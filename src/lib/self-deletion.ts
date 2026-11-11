@@ -7,14 +7,17 @@ import { liveBridgeToken } from "./live-backend-tokens";
    cookie, never from client input, so a player can only ever delete or
    restore their own. */
 
-export type SelfDeletionScope = "profile";
+/** 'profile': what tracking recorded. 'account': that and everything the account owns. */
+export type SelfDeletionScope = "profile" | "account";
 
 export interface SelfDeletionStatus {
   scope: SelfDeletionScope;
   requestedAt: string;
-  /** When the deletion runs. */
+  /** When whatever is still pending runs. */
   finalizeAfter: string;
-  /** The deletion completed. */
+  /** The profile half ran. */
+  profileDeleted: boolean;
+  /** Everything the scope covers is gone. */
   finalized: boolean;
   /** Still before the deadline and on hold, so Keep my profile works. */
   cancellable: boolean;
@@ -69,7 +72,7 @@ async function callSelfDeletion(payload: { action: "request"; scope: SelfDeletio
 
 export const requestSelfDeletion = createServerFn({ method: "POST" })
   .validator((data: { scope?: unknown }) => {
-    if (data?.scope !== "profile") throw new Error("Invalid scope");
+    if (data?.scope !== "profile" && data?.scope !== "account") throw new Error("Invalid scope");
     return { scope: data.scope as SelfDeletionScope };
   })
   .handler(async ({ data }): Promise<SelfDeletionResult> => {

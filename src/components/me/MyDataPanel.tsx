@@ -28,14 +28,16 @@ import {
   type MyDataTrackedPlay,
   type MyDataTrackedSort,
 } from "../../lib/my-data";
-import { openLiveEventSource } from "../../lib/live-backend";
+import { loadLiveMapSearchEntry, openLiveEventSource, peekLiveMapSearchEntry, prefetchLiveMapSearchEntry, type LiveMapSearchEntry } from "../../lib/live-backend";
+import { MapDetailModal, type MapDetailPlayContext } from "../maps/MapDetailModal";
+import { rateModFor } from "../player/SkillPlaysModal";
 import { SkillBreakdownBody } from "../player/SkillBreakdown";
 import { DanEvidenceModal } from "../player/DanEvidenceModal";
 import { SkillPlaysExplorer } from "../player/SkillPlaysExplorer";
 import { useNoDans } from "../../store";
 import { qualifyingSkillModes, skillRatingAccent } from "../../lib/skill-axes";
-import { getManiaKeyModCount, getScoreTimestamp } from "../../lib/score";
-import { MeScoreRow } from "./MeScoreRow";
+import { getDisplayedAccuracy, getDisplayedRank, getManiaKeyModCount, getModDisplayList, getScoreTimestamp } from "../../lib/score";
+import { MeScoreRow, type MyDataScoreRow } from "./MeScoreRow";
 import {
   compact,
   formatDay,
@@ -201,6 +203,26 @@ export function MyDataPanel() {
   const [skills, setSkills] = useState<MyDataSkillBreakdown | null>(null);
   const [insights, setInsights] = useState<MyDataInsights | null>(null);
   const [selectedDan, setSelectedDan] = useState<{ side: "rc" | "ln"; keyCount: number } | null>(null);
+  const [sidebarRef, sidebarTop] = useStickySidebarTop();
+  const [mapDetail, setMapDetail] = useState<{ entry: LiveMapSearchEntry; play: MapDetailPlayContext | null } | null>(null);
+  // Tracked and top rows open their play on the map's card. A hovered row
+  // answers from memory; a chart the catalog does not have opens its osu!
+  // page instead.
+  const mapOpenProps = (score: MyDataScoreRow, source: "top" | "tracked") => {
+    const beatmapId = score.beatmap?.id;
+    if (!beatmapId) return {};
+    const openOsuPage = () => window.open(score.beatmap?.url ?? `https://osu.ppy.sh/beatmaps/${beatmapId}`, "_blank", "noopener");
+    const open = (entry: LiveMapSearchEntry) => setMapDetail({ entry, play: scorePlayContext(score, beatmapId, username, source) });
+    return {
+      onPrefetch: () => prefetchLiveMapSearchEntry(beatmapId),
+      onOpen: () => {
+        const cached = peekLiveMapSearchEntry(beatmapId);
+        if (cached) return open(cached);
+        if (cached === null) return openOsuPage();
+        loadLiveMapSearchEntry(beatmapId).then((entry) => (entry ? open(entry) : openOsuPage()), openOsuPage);
+      },
+    };
+  };
   const [loading, setLoading] = useState(true);
   const newKeysRef = useRef<Set<string>>(new Set());
   const filterFetchReadyRef = useRef(false);
@@ -373,15 +395,26 @@ export function MyDataPanel() {
   const canRemovePlays = summary?.tracked === true && summary.rankedMember === false;
   const selfDeletion = summary?.selfDeletion ?? null;
   // Shown in the sheet before anything runs; the backend's own deadline is what the banner shows after.
-  const deleteProfileOn = formatDate(new Date(Date.now() + SELF_DELETION_DAYS * 86_400_000).toISOString(), "UTC", locale);
+  // A pending profile deletion that turns into "everything" keeps its deadline;
+  // anything asked for fresh gets its own 7 days.
+  const pendingProfile = selfDeletion?.scope === "profile" && selfDeletion.cancellable && !selfDeletion.profileDeleted;
+  const deleteOn = formatDate(
+    pendingProfile && selfDeletion ? selfDeletion.finalizeAfter : new Date(Date.now() + SELF_DELETION_DAYS * 86_400_000).toISOString(),
+    "UTC",
+    locale,
+  );
+  // Once the profile is gone (or a pending one is being widened), only "everything" is left to ask for.
+  const canAskDeletion = summary != null && (!selfDeletion || selfDeletion.finalized || pendingProfile);
 
-  const runDeleteProfile = useCallback(async () => {
+  const runDelete = useCallback(async (scope: "profile" | "account") => {
     setRemovalBusy(true);
     setRemovalError(null);
-    const result = await requestSelfDeletion({ data: { scope: "profile" } }).catch(() => null);
+    const result = await requestSelfDeletion({ data: { scope } }).catch(() => null);
     setRemovalBusy(false);
     if (!result?.ok) {
-      setRemovalError(t`Couldn't delete your profile right now. Try again in a moment.`);
+      setRemovalError(scope === "account"
+        ? t`Couldn't delete everything right now. Try again in a moment.`
+        : t`Couldn't delete your profile right now. Try again in a moment.`);
       return;
     }
     setRemovalSheet(null);
@@ -610,6 +643,7 @@ export function MyDataPanel() {
           busy={cancelBusy}
           error={cancelError}
           onCancel={() => void runCancelDeletion()}
+          onDeleteEverything={canAskDeletion ? () => openRemovalSheet("stop") : undefined}
         />
       ) : null}
       <div className="relative overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
@@ -685,7 +719,7 @@ export function MyDataPanel() {
                 onClick={() => openRemovalSheet("stop")}
                 className="px-2 py-2 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light disabled:cursor-default disabled:opacity-50"
               >
-                {t`Delete my profile`}
+                {t`Delete my data`}
               </button>
             </div>
           ) : null}
@@ -767,6 +801,7 @@ export function MyDataPanel() {
                           isNew={newKeysRef.current.has(key)}
                           selected={canRemovePlays && identity ? selectedPlays.has(identity) : undefined}
                           onToggleSelected={canRemovePlays && identity ? () => toggleSelectedPlay(identity, score) : undefined}
+                          {...mapOpenProps(score, "tracked")}
                         />
                       );
                     })}
@@ -786,7 +821,7 @@ export function MyDataPanel() {
               ) : (
                 <div translate="no" className="space-y-1.5">
                   {topPlays.map((tp, i) => (
-                    <MeScoreRow key={`${tp.score.beatmap?.id}-${getScoreTimestamp(tp.score)}-${topPageIndex * topLimit + i}`} score={tp.score} ppGain={tp.ppGain} />
+                    <MeScoreRow key={`${tp.score.beatmap?.id}-${getScoreTimestamp(tp.score)}-${topPageIndex * topLimit + i}`} score={tp.score} ppGain={tp.ppGain} {...mapOpenProps(tp.score, "top")} />
                   ))}
                   <Pagination
                     pageIndex={topPageIndex}
@@ -797,15 +832,9 @@ export function MyDataPanel() {
                   />
                 </div>
               )}
-              {insights?.sessions || insights?.judgement ? (
-                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {insights.sessions ? <SessionShapeCard sessions={insights.sessions} /> : null}
-                  {insights.judgement ? <JudgementCard judgement={insights.judgement} /> : null}
-                </div>
-              ) : null}
             </div>
 
-            <div className="space-y-4">
+            <div ref={sidebarRef} style={{ top: sidebarTop }} className="space-y-4 lg:sticky lg:self-start">
               <InsightCard
                 title={t`Skill rating`}
                 accent={skillRatingAccent(activeSkillMode)}
@@ -848,6 +877,8 @@ export function MyDataPanel() {
                 </InsightCard>
               ) : null}
 
+              {insights?.sessions ? <SessionShapeCard sessions={insights.sessions} /> : null}
+              {insights?.judgement ? <JudgementCard judgement={insights.judgement} /> : null}
             </div>
           </div>
 
@@ -874,6 +905,7 @@ export function MyDataPanel() {
           </div>
         </>
       )}
+      {mapDetail ? <MapDetailModal entry={mapDetail.entry} play={mapDetail.play} onClose={() => setMapDetail(null)} /> : null}
       {canRemovePlays && !removalSheet ? (
         <RemovalPill count={selectedPlays.size} onRemove={() => openRemovalSheet("some")} onClear={() => setSelectedPlays(new Map())} />
       ) : null}
@@ -886,9 +918,10 @@ export function MyDataPanel() {
           error={removalError}
           onRemove={() => void runRemoval(removalSheet === "all")}
           onStopTracking={(removePlays) => void runStopTracking(removePlays)}
-          canStopTracking={tracked}
-          deleteProfileOn={deleteProfileOn}
-          onDeleteProfile={() => void runDeleteProfile()}
+          canStopTracking={tracked && !selfDeletion}
+          canDeleteProfile={!selfDeletion}
+          deleteOn={canAskDeletion ? deleteOn : undefined}
+          onDelete={canAskDeletion ? (scope) => void runDelete(scope) : undefined}
           onClose={() => {
             setRemovalSheet(null);
             // A failed removal after tracking went off still leaves the page on the old state.
@@ -902,36 +935,51 @@ export function MyDataPanel() {
 
 const SELF_DELETION_DAYS = 7;
 
-function SelfDeletionNotice({ status, deletesOn, busy, error, onCancel }: {
+function SelfDeletionNotice({ status, deletesOn, busy, error, onCancel, onDeleteEverything }: {
   status: SelfDeletionStatus;
   deletesOn: string;
   busy: boolean;
   error: string | null;
   onCancel: () => void;
+  /** Offered once a profile deletion finished: the rest can still go. */
+  onDeleteEverything?: () => void;
 }) {
   const { t } = useLingui();
   // Past the deadline the sweep may already be deleting; the backend refuses a cancel then.
   const deadlineAhead = status.cancellable && Date.parse(status.finalizeAfter) > Date.now();
+  const everything = status.scope === "account";
+  const message = status.finalized
+    ? everything ? t`Everything was deleted.` : t`Your profile was deleted.`
+    : deadlineAhead
+    ? everything
+      ? status.profileDeleted
+        ? t`Your packs, skins and everything else get deleted on ${deletesOn}.`
+        : t`Your profile is hidden and everything gets deleted on ${deletesOn}.`
+      : t`Your profile is hidden and gets deleted on ${deletesOn}.`
+    : everything ? t`Everything is being deleted.` : t`Your profile is being deleted.`;
   return (
     <div className="rounded-xl bg-osu-b4 px-4 py-3.5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1 text-[13px] text-osu-l2">
-          {status.finalized
-            ? t`Your profile was deleted.`
-            : deadlineAhead
-            ? t`Your profile is hidden and gets deleted on ${deletesOn}.`
-            : t`Your profile is being deleted.`}
-        </div>
-        {status.finalized || !deadlineAhead ? null : (
+        <div className="min-w-0 flex-1 text-[13px] text-osu-l2">{message}</div>
+        {onDeleteEverything ? (
+          <button
+            type="button"
+            onClick={onDeleteEverything}
+            className="shrink-0 px-2 py-2 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light"
+          >
+            {status.finalized && everything ? t`Delete what's new` : t`Delete everything`}
+          </button>
+        ) : null}
+        {deadlineAhead ? (
           <button
             type="button"
             onClick={onCancel}
             disabled={busy}
             className="shrink-0 rounded-lg bg-osu-b3 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:brightness-110 cursor-pointer disabled:cursor-default disabled:opacity-60"
           >
-            {busy ? t`Restoring…` : t`Keep my profile`}
+            {busy ? t`Restoring…` : everything && status.profileDeleted ? t`Keep the rest` : t`Keep my profile`}
           </button>
-        )}
+        ) : null}
       </div>
       {error ? <div className="mt-2 text-[12px] text-osu-red-light">{error}</div> : null}
     </div>
@@ -1331,4 +1379,58 @@ function RhythmChart({ byHour, peakHour, peakDay }: { byHour: number[]; peakHour
       </div>
     </div>
   );
+}
+
+const SIDEBAR_TOP_PX = 80;
+const SIDEBAR_BOTTOM_PX = 16;
+
+/** Sticky offset for a sidebar beside a longer list. A sidebar that fits the
+ *  viewport holds under the nav; a taller one scrolls with the list until its
+ *  last card shows and holds there, so the column is never left empty. */
+function useStickySidebarTop(): [(node: HTMLDivElement | null) => void, number] {
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  const [top, setTop] = useState(SIDEBAR_TOP_PX);
+  useEffect(() => {
+    if (!node) return;
+    const update = () => setTop(Math.min(SIDEBAR_TOP_PX, window.innerHeight - node.offsetHeight - SIDEBAR_BOTTOM_PX));
+    update();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(node);
+    window.addEventListener("resize", update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [node]);
+  return [setNode, top];
+}
+
+const RATE_MOD_DEFAULTS: Record<string, number> = { DT: 1.5, NC: 1.5, HT: 0.75, DC: 0.75 };
+
+/** A tracked or top row as the map card's play. It carries no skill rating,
+ *  so the card shows the score without a rating panel. An archived row that
+ *  kept only a summary has no score to show and opens the map alone. */
+function scorePlayContext(score: MyDataScoreRow, beatmapId: number, username: string, source: "top" | "tracked"): MapDetailPlayContext | null {
+  if (score.archived && !score.archivedExact) return null;
+  const mods = getModDisplayList(score.mods);
+  const speed = mods.find((mod) => RATE_MOD_DEFAULTS[mod.acronym] !== undefined);
+  return {
+    beatmapId,
+    username,
+    accuracy: getDisplayedAccuracy(score),
+    pp: score.pp,
+    rateMod: speed ? rateModFor(speed.rate ?? RATE_MOD_DEFAULTS[speed.acronym], speed.acronym) : null,
+    playedAt: getScoreTimestamp(score) || null,
+    source,
+    mods: mods.map((mod) => mod.acronym),
+    score: {
+      statistics: score.statistics ?? null,
+      maxCombo: score.max_combo ?? null,
+      totalScore: score.total_score ?? score.score ?? null,
+      rank: getDisplayedRank(score),
+      scoreUrl: null,
+    },
+    ratingLabel: "",
+    ratingColor: "",
+  };
 }

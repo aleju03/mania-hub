@@ -24,6 +24,26 @@ export async function removeUploadedReplay(
   return { ok: true };
 }
 
+// An account's own deletion (routes/api/internal/account-deletion.ts) runs
+// unattended, so it takes the opposite order: the objects first, and the index
+// row only once they are gone. A failed object delete leaves the row, so the
+// next sweep finds the upload again instead of orphaning a file that carries
+// the player's name.
+export async function removeUploadedReplayObjectsFirst(id: string): Promise<DeleteUploadedReplayResult> {
+  const { deleteUploadedReplayObjects } = await import("./r2-cache");
+  const { deleteLocalUploadedReplay, uploadedReplaysUseR2 } = await import("./uploaded-replay-store");
+  try {
+    if (uploadedReplaysUseR2()) await deleteUploadedReplayObjects(id);
+    await deleteLocalUploadedReplay(id);
+  } catch {
+    return { ok: false, error: "unavailable" };
+  }
+  const removed = await deleteUploadedReplayIndexRow({ id, userId: null, asAdmin: true });
+  if (!removed.ok) return { ok: false, error: removed.error };
+  await forgetDeletedUpload(id);
+  return { ok: true };
+}
+
 // Every memory tier that would keep serving a file that no longer exists.
 // Per-instance only, which is enough: the community lists are rebuilt from an
 // R2 listing the deleted object has already left, so the other instances drop

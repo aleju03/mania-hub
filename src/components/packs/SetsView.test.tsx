@@ -31,14 +31,13 @@ const menu = (binders: LivePackBinder[], cardKeys = ["9999"], cardCount = cardKe
 beforeEach(() => { vi.clearAllMocks(); });
 afterEach(cleanup);
 
-it("shows one set at a time, pages its cards, and resets the page when switching sets", async () => {
+it("shows one set at a time with every card on one page, and switches sets", async () => {
   api.list.mockResolvedValue([binder(1, BINDER_MAX_CARDS), binder(2)]);
   await act(async () => { wrap(<SetsView syncStatus="synced" />); });
   await screen.findByRole("region", { name: "Set 1" });
   expect(screen.getAllByRole("region")).toHaveLength(1);
-  expect(screen.getByTestId("cards").children).toHaveLength(6);
-  fireEvent.click(screen.getByRole("button", { name: "Next" }));
-  expect(screen.getByTestId("cards").textContent).toContain("Player 106");
+  expect(screen.getByTestId("cards").children).toHaveLength(BINDER_MAX_CARDS);
+  expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
   fireEvent.click(within(screen.getByRole("navigation", { name: "Your sets" })).getByRole("button", { name: /Set 2/ }));
   expect(screen.getByRole("region", { name: "Set 2" })).toBeTruthy();
   expect(screen.getByTestId("cards").textContent).toBe("Player 200");

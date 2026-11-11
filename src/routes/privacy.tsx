@@ -176,7 +176,9 @@ function PrivacyPage() {
             . Stopping tracking records nothing new and keeps what was already recorded. Deleting
             your profile hides it right away and deletes your plays, stats and profile history 7
             days later, unless you cancel before then. Your packs, skins, uploaded replays and
-            collections stay.
+            collections stay. Deleting everything also deletes those, along with your goals,
+            Discord link and supporter status. Cards of you that other players pulled stay with
+            them.
           </Trans>
         </LegalParagraph>
         <LegalParagraph>

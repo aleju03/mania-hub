@@ -2951,6 +2951,7 @@ msgstr "账号活动"
 msgid "Account menu"
 msgstr "账号菜单"
 
+#: src/components/me/MeScoreRow.tsx
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "accuracy"
@@ -5874,6 +5875,10 @@ msgstr "无法发放卡包"
 msgid "Couldn't decode that image."
 msgstr "无法解码这张图片。"
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't delete everything right now. Try again in a moment."
+msgstr "暂时无法删除全部内容，请稍后再试。"
+
 #: src/routes/replay_.uploads.tsx
 #: src/routes/replay.tsx
 msgid "Couldn't delete that upload; try again."
@@ -6587,6 +6592,11 @@ msgstr "从你的上传中删除 {rowTitle}"
 msgid "Delete area"
 msgstr "删除区域"
 
+#: src/components/me/MyDataPanel.tsx
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Delete everything"
+msgstr "删除全部"
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete for good?"
 msgstr "永久删除？"
@@ -6604,6 +6614,9 @@ msgid "Delete imagemap"
 msgstr "删除 imagemap"
 
 #: src/components/me/MyDataPanel.tsx
+msgid "Delete my data"
+msgstr "删除我的数据"
+
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Delete my profile"
 msgstr "删除我的资料"
@@ -6611,6 +6624,10 @@ msgstr "删除我的资料"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Delete preset"
 msgstr "删除预设"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Delete profile"
+msgstr "删除资料"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete skin"
@@ -6629,6 +6646,10 @@ msgstr "删除这个上传"
 #: src/routes/replay.tsx
 msgid "Delete this upload? Its share link stops working and the file is gone for good."
 msgstr "删除这个上传？它的分享链接会失效，文件也会被永久删除。"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Delete what's new"
+msgstr "删除新增内容"
 
 #. placeholder {0}: selectedPreset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -7499,6 +7520,14 @@ msgstr "全部"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
 msgstr "压缩包里的其他所有文件"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Everything is being deleted."
+msgstr "全部内容正在删除。"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Everything was deleted."
+msgstr "全部内容已删除。"
 
 #. placeholder {0}: formatDanValue(dan.rawDan)
 #: src/components/player/DanEvidenceModal.tsx
@@ -8992,6 +9021,10 @@ msgid "hold to delete"
 msgstr "长按删除"
 
 #: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to delete everything"
+msgstr "按住以删除全部"
+
+#: src/components/me/RemovePlaysSheet.tsx
 msgid "Hold to delete my profile"
 msgstr "按住以删除我的资料"
 
@@ -9774,6 +9807,10 @@ msgid "Keep my profile"
 msgstr "保留我的资料"
 
 #: src/components/me/MyDataPanel.tsx
+msgid "Keep the rest"
+msgstr "保留其余内容"
+
+#: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
 #~ msgstr "保留"
 
@@ -9921,6 +9958,7 @@ msgstr "语言"
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/routes/discord.tsx
 msgid "Language"
 msgstr "语言"
 
@@ -12685,8 +12723,8 @@ msgid "nominator"
 msgstr "提名者"
 
 #: src/components/me/MeScoreRow.tsx
-msgid "nomod"
-msgstr "无模组"
+#~ msgid "nomod"
+#~ msgstr "无模组"
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "NoMod"
@@ -20210,6 +20248,10 @@ msgid "They're already a GOAT."
 msgstr "他们已经是 GOAT 了。"
 
 #: src/components/me/RemovePlaysSheet.tsx
+msgid "They're deleted on {deleteOn}. You can cancel from this page until then."
+msgstr "将于 {deleteOn} 删除。在此之前可以在本页取消。"
+
+#: src/components/me/RemovePlaysSheet.tsx
 msgid "They're removed from your tracked plays, recent plays and activity on this site."
 msgstr "它们会从本站你的追踪成绩、最近成绩和活动中移除。"
 
@@ -20872,7 +20914,7 @@ msgstr "最佳成绩"
 
 #: src/routes/discord.tsx
 msgid "Top plays from"
-msgstr "以下玩家的 top plays"
+msgstr "以下玩家的最佳成绩"
 
 #: src/routes/discord.tsx
 msgid "Top plays in"
@@ -21763,6 +21805,7 @@ msgstr "查看"
 msgid "view map details"
 msgstr "查看谱面详情"
 
+#: src/components/me/MeScoreRow.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
@@ -22165,15 +22208,19 @@ msgstr "每张卡片最初加入你收藏册的时间"
 
 #: src/routes/discord.tsx
 msgid "When I get sniped"
-msgstr "被 snipe 时"
+msgstr "被狙击时"
 
 #: src/routes/news_.companella.tsx
 #~ msgid "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
 #~ msgstr "当 osu! 也有同一局成绩时，你的技能评分会直接读取回放中的击打时机，而不是根据判定数量来估算。"
 
 #: src/routes/privacy.tsx
-msgid "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay."
-msgstr "登录后，你可以在<0>我的数据</0>中停止追踪或删除你的资料。停止追踪后不会再记录新内容，已记录的内容会保留。删除资料后，资料会立即隐藏，你的成绩、统计和资料历史会在 7 天后删除，在此之前可以取消。你的卡包、皮肤、上传的回放和合集会保留。"
+#~ msgid "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay."
+#~ msgstr "登录后，你可以在<0>我的数据</0>中停止追踪或删除你的资料。停止追踪后不会再记录新内容，已记录的内容会保留。删除资料后，资料会立即隐藏，你的成绩、统计和资料历史会在 7 天后删除，在此之前可以取消。你的卡包、皮肤、上传的回放和合集会保留。"
+
+#: src/routes/privacy.tsx
+msgid "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay. Deleting everything also deletes those, along with your goals, Discord link and supporter status. Cards of you that other players pulled stay with them."
+msgstr "登录后，你可以在<0>我的数据</0>中停止追踪或删除你的资料。停止追踪后不会再记录新内容，已记录的内容会保留。删除资料后，资料会立即隐藏，你的成绩、统计和资料历史会在 7 天后删除，在此之前可以取消。你的卡包、皮肤、上传的回放和合集会保留。删除全部则会连同这些内容一起删除，还包括你的目标、Discord 绑定和支持者身份。其他玩家抽到的你的卡会保留在他们那里。"
 
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
@@ -22889,6 +22936,14 @@ msgstr "你的 osu! 最佳成绩、被追踪期间记录的所有成绩，以及
 msgid "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it. Everyone else is on the <0>Dan tab of the rankings page</0>."
 msgstr "你自己的估算在玩家页面的技能页。点击那里的任意段位徽章，可以看到背后的通过。其他人的段位在<0>排行榜页面的段位标签</0>里。"
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your packs and cards, skins, uploaded replays, map collections, goals and supporter time are deleted. Cards of you that other players pulled stay with them."
+msgstr "你的卡包和卡牌、皮肤、上传的回放、谱面合集、目标和支持者时长都会被删除。其他玩家抽到的你的卡会保留在他们那里。"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Your packs, skins and everything else get deleted on {deletesOn}."
+msgstr "你的卡包、皮肤和其余所有内容将于 {deletesOn} 删除。"
+
 #: src/routes/dan-estimates.tsx
 msgid "Your pass"
 msgstr "你的通过"
@@ -22935,16 +22990,32 @@ msgid "Your profile is being deleted."
 msgstr "你的资料正在删除。"
 
 #: src/components/me/MyDataPanel.tsx
+msgid "Your profile is hidden and everything gets deleted on {deletesOn}."
+msgstr "你的资料已隐藏，全部内容将于 {deletesOn} 删除。"
+
+#: src/components/me/MyDataPanel.tsx
 msgid "Your profile is hidden and gets deleted on {deletesOn}."
 msgstr "你的资料已隐藏，将于 {deletesOn} 删除。"
 
 #: src/components/me/RemovePlaysSheet.tsx
-msgid "Your profile is hidden now and deleted on {deleteProfileOn}. You can cancel from this page until then."
-msgstr "你的资料会立即隐藏，并于 {deleteProfileOn} 删除。在此之前可以在本页取消。"
+msgid "Your profile is hidden now and deleted on {deleteOn}. You can cancel from this page until then."
+msgstr "你的资料会立即隐藏，并于 {deleteOn} 删除。在此之前可以在本页取消。"
+
+#: src/components/me/RemovePlaysSheet.tsx
+#~ msgid "Your profile is hidden now and deleted on {deleteProfileOn}. You can cancel from this page until then."
+#~ msgstr "你的资料会立即隐藏，并于 {deleteProfileOn} 删除。在此之前可以在本页取消。"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your profile is hidden now and everything is deleted on {deleteOn}. You can cancel from this page until then."
+msgstr "你的资料会立即隐藏，全部内容将于 {deleteOn} 删除。在此之前可以在本页取消。"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Your profile was deleted."
 msgstr "你的资料已删除。"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your profile, plays and stats on this site are deleted, and so are your packs and cards, skins, uploaded replays, map collections, goals and supporter time. Cards of you that other players pulled stay with them."
+msgstr "你在本站的资料、成绩和统计会被删除，你的卡包和卡牌、皮肤、上传的回放、谱面合集、目标和支持者时长也会一并删除。其他玩家抽到的你的卡会保留在他们那里。"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Your profile, plays and stats on this site are deleted. Your packs, skins, uploaded replays and map collections stay."

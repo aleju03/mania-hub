@@ -164,7 +164,7 @@ export function TakedownsPanel() {
                   <div className="text-[11px] text-osu-f1">
                     #{user.userId} · <span title={user.takenDownAt}>{formatTimeAgo(user.takenDownAt)}</span>
                     {user.held ? " · hidden, data kept" : ""}
-                    {user.selfScope ? ` · asked by the player${user.held && user.finalizeAfter ? `, deletes ${formatDate(user.finalizeAfter)}` : ""}` : ""}
+                    {user.selfScope ? ` · player asked to delete ${user.selfScope === "account" ? "everything" : "their profile"}${user.held && user.finalizeAfter ? `, runs ${formatDate(user.finalizeAfter)}` : ""}` : ""}
                     {user.companellaBlocked ? " · Companella blocked by the takedown" : ""}
                   </div>
                 </div>

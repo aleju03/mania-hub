@@ -64,5 +64,7 @@ describe("extractBeatmapArchiveFile", () => {
     const file = await extractBeatmapArchiveFile("2", "bg.jpg");
     expect(file.toString()).toBe("background bytes");
     expect(osuDirectCalls).toEqual([]);
-  });
+    // The whole-archive pass asks each mirror the range pass just missed
+    // again, after its 2.5s spacing, so this runs about 7.5s for real.
+  }, 20_000);
 });

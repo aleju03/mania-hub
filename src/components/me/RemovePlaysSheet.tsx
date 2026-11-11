@@ -12,7 +12,7 @@ const HOLD_MS = 1200;
 
 export type RemovePlaysSheetKind = "some" | "all" | "stop";
 
-type LeaveChoice = "stop" | "delete";
+type LeaveChoice = "stop" | "profile" | "account";
 
 function coverOf(play: MyDataTrackedPlay): string | null {
   const covers = play.beatmapset?.covers;
@@ -158,8 +158,9 @@ export function RemovePlaysSheet({
   onRemove,
   onStopTracking,
   canStopTracking = true,
-  deleteProfileOn,
-  onDeleteProfile,
+  canDeleteProfile = true,
+  deleteOn,
+  onDelete,
   onClose,
 }: {
   kind: RemovePlaysSheetKind;
@@ -170,17 +171,23 @@ export function RemovePlaysSheet({
   error: string | null;
   onRemove: () => void;
   onStopTracking: (removePlays: boolean) => void;
-  /** False once tracking is already off: "stop" then only offers the delete. */
+  /** False once tracking is already off: "stop" then only offers the deletes. */
   canStopTracking?: boolean;
-  /** The day a profile deletion asked for now would run, preformatted. */
-  deleteProfileOn?: string;
-  onDeleteProfile?: () => void;
+  /** False once the profile is deleted: only "everything" is left to ask for. */
+  canDeleteProfile?: boolean;
+  /** The day a deletion asked for now would run, preformatted. */
+  deleteOn?: string;
+  onDelete?: (scope: "profile" | "account") => void;
   onClose: () => void;
 }) {
   const { t } = useLingui();
   const [removeOnStop, setRemoveOnStop] = useState(false);
-  const canDelete = deleteProfileOn != null && onDeleteProfile != null;
-  const [choice, setChoice] = useState<LeaveChoice>(canStopTracking || !canDelete ? "stop" : "delete");
+  const canDelete = deleteOn != null && onDelete != null;
+  const leaveOptions: Array<{ value: LeaveChoice; label: string }> = [];
+  if (canStopTracking) leaveOptions.push({ value: "stop", label: t`Stop tracking` });
+  if (canDelete && canDeleteProfile) leaveOptions.push({ value: "profile", label: t`Delete profile` });
+  if (canDelete) leaveOptions.push({ value: "account", label: t`Delete everything` });
+  const [choice, setChoice] = useState<LeaveChoice>(leaveOptions[0]?.value ?? "stop");
   useBodyScrollLock(true);
 
   useEffect(() => {
@@ -197,9 +204,12 @@ export function RemovePlaysSheet({
     ? titles.length > 2 ? `${titles.slice(0, 2).join(" · ")} · +${count - 2}` : titles.join(" · ")
     : null;
   const leaving = kind === "stop";
-  const deleting = leaving && choice === "delete";
+  const deletingScope = leaving && choice !== "stop" ? choice : null;
+  const deleting = deletingScope != null;
   const stopping = leaving && !deleting;
-  const heading = deleting
+  const heading = deletingScope === "account"
+    ? t`Delete everything`
+    : deleting
     ? t`Delete my profile`
     : stopping
     ? t`Stop tracking`
@@ -253,12 +263,13 @@ export function RemovePlaysSheet({
           </div>
         </div>
 
-        {leaving && canDelete && canStopTracking ? (
-          <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-osu-b4 p-1" role="radiogroup" aria-label={t`What to do`}>
-            {([
-              { value: "stop", label: t`Stop tracking` },
-              { value: "delete", label: t`Delete my profile` },
-            ] as const).map((option) => (
+        {leaving && leaveOptions.length > 1 ? (
+          <div
+            className={`mt-4 grid gap-1 rounded-xl bg-osu-b4 p-1 ${leaveOptions.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}
+            role="radiogroup"
+            aria-label={t`What to do`}
+          >
+            {leaveOptions.map((option) => (
               <button
                 key={option.value}
                 type="button"
@@ -266,9 +277,9 @@ export function RemovePlaysSheet({
                 aria-checked={choice === option.value}
                 disabled={busy}
                 onClick={() => setChoice(option.value)}
-                className={`rounded-lg px-2 py-2 text-[12px] font-semibold cursor-pointer transition-colors ${
+                className={`rounded-lg px-1.5 py-2 text-[12px] font-semibold leading-tight cursor-pointer transition-colors ${
                   choice === option.value
-                    ? option.value === "delete" ? "bg-osu-red-light/20 text-osu-red-light" : "bg-osu-b3 text-white"
+                    ? option.value !== "stop" ? "bg-osu-red-light/20 text-osu-red-light" : "bg-osu-b3 text-white"
                     : "text-osu-f1 hover:text-white"
                 }`}
               >
@@ -279,7 +290,11 @@ export function RemovePlaysSheet({
         ) : null}
 
         <p className="mt-3 text-[12.5px] leading-5 text-osu-f1">
-          {deleting
+          {deletingScope === "account"
+            ? canDeleteProfile
+              ? t`Your profile, plays and stats on this site are deleted, and so are your packs and cards, skins, uploaded replays, map collections, goals and supporter time. Cards of you that other players pulled stay with them.`
+              : t`Your packs and cards, skins, uploaded replays, map collections, goals and supporter time are deleted. Cards of you that other players pulled stay with them.`
+            : deleting
             ? t`Your profile, plays and stats on this site are deleted. Your packs, skins, uploaded replays and map collections stay.`
             : stopping
             ? t`New plays stop being recorded.`
@@ -287,7 +302,11 @@ export function RemovePlaysSheet({
         </p>
         {deleting ? (
           <p className="mt-2 text-[12.5px] leading-5 text-osu-f1">
-            {t`Your profile is hidden now and deleted on ${deleteProfileOn}. You can cancel from this page until then.`}
+            {deletingScope === "account"
+              ? canDeleteProfile
+                ? t`Your profile is hidden now and everything is deleted on ${deleteOn}. You can cancel from this page until then.`
+                : t`They're deleted on ${deleteOn}. You can cancel from this page until then.`
+              : t`Your profile is hidden now and deleted on ${deleteOn}. You can cancel from this page until then.`}
           </p>
         ) : null}
 
@@ -318,10 +337,10 @@ export function RemovePlaysSheet({
 
         <div className="mt-4">
           <HoldToConfirm
-            label={deleting ? t`Hold to delete my profile` : stopping ? t`Hold to stop tracking` : t`Hold to remove`}
+            label={deletingScope === "account" ? t`Hold to delete everything` : deleting ? t`Hold to delete my profile` : stopping ? t`Hold to stop tracking` : t`Hold to remove`}
             busyLabel={deleting ? t`Deleting…` : stopping ? t`Stopping…` : t`Removing…`}
             busy={busy}
-            onConfirm={() => (deleting ? onDeleteProfile?.() : stopping ? onStopTracking(removeOnStop) : onRemove())}
+            onConfirm={() => (deletingScope ? onDelete?.(deletingScope) : stopping ? onStopTracking(removeOnStop) : onRemove())}
           />
         </div>
         {error ? <div className="mt-2.5 text-center text-[12px] text-osu-red-light">{error}</div> : null}

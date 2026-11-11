@@ -37,9 +37,12 @@ export interface BotAlerts {
   follows: BotFeedPlayer[];
   // When Discord last refused a DM to the viewer.
   failedAt: string | null;
+  // The DM language; until picked (localeChosen) it follows the site's.
+  locale: string;
+  localeChosen: boolean;
 }
 
-export type BotAlertsPatch = Partial<Pick<BotAlerts, "snipes" | "goals" | "newMaps" | "cardPulls" | "weeklyRecap">> & { follows?: number[] };
+export type BotAlertsPatch = Partial<Pick<BotAlerts, "snipes" | "goals" | "newMaps" | "cardPulls" | "weeklyRecap">> & { follows?: number[]; dmLocale?: string };
 
 export interface BotChannel {
   id: string;
@@ -99,6 +102,15 @@ async function viewer() {
   return (await readCurrentAuth()).viewer ?? null;
 }
 
+// The site language, which the backend keeps so supporter DMs are written in it.
+async function siteLocale(): Promise<string> {
+  const { getCookie } = await import("@tanstack/react-start/server");
+  const { LOCALE_COOKIE_NAME } = await import("./locale-cookie");
+  const { normalizeLocale } = await import("./locale");
+  const raw = getCookie(LOCALE_COOKIE_NAME);
+  return (raw && normalizeLocale(decodeURIComponent(raw))) || "en";
+}
+
 async function connection(osuUserId: number) {
   const { getCookie } = await import("@tanstack/react-start/server");
   const { DISCORD_LINK_COOKIE_NAME, readDiscordLink } = await import("./discord-auth-server");
@@ -121,7 +133,7 @@ async function readAccount(viewerId: number, signedIn: boolean, viewerUsername?:
   const { isDiscordOAuthConfigured } = await import("./discord-auth-server");
   const link = signedIn ? await connection(viewerId) : null;
   let account = signedIn
-    ? await post<AccountBody>("/api/discord/account", { viewerId })
+    ? await post<AccountBody>("/api/discord/account", { viewerId, locale: await siteLocale() })
     : null;
   // A link typed in /link for the Discord account just connected here is now
   // proven, so it is confirmed without another click.
@@ -153,6 +165,7 @@ export const saveBotAlerts = createServerFn({ method: "POST" })
     if (typeof data?.newMaps === "boolean") patch.newMaps = data.newMaps;
     if (typeof data?.cardPulls === "boolean") patch.cardPulls = data.cardPulls;
     if (typeof data?.weeklyRecap === "boolean") patch.weeklyRecap = data.weeklyRecap;
+    if (data?.dmLocale === "en" || data?.dmLocale === "es" || data?.dmLocale === "zh-CN") patch.dmLocale = data.dmLocale;
     if (Array.isArray(data?.follows)) patch.follows = data.follows.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0).slice(0, 50);
     return patch;
   })
@@ -161,7 +174,7 @@ export const saveBotAlerts = createServerFn({ method: "POST" })
     const me = await viewer();
     if (!me) return readAccount(0, false);
     // Refused (no longer a supporter) or unreachable: the page says it didn't save.
-    if (!await post("/api/discord/account/alerts", { viewerId: me.id, ...data })) throw new Error("save_failed");
+    if (!await post("/api/discord/account/alerts", { viewerId: me.id, locale: await siteLocale(), ...data })) throw new Error("save_failed");
     return readAccount(me.id, true);
   });
 
@@ -170,7 +183,7 @@ export const testBotAlerts = createServerFn({ method: "POST" }).handler(async ()
   await noStore();
   const me = await viewer();
   if (!me) return { result: "failed", account: await readAccount(0, false) };
-  const body = await post<{ result?: string }>("/api/discord/account/alerts/test", { viewerId: me.id });
+  const body = await post<{ result?: string }>("/api/discord/account/alerts/test", { viewerId: me.id, locale: await siteLocale() });
   return { result: body?.result ?? "failed", account: await readAccount(me.id, true) };
 });
 

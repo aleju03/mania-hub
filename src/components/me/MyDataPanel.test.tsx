@@ -264,10 +264,10 @@ it("deletes the profile only after the player picks it and holds", async () => {
     summary: { ...summary, rankedMember: false, totalScores: 1 },
     trackedPage: { items: [trackedPlay("official:1")], total: 1, limit: 50, offset: 0 },
   });
-  mocks.requestDeletion.mockResolvedValue({ ok: true, status: { scope: "profile", requestedAt: "", finalizeAfter: "2026-11-18T00:00:00Z", finalized: false, cancellable: true } });
+  mocks.requestDeletion.mockResolvedValue({ ok: true, status: { scope: "profile", requestedAt: "", finalizeAfter: "2026-11-18T00:00:00Z", finalized: false, profileDeleted: false, cancellable: true } });
   render(panel());
   fireEvent.click(await screen.findByRole("button", { name: "Stop tracking or delete" }));
-  fireEvent.click(screen.getByRole("radio", { name: "Delete my profile" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Delete profile" }));
   await hold("Hold to delete my profile");
   await waitFor(() => expect(mocks.requestDeletion).toHaveBeenCalledWith({ data: { scope: "profile" } }));
   expect(mocks.stopTracking).not.toHaveBeenCalled();
@@ -277,13 +277,39 @@ it("deletes the profile only after the player picks it and holds", async () => {
 it("shows a pending deletion with a way to keep the profile", async () => {
   mocks.dashboard.mockResolvedValue({
     ...dashboard,
-    summary: { ...summary, tracked: false, selfDeletion: { scope: "profile", requestedAt: "", finalizeAfter: "2099-11-18T00:00:00Z", finalized: false, cancellable: true } },
+    summary: { ...summary, tracked: false, selfDeletion: { scope: "profile", requestedAt: "", finalizeAfter: "2099-11-18T00:00:00Z", finalized: false, profileDeleted: false, cancellable: true } },
   });
   mocks.cancelDeletion.mockResolvedValue({ ok: true, status: null });
   render(panel());
   expect(await screen.findByText("Your profile is hidden and gets deleted on November 18, 2099.")).toBeTruthy();
   expect(screen.queryByText("Opt in")).toBeNull();
-  expect(screen.queryByRole("button", { name: "Delete my profile" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Delete my data" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Keep my profile" }));
   await waitFor(() => expect(mocks.cancelDeletion).toHaveBeenCalledTimes(1));
+});
+
+it("deletes everything only after the player picks it and holds", async () => {
+  mocks.dashboard.mockResolvedValue({
+    ...dashboard,
+    summary: { ...summary, rankedMember: false, totalScores: 1 },
+    trackedPage: { items: [trackedPlay("official:1")], total: 1, limit: 50, offset: 0 },
+  });
+  mocks.requestDeletion.mockResolvedValue({ ok: true, status: { scope: "account", requestedAt: "", finalizeAfter: "2099-11-18T00:00:00Z", finalized: false, profileDeleted: false, cancellable: true } });
+  render(panel());
+  fireEvent.click(await screen.findByRole("button", { name: "Stop tracking or delete" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Delete everything" }));
+  await hold("Hold to delete everything");
+  await waitFor(() => expect(mocks.requestDeletion).toHaveBeenCalledWith({ data: { scope: "account" } }));
+});
+
+it("offers the rest after a finished profile deletion", async () => {
+  mocks.dashboard.mockResolvedValue({
+    ...dashboard,
+    summary: { ...summary, tracked: false, selfDeletion: { scope: "profile", requestedAt: "", finalizeAfter: "2026-01-01T00:00:00Z", finalized: true, profileDeleted: true, cancellable: false } },
+  });
+  render(panel());
+  expect(await screen.findByText("Your profile was deleted.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Delete everything" }));
+  expect(screen.queryByRole("radio", { name: "Stop tracking" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Hold to delete everything" })).toBeTruthy();
 });

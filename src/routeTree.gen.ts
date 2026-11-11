@@ -109,6 +109,7 @@ import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
 import { Route as ApiCompanellaChartRouteImport } from './routes/api/companella/chart'
 import { Route as ApiCompanellaReplayRouteImport } from './routes/api/companella/replay'
 import { Route as ApiCompanellaUsageRouteImport } from './routes/api/companella/usage'
+import { Route as ApiInternalAccountDeletionRouteImport } from './routes/api/internal/account-deletion'
 import { Route as CompanellaDocsOpenapiDotyamlRouteImport } from './routes/companella_.docs_.openapi[.]yaml'
 import { Route as CompanellaDocsReferenceClientDotmjsRouteImport } from './routes/companella_.docs_.reference-client[.]mjs'
 import { Route as PlayerUsernameAboutRouteImport } from './routes/player/$username/about'
@@ -638,6 +639,12 @@ const ApiCompanellaUsageRoute = ApiCompanellaUsageRouteImport.update({
   path: '/api/companella/usage',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiInternalAccountDeletionRoute =
+  ApiInternalAccountDeletionRouteImport.update({
+    id: '/api/internal/account-deletion',
+    path: '/api/internal/account-deletion',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const CompanellaDocsOpenapiDotyamlRoute =
   CompanellaDocsOpenapiDotyamlRouteImport.update({
     id: '/companella_/docs_/openapi.yaml',
@@ -893,6 +900,7 @@ export interface FileRoutesByFullPath {
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
+  '/api/internal/account-deletion': typeof ApiInternalAccountDeletionRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
@@ -1022,6 +1030,7 @@ export interface FileRoutesByTo {
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
+  '/api/internal/account-deletion': typeof ApiInternalAccountDeletionRoute
   '/companella/docs/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella/docs/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
@@ -1152,6 +1161,7 @@ export interface FileRoutesById {
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
+  '/api/internal/account-deletion': typeof ApiInternalAccountDeletionRoute
   '/companella_/docs_/openapi.yaml': typeof CompanellaDocsOpenapiDotyamlRoute
   '/companella_/docs_/reference-client.mjs': typeof CompanellaDocsReferenceClientDotmjsRoute
   '/player/$username/about': typeof PlayerUsernameAboutRoute
@@ -1283,6 +1293,7 @@ export interface FileRouteTypes {
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
+    | '/api/internal/account-deletion'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
     | '/player/$username/about'
@@ -1412,6 +1423,7 @@ export interface FileRouteTypes {
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
+    | '/api/internal/account-deletion'
     | '/companella/docs/openapi.yaml'
     | '/companella/docs/reference-client.mjs'
     | '/player/$username/about'
@@ -1541,6 +1553,7 @@ export interface FileRouteTypes {
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
+    | '/api/internal/account-deletion'
     | '/companella_/docs_/openapi.yaml'
     | '/companella_/docs_/reference-client.mjs'
     | '/player/$username/about'
@@ -1670,6 +1683,7 @@ export interface RootRouteChildren {
   ApiCompanellaChartRoute: typeof ApiCompanellaChartRoute
   ApiCompanellaReplayRoute: typeof ApiCompanellaReplayRoute
   ApiCompanellaUsageRoute: typeof ApiCompanellaUsageRoute
+  ApiInternalAccountDeletionRoute: typeof ApiInternalAccountDeletionRoute
   CompanellaDocsOpenapiDotyamlRoute: typeof CompanellaDocsOpenapiDotyamlRoute
   CompanellaDocsReferenceClientDotmjsRoute: typeof CompanellaDocsReferenceClientDotmjsRoute
   PullOwnerIdCardIdRoute: typeof PullOwnerIdCardIdRoute
@@ -2387,6 +2401,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCompanellaUsageRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/internal/account-deletion': {
+      id: '/api/internal/account-deletion'
+      path: '/api/internal/account-deletion'
+      fullPath: '/api/internal/account-deletion'
+      preLoaderRoute: typeof ApiInternalAccountDeletionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/companella_/docs_/openapi.yaml': {
       id: '/companella_/docs_/openapi.yaml'
       path: '/companella/docs/openapi.yaml'
@@ -2813,6 +2834,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCompanellaChartRoute: ApiCompanellaChartRoute,
   ApiCompanellaReplayRoute: ApiCompanellaReplayRoute,
   ApiCompanellaUsageRoute: ApiCompanellaUsageRoute,
+  ApiInternalAccountDeletionRoute: ApiInternalAccountDeletionRoute,
   CompanellaDocsOpenapiDotyamlRoute: CompanellaDocsOpenapiDotyamlRoute,
   CompanellaDocsReferenceClientDotmjsRoute:
     CompanellaDocsReferenceClientDotmjsRoute,

@@ -2939,6 +2939,7 @@ msgstr "Actividad de la cuenta"
 msgid "Account menu"
 msgstr "Menú de cuenta"
 
+#: src/components/me/MeScoreRow.tsx
 #: src/components/packs/album/AlbumView.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "accuracy"
@@ -5862,6 +5863,10 @@ msgstr "No se pudo repartir un pack"
 msgid "Couldn't decode that image."
 msgstr "No se pudo decodificar esa imagen."
 
+#: src/components/me/MyDataPanel.tsx
+msgid "Couldn't delete everything right now. Try again in a moment."
+msgstr "No se pudo borrar todo en este momento. Inténtalo de nuevo en un momento."
+
 #: src/routes/replay_.uploads.tsx
 #: src/routes/replay.tsx
 msgid "Couldn't delete that upload; try again."
@@ -6575,6 +6580,11 @@ msgstr "Eliminar {rowTitle} de tus subidas"
 msgid "Delete area"
 msgstr "Eliminar área"
 
+#: src/components/me/MyDataPanel.tsx
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Delete everything"
+msgstr "Borrar todo"
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete for good?"
 msgstr "¿Eliminar para siempre?"
@@ -6592,6 +6602,9 @@ msgid "Delete imagemap"
 msgstr "Eliminar imagemap"
 
 #: src/components/me/MyDataPanel.tsx
+msgid "Delete my data"
+msgstr "Borrar mis datos"
+
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Delete my profile"
 msgstr "Borrar mi perfil"
@@ -6599,6 +6612,10 @@ msgstr "Borrar mi perfil"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Delete preset"
 msgstr "Eliminar preset"
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Delete profile"
+msgstr "Borrar perfil"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete skin"
@@ -6617,6 +6634,10 @@ msgstr "Eliminar esta subida"
 #: src/routes/replay.tsx
 msgid "Delete this upload? Its share link stops working and the file is gone for good."
 msgstr "¿Eliminar esta subida? Su enlace para compartir deja de funcionar y el archivo se pierde para siempre."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Delete what's new"
+msgstr "Borrar lo nuevo"
 
 #. placeholder {0}: selectedPreset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -7487,6 +7508,14 @@ msgstr "todo"
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "everything else the archive ships"
 msgstr "todo lo demás que trae el archivo"
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Everything is being deleted."
+msgstr "Todo se está borrando."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Everything was deleted."
+msgstr "Se borró todo."
 
 #. placeholder {0}: formatDanValue(dan.rawDan)
 #: src/components/player/DanEvidenceModal.tsx
@@ -8980,6 +9009,10 @@ msgid "hold to delete"
 msgstr "mantén para eliminar"
 
 #: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to delete everything"
+msgstr "Mantén para borrar todo"
+
+#: src/components/me/RemovePlaysSheet.tsx
 msgid "Hold to delete my profile"
 msgstr "Mantén para borrar mi perfil"
 
@@ -9762,6 +9795,10 @@ msgid "Keep my profile"
 msgstr "Conservar mi perfil"
 
 #: src/components/me/MyDataPanel.tsx
+msgid "Keep the rest"
+msgstr "Conservar lo demás"
+
+#: src/components/me/MyDataPanel.tsx
 #~ msgid "Keep them"
 #~ msgstr "Conservarlas"
 
@@ -9909,6 +9946,7 @@ msgstr "idioma"
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/routes/discord.tsx
 msgid "Language"
 msgstr "Idioma"
 
@@ -12673,8 +12711,8 @@ msgid "nominator"
 msgstr "nominador"
 
 #: src/components/me/MeScoreRow.tsx
-msgid "nomod"
-msgstr "nomod"
+#~ msgid "nomod"
+#~ msgstr "nomod"
 
 #: src/components/ui/ModFilterChip.tsx
 msgid "NoMod"
@@ -20198,6 +20236,10 @@ msgid "They're already a GOAT."
 msgstr "Ya es un GOAT."
 
 #: src/components/me/RemovePlaysSheet.tsx
+msgid "They're deleted on {deleteOn}. You can cancel from this page until then."
+msgstr "Se borran el {deleteOn}. Puedes cancelarlo desde esta página hasta entonces."
+
+#: src/components/me/RemovePlaysSheet.tsx
 msgid "They're removed from your tracked plays, recent plays and activity on this site."
 msgstr "Se eliminan de tus jugadas trackeadas, jugadas recientes y actividad en este sitio."
 
@@ -20860,7 +20902,7 @@ msgstr "Mejores jugadas"
 
 #: src/routes/discord.tsx
 msgid "Top plays from"
-msgstr "Top plays de"
+msgstr "Mejores jugadas de"
 
 #: src/routes/discord.tsx
 msgid "Top plays in"
@@ -20906,7 +20948,7 @@ msgstr "Volver a seguir mis plays"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Tracked"
-msgstr "Seguidos"
+msgstr "Trackeados"
 
 #: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
@@ -21751,6 +21793,7 @@ msgstr "Verlo"
 msgid "view map details"
 msgstr "ver detalles del mapa"
 
+#: src/components/me/MeScoreRow.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
@@ -22153,15 +22196,19 @@ msgstr "Cuándo entró cada carta a tu colección"
 
 #: src/routes/discord.tsx
 msgid "When I get sniped"
-msgstr "Cuando me snipean"
+msgstr "Cuando me hacen snipe"
 
 #: src/routes/news_.companella.tsx
 #~ msgid "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
 #~ msgstr "Cuando osu! tiene la misma partida, tus ratings de skill leen tu timing desde el replay en vez de estimarlo a partir de tus judgements."
 
 #: src/routes/privacy.tsx
-msgid "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay."
-msgstr "Con la sesión iniciada, puedes dejar de trackear o borrar tu perfil desde <0>Mis estadísticas</0>. Al dejar de trackear no se registra nada nuevo y se queda lo que ya estaba registrado. Al borrar tu perfil se oculta de una vez y tus jugadas, stats e historial del perfil se borran 7 días después, a menos que lo canceles antes. Tus packs, skins, replays subidos y colecciones se quedan."
+#~ msgid "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay."
+#~ msgstr "Con la sesión iniciada, puedes dejar de trackear o borrar tu perfil desde <0>Mis estadísticas</0>. Al dejar de trackear no se registra nada nuevo y se queda lo que ya estaba registrado. Al borrar tu perfil se oculta de una vez y tus jugadas, stats e historial del perfil se borran 7 días después, a menos que lo canceles antes. Tus packs, skins, replays subidos y colecciones se quedan."
+
+#: src/routes/privacy.tsx
+msgid "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay. Deleting everything also deletes those, along with your goals, Discord link and supporter status. Cards of you that other players pulled stay with them."
+msgstr "Con la sesión iniciada, puedes dejar de trackear o borrar tu perfil desde <0>Mis estadísticas</0>. Al dejar de trackear no se registra nada nuevo y se queda lo que ya estaba registrado. Al borrar tu perfil se oculta de una vez y tus jugadas, stats e historial del perfil se borran 7 días después, a menos que lo canceles antes. Tus packs, skins, replays subidos y colecciones se quedan. Al borrar todo también se borran esos, junto con tus goals, tu enlace de Discord y tu estado de supporter. Las cartas tuyas que sacaron otros jugadores se quedan con ellos."
 
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "When someone lands a new top play, it drops in your channel automatically, in full detail."
@@ -22877,6 +22924,14 @@ msgstr "Tus top plays de osu!, todo lo registrado mientras estabas en tracking y
 msgid "Your own estimate is on the Skills tab of your player page. Click any dan badge there to see the passes behind it. Everyone else is on the <0>Dan tab of the rankings page</0>."
 msgstr "Tu propia estimación está en la pestaña Skills de tu página de jugador. Haz clic en cualquier insignia de dan ahí para ver los pases que hay detrás. Los demás están en la <0>pestaña Dan de la página de rankings</0>."
 
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your packs and cards, skins, uploaded replays, map collections, goals and supporter time are deleted. Cards of you that other players pulled stay with them."
+msgstr "Se borran tus packs y cartas, skins, replays subidos, colecciones de mapas, goals y tiempo de supporter. Las cartas tuyas que sacaron otros jugadores se quedan con ellos."
+
+#: src/components/me/MyDataPanel.tsx
+msgid "Your packs, skins and everything else get deleted on {deletesOn}."
+msgstr "Tus packs, skins y todo lo demás se borran el {deletesOn}."
+
 #: src/routes/dan-estimates.tsx
 msgid "Your pass"
 msgstr "Tu pase"
@@ -22923,16 +22978,32 @@ msgid "Your profile is being deleted."
 msgstr "Tu perfil se está borrando."
 
 #: src/components/me/MyDataPanel.tsx
+msgid "Your profile is hidden and everything gets deleted on {deletesOn}."
+msgstr "Tu perfil está oculto y todo se borra el {deletesOn}."
+
+#: src/components/me/MyDataPanel.tsx
 msgid "Your profile is hidden and gets deleted on {deletesOn}."
 msgstr "Tu perfil está oculto y se borra el {deletesOn}."
 
 #: src/components/me/RemovePlaysSheet.tsx
-msgid "Your profile is hidden now and deleted on {deleteProfileOn}. You can cancel from this page until then."
-msgstr "Tu perfil se oculta ya y se borra el {deleteProfileOn}. Puedes cancelarlo desde esta página hasta entonces."
+msgid "Your profile is hidden now and deleted on {deleteOn}. You can cancel from this page until then."
+msgstr "Tu perfil se oculta ya y se borra el {deleteOn}. Puedes cancelarlo desde esta página hasta entonces."
+
+#: src/components/me/RemovePlaysSheet.tsx
+#~ msgid "Your profile is hidden now and deleted on {deleteProfileOn}. You can cancel from this page until then."
+#~ msgstr "Tu perfil se oculta ya y se borra el {deleteProfileOn}. Puedes cancelarlo desde esta página hasta entonces."
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your profile is hidden now and everything is deleted on {deleteOn}. You can cancel from this page until then."
+msgstr "Tu perfil se oculta ya y todo se borra el {deleteOn}. Puedes cancelarlo desde esta página hasta entonces."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Your profile was deleted."
 msgstr "Tu perfil se borró."
+
+#: src/components/me/RemovePlaysSheet.tsx
+msgid "Your profile, plays and stats on this site are deleted, and so are your packs and cards, skins, uploaded replays, map collections, goals and supporter time. Cards of you that other players pulled stay with them."
+msgstr "Se borran tu perfil, tus jugadas y tus stats en este sitio, y también tus packs y cartas, skins, replays subidos, colecciones de mapas, goals y tiempo de supporter. Las cartas tuyas que sacaron otros jugadores se quedan con ellos."
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Your profile, plays and stats on this site are deleted. Your packs, skins, uploaded replays and map collections stay."

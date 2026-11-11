@@ -281,6 +281,13 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
   );
 }
 
+// Each language named in itself, as the site's language menu does.
+const DM_LANGUAGES: Array<{ value: string; label: ReactNode }> = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Español" },
+  { value: "zh-CN", label: "中文（简体）" },
+];
+
 // Supporter DMs: the bot messages the viewer's verified Discord link.
 function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; alerts: BotAlerts; onChange: (account: BotAccount) => void }) {
   const [busy, setBusy] = useState(false);
@@ -335,6 +342,15 @@ function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; a
         <Toggle checked={alerts.newMaps} disabled={busy || !usable} onChange={(on) => void save({ newMaps: on })} label={<Trans>New farm maps at my level</Trans>} />
         <Toggle checked={alerts.cardPulls} disabled={busy || !usable} onChange={(on) => void save({ cardPulls: on })} label={<Trans>When someone pulls my card</Trans>} />
         <Toggle checked={alerts.weeklyRecap} disabled={busy || !usable} onChange={(on) => void save({ weeklyRecap: on })} label={<Trans>Weekly recap</Trans>} />
+      </div>
+      <div className={`mt-3 flex flex-wrap items-center gap-2 text-[12px] text-osu-f1 ${usable ? "" : "opacity-50"}`}>
+        <span className="mr-1"><Trans>Language</Trans></span>
+        <Segmented
+          value={alerts.locale}
+          disabled={busy || !usable}
+          options={DM_LANGUAGES}
+          onChange={(value) => void save({ dmLocale: value })}
+        />
       </div>
       <div className={`mt-3 text-[12px] text-osu-f1 ${usable ? "" : "opacity-50"}`}>
         <FeedPlayerPicker

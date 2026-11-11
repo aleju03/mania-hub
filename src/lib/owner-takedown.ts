@@ -206,9 +206,12 @@ export const restoreOwnerTakedown = createServerFn({ method: "POST" })
 /* Every upload in the owner index under this account, deleted the way the
    owner's own delete button does it. The first page (0-based) is re-read each
    round because each delete shifts the rest up. */
-async function deleteOwnedUploads(userId: number): Promise<{ deleted: number; failed: number }> {
+export async function deleteOwnedUploads(
+  userId: number,
+  options: { objectsFirst?: boolean } = {},
+): Promise<{ deleted: number; failed: number }> {
   const { fetchUploadedReplayIndexPage } = await import("./uploaded-replay-index");
-  const { removeUploadedReplay } = await import("./uploaded-replay-delete-server");
+  const { removeUploadedReplay, removeUploadedReplayObjectsFirst } = await import("./uploaded-replay-delete-server");
   let deleted = 0;
   let failed = 0;
   const tried = new Set<string>();
@@ -224,7 +227,9 @@ async function deleteOwnedUploads(userId: number): Promise<{ deleted: number; fa
     if (pending.length === 0) break;
     for (const upload of pending) {
       tried.add(upload.id);
-      const result = await removeUploadedReplay(upload.id, { userId: null, asAdmin: true });
+      const result = options.objectsFirst
+        ? await removeUploadedReplayObjectsFirst(upload.id)
+        : await removeUploadedReplay(upload.id, { userId: null, asAdmin: true });
       if (result.ok) deleted += 1;
       else failed += 1;
     }

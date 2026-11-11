@@ -1967,18 +1967,24 @@ function PlayRow({
         </div>
       </div>
       <div className="hidden shrink-0 items-end gap-4 text-right sm:flex">
-        {play.accuracy != null ? (
-          <div>
-            <div className="text-xs font-semibold tabular-nums text-osu-l2">{formatAccuracy(play.accuracy)}</div>
-            <div className="mt-0.5 text-[8px] uppercase tracking-wide text-osu-f1">{t`accuracy`}</div>
-          </div>
-        ) : null}
-        {play.pp != null ? (
-          <div>
-            <div className="text-xs font-bold tabular-nums text-osu-pink-light">{formatPP(play.pp)}</div>
-            <div className="mt-0.5 text-[8px] uppercase tracking-wide text-osu-f1">pp</div>
-          </div>
-        ) : null}
+        {/* Fixed widths, and the pp slot stays when a play has none, so the
+            columns line up down the list. */}
+        <div className="w-12">
+          {play.accuracy != null ? (
+            <>
+              <div className="text-xs font-semibold tabular-nums text-osu-l2">{formatAccuracy(play.accuracy)}</div>
+              <div className="mt-0.5 text-[8px] uppercase tracking-wide text-osu-f1">{t`accuracy`}</div>
+            </>
+          ) : null}
+        </div>
+        <div className="w-11">
+          {play.pp != null ? (
+            <>
+              <div className="text-xs font-bold tabular-nums text-osu-pink-light">{formatPP(play.pp)}</div>
+              <div className="mt-0.5 text-[8px] uppercase tracking-wide text-osu-f1">pp</div>
+            </>
+          ) : null}
+        </div>
       </div>
     </button>
     {trailing}
