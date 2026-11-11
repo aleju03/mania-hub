@@ -11295,8 +11295,8 @@ msgid "Get {grade} {speed} on {map}"
 msgstr "Consigue {grade} {speed} en {map}"
 
 #: src/routes/discord.tsx
-msgid "Get a DM when you finish a goal or someone pulls your card, plus a recap of your week."
-msgstr "Recibe un DM cuando completas una meta o alguien saca tu carta, y un resumen de tu semana."
+#~ msgid "Get a DM when you finish a goal or someone pulls your card, plus a recap of your week."
+#~ msgstr "Recibe un DM cuando completas una meta o alguien saca tu carta, y un resumen de tu semana."
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "Get a share link"

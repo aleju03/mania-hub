@@ -104,6 +104,7 @@ function DiscordToolPage() {
             <Hero info={info} />
             {info.configured ? <AccountPanel account={account} onChange={setAccount} /> : null}
             {info.configured ? <ServersPanel account={account} inviteUrl={info.inviteUrl} /> : null}
+            {info.configured && account?.alerts && !account.alerts.supporter ? <DmPerkLine /> : null}
             {info.configured ? <PreviewPanel initialProfile={profilePreview} /> : null}
             {info.configured ? <CommandsPanel commands={info.commands} /> : null}
           </div>
@@ -275,7 +276,7 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
         </div>
       ) : null}
 
-      {account.alerts ? <DmAlertsSection account={account} alerts={account.alerts} onChange={onChange} /> : null}
+      {account.alerts?.supporter ? <DmAlertsSection account={account} alerts={account.alerts} onChange={onChange} /> : null}
     </Panel>
   );
 }
@@ -286,6 +287,20 @@ const DM_LANGUAGES: Array<{ value: string; label: ReactNode }> = [
   { value: "es", label: "Español" },
   { value: "zh-CN", label: "中文（简体）" },
 ];
+
+/* The DMs for someone who isn't a supporter: one quiet line after the
+   settings they can use, not a pitch in the middle of them. */
+function DmPerkLine() {
+  return (
+    <section className="flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-white/[0.07] pt-5 text-[12px] text-osu-f1">
+      <span className="text-[13px] font-semibold text-white"><Trans>DMs from the bot</Trans></span>
+      <span className="rounded bg-osu-pink/15 px-1.5 py-0.5 text-[11px] font-semibold text-osu-pink-light"><Trans>Supporters</Trans></span>
+      <Link to="/support" hash="bot-dms" className="font-semibold text-osu-pink-light hover:underline">
+        <Trans>See what supporters get</Trans>
+      </Link>
+    </section>
+  );
+}
 
 // Supporter DMs: the bot messages the viewer's verified Discord link.
 function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; alerts: BotAlerts; onChange: (account: BotAccount) => void }) {
@@ -318,20 +333,6 @@ function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; a
     }
   };
   const blocked = testResult === "blocked" || (testResult == null && alerts.failedAt != null);
-
-  // A perk they don't have: one quiet line among the settings, not a pitch.
-  if (!alerts.supporter) {
-    return (
-      <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-white/[0.07] pt-4 text-[12px] text-osu-f1">
-        <span className="text-[13px] font-semibold text-white"><Trans>DMs from the bot</Trans></span>
-        <span className="rounded bg-osu-pink/15 px-1.5 py-0.5 text-[11px] font-semibold text-osu-pink-light"><Trans>Supporters</Trans></span>
-        <span><Trans>Get a DM when you finish a goal or someone pulls your card, plus a recap of your week.</Trans></span>
-        <Link to="/support" hash="bot-dms" className="font-semibold text-osu-pink-light hover:underline">
-          <Trans>See what supporters get</Trans>
-        </Link>
-      </div>
-    );
-  }
 
   return (
     <div className="mt-4 border-t border-white/[0.07] pt-4">
