@@ -975,12 +975,24 @@ function PreviewSkeleton() {
   );
 }
 
+// Commands that answer the same for anyone, then a post from each feed.
 const PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
   { id: "profile", label: msg`/profile` },
   { id: "skills", label: msg`/skills` },
+  { id: "top", label: msg`/top` },
+  { id: "recent", label: msg`/recent` },
+  { id: "maniacard", label: msg`/maniacard` },
   { id: "map", label: msg`/map` },
+  { id: "farm", label: msg`/farm` },
   { id: "challenge", label: msg`/challenge` },
+  { id: "rankings", label: msg`/rankings` },
   { id: "help", label: msg`/help` },
+];
+
+const FEED_PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
+  { id: "feed-top-plays", label: FEED_NAMES.top_play },
+  { id: "feed-new-maps", label: FEED_NAMES.new_map },
+  { id: "feed-changelog", label: FEED_NAMES.changelog },
 ];
 
 function PreviewPanel({ initialProfile }: { initialProfile: DiscordMessageJson | null }) {
@@ -1004,18 +1016,20 @@ function PreviewPanel({ initialProfile }: { initialProfile: DiscordMessageJson |
   const message = messages[view];
   return (
     <Panel title={<Trans>Previews</Trans>}>
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {PREVIEWS.map((preview) => (
-          <button
-            key={preview.id}
-            type="button"
-            onClick={() => setView(preview.id)}
-            className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${preview.id === view ? "bg-osu-pink/15 text-osu-pink-light" : "bg-osu-b4 text-osu-f1 hover:text-white"}`}
-          >
-            {i18n._(preview.label)}
-          </button>
-        ))}
-      </div>
+      {[PREVIEWS, FEED_PREVIEWS].map((group, index) => (
+        <div key={index} className={`flex flex-wrap gap-1.5 ${index === 0 ? "mb-1.5" : "mb-3"}`}>
+          {group.map((preview) => (
+            <button
+              key={preview.id}
+              type="button"
+              onClick={() => setView(preview.id)}
+              className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${preview.id === view ? "bg-osu-pink/15 text-osu-pink-light" : "bg-osu-b4 text-osu-f1 hover:text-white"}`}
+            >
+              {i18n._(preview.label)}
+            </button>
+          ))}
+        </div>
+      ))}
       <div className="overflow-hidden rounded-xl p-4" style={{ backgroundColor: DISCORD.msg, fontFamily: DISCORD.font }}>
         <div className="flex gap-4">
           <img src="/images/discord/bot-avatar.png" alt="" className="h-10 w-10 shrink-0 rounded-full" />

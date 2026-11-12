@@ -2032,8 +2032,16 @@ msgid "/challenge"
 msgstr "/challenge"
 
 #: src/routes/discord.tsx
+msgid "/farm"
+msgstr "/farm"
+
+#: src/routes/discord.tsx
 msgid "/help"
 msgstr "/help"
+
+#: src/routes/discord.tsx
+msgid "/maniacard"
+msgstr "/maniacard"
 
 #: src/routes/discord.tsx
 msgid "/map"
@@ -2044,8 +2052,20 @@ msgid "/profile"
 msgstr "/profile"
 
 #: src/routes/discord.tsx
+msgid "/rankings"
+msgstr "/rankings"
+
+#: src/routes/discord.tsx
+msgid "/recent"
+msgstr "/recent"
+
+#: src/routes/discord.tsx
 msgid "/skills"
 msgstr "/skills"
+
+#: src/routes/discord.tsx
+msgid "/top"
+msgstr "/top"
 
 #. placeholder {0}: formatNumber(variant.country_rank)
 #: src/routes/player/$username.tsx
