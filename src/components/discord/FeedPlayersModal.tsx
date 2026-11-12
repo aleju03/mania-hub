@@ -12,42 +12,44 @@ import { CountryFlag } from "../ui/CountryFlag";
 import { SelectMenu, type SelectMenuOption } from "../ui/SelectMenu";
 
 const PAGE = 30;
-const SCOPE_KEY = "mania-hub-feed-picker-countries";
 // Past this many countries the chips stop helping; the region's name stands in.
 const MAX_CHIPS = 14;
 
-function readScope(): string[] {
-  try {
-    const stored = JSON.parse(window.localStorage.getItem(SCOPE_KEY) ?? "[]") as unknown;
-    return Array.isArray(stored) ? stored.filter((code): code is string => typeof code === "string" && /^[A-Z]{2}$/.test(code)) : [];
-  } catch {
-    return [];
-  }
+export type FeedPlayersMode = "only" | "except";
+
+export interface FeedPlayersChoice {
+  players: BotFeedPlayer[];
+  mode: FeedPlayersMode;
+  countries: string[];
 }
 
 /**
- * The players a top-play feed posts for. The left side browses the tracked
- * players of the chosen countries, highest pp first; the right side is who is
- * picked. Nothing is picked by choosing a country: a feed only ever takes the
- * players ticked here.
+ * Who a top-play feed posts. The left side picks the countries and browses
+ * their tracked players, highest pp first; the right side is the ticked list,
+ * which is either the only players the feed posts or the ones it leaves out.
+ * With nobody ticked the feed posts everyone from the countries.
  */
-export function FeedPlayersModal({ title, players, max, fallbackCountry, onSave, onClose }: {
+export function FeedPlayersModal({ title, players, mode: initialMode, countries: initialCountries, max, feedCountry, onSave, onClose }: {
   title: string;
   players: BotFeedPlayer[];
+  mode: FeedPlayersMode;
+  /** The feed's own set of countries; empty means it uses `feedCountry`. */
+  countries: string[];
   max: number;
-  /** Shown first when this browser has no countries remembered. */
-  fallbackCountry: string | null;
-  onSave: (players: BotFeedPlayer[]) => void;
+  /** The feed's one country, or null when it is Global. */
+  feedCountry: string | null;
+  onSave: (choice: FeedPlayersChoice) => void;
   onClose: () => void;
 }) {
   const { t } = useLingui();
   useBodyScrollLock(true);
   const [picked, setPicked] = useState(players);
-  const [countries, setCountries] = useState<string[]>(() => {
-    const stored = readScope();
-    if (stored.length) return stored;
-    return fallbackCountry && /^[A-Z]{2}$/.test(fallbackCountry) ? [fallbackCountry] : [];
-  });
+  const [mode, setMode] = useState<FeedPlayersMode>(initialMode);
+  const startCountries = useMemo(
+    () => (initialCountries.length ? initialCountries : feedCountry && /^[A-Z]{2}$/.test(feedCountry) ? [feedCountry] : []),
+    [initialCountries, feedCountry],
+  );
+  const [countries, setCountries] = useState<string[]>(startCountries);
   const [region, setRegion] = useState("");
   const [codeDraft, setCodeDraft] = useState("");
   const [query, setQuery] = useState("");
@@ -61,10 +63,6 @@ export function FeedPlayersModal({ title, players, max, fallbackCountry, onSave,
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  useEffect(() => {
-    try { window.localStorage.setItem(SCOPE_KEY, JSON.stringify(countries)); } catch { /* private mode */ }
-  }, [countries]);
 
   const scopeKey = countries.join(",");
   useEffect(() => {
@@ -114,7 +112,18 @@ export function FeedPlayersModal({ title, players, max, fallbackCountry, onSave,
     }
     setCodeDraft("");
   };
-  const changed = picked.length !== players.length || picked.some((player, index) => player.id !== players[index]?.id);
+  const changed = mode !== initialMode
+    || countries.join(",") !== startCountries.join(",")
+    || picked.length !== players.length
+    || picked.some((player, index) => player.id !== players[index]?.id);
+  const where = countries.length === 0
+    ? feedCountry ?? t`every country`
+    : countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`;
+  const summary = picked.length === 0
+    ? t`Posts top plays from everyone in ${where}.`
+    : mode === "except"
+      ? t`Posts top plays from everyone in ${where} except the ${picked.length} picked.`
+      : t`Posts top plays from the ${picked.length} picked players only.`;
   const regionName = region ? getRegionDef(region)?.name : null;
 
   return createPortal(
@@ -230,6 +239,19 @@ export function FeedPlayersModal({ title, players, max, fallbackCountry, onSave,
           </div>
 
           <div className="flex min-h-0 min-w-0 shrink-0 flex-col sm:shrink">
+            <div className="mb-2 flex rounded-lg bg-white/[0.07] p-0.5 text-[12px] font-semibold">
+              {(["only", "except"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={mode === value}
+                  onClick={() => setMode(value)}
+                  className={`flex-1 rounded-md px-2 py-1 ${mode === value ? "bg-osu-pink text-white" : "text-osu-l2 hover:text-white"}`}
+                >
+                  {value === "only" ? <Trans>Only these</Trans> : <Trans>Everyone except</Trans>}
+                </button>
+              ))}
+            </div>
             <div className="flex items-center text-[12px] text-osu-f1">
               <Trans>Picked {picked.length} of {max}</Trans>
               {picked.length ? (
@@ -251,14 +273,15 @@ export function FeedPlayersModal({ title, players, max, fallbackCountry, onSave,
           </div>
         </div>
 
-        <div className="mt-4 flex shrink-0 items-center justify-end gap-2">
+        <div className="mt-4 flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <p className="mr-auto min-w-0 text-[12px] text-osu-l2">{summary}</p>
           <button type="button" onClick={onClose} className="rounded-lg px-3.5 py-2 text-[13px] font-bold text-osu-l2 hover:bg-white/[0.07] hover:text-white">
             <Trans>Cancel</Trans>
           </button>
           <button
             type="button"
             disabled={!changed}
-            onClick={() => { onSave(picked); onClose(); }}
+            onClick={() => { onSave({ players: picked, mode, countries: feedCountry && countries.length === 1 && countries[0] === feedCountry ? [] : countries }); onClose(); }}
             className="rounded-lg bg-osu-pink px-4 py-2 text-[13px] font-bold text-white hover:brightness-110 disabled:opacity-40"
           >
             <Trans>Save</Trans>

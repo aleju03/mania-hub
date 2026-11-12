@@ -416,10 +416,10 @@ function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onCh
 const FILTER_KEYS = [4, 5, 6, 7, 8, 9, 10];
 const KEYMODE_TOP_CHOICES = [0, 100, 50];
 
-type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[] };
+type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "except"; countries: string[] };
 
 function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
-  return { minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [] };
+  return { minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [], playersMode: sub.playersMode ?? "only", countries: sub.countries ?? [] };
 }
 
 // Which top plays a channel posts: keymodes, a cut to the player's best N of
@@ -428,7 +428,7 @@ function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState 
 function TopPlayFilters({ sub, channelName, onSave }: {
   sub: BotServer["subscriptions"][number];
   channelName?: string;
-  onSave: (filters: { minPp: number; keys: number[]; keymodeTop: number; players: number[] }) => Promise<boolean>;
+  onSave: (filters: { minPp: number; keys: number[]; keymodeTop: number; players: number[]; playersMode: "only" | "except"; countries: string[] }) => Promise<boolean>;
 }) {
   const { t } = useLingui();
   const [picking, setPicking] = useState(false);
@@ -447,7 +447,7 @@ function TopPlayFilters({ sub, channelName, onSave }: {
     setFilters(next);
     pending.current++;
     queue.current = queue.current
-      .then(() => onSave({ minPp: next.minPp, keys: next.keys, keymodeTop: next.keymodeTop, players: next.players.map((p) => p.id) }))
+      .then(() => onSave({ minPp: next.minPp, keys: next.keys, keymodeTop: next.keymodeTop, players: next.players.map((p) => p.id), playersMode: next.playersMode, countries: next.countries }))
       .then((ok) => {
         pending.current--;
         if (!ok && pending.current === 0) setFilters(filtersOf(sub));
@@ -455,7 +455,10 @@ function TopPlayFilters({ sub, channelName, onSave }: {
   };
   const chip = (active: boolean, interactive = true) =>
     `rounded-md px-2 py-0.5 text-[12px] font-semibold ${active ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2"} ${interactive ? "hover:brightness-110" : "cursor-default"}`;
-  const { keys, keymodeTop, players } = filters;
+  const { keys, keymodeTop, players, playersMode, countries } = filters;
+  const scope = countries.length === 0
+    ? sub.country === "GLOBAL" ? t`every country` : sub.country
+    : countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`;
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-3 text-[12px] text-osu-f1">
@@ -499,7 +502,9 @@ function TopPlayFilters({ sub, channelName, onSave }: {
       </div>
       <div className="flex w-full flex-wrap items-center gap-1.5">
         <span className="mr-1"><Trans>Players</Trans></span>
-        {players.length === 0 ? <span className="text-osu-l2"><Trans>Everyone</Trans></span> : null}
+        {players.length === 0
+          ? <span className="text-osu-l2"><Trans>Everyone in {scope}</Trans></span>
+          : playersMode === "except" ? <span className="text-osu-l2"><Trans>Everyone in {scope} except</Trans></span> : null}
         {players.slice(0, 8).map((player) => (
           <span key={player.id} className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.07] py-1 pl-1.5 pr-2 text-[13px] font-semibold text-white">
             {player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-4 w-4 rounded-full" /> : null}
@@ -516,8 +521,10 @@ function TopPlayFilters({ sub, channelName, onSave }: {
           title={channelName ? t`Players for #${channelName}` : t`Players`}
           players={players}
           max={MAX_FEED_PLAYERS}
-          fallbackCountry={sub.country === "GLOBAL" ? null : sub.country}
-          onSave={(next) => save({ players: next })}
+          mode={playersMode}
+          countries={countries}
+          feedCountry={sub.country === "GLOBAL" ? null : sub.country}
+          onSave={(next) => save({ players: next.players, playersMode: next.mode, countries: next.countries })}
           onClose={() => setPicking(false)}
         />
       ) : null}
@@ -525,7 +532,7 @@ function TopPlayFilters({ sub, channelName, onSave }: {
   );
 }
 
-const MAX_FEED_PLAYERS = 50;
+const MAX_FEED_PLAYERS = 200;
 
 // The players a top-play feed is limited to, picked from players the site
 // tracks. Empty means everyone in the feed's country.
@@ -825,7 +832,11 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                             <Toggle checked={Boolean(sub)} disabled={busy} onChange={(on) => void apply({ feed: { channelId: channel.id, feedType: feed, on, country } })} />
                             {sub && feed === "top_play" ? (
                               <span className="text-[11px] text-osu-f1">
-                                {sub.players?.length ? <Plural value={sub.players.length} one="# player" other="# players" /> : sub.country === "GLOBAL" ? i18n._(msg`Global`) : sub.country}
+                                {sub.players?.length && sub.playersMode !== "except"
+                                  ? <Plural value={sub.players.length} one="# player" other="# players" />
+                                  : sub.countries?.length
+                                    ? sub.countries.length <= 3 ? sub.countries.join(", ") : <Plural value={sub.countries.length} one="# country" other="# countries" />
+                                    : sub.country === "GLOBAL" ? i18n._(msg`Global`) : sub.country}
                               </span>
                             ) : null}
                           </div>

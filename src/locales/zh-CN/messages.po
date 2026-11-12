@@ -171,6 +171,11 @@ msgstr "{0, plural, other {有 # 个转谱成绩未计入，osu! 自己的键数
 msgid "{0, plural, one {# copy} other {# copies}}"
 msgstr "{0, plural, other {# 张}}"
 
+#. placeholder {0}: sub.countries.length
+#: src/routes/discord.tsx
+msgid "{0, plural, one {# country} other {# countries}}"
+msgstr "{0, plural, other {# 个国家}}"
+
 #. placeholder {0}: diffs.length
 #: src/components/maps/SearchCard.tsx
 msgid "{0, plural, one {# diff} other {# diffs}}"
@@ -486,6 +491,7 @@ msgstr "{0} 无法下载，只应用了配色"
 
 #. placeholder {0}: countries.length
 #: src/components/discord/FeedPlayersModal.tsx
+#: src/routes/discord.tsx
 msgid "{0} countries"
 msgstr "{0} 个国家"
 
@@ -7453,6 +7459,11 @@ msgstr "每张谱面都有一个段位，你的段位根据你通过过的谱面
 msgid "every collector"
 msgstr "全部收藏者"
 
+#: src/components/discord/FeedPlayersModal.tsx
+#: src/routes/discord.tsx
+msgid "every country"
+msgstr "所有国家"
+
 #: src/routes/recommendations.tsx
 msgid "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
 msgstr "你 pp 附近的玩家实际在打的所有刷分谱面，按持有人数排序。已通关的谱面也会保留，方便你看到自己已有的位置。"
@@ -7523,6 +7534,18 @@ msgstr "所有已追踪玩家，概率相同"
 #: src/routes/discord.tsx
 msgid "Everyone"
 msgstr "所有人"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone except"
+msgstr "除这些外的所有人"
+
+#: src/routes/discord.tsx
+msgid "Everyone in {scope}"
+msgstr "{scope} 的所有人"
+
+#: src/routes/discord.tsx
+msgid "Everyone in {scope} except"
+msgstr "{scope} 的所有人，除了"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Everyone watching your replays sees this skin."
@@ -13398,6 +13421,10 @@ msgstr "只有全球前 100 名参与。"
 #~ msgid "Only the last few opens of each collector are kept, or the link is wrong."
 #~ msgstr "每位收藏者只保留最近几次开包，或者链接有误。"
 
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Only these"
+msgstr "仅这些"
+
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "only you"
@@ -14623,6 +14650,20 @@ msgstr "发布你的服务器"
 #: src/routes/communities_.$id.tsx
 msgid "posted by"
 msgstr "发布者"
+
+#. placeholder {0}: picked.length
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Posts top plays from everyone in {where} except the {0} picked."
+msgstr "发布 {where} 所有人的 top plays，已选的 {0} 人除外。"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Posts top plays from everyone in {where}."
+msgstr "发布 {where} 所有人的 top plays。"
+
+#. placeholder {0}: picked.length
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Posts top plays from the {0} picked players only."
+msgstr "仅发布已选 {0} 名玩家的 top plays。"
 
 #: src/components/player/ProfileParts.tsx
 msgid "pp"

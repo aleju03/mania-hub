@@ -159,6 +159,11 @@ msgstr "{0, plural, one {# convert is left out, as osu! leaves converts out of i
 msgid "{0, plural, one {# copy} other {# copies}}"
 msgstr "{0, plural, one {# copy} other {# copies}}"
 
+#. placeholder {0}: sub.countries.length
+#: src/routes/discord.tsx
+msgid "{0, plural, one {# country} other {# countries}}"
+msgstr "{0, plural, one {# country} other {# countries}}"
+
 #. placeholder {0}: diffs.length
 #: src/components/maps/SearchCard.tsx
 msgid "{0, plural, one {# diff} other {# diffs}}"
@@ -474,6 +479,7 @@ msgstr "{0} could not be downloaded, applied colors only"
 
 #. placeholder {0}: countries.length
 #: src/components/discord/FeedPlayersModal.tsx
+#: src/routes/discord.tsx
 msgid "{0} countries"
 msgstr "{0} countries"
 
@@ -7472,6 +7478,11 @@ msgstr "Every chart gets a dan level, and your dan is worked out from the charts
 msgid "every collector"
 msgstr "every collector"
 
+#: src/components/discord/FeedPlayersModal.tsx
+#: src/routes/discord.tsx
+msgid "every country"
+msgstr "every country"
+
 #: src/routes/recommendations.tsx
 msgid "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
 msgstr "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
@@ -7542,6 +7553,18 @@ msgstr "Every tracked player, same odds"
 #: src/routes/discord.tsx
 msgid "Everyone"
 msgstr "Everyone"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone except"
+msgstr "Everyone except"
+
+#: src/routes/discord.tsx
+msgid "Everyone in {scope}"
+msgstr "Everyone in {scope}"
+
+#: src/routes/discord.tsx
+msgid "Everyone in {scope} except"
+msgstr "Everyone in {scope} except"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Everyone watching your replays sees this skin."
@@ -13425,6 +13448,10 @@ msgstr "Only the global top 100 take part."
 #~ msgid "Only the last few opens of each collector are kept, or the link is wrong."
 #~ msgstr "Only the last few opens of each collector are kept, or the link is wrong."
 
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Only these"
+msgstr "Only these"
+
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
 msgid "only you"
@@ -14650,6 +14677,20 @@ msgstr "Post your server"
 #: src/routes/communities_.$id.tsx
 msgid "posted by"
 msgstr "posted by"
+
+#. placeholder {0}: picked.length
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Posts top plays from everyone in {where} except the {0} picked."
+msgstr "Posts top plays from everyone in {where} except the {0} picked."
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Posts top plays from everyone in {where}."
+msgstr "Posts top plays from everyone in {where}."
+
+#. placeholder {0}: picked.length
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Posts top plays from the {0} picked players only."
+msgstr "Posts top plays from the {0} picked players only."
 
 #: src/components/player/ProfileParts.tsx
 msgid "pp"
