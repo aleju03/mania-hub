@@ -55,7 +55,9 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
   const [query, setQuery] = useState("");
   const [list, setList] = useState<LiveUserSearchEntry[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  // True from the first paint when there is a list to fetch, so the window
+  // never opens on "no players" for a frame before the list lands.
+  const [loading, setLoading] = useState(startCountries.length > 0);
   const request = useRef(0);
 
   useEffect(() => {
@@ -134,7 +136,7 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
       aria-label={title}
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
-      <div className="flex max-h-full w-full max-w-[820px] flex-col rounded-xl bg-osu-b5 p-5">
+      <div className="flex h-full max-h-full w-full max-w-[820px] flex-col rounded-xl bg-osu-b5 p-5 sm:h-[640px]">
         <h2 className="text-[16px] font-bold text-white">{title}</h2>
 
         <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 sm:grid sm:grid-cols-[minmax(0,1fr)_240px] sm:gap-6">
@@ -196,7 +198,7 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
               className="mt-3 w-full rounded-lg bg-white/[0.07] px-3 py-2 text-[13px] text-white outline-none placeholder:text-osu-l2 focus:ring-1 focus:ring-osu-pink/60 disabled:opacity-50"
             />
 
-            <div className="mt-2 min-h-[120px] flex-1 overflow-y-auto sm:min-h-[260px]">
+            <div className="mt-2 min-h-[120px] flex-1 overflow-y-auto">
               {!countries.length ? (
                 <p className="px-1 py-6 text-[13px] text-osu-f1"><Trans>Pick a region or add a country to see its players.</Trans></p>
               ) : !list.length ? (
@@ -273,8 +275,8 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
           </div>
         </div>
 
-        <div className="mt-4 flex shrink-0 flex-wrap items-center justify-end gap-2">
-          <p className="mr-auto min-w-0 text-[12px] text-osu-l2">{summary}</p>
+        <p className="mt-4 shrink-0 text-[12px] text-osu-l2">{summary}</p>
+        <div className="mt-2 flex shrink-0 items-center justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg px-3.5 py-2 text-[13px] font-bold text-osu-l2 hover:bg-white/[0.07] hover:text-white">
             <Trans>Cancel</Trans>
           </button>
