@@ -28,6 +28,7 @@ import {
 } from "../lib/discord-bot";
 import { DiscordLogo, DISCORD_BLURPLE } from "../components/ui/DiscordLogo";
 import { FeedPlayersModal } from "../components/discord/FeedPlayersModal";
+import { findRegionByCountries } from "../lib/regions";
 import { Panel } from "../components/companella/primitives";
 import { DiscordMessageBodyView, type DiscordMessageJson } from "../components/discord/message/DiscordMessageView";
 import { DISCORD } from "../components/discord/message/discord-markdown";
@@ -458,7 +459,7 @@ function TopPlayFilters({ sub, channelName, onSave }: {
   const { keys, keymodeTop, players, playersMode, countries } = filters;
   const scope = countries.length === 0
     ? sub.country === "GLOBAL" ? t`every country` : sub.country
-    : countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`;
+    : findRegionByCountries(countries)?.name ?? (countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`);
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 sm:pl-3 gap-y-2 text-[12px] text-osu-f1">
@@ -882,7 +883,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                                 {sub.players?.length && sub.playersMode !== "except"
                                   ? <Plural value={sub.players.length} one="# player" other="# players" />
                                   : sub.countries?.length
-                                    ? sub.countries.length <= 3 ? sub.countries.join(", ") : <Plural value={sub.countries.length} one="# country" other="# countries" />
+                                    ? findRegionByCountries(sub.countries)?.name ?? (sub.countries.length <= 3 ? sub.countries.join(", ") : <Plural value={sub.countries.length} one="# country" other="# countries" />)
                                     : sub.country === "GLOBAL" ? i18n._(msg`Global`) : sub.country}
                               </span>
                             ) : null}

@@ -5,7 +5,7 @@ import { Check, X } from "lucide-react";
 
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { fetchLiveRosterPlayers, type LiveUserSearchEntry } from "../../lib/live-backend";
-import { CONTINENT_OPTIONS, REGION_OPTIONS, getRegionDef } from "../../lib/regions";
+import { CONTINENT_OPTIONS, REGION_OPTIONS, findRegionByCountries, getRegionDef } from "../../lib/regions";
 import { getCountryName } from "../../lib/country";
 import type { BotFeedPlayer } from "../../lib/discord-bot";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -50,7 +50,10 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
     [initialCountries, feedCountry],
   );
   const [countries, setCountries] = useState<string[]>(startCountries);
-  const [region, setRegion] = useState("");
+  // A set that is exactly one region reads as that region, not as its countries.
+  const regionDef = useMemo(() => findRegionByCountries(countries), [countries]);
+  const region = regionDef?.code ?? "";
+  const [showMembers, setShowMembers] = useState(false);
   const [codeDraft, setCodeDraft] = useState("");
   const [query, setQuery] = useState("");
   const [list, setList] = useState<LiveUserSearchEntry[]>([]);
@@ -110,7 +113,6 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
     const code = codeDraft.trim().toUpperCase();
     if (/^[A-Z]{2}$/.test(code) && !countries.includes(code)) {
       setCountries([...countries, code]);
-      setRegion("");
     }
     setCodeDraft("");
   };
@@ -120,13 +122,12 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
     || picked.some((player, index) => player.id !== players[index]?.id);
   const where = countries.length === 0
     ? feedCountry ?? t`every country`
-    : countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`;
+    : regionDef ? regionDef.name : countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`;
   const summary = picked.length === 0
     ? t`Posts top plays from everyone in ${where}.`
     : mode === "except"
       ? t`Posts top plays from everyone in ${where} except the ${picked.length} picked.`
       : t`Posts top plays from the ${picked.length} picked players only.`;
-  const regionName = region ? getRegionDef(region)?.name : null;
 
   return createPortal(
     <div
@@ -148,9 +149,8 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
                 searchable
                 ariaLabel={t`Region`}
                 onChange={(value) => {
-                  setRegion(value);
-                  const members = getRegionDef(value)?.countries;
-                  if (members) setCountries([...members]);
+                  setShowMembers(false);
+                  setCountries([...(getRegionDef(value)?.countries ?? [])]);
                 }}
               />
               <input
@@ -165,17 +165,21 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
             </div>
             {countries.length ? (
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                {countries.length > MAX_CHIPS ? (
-                  <span className="text-[12px] text-osu-f1">
-                    {regionName ? `${regionName}, ` : ""}<Trans>{countries.length} countries</Trans>
-                  </span>
+                {regionDef && !showMembers ? (
+                  // The menu above already names the region; its countries stay
+                  // one tap away for leaving one out.
+                  <button type="button" onClick={() => setShowMembers(true)} className="text-[12px] font-semibold text-osu-f1 hover:text-white">
+                    <Trans>{countries.length} countries</Trans>
+                  </button>
+                ) : countries.length > MAX_CHIPS ? (
+                  <span className="text-[12px] text-osu-f1"><Trans>{countries.length} countries</Trans></span>
                 ) : countries.map((code) => (
                   <button
                     key={code}
                     type="button"
                     title={getCountryName(code)}
                     aria-label={t`Remove ${getCountryName(code)}`}
-                    onClick={() => { setCountries(countries.filter((entry) => entry !== code)); setRegion(""); }}
+                    onClick={() => setCountries(countries.filter((entry) => entry !== code))}
                     className="inline-flex items-center gap-1.5 rounded-md bg-osu-pink px-2 py-0.5 text-[12px] font-bold text-white hover:brightness-110"
                   >
                     <CountryFlag code={code} size="sm" decorative />
@@ -183,9 +187,11 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
                     <X className="h-3 w-3 opacity-80" />
                   </button>
                 ))}
-                <button type="button" onClick={() => { setCountries([]); setRegion(""); }} className="px-1 text-[12px] font-semibold text-osu-f1 hover:text-white">
-                  <Trans>Clear</Trans>
-                </button>
+                {regionDef && !showMembers ? null : (
+                  <button type="button" onClick={() => setCountries([])} className="px-1 text-[12px] font-semibold text-osu-f1 hover:text-white">
+                    <Trans>Clear</Trans>
+                  </button>
+                )}
               </div>
             ) : null}
 
