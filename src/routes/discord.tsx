@@ -461,7 +461,7 @@ function TopPlayFilters({ sub, channelName, onSave }: {
     : countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-3 text-[12px] text-osu-f1">
+    <div className="flex flex-wrap items-center gap-x-4 sm:pl-3 gap-y-2 text-[12px] text-osu-f1">
       <div className="flex flex-wrap items-center gap-1">
         <span className="mr-1"><Trans>Top plays in</Trans></span>
         <button type="button" className={chip(keys.length === 0, keys.length > 0)} onClick={() => { if (keys.length) save({ keys: [] }); }}><Trans>All keys</Trans></button>
@@ -805,7 +805,54 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
             <p className="text-[13px] text-osu-l2"><Trans>Turn on Top plays in a channel, then choose the players it posts.</Trans></p>
           )}
 
-          <div className="overflow-x-auto">
+          {/* Phones: one block per channel, each feed on its own line. A table of
+              four switch columns is wider than the screen there. */}
+          <div className="sm:hidden">
+            {channels.map((channel) => {
+              const topPlays = server.subscriptions.find((s) => s.channelId === channel.id && s.feedType === "top_play");
+              return (
+                <div key={channel.id} className="border-t border-white/[0.07] py-2.5">
+                  <div className="text-[14px] font-semibold text-white">
+                    <span className="text-osu-f1">#</span>{channel.name}
+                    {channel.category ? <span className="ml-2 text-[11px] font-normal text-osu-f1">{channel.category}</span> : null}
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {feedTypes.map((feed) => {
+                      const sub = server.subscriptions.find((s) => s.channelId === channel.id && s.feedType === feed);
+                      return (
+                        <div key={feed}>
+                          <Toggle
+                            checked={Boolean(sub)}
+                            disabled={busy}
+                            onChange={(on) => void apply({ feed: { channelId: channel.id, feedType: feed, on, country } })}
+                            label={FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed}
+                          />
+                          {feed === "top_play" && topPlays ? (
+                            <div className="mt-2">
+                              <TopPlayFilters
+                                sub={topPlays}
+                                channelName={channel.name}
+                                onSave={(filters) => saveFilters({ feedFilters: { channelId: channel.id, feedType: "top_play", ...filters } })}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                    {autoDanAvailable ? (
+                      <Toggle
+                        checked={server.settings.autoDanChannels.includes("*") || server.settings.autoDanChannels.includes(channel.id)}
+                        disabled={busy || server.settings.autoDanChannels.includes("*")}
+                        onChange={(on) => void apply({ autoDan: { channelId: channel.id, on } })}
+                        label={<Trans>Dan on score posts</Trans>}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="text-left text-[12px] text-osu-f1">
