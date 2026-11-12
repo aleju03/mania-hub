@@ -119,17 +119,17 @@ export function FeedPlayersModal({ title, players, max, fallbackCountry, onSave,
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[140] flex justify-center overflow-y-auto bg-black/70 py-3 pl-3 pr-[calc(0.75rem+var(--modal-scrollbar-compensation,0px))] sm:py-6 sm:pl-4 sm:pr-[calc(1rem+var(--modal-scrollbar-compensation,0px))]"
+      className="fixed inset-0 z-[140] flex items-center justify-center bg-black/70 py-3 pl-3 pr-[calc(0.75rem+var(--modal-scrollbar-compensation,0px))] sm:py-6 sm:pl-4 sm:pr-[calc(1rem+var(--modal-scrollbar-compensation,0px))]"
       role="dialog"
       aria-modal="true"
       aria-label={title}
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
-      <div className="my-auto flex w-full max-w-[820px] flex-col rounded-xl bg-osu-b5 p-5">
+      <div className="flex max-h-full w-full max-w-[820px] flex-col rounded-xl bg-osu-b5 p-5">
         <h2 className="text-[16px] font-bold text-white">{title}</h2>
 
-        <div className="mt-4 grid gap-6 sm:grid-cols-[minmax(0,1fr)_240px]">
-          <div className="min-w-0">
+        <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 sm:grid sm:grid-cols-[minmax(0,1fr)_240px] sm:gap-6">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="flex flex-wrap items-center gap-1.5">
               <SelectMenu
                 value={region}
@@ -187,7 +187,7 @@ export function FeedPlayersModal({ title, players, max, fallbackCountry, onSave,
               className="mt-3 w-full rounded-lg bg-white/[0.07] px-3 py-2 text-[13px] text-white outline-none placeholder:text-osu-l2 focus:ring-1 focus:ring-osu-pink/60 disabled:opacity-50"
             />
 
-            <div className="mt-2 max-h-[46vh] min-h-[220px] overflow-y-auto">
+            <div className="mt-2 min-h-[120px] flex-1 overflow-y-auto sm:min-h-[260px]">
               {!countries.length ? (
                 <p className="px-1 py-6 text-[13px] text-osu-f1"><Trans>Pick a region or add a country to see its players.</Trans></p>
               ) : !list.length ? (
@@ -229,14 +229,14 @@ export function FeedPlayersModal({ title, players, max, fallbackCountry, onSave,
             </div>
           </div>
 
-          <div className="min-w-0">
+          <div className="flex min-h-0 min-w-0 shrink-0 flex-col sm:shrink">
             <div className="flex items-center text-[12px] text-osu-f1">
               <Trans>Picked {picked.length} of {max}</Trans>
               {picked.length ? (
                 <button type="button" onClick={() => setPicked([])} className="ml-auto font-semibold hover:text-white"><Trans>Clear</Trans></button>
               ) : null}
             </div>
-            <div className="mt-2 flex max-h-[52vh] flex-wrap content-start gap-1.5 overflow-y-auto">
+            <div className="mt-2 flex max-h-[84px] flex-wrap content-start gap-1.5 overflow-y-auto sm:max-h-none sm:min-h-0 sm:flex-1">
               {picked.length === 0 ? <p className="text-[13px] text-osu-l2"><Trans>Nobody yet.</Trans></p> : null}
               {picked.map((player) => (
                 <span key={player.id} className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-white/[0.07] py-1 pl-1.5 pr-1 text-[13px] font-semibold text-white">
@@ -251,7 +251,7 @@ export function FeedPlayersModal({ title, players, max, fallbackCountry, onSave,
           </div>
         </div>
 
-        <div className="mt-5 flex items-center justify-end gap-2">
+        <div className="mt-4 flex shrink-0 items-center justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg px-3.5 py-2 text-[13px] font-bold text-osu-l2 hover:bg-white/[0.07] hover:text-white">
             <Trans>Cancel</Trans>
           </button>
