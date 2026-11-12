@@ -9,6 +9,7 @@ import {
   formatOgInt,
   getFont,
   getNoteSpriteDataUrl,
+  imageResponse,
   isOgFallbackError,
   loadOgFonts,
   MAX_CONCURRENT_OG_RENDERS,
@@ -23,11 +24,12 @@ import {
   getRankings,
   getScore,
 } from "../../lib/osu";
-import { fetchPublicCompanellaImport, getServerLiveBackendUrl } from "../../lib/live-backend";
+import { fetchLivePlayerSummaryDirect, fetchPublicCompanellaImport, getServerLiveBackendUrl } from "../../lib/live-backend";
 import { bridgeAuthHeaders } from "../../lib/live-backend-tokens";
 import { parsePackCardKey } from "../../lib/pack-collection";
 import { getCountryName, isGlobalScope, isSupportedCountryCode, isSupportedCountryScope } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
+import { drawPlayBanner, fetchPlayBannerSources } from "../../lib/play-banner";
 import {
   getDisplayedAccuracy,
   getDisplayedRank,
@@ -1763,6 +1765,35 @@ async function renderDanEmblemOg(request: Request, label: string, family: string
     .png()
     .toBuffer();
   return new Response(new Uint8Array(png), { headers: { "Content-Type": "image/png", "Cache-Control": OG_CACHE_HEADER } });
+}
+
+// The strip on the Discord bot's top play post (lib/play-banner.ts). Only two
+// numbers come from the request: the name is read from the stored player, so a
+// URL cannot put its own text on a banner. Not kept in R2: Discord fetches a
+// post's banner once and holds its own copy.
+const inFlightPlayBanners = new Map<string, Promise<Buffer | null>>();
+
+async function renderPlayBannerOg(request: Request, beatmapsetId: number, userId: number): Promise<Response> {
+  const key = `${beatmapsetId}:${userId}`;
+  let pending = inFlightPlayBanners.get(key);
+  if (!pending) {
+    pending = (async () => {
+      const [player, fonts, [cover, avatar]] = await Promise.all([
+        fetchLivePlayerSummaryDirect(String(userId), { lookup: "id" }).catch(() => null),
+        loadOgFonts(request),
+        fetchPlayBannerSources(beatmapsetId, userId),
+      ]);
+      if (!player && !cover) return null;
+      // Only the drawing holds a render slot, not the waits on osu!'s image hosts.
+      return ogRenderGate.run(() => drawPlayBanner({ cover, avatar: player ? avatar : null, username: player?.user.username ?? null, fonts }));
+    })().finally(() => {
+      inFlightPlayBanners.delete(key);
+    });
+    inFlightPlayBanners.set(key, pending);
+  }
+  const buffer = await pending;
+  if (!buffer) return new Response(null, { status: 404, headers: { "Cache-Control": "public, max-age=300" } });
+  return imageResponse(buffer, "image/jpeg", OG_CACHE_HEADER);
 }
 
 /* Polaroid card primitive used by both home and rankings OGs. Renders an
@@ -5256,6 +5287,20 @@ export const Route = createFileRoute("/api/og")({
             } catch (err) {
               if (!isOgFallbackError(err)) console.warn("[og] dan-emblem render failed, falling back", err);
             }
+          }
+        }
+
+        if (kind === "play-banner") {
+          const beatmapsetId = Number(url.searchParams.get("set"));
+          const userId = Number(url.searchParams.get("user"));
+          if (!Number.isInteger(beatmapsetId) || beatmapsetId <= 0 || !Number.isInteger(userId) || userId <= 0) {
+            return new Response(null, { status: 400 });
+          }
+          try {
+            return await renderPlayBannerOg(request, beatmapsetId, userId);
+          } catch (err) {
+            console.warn("[og] play banner render failed", err);
+            return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
           }
         }
 

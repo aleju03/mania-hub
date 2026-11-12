@@ -262,6 +262,16 @@ async function buildBar(kind, quarters, color) {
   return sharp(svg).png().toBuffer();
 }
 
+// The arrow ahead of a pp gain on a top play post: Discord cannot colour
+// text, so the green the site gives the number is carried by this. A gain
+// under 1pp gets the grey one, which reads on dark and light themes.
+const GAINS = { gain_up: "#88da20", gain_small: "#8e9199" };
+
+async function buildGain(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 128 128"><path d="M64 32 105 96H23Z" fill="${color}" stroke="${color}" stroke-width="12" stroke-linejoin="round"/></svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
 // Discord fits an emoji into a square, so a wide pill shows at half height. Each
 // pill is also written as a left and a right square (`<name>_l`, `<name>_r`)
 // that the bot places side by side.
@@ -302,6 +312,10 @@ async function main() {
     await writeFile(join(OUT_DIR, `hit_${name}.png`), png);
     await writeHalves(`hit_${name}`, png, { scale: 0.72, suffix: "s" });
     count += 3;
+  }
+  for (const [name, color] of Object.entries(GAINS)) {
+    await writeFile(join(OUT_DIR, `${name}.png`), await buildGain(color));
+    count += 1;
   }
   for (const kind of ["m", "r"]) {
     await writeFile(join(OUT_DIR, `b0_${kind}.png`), await buildBar(kind, 0, null));
