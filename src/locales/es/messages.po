@@ -11272,6 +11272,7 @@ msgid "Gains x{0} combo for every song cleared with a pack to spare and goes bac
 msgstr "Gana x{0} combo por cada canción superada con un pack de sobra y vuelve a x1 cuando una canción usa su último pack."
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-profile-themes.ts
 msgid "Galaxy"
 msgstr "Galaxia"
 

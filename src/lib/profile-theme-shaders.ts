@@ -3980,6 +3980,76 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }
 `),
+
+  // Galaxy: a spiral seen at a tilt, turning slowly: a warm bulge, two blue
+  // arms with dust along their inner edges and pink knots of new stars, its
+  // own stars a fine glitter. The pointer tips it.
+  galaxy: shader(`
+/* Galaxy: a spiral seen at a tilt, turning slowly. A warm bulge of old
+   stars, two blue arms winding out of it with dark dust along their inner
+   edges and pink knots where stars are being born, its own stars resolved
+   as a fine glitter, the rest of space behind. The pointer tips it a
+   little, never far enough to show it edge on. */
+vec3 theme(vec2 uv, vec2 p, float t) {
+  float A = u_res.x / u_res.y;
+  vec2 ptr = pointerP();
+  float sc = min(u_scroll, 2.);
+  // smaller on a narrow screen, and in the middle of it
+  float size = mix(.6, 1., smoothstep(.5, 1.4, A)) * 1.5;
+  vec2 c = vec2(A * .17 * smoothstep(.8, 1.3, A), .1 + sc * .14);
+  // space behind: stars at three depths, a few warm ones, a little far gas
+  vec2 sp = p + vec2(0., sc * .05) + ptr * .006;
+  vec3 col = vec3(.005, .006, .014) + vec3(.02, .012, .04) * smoothstep(.4, .8, ifbm(sp * 1.4 + 4.));
+  col += vec3(.8, .87, 1.) * (stars(sp, 34., .16, t) * .8 + stars(sp + 3.7, 70., .22, t) * .45);
+  col += vec3(1., .82, .65) * stars(sp + 9.1, 17., .05, t) * .9;
+  // the disc, laid flat: how far out, and which way round
+  float tip = 1.02 + ptr.y * .07;
+  vec2 q = rot(.42 - ptr.x * .06) * (p - c) / size;
+  vec2 d = vec2(q.x, q.y / cos(tip));
+  float r = length(d), th = atan(d.y, d.x);
+  float turn = t * .012;
+  vec2 rd = rot(turn) * d;
+  // two arms winding out, bent a little by the gas they are made of
+  float warp = ifbm(rd * 5.) - .5;
+  float clump = ifbm(rd * 26. + 7.);
+  float ph = 2. * (th + turn) - 5.4 * log(r + .002) + 1.2 * warp;
+  float out_ = smoothstep(.03, .15, r);
+  float wave = .5 + .5 * cos(ph);
+  float arm = pow(wave, 2.4) * out_;
+  // the young blue stars keep to a narrow lane down each arm
+  float spine = pow(wave, 9.) * out_;
+  float spur = pow(.5 + .5 * cos(ph * 2. + 1.3 + 3. * warp), 4.) * out_ * .28;
+  float disc = exp(-r / .19) * smoothstep(.66, .3, r);
+  // dust lies along the inside of each arm, in lanes and knots
+  float lane = pow(.5 + .5 * cos(ph + .95 + 1.8 * (clump - .5)), 7.) * out_ * smoothstep(.55, .2, r);
+  float dust = min(lane * smoothstep(.28, .6, ifbm(rd * 15. + 3.)) * 1.5, 1.);
+  vec3 old = vec3(1., .78, .55), young = mix(vec3(.26, .5, 1.), vec3(.76, .86, 1.), clump);
+  // fine grain, so the arms read as stars and not as cloud
+  float grain = .6 + .8 * inoise(rd * 90.) * inoise(rd * 47. + 3.);
+  vec3 light = old * disc * .2 + young * disc * (arm + spur) * (.7 + .55 * clump) * grain * 1.7;
+  light += vec3(.7, .84, 1.) * disc * spine * (.5 + clump) * grain * 1.2;
+  // where stars are being born
+  light += vec3(1., .3, .5) * (smoothstep(.55, .85, inoise(rd * 22.)) * .45 + stars(rd + 4.3, 30., .4, t * .3) * 3.) * arm * disc * 1.8;
+  light *= 1. - .9 * dust;
+  light += vec3(.45, .2, .1) * dust * disc * .22;
+  // its own stars, too many to tell apart except as a glitter
+  light += mix(young, vec3(1.), .4) * (stars(rd, 95., .55, t) + stars(rd + 2.2, 170., .5, t) * .7) * disc * (.5 + 2.2 * arm) * 2.6;
+  // it has depth: old stars in a thicker layer than the arms, and a ball of
+  // them at the middle, which the dust on the near side crosses in front of
+  vec2 thick = vec2(q.x, q.y / mix(cos(tip), 1., .32));
+  light += old * exp(-length(thick) / .12) * .13;
+  vec2 b = vec2(q.x, q.y / mix(cos(tip), 1., .62));
+  float rb = length(b);
+  float nearSide = smoothstep(.01, -.05, q.y);
+  light += vec3(1., .86, .66) * (exp(-rb * rb / .0009) * 1.2 + exp(-rb / .04) * .6) * (1. - .75 * dust * nearSide);
+  // a faint halo round it all
+  light += vec3(.2, .26, .45) * exp(-r / .34) * .05;
+  // the brightest parts ease off instead of burning out
+  col += light * 1.2 / (1. + light * .4);
+  col *= 1. - .3 * dot(p, p);
+  return col;
+}
+`),
 };
 
 /* The custom theme editor's yardstick for cost (custom-theme-editor-gl.ts):

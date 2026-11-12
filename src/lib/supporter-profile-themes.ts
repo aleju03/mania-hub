@@ -16,7 +16,7 @@ export const SUPPORTER_PROFILE_THEMES = [
   "inferno", "frost", "highway", "storm", "noir", "sunset",
   "judgements", "koi", "hanabi", "vaporwave", "blackhole", "singularity",
   "knight", "knightfight", "sketch", "redtree",
-  "fireflies", "crystal", "maple", "chrome", "aero", "tty",
+  "fireflies", "crystal", "maple", "chrome", "aero", "tty", "galaxy",
 ] as const;
 
 export type SupporterProfileThemeId = (typeof SUPPORTER_PROFILE_THEMES)[number];
@@ -66,6 +66,7 @@ export const PROFILE_THEME_LOOKS: Record<SupporterProfileThemeId, ProfileThemeLo
   chrome: { hue: 230, sat: 0.15, base: "#020203", swatch: "linear-gradient(160deg,#020203 0%,#020203 40%,#9a9aa6 46%,#101014 52%,#020203 70%,#5a5a64 78%,#020203 84%)", cover: 0.2 },
   aero: { hue: 168, sat: 0.7, base: "#03161a", swatch: "radial-gradient(70% 40% at 55% 62%,#3f7a1c 0%,transparent 70%),linear-gradient(180deg,#0a3a40 0%,#06272c 60%,#03161a 100%)", cover: 0.25 },
   tty: { hue: 36, sat: 0.9, base: "#080502", swatch: "radial-gradient(60% 55% at 68% 34%,#7a4a08 0%,transparent 70%),linear-gradient(180deg,#140b03 0%,#080502 100%)", cover: 0.12 },
+  galaxy: { hue: 222, sat: 0.6, base: "#03040a", swatch: "radial-gradient(38% 30% at 62% 42%,#e8c78a 0%,#5a6a9a 28%,transparent 75%),linear-gradient(180deg,#05060f 0%,#03040a 100%)", cover: 0.15 },
 };
 
 export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, MessageDescriptor> = {
@@ -97,6 +98,7 @@ export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, Mes
   chrome: msg`Liquid chrome`,
   aero: msg`Aero`,
   tty: msg`Terminal`,
+  galaxy: msg`Galaxy`,
 };
 
 /* A theme's own switches, saved with the pick (the backend keeps the same

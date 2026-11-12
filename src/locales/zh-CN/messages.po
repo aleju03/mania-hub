@@ -11284,6 +11284,7 @@ msgid "Gains x{0} combo for every song cleared with a pack to spare and goes bac
 msgstr "每通过一首还剩余卡包的曲目获得 x{0} 连击，有曲目用到最后一个卡包时回到 x1。"
 
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-profile-themes.ts
 msgid "Galaxy"
 msgstr "银河"
 
