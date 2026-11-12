@@ -760,7 +760,10 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
     ...server.subscriptions.map((sub) => sub.channelId),
     ...server.settings.autoDanChannels,
   ]), [server]);
-  const channels = showAll ? server.channels : server.channels.filter((channel) => activeChannels.has(channel.id));
+  // With nothing set up yet, every channel shows: there is nothing to narrow to.
+  const nothingOn = activeChannels.size === 0;
+  const channels = showAll || nothingOn ? server.channels : server.channels.filter((channel) => activeChannels.has(channel.id));
+  const hasTopPlays = server.subscriptions.some((sub) => sub.feedType === "top_play");
   const feedCount = server.subscriptions.length;
 
   const header = (
@@ -791,24 +794,9 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
       {header}
       {open && server.botPresent ? (
         <div className="mt-3 space-y-3 border-t border-white/[0.07] pt-3">
-          <div className="flex flex-wrap items-center gap-2 text-[13px] text-osu-l2">
-            <span className="font-semibold text-white"><Trans>Country for top plays</Trans></span>
-            <input
-              value={countryDraft}
-              onChange={(event) => setCountryDraft(event.target.value.toUpperCase().slice(0, 6))}
-              className="w-20 rounded-md bg-osu-b5 px-2 py-1 text-[13px] text-white outline-none focus:ring-1 focus:ring-osu-pink/60"
-              placeholder="CR"
-            />
-            <button
-              type="button"
-              disabled={busy || countryDraft === country || !countryDraft}
-              onClick={() => void apply({ defaultCountry: countryDraft })}
-              className="rounded-md bg-osu-b3 px-2.5 py-1 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-40"
-            >
-              <Trans>Save</Trans>
-            </button>
-            <span className="text-[12px] text-osu-f1"><Trans>A 2-letter code, or GLOBAL for every country.</Trans></span>
-          </div>
+          {hasTopPlays ? null : (
+            <p className="text-[13px] text-osu-l2"><Trans>Turn on Top plays in a channel, then choose the players it posts.</Trans></p>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
@@ -870,10 +858,9 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                 })}
               </tbody>
             </table>
-            {channels.length === 0 ? <p className="py-2 text-[13px] text-osu-f1"><Trans>No channel has a feed yet.</Trans></p> : null}
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {server.channels.length > channels.length || showAll ? (
+            {!nothingOn && (server.channels.length > channels.length || showAll) ? (
               <button type="button" onClick={() => setShowAll((value) => !value)} className="text-[12px] font-semibold text-osu-pink-light hover:text-white">
                 {showAll ? <Trans>Only channels with something on</Trans> : <Trans>All {server.channels.length} channels</Trans>}
               </button>
@@ -887,6 +874,24 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
               />
             ) : null}
             {error ? <span className="text-[12px] text-rose-300"><Trans>That didn't save. Try again.</Trans></span> : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[13px] text-osu-l2">
+            <span className="font-semibold text-white"><Trans>Country for top plays without picked players</Trans></span>
+            <input
+              value={countryDraft}
+              onChange={(event) => setCountryDraft(event.target.value.toUpperCase().slice(0, 6))}
+              className="w-20 rounded-md bg-osu-b5 px-2 py-1 text-[13px] text-white outline-none focus:ring-1 focus:ring-osu-pink/60"
+              placeholder="CR"
+            />
+            <button
+              type="button"
+              disabled={busy || countryDraft === country || !countryDraft}
+              onClick={() => void apply({ defaultCountry: countryDraft })}
+              className="rounded-md bg-osu-b3 px-2.5 py-1 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-40"
+            >
+              <Trans>Save</Trans>
+            </button>
+            <span className="text-[12px] text-osu-f1"><Trans>A 2-letter code, or GLOBAL for every country.</Trans></span>
           </div>
         </div>
       ) : null}

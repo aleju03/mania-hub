@@ -6181,8 +6181,12 @@ msgstr "国家/地区"
 #~ msgstr "国家/地区(或全球)排行榜，按 pp 排列的顶尖玩家。"
 
 #: src/routes/discord.tsx
-msgid "Country for top plays"
-msgstr "最佳成绩推送的国家"
+#~ msgid "Country for top plays"
+#~ msgstr "最佳成绩推送的国家"
+
+#: src/routes/discord.tsx
+msgid "Country for top plays without picked players"
+msgstr "未选择玩家时 top plays 的国家"
 
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
@@ -12123,8 +12127,8 @@ msgid "No change in the last 7 days"
 msgstr "最近 7 天无变化"
 
 #: src/routes/discord.tsx
-msgid "No channel has a feed yet."
-msgstr "还没有频道开启推送。"
+#~ msgid "No channel has a feed yet."
+#~ msgstr "还没有频道开启推送。"
 
 #: src/routes/recommendations.tsx
 msgid "no charts"
@@ -21157,6 +21161,10 @@ msgstr "土耳其语"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Turn off"
 msgstr "关闭"
+
+#: src/routes/discord.tsx
+msgid "Turn on Top plays in a channel, then choose the players it posts."
+msgstr "在频道中开启 Top plays，然后选择要发布的玩家。"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Turn your phone sideways to watch."

@@ -6196,8 +6196,12 @@ msgstr "Country"
 #~ msgstr "Country (or global) leaderboard, top players by pp."
 
 #: src/routes/discord.tsx
-msgid "Country for top plays"
-msgstr "Country for top plays"
+#~ msgid "Country for top plays"
+#~ msgstr "Country for top plays"
+
+#: src/routes/discord.tsx
+msgid "Country for top plays without picked players"
+msgstr "Country for top plays without picked players"
 
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
@@ -12150,8 +12154,8 @@ msgid "No change in the last 7 days"
 msgstr "No change in the last 7 days"
 
 #: src/routes/discord.tsx
-msgid "No channel has a feed yet."
-msgstr "No channel has a feed yet."
+#~ msgid "No channel has a feed yet."
+#~ msgstr "No channel has a feed yet."
 
 #: src/routes/recommendations.tsx
 msgid "no charts"
@@ -21200,6 +21204,10 @@ msgstr "Turkish"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Turn off"
 msgstr "Turn off"
+
+#: src/routes/discord.tsx
+msgid "Turn on Top plays in a channel, then choose the players it posts."
+msgstr "Turn on Top plays in a channel, then choose the players it posts."
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Turn your phone sideways to watch."
