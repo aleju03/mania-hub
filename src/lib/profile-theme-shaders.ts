@@ -1684,68 +1684,225 @@ vec3 theme(vec2 uv, vec2 p, float t) {
 }
 `),
 
-  // Hanabi: a summer festival night, lanterns strung across the top of the
-  // hero and fireworks bursting over it.
+  // Hanabi: fireworks over a river on a summer festival night: shells climb
+  // from the far bank and open as balls of stars (chrysanthemums, peonies with
+  // a second colour at the heart, gold willows that hang), their smoke and
+  // colours lying on the water; lights along the bank, paper lanterns adrift,
+  // and a string of lanterns across the top of the hero (lantern.png).
   hanabi: shader(`
+/* Hanabi: fireworks over a river on a summer festival night. Shells climb
+   from the far bank and open as balls of stars: chrysanthemums that turn
+   colour as they spread, peonies with a second colour at the heart, gold
+   willows that hang and glitter; their smoke stays lit by the next ones, and
+   the river holds it all in broken streaks. Lights along the far bank, paper
+   lanterns adrift on the water, and a string of them across the top of the
+   page (the sprite, lantern.png). */
 uniform sampler2D u_sprite;
 
-vec3 burstColour(float h) {
-  vec3 palette[6] = vec3[6](vec3(1., .3, .35), vec3(1., .78, .3), vec3(.35, .85, 1.), vec3(1., .45, .85), vec3(.45, 1., .55), vec3(1., .95, .9));
-  return palette[int(h * 5.99)];
+const float HB_HZ = -.2;     // the far bank's waterline
+const int HB_STARS = 60;
+
+vec3 hbColour(float h) {
+  return h < .17 ? vec3(1., .3, .35) : h < .34 ? vec3(1., .78, .3) : h < .5 ? vec3(.35, .85, 1.)
+    : h < .67 ? vec3(1., .45, .85) : h < .84 ? vec3(.45, 1., .55) : vec3(.75, .6, 1.);
+}
+
+/* Where a star thrown from the middle of a burst has got to after a
+   seconds: out along dir, slowing in the air, and falling. */
+vec2 hbStar(vec2 dir, float a, float reach, float fall) {
+  a = max(a, 0.);
+  return dir * reach * (1. - exp(-a * 2.7)) - vec2(0., fall * a * a);
+}
+
+/* A soft glow that is gone entirely by 12 w from its source. (A star's light
+   has to end somewhere: each point only visits the stars thrown its way, and
+   a glow that never quite reached nothing showed where the others stopped.) */
+float hbGlow(float d, float w) {
+  float k = max(1. - d / (12. * w), 0.);
+  return k * k * k;
+}
+
+/* A streak of light from a to b at x, brightest at b. */
+float hbStreak(vec2 x, vec2 a, vec2 b, float w) {
+  vec2 pa = x - a, ba = b - a;
+  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-7), 0., 1.);
+  float d = length(pa - ba * h);
+  return (exp(-d / w) + hbGlow(d, w) * .22) * (.15 + .85 * h * h);
 }
 
 vec3 theme(vec2 uv, vec2 p, float t) {
   float aspect = u_res.x / u_res.y;
-  vec2 q = vec2(p.x, p.y - u_scroll);
-  vec3 col = mix(vec3(.008, .008, .03), vec3(.04, .03, .1), smoothstep(-.5, .55, p.y));
-  col += vec3(.8, .85, 1.) * stars(p - vec2(0., u_scroll * .1), 40., .1, t) * .5;
-  for (int k = 0; k < 3; k++) {
+  // the river scene sinks away slower than the page; the lantern string goes with it
+  vec2 q = vec2(p.x, p.y - u_scroll * .5);
+  float below = HB_HZ - q.y;
+
+  // night sky, a little warm haze over the far bank
+  vec3 col = mix(vec3(.035, .03, .09), vec3(.008, .008, .03), smoothstep(HB_HZ, .5, q.y));
+  col += vec3(.1, .045, .06) * exp(-max(q.y - HB_HZ, 0.) * 9.);
+  col += vec3(.8, .85, 1.) * stars(q, 40., .1, t) * .45 * smoothstep(HB_HZ + .05, .2, q.y);
+  // the river, lying flat away from the eye: its ripples are fine lines out by
+  // the far bank and broad swells up close. A light on it is a column under
+  // the light, pushed side to side by the slope of each ripple (more the
+  // nearer), and brightest on the faces that tilt toward the eye.
+  float sway = 0., glint = 0.;
+  if (below > 0.) {
+    float z = .05 / (below + .01);
+    vec2 wq = vec2(q.x * z, z) * 7.;
+    float swell = noise(vec2(wq.x * 1.3, wq.y * 7. + t * .5)), chop = noise(vec2(wq.x * 3.6 + 5., wq.y * 21. - t * .8));
+    // out by the bank they are finer than a pixel: let them even out there
+    float calm = smoothstep(.004, .03, below);
+    float slope = ((swell - .5) * 1.3 + (chop - .5) * .7) * calm;
+    sway = slope * (.006 + below * .16);
+    glint = mix(.5, smoothstep(.35, .75, chop * .7 + swell * .3), calm);
+    col = mix(vec3(.03, .024, .07), vec3(.006, .006, .02), smoothstep(0., .3, below));
+    col += vec3(.05, .025, .04) * exp(-below * 12.) * (.5 + slope) + vec3(.014, .012, .03) * glint * exp(-below * 4.);
+  }
+
+  // the shells: six going, each on its own clock
+  for (int k = 0; k < 6; k++) {
     float fk = float(k);
-    float cycle = (t + fk * 1.1) / 3.3;
-    float id = floor(cycle) * 3. + fk;
-    float a = fract(cycle) * 3.3;
-    vec2 B = vec2((hash(vec2(id, 1.)) - .5) * aspect * .85, .22 + .2 * hash(vec2(id, 2.)));
-    vec3 c = burstColour(hash(vec2(id, 3.)));
-    if (a < .7) {
-      // the shell climbing
-      vec2 pos = mix(vec2(B.x + .05, -.1), B, 1. - pow(1. - a / .7, 2.));
-      float d = length(q - pos);
-      col += vec3(1., .85, .6) * exp(-d / max(PX * 1.5, .0015)) * .8;
+    float period = 3.7 + .43 * fk;
+    float run = (t + fk * 2.17) / period;
+    float id = floor(run) * 6. + fk;
+    float a = fract(run) * period;
+    float kind = hash(vec2(id, 7.));           // < .4 chrysanthemum, < .72 peony, else willow
+    bool willow = kind >= .72;
+    vec2 B = vec2((hash(vec2(id, 1.)) - .44) * aspect * .78, .08 + .22 * hash(vec2(id, 2.)));
+    vec3 c = willow ? vec3(1., .72, .32) : hbColour(hash(vec2(id, 3.)));
+    vec3 c2 = hbColour(fract(hash(vec2(id, 3.)) + .37));
+    const float RISE = .8;
+    if (a < RISE) {
+      // climbing from the bank, wavering, a short tail behind it
+      float e = 1. - pow(1. - a / RISE, 2.2), e0 = 1. - pow(1. - max(a - .09, 0.) / RISE, 2.2);
+      vec2 from = vec2(B.x + .06 * (hash(vec2(id, 5.)) - .5), HB_HZ);
+      vec2 head = mix(from, B, e) + vec2(.004 * sin(a * 30. + id), 0.);
+      vec2 tail = mix(from, B, e0) + vec2(.004 * sin((a - .09) * 30. + id), 0.);
+      float w = max(PX * 1.3, .0012);
+      col += vec3(1., .82, .55) * hbStreak(q, tail, head, w) * (1. - a / RISE * .5);
+      // and its light on the water
+      if (below > 0.) col += vec3(1., .8, .5) * exp(-abs(q.x - head.x + sway) * 90.) * exp(-below * 5.) * (.25 + .75 * glint) * .12;
       continue;
     }
-    float age = a - .7;
-    float fade = exp(-age * 1.3);
-    col += c * exp(-length(q - B) * 2.5) * exp(-age * 3.5) * .25;
-    if (length(q - B) > .6) continue;
-    float v = .3 + .1 * hash(vec2(id, 4.));
-    for (int i = 0; i < 28; i++) {
-      float fi = float(i);
-      float ang = fi / 28. * 6.2832 + hash(vec2(id, fi)) * .2;
-      vec2 dir = vec2(cos(ang), sin(ang)) * (.85 + .3 * hash(vec2(fi, id)));
-      float reach = v * (1. - exp(-age * 2.8)) / 2.8 * 2.;
-      vec2 head = B + dir * reach - vec2(0., .035 * age * age);
-      float reachBefore = v * (1. - exp(-max(age - .15, 0.) * 2.8)) / 2.8 * 2.;
-      vec2 tail = B + dir * reachBefore - vec2(0., .035 * max(age - .15, 0.) * max(age - .15, 0.));
-      vec2 pa = q - tail, ba = head - tail;
-      float hseg = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0., 1.);
-      float d = length(pa - ba * hseg);
-      float flicker = age > 1.2 ? step(.4, hash(vec2(fi, floor(t * 20.)))) : 1.;
-      float w = max(PX * 1.4, .0014);
-      col += c * (exp(-d / w) * 1.6 + exp(-d / (w * 5.)) * .35) * fade * (.25 + .75 * hseg) * flicker;
+    float age = a - RISE;
+    float life = willow ? 3.8 : 2.8;
+    if (age > life) continue;
+    float reach = (willow ? .24 : .26 + .12 * hash(vec2(id, 4.))) * min(1., .25 + aspect * .6);
+    float fall = willow ? .034 : .016;
+    float fade = willow ? exp(-age * .6) * smoothstep(life, life - 1.2, age) : exp(-age * .95) * smoothstep(life, life - .8, age);
+    vec2 dq = q - B;
+    // the flash, and the smoke it leaves, lit by the burst as it thins and drifts
+    col += mix(vec3(1.), c, .6) * exp(-length(dq) * 2.4) * exp(-age * 4.) * .3;
+    float near = exp(-dot(dq, dq) / (reach * reach * 1.3));
+    if (near > .02) {
+      vec2 sq = dq * 5.5 + vec2(id, age * .12);
+      col += (c * .5 + vec3(.25, .22, .3)) * (noise(sq) * .65 + noise(sq * 2.3 + 4.) * .35) * near * exp(-age * .8) * smoothstep(0., .25, age) * .1;
     }
+    // on the water: its colours, pulled down into streaks
+    if (below > 0.) {
+      vec2 m = (q + vec2(sway * 1.6, 0.) - vec2(B.x, 2. * HB_HZ - B.y + fall * age * age)) / (vec2(1., 2.1) * (reach * (1. - exp(-age * 2.7)) + .05));
+      col += mix(c, c2, .25) * exp(-dot(m, m) * 1.3) * (.18 + .82 * glint) * fade * .5;
+    }
+    // the burst's own frame, falling with its stars: there every star's head
+    // lies on a straight line out from the middle
+    vec2 sh = dq + vec2(0., fall * age * age);
+    float rad = length(sh);
+    if (rad > reach * 1.12 + .02 && sh.y < 0.) continue;
+    if (rad > reach * 1.12 + (willow ? .2 : .06)) continue;
+    float turn = hash(vec2(id, 9.)) * 6.28;
+    // a chrysanthemum's stars draw lines out from the middle, a peony's are points, a willow's hang
+    bool peony = !willow && kind >= .4;
+    float tail = willow ? .6 : peony ? .07 : .42;
+    // as it opens the stars are all on top of each other: hold them down, the flash is enough
+    float open = smoothstep(0., .22, age);
+    float w = max(PX * 1.25, .0012);
+    float n = float(HB_STARS);
+    float before = max(age - tail, 0.);
+    float out1 = 1. - exp(-age * 2.7), out0 = 1. - exp(-before * 2.7);
+    // how far above its head the far end of a star's tail hangs, in this frame
+    vec2 lag = vec2(0., fall * (age * age - before * before));
+    // the stars are dealt round the ball in order, so only those thrown this
+    // point's way can reach it; near the middle, all of them
+    int span = rad < max(willow ? .12 : .05, w * 44.) ? HB_STARS : willow ? 21 : 7;
+    float first = span == HB_STARS ? 0. : floor((atan(sh.y, sh.x) - turn) / 6.2832 * n + .5) - float(span / 2);
+    vec3 lit = vec3(0.);
+    for (int j = 0; j < HB_STARS; j++) {
+      if (j >= span) break;
+      float fi = mod(first + float(j), n);
+      float ang = (fi + (hash(vec2(fi, id + 2.)) - .5) * .7) / n * 6.2832 + turn;
+      // spread over a ball, seen from the side: crowded at the rim, sparse in the middle
+      float z = 2. * hash(vec2(fi, id + 5.)) - 1.;
+      vec2 dir = sqrt(1. - z * z) * vec2(cos(ang), sin(ang));
+      // a peony's heart: every fourth star stays in close, in the second colour
+      bool heart = peony && mod(fi, 4.) < 1.;
+      float r = reach * (heart ? .42 : .9 + .16 * hash(vec2(fi, id)));
+      vec2 head = dir * r * out1, end = dir * r * out0 + lag;
+      vec2 dh = sh - head;
+      // a chrysanthemum's stars start white-gold and take their colour as they cool
+      vec3 sc = heart ? c2 : mix(vec3(1., .9, .7), c, willow ? .2 : smoothstep(.05, .5, age));
+      // near the end they gutter
+      float gutter = age > life * .55 ? step(.35, hash(vec2(fi + id, floor(t * 18.)))) : 1.;
+      float light = hbStreak(sh, end, head, peony ? w * 1.3 : w) * (.6 + .5 * z * z) * (peony ? 1.5 : 1.);
+      // the star itself, a soft point at the streak's head
+      light += hbGlow(length(dh), w * .8) * .5;
+      if (willow) light += step(.72, hash(vec2(fi * 3. + id, floor(t * 14.)))) * exp(-length(sh - mix(end, head, hash(vec2(fi, floor(t * 14.))))) / (w * 1.4)) * .8;
+      lit += sc * light * gutter;
+    }
+    // where the stars crowd together the light eases off, so the middle never burns out to a blob
+    lit *= fade * open * 2.2;
+    col += lit / (1. + .8 * max(lit.r, max(lit.g, lit.b)));
   }
+
+  // the far bank: hills, then roofs and trees against them, lights strung along the water
+  float land = q.y - HB_HZ;
+  if (land > 0.) {
+    float hills = .03 + .05 * noise(vec2(q.x * 1.6 + 3., 1.)) + .015 * noise(vec2(q.x * 7., 2.));
+    col = mix(col, vec3(.014, .014, .04), smoothstep(PX, -PX, land - hills) * .85);
+    float roofs = .008 + .02 * hash(vec2(floor(q.x * 46.), 3.)) * step(.45, hash(vec2(floor(q.x * 46.), 4.))) + .012 * noise(vec2(q.x * 30., 5.));
+    col = mix(col, vec3(.006, .006, .016), smoothstep(PX, -PX, land - roofs));
+  }
+  float cellW = .028;
+  for (int k = -1; k <= 1; k++) {
+    float li = floor(q.x / cellW) + float(k);
+    float h = hash(vec2(li, 11.));
+    if (h > .62) continue;
+    vec2 lp = vec2((li + .2 + .6 * hash(vec2(li, 12.))) * cellW, HB_HZ + .003 + .009 * hash(vec2(li, 13.)));
+    vec3 lc = h < .12 ? vec3(1., .3, .25) : h < .2 ? vec3(.5, .9, 1.) : vec3(1., .72, .4);
+    float tw = .7 + .3 * sin(t * (1. + 3. * h) + li);
+    float d = length(q - lp);
+    col += lc * (smoothstep(max(.0022, PX * 1.6), 0., d) + exp(-d * 120.) * .2) * tw * .8;
+    if (below > 0.) col += lc * exp(-abs(q.x - lp.x + sway * .7) * 260.) * exp(-below * 16.) * (.3 + .7 * glint) * tw * .4;
+  }
+
+  // paper lanterns set adrift on the river, their light under them
+  for (int i = 0; i < 7; i++) {
+    float fi = float(i);
+    float near = hash(vec2(fi, 21.));
+    float s = mix(.006, .017, near);
+    float span = aspect + .3;
+    vec2 lp = vec2(mod(hash(vec2(fi, 22.)) * span + t * mix(.004, .011, near), span) - span * .5, HB_HZ - .025 - .27 * near * near + .0015 * sin(t * 1.3 + fi));
+    vec2 d = q - lp;
+    if (abs(d.x) > .08 || d.y > .06 || d.y < -.14) continue;
+    float flick = .85 + .15 * sin(t * (5. + fi) + fi * 3.);
+    vec2 bx = abs(d) - vec2(s * .8, s);
+    float box = smoothstep(PX, -PX, max(bx.x, bx.y));
+    col = mix(col, vec3(1., .66, .3) * (1.1 - .4 * length(d / s)) * flick * (abs(d.y) > s * .78 ? .45 : 1.), box);
+    col += vec3(1., .5, .2) * exp(-length(d) / (s * 2.4)) * .22 * flick;
+    if (d.y < -s) col += vec3(1., .55, .22) * exp(-abs(d.x + sway * .5) / (s * .8)) * exp((d.y + s) / (s * 5.)) * (.35 + .65 * glint) * .5 * flick;
+  }
+
   // paper lanterns (the sprite, 256x400, cord loop at the top middle) hung
   // from a sagging rope across the top of the hero, each swaying from its
   // hook, tinted red or orange, its candle flickering
+  vec2 u = vec2(p.x, p.y - u_scroll);
   float halfW = aspect * .5;
-  float ropeY = .46 - .03 * (1. - pow(q.x / halfW, 2.));
-  col += vec3(.25, .12, .08) * smoothstep(PX * 2., 0., abs(q.y - ropeY)) * .5;
+  float ropeY = .46 - .03 * (1. - pow(u.x / halfW, 2.));
+  col += vec3(.25, .12, .08) * smoothstep(PX * 2., 0., abs(u.y - ropeY)) * .5;
   float spacing = .17;
-  float li = floor(q.x / spacing + .5);
+  float li = floor(u.x / spacing + .5);
   float lx = li * spacing;
   vec2 hook = vec2(lx, .46 - .03 * (1. - pow(lx / halfW, 2.)) + .004);
   float H = .12, W = H * .64;
-  vec2 ld = rot(sin(t * 1.3 + li) * .08) * (q - hook);
+  vec2 ld = rot(sin(t * 1.3 + li) * .08) * (u - hook);
   vec2 cell = vec2(.5 + ld.x / W, -ld.y / H);
   float inside = step(0., cell.x) * step(cell.x, 1.) * step(0., cell.y) * step(cell.y, 1.);
   vec4 lantern = texture(u_sprite, clamp(cell, 0., 1.)) * inside;
@@ -1758,13 +1915,14 @@ vec3 theme(vec2 uv, vec2 p, float t) {
     float gx = lk * spacing;
     vec2 gHook = vec2(gx, .46 - .03 * (1. - pow(gx / halfW, 2.)) + .004);
     vec2 centre = gHook + rot(-sin(t * 1.3 + lk) * .08) * vec2(0., -H * .42);
-    float d = length(q - centre);
+    float d = length(u - centre);
     vec3 gWarm = hash(vec2(lk, 5.)) > .5 ? vec3(1., .34, .16) : vec3(1., .62, .24);
     float gFlicker = .88 + .08 * sin(t * 2. + lk) + .04 * sin(t * 9.3 + lk * 3.);
     col += gWarm * exp(-d * 18.) * smoothstep(.22, .04, d) * .22 * gFlicker;
   }
   return col;
-}`),
+}
+`),
 
   // Vaporwave: a pastel sunset over a calm sea, the sun's reflection
   // shimmering on the water, palms framing the hero; it all scrolls away
@@ -2519,9 +2677,21 @@ vec2 sgMap(vec3 p, float t) {
   return vec2(min(body, core), m);
 }
 
-vec3 sgNormal(vec3 p, float t) {
-  const vec2 e = vec2(.003, -.003);
-  return normalize(e.xyy * sgMap(p + e.xyy, t).x + e.yyx * sgMap(p + e.yyx, t).x + e.yxy * sgMap(p + e.yxy, t).x + e.xxx * sgMap(p + e.xxx, t).x);
+/* The surface's normal at p, from the four corners of a tetrahedron round
+   it, and in ao how open the space is a little way out along it. One call
+   site for sgMap, in a loop the compiler can't unroll (its start isn't a
+   constant): written out, sgMap was copied five more times into the
+   program, which made it slow to compile. */
+vec3 sgNormal(vec3 p, float t, out float ao) {
+  vec3 n = vec3(0.);
+  ao = 0.;
+  for (int i = min(int(u_time), 0); i < 5; i++) {
+    vec3 e = 2. * vec3((((i + 3) >> 1) & 1), ((i >> 1) & 1), (i & 1)) - 1.;
+    vec3 q = i < 4 ? p + e * .003 : p + normalize(n) * .14;
+    float d = sgMap(q, t).x;
+    if (i < 4) n += e * d; else ao = clamp(.3 + 5.5 * d, 0., 1.);
+  }
+  return normalize(n);
 }
 
 // What the glass mirrors: near black below and left, deep cobalt toward the
@@ -2595,7 +2765,8 @@ vec4 sgOrb(vec2 d, float t) {
   vec3 halo = vec3(.5, .75, 1.) * exp(-near * 6.) * .55 * smoothstep(1.4, 1., rs);
   if (cover <= 0.) return vec4(halo, 0.);
   vec3 p = ro + rd * z;
-  vec3 n = sgNormal(p, t);
+  float ao;
+  vec3 n = sgNormal(p, t, ao);
   vec3 L = SG_CORE - p;
   float ld = length(L);
   L /= ld;
@@ -2603,7 +2774,6 @@ vec4 sgOrb(vec2 d, float t) {
     // the core: a white-hot ball (its glow is added over everything later)
     return vec4(vec3(6.), cover);
   }
-  float ao = clamp(.3 + 5.5 * sgMap(p + n * .14, t).x, 0., 1.);
   // how close the skin is to where the ink leaves it: there the strips take
   // on the ink's colour, turn to face us as its sheet does (so the ball's
   // edge catches no glancing light), and lose their rim light and the shadow
@@ -2858,136 +3028,238 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   ink = max(ink, skCross(skBoil(p, t, .004), pointerP(), .01, .0035, 21.) * .6);
   return mix(col, SK_INK, clamp(ink, 0., 1.) * .93);
 }`),
-  // Red tree: a lone crimson tree on a violet night meadow, after the red
-  // trees of a certain dark world, kept cosy rather than eerie: a dusky rose
-  // sky with soft cloud and stars, far hills of more trees, the tree's own
-  // glow warming the ground, leaves drifting down into a still pool that
-  // mirrors it, and fireflies blinking about (they lean toward the pointer).
-  // The tree is a painted sprite (red-tree.webp); the crown sways in the
-  // breeze and catches a gust now and then.
+  // Red tree: a tree of flat blocks on a mound in still dark water, a nod to
+  // the blocky red trees of a certain dark world: a compact crimson and
+  // magenta crown on a short dark trunk, mirrored below in broken rows, more
+  // of them small and dim far off. Drawn on a coarse pixel grid; laid out by
+  // foundry/designs/red-tree-slabs. No sprite.
   redtree: shader(`
-uniform sampler2D u_sprite;
+/* Red tree: a tree of flat blocks standing on a mound in still dark water,
+   a nod to the blocky red trees of a certain dark world. A compact crown of
+   big blocks, crimson where the light reaches and magenta in its own shade,
+   on a short dark trunk that leans a little; the water holds it upside down
+   in broken rows; more of them stand far off on mounds of their own. Drawn on
+   a coarse pixel grid like a sprite: the blocks shift a cell or two as the
+   wind passes through, further in a gust, and part round the pointer; leaves
+   come down to lie on the mound or float off, and bits are carried away
+   across the dark. The blocks and the trunk's limbs are laid out by
+   foundry/designs/red-tree-slabs/slab_tree.py, one call each (no tables). */
+const vec3 RT_ROSE = vec3(1., .26, .36);
+const float RT_WL = -9.;   // the waterline, in a tree's own cells
+const float RT_HZ = 60.;   // the horizon, in the near tree's cells
 
-// where the trunk meets the ground in the sprite (x, and y from the top)
-const vec2 RT_BASE = vec2(.547, .915);
-const vec3 RT_ROSE = vec3(1., .3, .38);
-
-/* Sprite uv (y from the top) of a point q, for a tree of height \`size\`
-   standing at g. */
-vec2 rtUV(vec2 q, vec2 g, float size) {
-  return vec2(RT_BASE.x + (q.x - g.x) / size, RT_BASE.y - (q.y - g.y) / size);
+/* How high the mound a tree stands on is at x. */
+float rtMound(float x) {
+  float d = (x - 4.) / 46.;
+  return 3. - 12. * d * d;
 }
 
-/* The breeze: the crown sways, the trunk does not; leaves shiver on top,
-   and every 13 s a gust leans it over and lets it rock back. */
-vec2 rtSway(vec2 s, float t) {
-  float w = smoothstep(.62, .06, s.y);
-  float k = fract(t / 13. + .3);
-  float gust = smoothstep(0., .08, k) * (1. - smoothstep(.08, .5, k));
-  float dx = .0045 * sin(t * .7 + s.y * 2.) + .002 * sin(t * 1.7 + s.x * 4.)
-    + gust * (.009 + .004 * sin(t * 4.2 + s.x * 3.));
-  dx += .003 * (noise(s * 13. + vec2(t * .8, t * .3)) - .5);
-  float dy = .002 * (noise(s * 13. + vec2(7., t * .6)) - .5);
-  return s - w * vec2(dx, dy);
+/* One block of the crown at cell c: r is its corner and size in cells, w the
+   wind (time, gust) and the pointer's cell. Sets k to its layer and which
+   row of it this is. Its corners are knocked off.
+   The wind crosses the crown as one slow wave, so neighbours move together:
+   the top blocks give a cell either way, those by the trunk stay put, and a
+   gust leans the whole crown downwind, most at the top. Now and then a block's
+   downwind end flicks out a cell, as leaves do. */
+void rtSlab(vec2 c, vec4 w, vec4 r, int layer, inout float k) {
+  float lift = clamp((r.y + r.w * .5 - 30.) / 46., 0., 1.);
+  vec2 mid = r.xy + r.zw * .5;
+  float wave = sin(w.x * 1.15 - mid.x * .03 - mid.y * .022);
+  float dx = lift * (.8 * wave + w.y * (2.4 + .45 * sin(w.x * 6.5 + mid.x * .2)));
+  vec2 d = mid - w.zw;
+  // the pointer parts them a cell, no more, and not at all where it sits right on one
+  dx += 1.5 * (d.x / 14.) * exp(-dot(d, d) / 420.);
+  float flick = step(.82, sin(w.x * 2.1 + r.x * 1.7 + r.y * 2.3)) * step(.25, lift);
+  vec2 l = c - r.xy - vec2(floor(dx + .5), 0.);
+  float wd = r.z + flick;
+  if (l.x < 0. || l.y < 0. || l.x >= wd || l.y >= r.w) return;
+  bool top = l.y >= r.w - 1., bottom = l.y < 1.;
+  if ((l.x < 1. || l.x >= wd - 1.) && (top || bottom)) return;
+  k = float(layer) * 4. + (top ? 1. : bottom ? 2. : 0.);
 }
 
-vec4 rtTree(vec2 s) {
-  if (s.x < 0. || s.x > 1. || s.y < 0. || s.y > 1.) return vec4(0.);
-  return texture(u_sprite, s);
+/* One limb of the trunk at x: from s.xy to s.zw, as thick as rr at each end.
+   Sets side to how far across it x is, -1 (left) to 1 (right). */
+void rtLimb(vec2 x, vec4 s, vec2 rr, inout float side) {
+  vec2 d = s.zw - s.xy;
+  float k = clamp(dot(x - s.xy, d) / dot(d, d), 0., 1.);
+  vec2 pq = x - s.xy - d * k;
+  float r = mix(rr.x, rr.y, k);
+  if (dot(pq, pq) > r * r) return;
+  float sd = (pq.x * d.y - pq.y * d.x) / (length(d) * r);
+  if (abs(sd) < abs(side)) side = sd;
+}
+
+vec3 rtLeaf(float k) {
+  int layer = int(k) / 4, row = int(k) - layer * 4;
+  vec3 body = layer == 0 ? vec3(.35, .11, .385) : layer == 1 ? vec3(.705, .095, .5) : layer == 2 ? vec3(.885, .14, .25) : vec3(1., .425, .375);
+  return row == 1 ? body * 1.16 + .035 : row == 2 ? body * .77 : body;
+}
+
+/* The trunk at cell c: dark, its right side catching the crown's light. */
+vec4 rtTrunk(vec2 c) {
+  if (c.x < -18. || c.x > 34. || c.y < -8. || c.y > 41.) return vec4(0.);
+  float side = 9.;
+  vec2 x = c + .5;
+  rtLimb(x, vec4(0., 0., 2., 8.), vec2(6.4, 5.6), side);
+  rtLimb(x, vec4(2., 8., 6., 16.), vec2(5.6, 4.8), side);
+  rtLimb(x, vec4(6., 16., 9., 25.), vec2(4.8, 4.2), side);
+  rtLimb(x, vec4(9., 25., 18., 38.), vec2(3.4, 2.0), side);
+  rtLimb(x, vec4(8., 20., -9., 32.), vec2(3.2, 1.8), side);
+  rtLimb(x, vec4(9., 22., 30., 33.), vec2(2.8, 1.6), side);
+  rtLimb(x, vec4(0., 3., -13., -2.), vec2(3.4, 1.2), side);
+  rtLimb(x, vec4(2., 3., 15., -3.), vec2(3.4, 1.2), side);
+  rtLimb(x, vec4(0., 2., -4., -6.), vec2(3.0, 1.2), side);
+  rtLimb(x, vec4(3., 2., 8., -6.), vec2(2.6, 1.0), side);
+  if (side > 8.) return vec4(0.);
+  return vec4(side > .45 ? vec3(.5, .16, .47) : side < -.5 ? vec3(.055, .042, .14) : vec3(.11, .088, .225), 1.);
+}
+
+/* The crown at cell c. */
+vec4 rtCrown(vec2 c, vec4 w) {
+  if (c.x < -43. || c.x > 65. || c.y < 25. || c.y > 87.) return vec4(0.);
+  float k = -1.;
+  rtSlab(c, w, vec4(-6., 27., 25., 9.), 0, k);
+  rtSlab(c, w, vec4(-22., 31., 23., 8.), 0, k);
+  rtSlab(c, w, vec4(-16., 33., 22., 8.), 0, k);
+  rtSlab(c, w, vec4(-33., 42., 23., 10.), 0, k);
+  rtSlab(c, w, vec4(-34., 49., 27., 8.), 0, k);
+  rtSlab(c, w, vec4(19., 30., 22., 8.), 1, k);
+  rtSlab(c, w, vec4(3., 30., 23., 10.), 1, k);
+  rtSlab(c, w, vec4(7., 30., 21., 9.), 1, k);
+  rtSlab(c, w, vec4(22., 34., 29., 9.), 1, k);
+  rtSlab(c, w, vec4(13., 35., 29., 12.), 1, k);
+  rtSlab(c, w, vec4(-24., 40., 37., 11.), 1, k);
+  rtSlab(c, w, vec4(-17., 41., 36., 11.), 1, k);
+  rtSlab(c, w, vec4(-7., 44., 32., 11.), 1, k);
+  rtSlab(c, w, vec4(-7., 45., 43., 13.), 1, k);
+  rtSlab(c, w, vec4(-11., 50., 32., 13.), 1, k);
+  rtSlab(c, w, vec4(-16., 51., 42., 12.), 1, k);
+  rtSlab(c, w, vec4(-27., 54., 35., 12.), 1, k);
+  rtSlab(c, w, vec4(36., 44., 19., 10.), 2, k);
+  rtSlab(c, w, vec4(14., 50., 32., 10.), 2, k);
+  rtSlab(c, w, vec4(6., 51., 28., 11.), 2, k);
+  rtSlab(c, w, vec4(15., 52., 28., 10.), 2, k);
+  rtSlab(c, w, vec4(11., 57., 37., 12.), 2, k);
+  rtSlab(c, w, vec4(27., 59., 29., 8.), 2, k);
+  rtSlab(c, w, vec4(-13., 60., 26., 10.), 2, k);
+  rtSlab(c, w, vec4(24., 61., 27., 10.), 2, k);
+  rtSlab(c, w, vec4(-20., 65., 29., 10.), 2, k);
+  rtSlab(c, w, vec4(2., 67., 24., 10.), 2, k);
+  rtSlab(c, w, vec4(4., 68., 22., 10.), 2, k);
+  rtSlab(c, w, vec4(22., 70., 22., 8.), 2, k);
+  rtSlab(c, w, vec4(-5., 74., 27., 8.), 2, k);
+  rtSlab(c, w, vec4(25., 75., 16., 10.), 2, k);
+  return k < 0. ? vec4(0.) : vec4(rtLeaf(k), 1.);
 }
 
 vec3 theme(vec2 uv, vec2 p, float t) {
   float aspect = u_res.x / u_res.y;
   float wide = smoothstep(.7, 1.4, aspect);
-  float size = mix(.6, .82, wide);
-  vec2 g = vec2(mix(.02, aspect * .25, wide), mix(-.24, -.32, wide));
-  // the scene drifts up with the page, slower than it
+  // one cell of the grid, in canvas heights: coarser on a narrow screen, so the tree still fits across
+  float px = min(1. / 172., aspect / 170.);
+  // where the trunk meets the ground; the scene drifts up with the page, slower than it
+  vec2 g = vec2(mix(-14. * px, aspect * .2, wide), mix(-.2, -.11, wide));
   vec2 q = vec2(p.x, p.y - u_scroll * .5);
-  float hz = g.y + .16 * size;
+  vec2 c = floor((q - g) / px);
+  vec2 ptr = floor((pointerP() + vec2(0., -u_scroll * .5) - g) / px);
+  // a gust every 11 s leans the crown over and lets it rock back
+  float gk = fract(t / 11. + .3);
+  float gust = smoothstep(0., .12, gk) * (1. - smoothstep(.12, .6, gk));
+  // the crown moves in frames, six a second, like a sprite
+  float tf = floor(t * 6.) / 6.;
+  vec4 w = vec4(tf, gust, ptr);
 
-  // sky: plum low, deep indigo high, a rose dusk along the horizon
-  float sy = q.y - hz;
-  vec3 col = mix(vec3(.085, .036, .11), vec3(.03, .018, .07), smoothstep(-.02, .85, sy));
-  col += vec3(.1, .028, .065) * exp(-max(sy, 0.) * 6.);
-  float cloud = fbm(vec2(q.x * 1.3 + t * .006, q.y * 4.6 + 3.));
-  col += vec3(.045, .018, .05) * smoothstep(.52, .78, cloud) * smoothstep(.02, .25, sy) * smoothstep(.95, .35, sy);
-  vec2 sp = vec2(p.x, p.y - u_scroll * .15);
-  col += vec3(1., .86, .9) * (stars(sp, 70., .09, t) + .7 * stars(sp + 3.1, 130., .07, t)) * smoothstep(.06, .4, sy);
-  // the crown's glow in the air round it
-  vec2 crown = g + size * vec2(.5 - RT_BASE.x, RT_BASE.y - .3);
-  float halo = exp(-length((q - crown) / (size * vec2(.62, .48))) * 2.2);
-  col += RT_ROSE * .1 * halo;
-
-  // far hills, tufted with trees, then nearer ones, both hazed toward the sky
-  float tuft = pow(noise(vec2(q.x * 46., 2.)), 2.) * .016 + pow(noise(vec2(q.x * 17., 5.)), 3.) * .02;
-  float h1 = hz + .03 + .022 * sin(q.x * 2.7 + 1.) + .012 * sin(q.x * 6.1 + 2.) + tuft;
-  col = mix(col, mix(vec3(.12, .048, .14), col, .35) + RT_ROSE * .03 * halo, smoothstep(h1 + PX, h1 - PX, q.y));
-  float h2 = hz + .008 + .014 * sin(q.x * 4.3 + 4.) + .008 * sin(q.x * 9.7) + tuft * .6;
-  col = mix(col, vec3(.075, .03, .095) + RT_ROSE * .03 * halo, smoothstep(h2 + PX, h2 - PX, q.y));
-
-  // the meadow: violet, streaked by the brush, warmed near the tree
-  if (q.y < hz) {
-    float near = smoothstep(hz, g.y - .3, q.y);
-    vec3 ground = mix(vec3(.07, .03, .09), vec3(.1, .042, .13), near);
-    ground += vec3(.022, .01, .03) * (fbm(vec2(q.x * 3.5, q.y * 38.)) - .5);
-    ground += RT_ROSE * .1 * exp(-length((q - g) * vec2(1., 3.2)) / size * 3.);
-    col = mix(col, ground, smoothstep(hz - PX * 2., hz - PX * 6., q.y) * step(q.y, h2));
+  // night sky over still water, a paler band where they meet
+  vec3 col;
+  float off = (c.y - RT_HZ) * px;
+  if (off >= 0.) {
+    col = mix(vec3(.075, .028, .09), vec3(.02, .012, .03), smoothstep(0., .42, off));
+    float star = ihash(ivec2(c) + 91);
+    if (star > .9984) col += vec3(.5, .36, .6) * (.5 + .5 * sin(t * (.6 + 2. * fract(star * 731.)) + star * 900.));
+  } else {
+    col = mix(vec3(.06, .024, .075), vec3(.018, .01, .028), smoothstep(0., .5, -off));
+    // glints lying on it, sliding slowly
+    float glint = ihash(ivec2(int(floor((c.x + t * (1.5 + mod(c.y, 3.))) / 8.)), int(c.y)));
+    if (glint > .95 && mod(c.y, 2.) < 1.) col += vec3(.05, .02, .07);
   }
+  // a little of the crown's colour hangs in the air round it, and lies on the water under it
+  vec2 crown = (c - vec2(14., 52.)) * px;
+  col += vec3(.2, .035, .15) * .3 * exp(-length(crown * vec2(.8, 1.)) * 2.4);
+  col += RT_ROSE * .09 * exp(-length(crown * vec2(.75, 1.2)) * 5.5);
+  vec2 under = (c - vec2(14., RT_WL - 40.)) * px;
+  col += RT_ROSE * .045 * exp(-length(under * vec2(.6, 1.3)) * 4.5);
 
-  // the pool under the tree, still enough to hold it upside down
-  vec2 pq = (q - g - vec2(-.03, -.045) * size) / (vec2(.6, .1) * size);
-  float streak = fbm(vec2(q.x * 2.6 / size, q.y * 60. / size));
-  float pool = smoothstep(1., .78, length(pq) + .4 * (streak - .5));
-  if (pool > 0.) {
-    vec3 water = mix(vec3(.17, .075, .26), vec3(.3, .14, .42), smoothstep(1., .1, length(pq))) * (.85 + .3 * streak);
-    water += RT_ROSE * .12 * smoothstep(1., .2, length(pq));
-    vec2 rq = vec2(q.x, g.y + (g.y - q.y) * 1.6);
-    rq.x += .0025 * sin(q.y * 220. / size + t * 1.6) * smoothstep(g.y, g.y - .05 * size, q.y);
-    vec4 refl = textureLod(u_sprite, rtSway(rtUV(rq, g, size), t), 1.5);
-    water = water * (1. - refl.a * .7) + refl.rgb * vec3(.62, .48, .75);
-    col = mix(col, water, pool);
+  // which tree this cell belongs to: the near one, or one of those far off,
+  // drawn at half or a third the size
+  vec2 fc = c;
+  float far = 0.;
+  if (c.x < -92.) {
+    if (c.x > -146.) { fc = (c - vec2(-118., 40.)) * 3.; far = .22; }
+    else if (c.x > -232.) { fc = (c - vec2(-186., 14.)) * 2.; far = .36; }
+    else { fc = (c - vec2(-268., 46.)) * 3.; far = .18; }
   }
+  // below its waterline a tree is seen again upside down, its rows slipping sideways
+  float mirror = 1.;
+  if (fc.y < RT_WL) {
+    float depth = RT_WL - fc.y;
+    // (and squashed, as water seen from low down shows it)
+    fc = vec2(fc.x + floor(1.7 * sin(depth * .5 + t * 1.4) * min(depth / 8., 1.) + .5), RT_WL + floor(depth * 1.5) - 1.);
+    mirror = (mod(c.y, 2.) < 1. ? .55 : .36) * exp(-depth / 60.);
+  }
+  vec4 obj = vec4(0.);
+  // the mound: dark earth, a skin of dull purple grass
+  float top = rtMound(fc.x);
+  if (fc.y >= RT_WL && fc.y < top) {
+    float speck = ihash(ivec2(fc) + 400);
+    obj = vec4((fc.y >= top - 2. ? vec3(.43, .19, .46) : fc.y >= top - 4. ? vec3(.3, .13, .34) : vec3(.17, .075, .21)) * (speck > .95 ? 1.2 : speck < .05 ? .82 : 1.), 1.);
+  }
+  // an egg, left at the foot of the near tree
+  vec2 eg = fc - vec2(21., 1.);
+  if (far == 0. && eg.x >= 0. && eg.x < 4. && eg.y >= 0. && eg.y < 5. && !((eg.x < 1. || eg.x >= 3.) && (eg.y < 1. || eg.y >= 4.))) {
+    obj = vec4(eg.x >= 3. || eg.y < 1. ? vec3(.74, .66, .62) : eg.x == 1. && eg.y == 3. ? vec3(1.) : vec3(.95, .91, .84), 1.);
+  }
+  vec4 wood = rtTrunk(fc);
+  obj = mix(obj, wood, wood.a);
+  vec4 leaves = rtCrown(fc, far > 0. ? vec4(tf + far * 40., gust * .7, vec2(1e4)) : w);
+  obj = mix(obj, leaves, leaves.a);
+  col = mix(col, obj.rgb, obj.a * mirror * (far > 0. ? far : 1.));
 
-  // the tree
-  vec4 tree = rtTree(rtSway(rtUV(q, g, size), t));
-  col = col * (1. - tree.a) + tree.rgb * .94;
-
-  // leaves let go of the crown and see-saw down to the pool
-  for (int i = 0; i < 9; i++) {
+  // leaves: some come down to lie on the mound or float off on the water, some are carried away across the dark
+  for (int i = 0; i < 16; i++) {
     float fi = float(i);
-    float period = 10. + 6. * hash(vec2(fi, 1.));
+    float period = (i < 7 ? 9. : 15.) + 7. * hash(vec2(fi, 1.));
     float run = t / period + hash(vec2(fi, 2.));
     float k = fract(run), cyc = floor(run);
-    vec2 start = g + size * vec2(.62 * hash(vec2(fi, cyc + 3.)) - .36, .42 + .16 * hash(vec2(fi, cyc + 5.)));
-    float drop = start.y - g.y + .03 * size * hash(vec2(fi, cyc + 6.));
-    vec2 pos = start + vec2(.1 * size * k + .03 * size * sin(k * 8. + fi * 2.), -drop * k);
-    vec2 lp = q - pos;
-    float r = max(.017 * size, PX * 4.);
-    if (dot(lp, lp) > r * r * 2.) continue;
-    // it turns over as it falls: narrow edge-on, full face-on
-    float flip = abs(cos(k * 11. + fi));
-    lp = rot(k * 4. + fi) * lp / r;
-    float e = abs(lp.x) / max(.4 * (.2 + .8 * flip) * (1. - lp.y * lp.y), 1e-3);
-    float a = smoothstep(1., .75, e) * smoothstep(1., .85, abs(lp.y)) * smoothstep(0., .05, k) * smoothstep(1., .9, k);
-    col = mix(col, mix(vec3(.55, .06, .2), vec3(1., .33, .3), flip * flip), a * .95);
-  }
-
-  // fireflies over the meadow, blinking slowly, drawn to the pointer
-  vec2 ptr = pointerP() + vec2(0., -u_scroll * .5);
-  for (int i = 0; i < 14; i++) {
-    float fi = float(i);
-    vec2 home = vec2((hash(vec2(fi, 7.)) - .5) * aspect * .96, mix(g.y - .08, g.y + size * .85, hash(vec2(fi, 8.))));
-    vec2 pos = home + .05 * vec2(sin(t * .21 + fi * 2.), sin(t * .29 + fi * 1.3));
-    pos += (ptr - pos) * .12 * exp(-length(ptr - pos) * 5.);
-    float blink = smoothstep(.25, 1., .5 + .5 * sin(t * (.45 + .4 * hash(vec2(fi, 9.))) + fi * 4.));
-    float d = length(q - pos);
-    float r = max(.003, PX * 2.);
-    col += vec3(1., .74, .46) * (smoothstep(r, r * .3, d) * .9 + exp(-d * 70.) * .16) * blink;
+    vec2 from = vec2(-24. + 80. * hash(vec2(fi, cyc + 3.)), 30. + 46. * hash(vec2(fi, cyc + 5.)));
+    vec2 at;
+    float lit = 1.;
+    bool down = i < 7 && k > .55;
+    if (i < 7) {
+      // see-sawing down
+      float lx = from.x - 34. + 22. * hash(vec2(fi, cyc + 6.));
+      float ly = max(RT_WL, floor(rtMound(lx)));
+      float kk = min(k / .55, 1.);
+      at = mix(from, vec2(lx, ly), kk) + vec2(5. * sin(kk * 9. + fi * 2.) * (1. - kk), 0.);
+      if (down && ly <= RT_WL) at.x -= (k - .55) * 30.;
+      lit = smoothstep(0., .04, k) * (1. - smoothstep(.9, .97, k));
+    } else {
+      // away on the wind, dimming as it goes
+      at = from + vec2(-k * (230. + 90. * hash(vec2(fi, 8.))), 9. * sin(k * 7. + fi * 3.) - 34. * k + 30. * k * k);
+      lit = smoothstep(0., .04, k) * mix(.95, .2, k) * (1. - smoothstep(.9, 1., k));
+    }
+    vec2 l = c - floor(at);
+    // two cells, lying flat or on end as it turns
+    bool flat_ = down || mod(floor(t * 2.5 + fi), 2.) < 1.;
+    if (l.x >= 0. && l.y >= 0. && l.x < (flat_ ? 2. : 1.) && l.y < (flat_ ? 1. : 2.)) {
+      col = mix(col, mod(fi, 3.) < 1. ? vec3(.705, .095, .5) : vec3(.885, .14, .25), lit);
+    }
   }
 
   // a soft vignette keeps the corners quiet under the page
   return col * (1. - .3 * smoothstep(.55, 1.4, length(p * vec2(.75, 1.))));
-}`),
+}
+`),
   fireflies: shader(`
 // Firefly forest: a blue-hour clearing (our own Blender render) with old
 // mossy trees, ferns and grass, a stump and a log in warm pools of light,

@@ -78,7 +78,6 @@ interface Compiled {
 const THEME_SPRITES: Partial<Record<SupporterProfileThemeId, string>> = {
   hanabi: "/images/profile-themes/lantern.png",
   vaporwave: "/images/profile-themes/palm.png",
-  redtree: "/images/profile-themes/red-tree.webp",
   maple: "/images/profile-themes/maple-built-2.webp",
   fireflies: "/images/profile-themes/firefly-built.webp",
   aero: "/images/profile-themes/aero-built.webp",
@@ -509,6 +508,12 @@ const CLIMB_WINDOWS = 8;
    most each time a try runs slow again. */
 const RETRY_WINDOWS = 8;
 const MAX_RETRY_WINDOWS = 128;
+/* While starved it draws only every STARVED_FRAME_MS (~30fps), so a gap that
+   long is its own cadence, not a slow GPU: it is falling behind even that
+   only past this. */
+const STARVED_SLOW_MS = 45;
+/* Windows (~1s each at half rate) a starved theme holds before its first try at full rate. */
+const STARVED_RETRY_WINDOWS = 3;
 
 /* Lowers a backdrop's pixel budget while frames run slow (a weak GPU, a
    phone, a heavy theme), and raises it again once they have run fast for a
@@ -531,6 +536,10 @@ export class ResolutionGovernor {
   private retryWindows = RETRY_WINDOWS;
   /* Where it held before trying above its ceiling, while the try is on. */
   private beforeTry: number | null = null;
+  /* Starved windows that kept the half rate before it tries full rate again,
+     doubling each time a try runs slow; and whether a try is on. */
+  private starvedWindows = STARVED_RETRY_WINDOWS;
+  private starvedTry = false;
   /* The scale came from the start-up probe's guess, and no window has run slow since. */
   private guessed = false;
 
@@ -549,6 +558,23 @@ export class ResolutionGovernor {
     if (this.gaps.length < GOVERNOR_WINDOW) return false;
     const median = this.gaps.sort((a, b) => a - b)[GOVERNOR_WINDOW >> 1];
     this.gaps.length = 0;
+    if (this.starved) {
+      // Drawn at half rate on purpose, its gaps only show whether it holds
+      // that. Judged against full rate they always looked slow, so a theme
+      // starved once (one slow frame in the start-up probe will do it) stayed
+      // at the floor and half rate for the rest of the visit, however fast
+      // the GPU. After a while holding it, it tries full rate again.
+      if (median > STARVED_SLOW_MS) {
+        this.fastWindows = 0;
+        return false;
+      }
+      this.fastWindows += 1;
+      if (this.fastWindows < this.starvedWindows) return false;
+      this.fastWindows = 0;
+      this.starved = false;
+      this.starvedTry = true;
+      return false;
+    }
     if (median > SLOW_FRAME_MS) {
       this.guessed = false;
       this.fastWindows = 0;
@@ -559,6 +585,9 @@ export class ResolutionGovernor {
         return true;
       }
       if (this.scale <= MIN_PIXEL_SCALE) {
+        // a try at full rate that ran slow waits twice as long before the next
+        if (this.starvedTry) this.starvedWindows = Math.min(MAX_RETRY_WINDOWS, this.starvedWindows * 2);
+        this.starvedTry = false;
         this.starved = true;
         return false;
       }
@@ -568,6 +597,11 @@ export class ResolutionGovernor {
     }
     if (median >= FAST_FRAME_MS) return false;
     this.fastWindows += 1;
+    // a try at full rate that held
+    if (this.starvedTry && this.fastWindows >= 2) {
+      this.starvedTry = false;
+      this.starvedWindows = STARVED_RETRY_WINDOWS;
+    }
     if (this.beforeTry !== null) {
       // the try held
       if (this.fastWindows >= 2) {

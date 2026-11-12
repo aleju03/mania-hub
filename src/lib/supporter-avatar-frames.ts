@@ -71,7 +71,7 @@ const FRAME_GEOMETRY = {
   sakura: { box: [-0.4355, -0.4194, 1.629, 1.6613], overhang: [0.3589, 0.3387, 0.1935, 0.2016] },
   stardust: { box: [-0.8548, -0.3548, 2.1935, 2.129], overhang: [0.8427, 0, 0.2823, 0.7742] },
   wisteria: { roundStill: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2258, 0, 0.2419] },
-  "aero-bubble": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2298, 0.1774, 0.1976, 0.1815] },
+  "aero-bubble": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3468, 0.1089, 0.121, 0.1331] },
   "aero-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1048, 0.2177, 0.1048, 0.121] },
   "ai-wings-1": { roundStill: true, box: [-0.7258, -0.7581, 2.6129, 1.9677], overhang: [0.7258, 0.2401, 0.7611, 0] },
   "ai-wings-2": { roundStill: true, box: [-0.7258, -0.7581, 2.6129, 1.9677], overhang: [0.7258, 0.5294, 0.7611, 0] },
@@ -315,7 +315,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 76;
+const FRAME_ART_VERSION = 77;
 
 /* `round`: the still for a round avatar, where the frame has one. */
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still", { round = false }: { round?: boolean } = {}): string {

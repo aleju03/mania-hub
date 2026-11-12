@@ -76,6 +76,42 @@ describe("ResolutionGovernor", () => {
     expect(slowFrames / 60_000).toBeLessThan(0.02);
   });
 
+  // starved, the loop draws only every ~31ms, so ~33ms is what its gaps look like
+  const HALF_RATE = 33.3;
+
+  it("tries full rate again once a theme starved by one slow start-up frame holds half rate easily", () => {
+    const governor = new ResolutionGovernor();
+    // what the start-up probe does when one of its frames ran past 24ms
+    governor.start(0.12);
+    governor.starved = true;
+    let frames = 0;
+    while (governor.starved && frames < 60 * 60) {
+      governor.frame(HALF_RATE);
+      frames += 1;
+    }
+    expect(governor.starved).toBe(false);
+    // within ~6s at half rate (the warm-up, then three windows)
+    expect(frames).toBeLessThanOrEqual(30 * 6);
+    // and from there, at full rate, it climbs all the way back
+    run(governor, 16.7, 60 * 30);
+    expect(governor.scale).toBe(1);
+  });
+
+  it("goes back to half rate when full rate is still too slow, and tries less and less often", () => {
+    const governor = warmed();
+    run(governor, 40, 600);
+    expect(governor.starved).toBe(true);
+    let tries = 0;
+    for (let i = 0; i < 30 * 60 * 10; i++) {
+      const was = governor.starved;
+      governor.frame(governor.starved ? HALF_RATE : 40);
+      if (was && !governor.starved) tries += 1;
+    }
+    expect(governor.scale).toBeCloseTo(0.12);
+    // ten minutes: a try that doubles its wait each time, not one every few seconds
+    expect(tries).toBeLessThan(12);
+  });
+
   it("ignores hidden-tab gaps and lone hitches", () => {
     const governor = warmed();
     for (let i = 0; i < 300; i++) governor.frame(i % 10 === 0 ? 1000 : i % 7 === 0 ? 60 : 16.7);
