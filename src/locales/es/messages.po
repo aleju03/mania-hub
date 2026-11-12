@@ -9413,6 +9413,10 @@ msgstr "en cola"
 msgid "In server discovery"
 msgstr "En el directorio de servidores"
 
+#: src/routes/discord.tsx
+msgid "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4> or <5>m!m</5> with a player's name or a map after it, for recent, top, profile, skills, compare and map."
+msgstr"En servidores también puedes escribir <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4> o <5>m!m</5> con el nombre de un jugador o un mapa después, para recent, top, profile, skills, compare y map."
+
 #: src/components/player/LivePresence.tsx
 msgid "In song select"
 msgstr "En la selección de canciones"

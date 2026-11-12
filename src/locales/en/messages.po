@@ -9452,6 +9452,10 @@ msgstr "in queue"
 msgid "In server discovery"
 msgstr "In server discovery"
 
+#: src/routes/discord.tsx
+msgid "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4> or <5>m!m</5> with a player's name or a map after it, for recent, top, profile, skills, compare and map."
+msgstr "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4> or <5>m!m</5> with a player's name or a map after it, for recent, top, profile, skills, compare and map."
+
 #: src/components/player/LivePresence.tsx
 msgid "In song select"
 msgstr "In song select"

@@ -9425,6 +9425,10 @@ msgstr "排队中"
 msgid "In server discovery"
 msgstr "已加入服务器发现"
 
+#: src/routes/discord.tsx
+msgid "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4> or <5>m!m</5> with a player's name or a map after it, for recent, top, profile, skills, compare and map."
+msgstr"在服务器里也可以输入 <0>m!r</0>、<1>m!t</1>、<2>m!p</2>、<3>m!s</3>、<4>m!c</4> 或 <5>m!m</5>，后面跟玩家名或谱面，分别对应 recent、top、profile、skills、compare 和 map。"
+
 #: src/components/player/LivePresence.tsx
 msgid "In song select"
 msgstr "选歌中"

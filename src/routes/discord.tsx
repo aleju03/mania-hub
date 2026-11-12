@@ -977,6 +977,11 @@ function CommandsPanel({ commands }: { commands: DiscordPublicInfo["commands"] }
       ) : null}
       <p className="mt-2 text-[13px] text-osu-f1">
         <Trans>
+          In servers you can also type <code className="font-semibold text-osu-pink-light">m!r</code>, <code className="font-semibold text-osu-pink-light">m!t</code>, <code className="font-semibold text-osu-pink-light">m!p</code>, <code className="font-semibold text-osu-pink-light">m!s</code>, <code className="font-semibold text-osu-pink-light">m!c</code> or <code className="font-semibold text-osu-pink-light">m!m</code> with a player's name or a map after it, for recent, top, profile, skills, compare and map.
+        </Trans>
+      </p>
+      <p className="mt-2 text-[13px] text-osu-f1">
+        <Trans>
           Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">New farm maps</span> and <span className="font-semibold text-osu-l2">Website changelog</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
         </Trans>
       </p>
