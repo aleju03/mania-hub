@@ -3126,42 +3126,28 @@ vec3 theme(vec2 uv, vec2 p, float t) {
 // catching the facets one after another and leaving glints on the tips.
 const float CC_SEG = 1.04719755; // a sixth of a turn: one prism face
 
-// The scene, back to front by z. A: where the root sits (across the screen,
+// The scene, back to front by z, as two tables (chains of ifs: a constant
+// array read by a loop's index is rebuilt on every read by some drivers). A: where the root sits (across the screen,
 // -1..1 each way), size in canvas heights, the way the cluster grows. B: z,
 // the rock mass's width and height over the size, how much light the
 // cluster gives off (0: a bare rock mass). The first is the hero; the
-// last five are bare rock: an overhang, the floor, deep masses.
-const int CC_N = 14;
-const vec4 CC_A[14] = vec4[14](
-  vec4(.74, -.86, .56, 1.78),
-  vec4(.1, -.66, .3, 1.5),
-  vec4(.86, .04, .27, 2.05),
-  vec4(-.56, -.8, .26, 1.36),
-  vec4(.44, .3, .17, 1.82),
-  vec4(-.14, -.16, .15, 1.45),
-  vec4(-.78, -.34, .12, 1.25),
-  vec4(.1, .4, .1, 1.7),
-  vec4(-.4, .1, .085, 1.6),
-  vec4(.62, 1.06, .3, -1.75),
-  vec4(-1.02, -1., .5, 1.3),
-  vec4(.36, -.22, .36, 1.62),
-  vec4(-.72, .62, .42, 1.5),
-  vec4(-.18, .9, .36, -1.6));
-const vec4 CC_B[14] = vec4[14](
-  vec4(10., 1.2, .85, 1.),
-  vec4(8., 1.15, .9, .5),
-  vec4(7., 1.1, 1.1, .45),
-  vec4(7.5, 1.25, 1., .4),
-  vec4(5., 1.3, 1.1, .28),
-  vec4(5.5, 1.4, 1.2, .25),
-  vec4(4.5, 1.5, 1.3, .28),
-  vec4(4., 1.6, 1.4, .26),
-  vec4(3.5, 1.7, 1.4, .24),
-  vec4(6., 1.6, 1., 0.),
-  vec4(9., 1.3, 1.2, 0.),
-  vec4(3., 1.5, 1.1, 0.),
-  vec4(2., 1.5, 1.1, 0.),
-  vec4(2.5, 1.7, 1., 0.));
+// rest are rock: the floor, deep masses, two clusters hanging from the
+// ceiling into the top of the page, and last the two slabs of that ceiling.
+const int CC_N = 16;
+vec4 ccA(int i) {
+  return
+    i == 0 ? vec4(.74, -.86, .56, 1.78) : i == 1 ? vec4(.1, -.66, .3, 1.5) : i == 2 ? vec4(.86, .04, .27, 2.05) : i == 3 ? vec4(-.56, -.8, .26, 1.36) :
+    i == 4 ? vec4(.44, .3, .17, 1.82) : i == 5 ? vec4(-.14, -.16, .15, 1.45) : i == 6 ? vec4(-.78, -.34, .12, 1.25) : i == 7 ? vec4(.1, .4, .1, 1.7) :
+    i == 8 ? vec4(-.4, .1, .085, 1.6) : i == 9 ? vec4(.62, .94, .36, -1.75) : i == 10 ? vec4(-1.02, -1., .5, 1.3) : i == 11 ? vec4(.36, -.22, .36, 1.62) :
+    i == 12 ? vec4(-.72, .62, .42, 1.5) : i == 13 ? vec4(.1, .93, .3, -1.48) : i == 14 ? vec4(-.5, .93, .5, -1.5) : vec4(.55, 1.02, .5, -1.66);
+}
+vec4 ccB(int i) {
+  return
+    i == 0 ? vec4(10., 1.2, .85, 1.) : i == 1 ? vec4(8., 1.15, .9, .5) : i == 2 ? vec4(7., 1.1, 1.1, .45) : i == 3 ? vec4(7.5, 1.25, 1., .4) :
+    i == 4 ? vec4(5., 1.3, 1.1, .28) : i == 5 ? vec4(5.5, 1.4, 1.2, .25) : i == 6 ? vec4(4.5, 1.5, 1.3, .28) : i == 7 ? vec4(4., 1.6, 1.4, .26) :
+    i == 8 ? vec4(3.5, 1.7, 1.4, .24) : i == 9 ? vec4(6., 1.6, 1., .8) : i == 10 ? vec4(9., 1.3, 1.2, 0.) : i == 11 ? vec4(3., 1.5, 1.1, 0.) :
+    i == 12 ? vec4(2., 1.5, 1.1, 0.) : i == 13 ? vec4(2.5, 1.7, 1., .6) : i == 14 ? vec4(1.2, 2.3, 1., 0.) : vec4(1.4, 2.2, 1., 0.);
+}
 
 // where the sweep has reached: 0 at the left edge, 1 at the right, leaning
 float ccSweepAt(vec2 x, float aspect) { return (x.x / aspect + .5) * .85 + (x.y + .5) * .15; }
@@ -3177,6 +3163,18 @@ float ccWall(vec2 x, float aspect) {
 float ccStone(vec2 x) {
   return inoise(x) * .55 + inoise(mat2(.8, -.6, .6, .8) * x * 2.1 + 3.1) * .3
        + inoise(mat2(-.5, -.87, .87, -.5) * x * 4.4 + 7.3) * .15;
+}
+
+// dust adrift in the cave, one layer: seen only where it crosses light
+float ccMotes(vec2 p, float t, float scale, float seed) {
+  vec2 q = p * scale + vec2(t * .03 + seed * 5., t * (.025 + .01 * seed));
+  q.x += .3 * sin(q.y * .9 + seed * 3. + t * .07);
+  vec2 id = floor(q), f = fract(q) - .5;
+  float h = hash(id + seed * 17.);
+  if (h > .22) return 0.;
+  vec2 d = f - (vec2(hash(id + 1.3), hash(id + 2.7)) - .5) * .6;
+  float r = .02 + .05 * pow(hash(id + 4.), 3.) + PX * scale;
+  return smoothstep(r, r * .2, length(d)) * (.3 + .7 * hash(id + 6.)) * (.55 + .45 * sin(t * (.5 + 1.5 * hash(id + 8.)) + h * 60.));
 }
 
 vec3 theme(vec2 uv, vec2 p, float t) {
@@ -3217,13 +3215,13 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   // clusters throw on what is around them, the glints on their tips
   float bestZ = -1., hitD = 9., spark = 0., spZ = 0., glow = 0.;
   bool isRock = false;
-  float mD[14];
+  float mD[16];
   vec2 gdir = vec2(0.);
   vec4 F = vec4(0.); // the front crystal's shape: both ends grown, broken, where and how slanted
   vec4 A = vec4(0.), B = vec4(0.);
   vec2 C = vec2(0.), back = vec2(9.), mO = vec2(0., 1.);
   for (int i = 0; i < CC_N; i++) {
-    vec4 a = CC_A[i], b = CC_B[i];
+    vec4 a = ccA(i), b = ccB(i);
     vec2 root = a.xy * qs;
     float size = a.z * sz;
     vec2 md = vec2(cos(a.w), sin(a.w)), mp = vec2(-md.y, md.x);
@@ -3310,12 +3308,12 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   // whatever is under x sits in the shadow of the rock in front of it
   float shade = 1.;
   for (int i = 0; i < CC_N; i++) {
-    float ms = CC_A[i].z * sz;
-    if (CC_B[i].x + .5 > bestZ) shade *= mix(.3, 1., smoothstep(0., .02 * ms + 2. * PX, mD[i])) * mix(.6, 1., smoothstep(0., .16 * ms, mD[i]));
+    float ms = ccA(i).z * sz;
+    if (ccB(i).x + .5 > bestZ) shade *= mix(.3, 1., smoothstep(0., .02 * ms + 2. * PX, mD[i])) * mix(.6, 1., smoothstep(0., .16 * ms, mD[i]));
   }
 
   // a pool of light rests on the hero and wanders a little around it
-  vec2 pc = CC_A[0].xy * qs + vec2(-.12 + .06 * sin(t * .05), .16 + .05 * cos(t * .041));
+  vec2 pc = ccA(0).xy * qs + vec2(-.12 + .06 * sin(t * .05), .16 + .05 * cos(t * .041));
   float pool = exp(-length((p - pc) * vec2(.8, 1.)) * 1.8);
   vec3 violet = vec3(.24, .07, .42);
 
@@ -3323,7 +3321,7 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   vec2 gd2 = gdir / max(length(gdir), .001);
   vec3 wn = normalize(vec3(rn, 1.));
   float litW = max(dot(wn, normalize(K + vec3(0., .3, .5))), 0.);
-  vec3 col = vec3(.009, .007, .014) * (.55 + .9 * r0) + vec3(.03, .022, .04) * pow(litW, 4.) * r0;
+  vec3 col = vec3(.014, .01, .022) * (.55 + .9 * r0) + vec3(.045, .032, .06) * pow(litW, 4.) * r0;
   col += violet * glow * .07 * (.4 + .6 * r0) * (.5 + .8 * max(dot(wn.xy, gd2), 0.));
   col += vec3(.05, .016, .085) * exp(-length((p - vec2(.42 * aspect, -.38)) * vec2(.7, 1.)) * 2.2);
 
@@ -3342,6 +3340,8 @@ vec3 theme(vec2 uv, vec2 p, float t) {
     rock += vec3(.12, .26, .38) * smoothstep(-3. * PX, -.5 * PX, hitD) * smoothstep(.5, .95, mO.y) * pow(lit, 3.) * smoothstep(.45, .7, r0) * (.2 + 1.2 * band);
     rock += vec3(.05, .025, .09) * band * tone * .5 * smoothstep(-.3, .5, mO.y);
     rock *= mix(.55, 1., smoothstep(3., 10., C.x)) * mix(.75, 1.05, pool);
+    // the ceiling's lip catches the light of what hangs from it and stands under it
+    rock += violet * (.08 + .6 * min(glow, 1.)) * pow(C.y, 2.) * tone * smoothstep(.1, -.5, mO.y);
     col = mix(col, rock, smoothstep(PX, -PX, hitD));
   }
 
@@ -3465,6 +3465,8 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   // a faint violet haze in the air around the clusters
   col += violet * glow * .035;
   col += violet * hover * min(glow, 1.) * .14;
+  // dust in the air, showing where it drifts through the crystals' light
+  col += vec3(.72, .58, 1.) * (ccMotes(x, t, 8., 1.) + .7 * ccMotes(x + 3., t, 15., 2.)) * (.03 + .4 * min(glow, 1.3));
 
   // the edges fall into shadow, the upper left stays darkest
   vec2 e = (uv - .5) * 2.;

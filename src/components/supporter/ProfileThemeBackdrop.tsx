@@ -113,7 +113,7 @@ export function profileThemeStrip(theme: SupporterProfileThemeId): string {
 
 /* Bump after re-rendering a thumb (and its strip): /images/ is served cache-first by the
    service worker, so a changed file needs a new URL. */
-const THEME_THUMB_VERSION = 20;
+const THEME_THUMB_VERSION = 21;
 
 /* A thumbnail of a theme's backdrop, for the drawer and the slot: the
    rendered still, or live while `still` is off, over that same still until
