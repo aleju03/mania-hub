@@ -472,6 +472,11 @@ msgstr "{0} copy"
 msgid "{0} could not be downloaded, applied colors only"
 msgstr "{0} could not be downloaded, applied colors only"
 
+#. placeholder {0}: countries.length
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "{0} countries"
+msgstr "{0} countries"
+
 #. placeholder {0}: summary.highlights.longestStreak
 #: src/components/me/MyDataPanel.tsx
 msgid "{0} day"
@@ -3140,6 +3145,10 @@ msgstr "Add {cardCount} cards to set..."
 msgid "Add a card to your showcase"
 msgstr "Add a card to your showcase"
 
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Add a country code"
+msgstr "Add a country code"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Add a message (optional)"
 msgstr "Add a message (optional)"
@@ -4533,6 +4542,7 @@ msgstr "Can't reach the bot right now. Refresh in a moment."
 
 #: src/components/companella/AuthorizePage.tsx
 #: src/components/companella/InstallationList.tsx
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/maps/UserCollectionEditor.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/collections/ShowcasePicker.tsx
@@ -4903,6 +4913,10 @@ msgstr "Choose a new GOAT"
 msgid "Choose another collector for your gift."
 msgstr "Choose another collector for your gift."
 
+#: src/routes/discord.tsx
+msgid "Choose players"
+msgstr "Choose players"
+
 #: src/components/packs/CollectionPanel.tsx
 #~ msgid "Choose the card you want to craft a special edition of."
 #~ msgstr "Choose the card you want to craft a special edition of."
@@ -4968,6 +4982,7 @@ msgid "clear"
 msgstr "clear"
 
 #: src/components/companella/InstallationList.tsx
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/maps/RangePill.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
@@ -10602,6 +10617,10 @@ msgstr "Loaded the built-in skin"
 #~ msgid "loading"
 #~ msgstr "loading"
 
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Loading"
+msgstr "Loading"
+
 #. placeholder {0}: skin.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Loading {0} failed"
@@ -12613,6 +12632,10 @@ msgstr "No top plays match those controls."
 msgid "No top plays recorded yet. As you set new personal bests while tracked, they're saved here."
 msgstr "No top plays recorded yet. As you set new personal bests while tracked, they're saved here."
 
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "No tracked players here."
+msgstr "No tracked players here."
+
 #: src/routes/player/$username.tsx
 msgid "No tracked plays found"
 msgstr "No tracked plays found"
@@ -12740,6 +12763,10 @@ msgstr "Nobody holds an exclusive card yet."
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nobody we track has a scored run on this map. Search a player, or paste a score link."
 msgstr "Nobody we track has a scored run on this map. Search a player, or paste a score link."
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Nobody yet."
+msgstr "Nobody yet."
 
 #: src/components/packs/GoatPoll.tsx
 msgid "Nominate"
@@ -14180,6 +14207,14 @@ msgstr "Pick a different file"
 msgid "pick a difficulty below"
 msgstr "pick a difficulty below"
 
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Pick a region"
+msgstr "Pick a region"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Pick a region or add a country to see its players."
+msgstr "Pick a region or add a country to see its players."
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Pick a target above. Progress updates as your mania plays land."
 msgstr "Pick a target above. Progress updates as your mania plays land."
@@ -14223,6 +14258,11 @@ msgstr "Pick two scores"
 #: src/components/packs/collections/ShowcasePicker.tsx
 msgid "Pick your showcase"
 msgstr "Pick your showcase"
+
+#. placeholder {0}: picked.length
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Picked {0} of {max}"
+msgstr "Picked {0} of {max}"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Picking a backdrop or a pattern re-renders that playfield from the uploaded .osk while preserving its other saved choice. Patterns are cut from real charts, one keymode at a time. Keymodes left alone keep the previews they were published with."
@@ -14414,6 +14454,10 @@ msgstr "Players"
 #: src/components/packs/collections/CommunityStatsHeader.tsx
 msgid "players carded"
 msgstr "players carded"
+
+#: src/routes/discord.tsx
+msgid "Players for #{channelName}"
+msgstr "Players for #{channelName}"
 
 #: src/components/farm-helper/NeighborhoodGraph.tsx
 msgid "Players near your pp"
@@ -15605,6 +15649,10 @@ msgstr "Refreshing maps..."
 msgid "Refreshing..."
 msgstr "Refreshing..."
 
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Region"
+msgstr "Region"
+
 #: src/components/communities/AccessScopePicker.tsx
 #: src/components/layout/CountrySelector.tsx
 msgid "Regions"
@@ -15694,8 +15742,10 @@ msgstr "remove"
 msgid "Remove"
 msgstr "Remove"
 
+#. placeholder {0}: getCountryName(code)
 #. placeholder {0}: player.username
 #. placeholder {0}: server.name
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/player/ServerLinks.tsx
 #: src/routes/discord.tsx
 msgid "Remove {0}"
@@ -16322,6 +16372,7 @@ msgstr "Saturdays"
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/companella/InstallationList.tsx
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/me/GoalsPanel.tsx
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/ServerLinks.tsx
@@ -16600,6 +16651,10 @@ msgstr "Search a beatmap, then pick a difficulty"
 #: src/components/me/GoalsPanel.tsx
 msgid "Search a map or paste a beatmap ID..."
 msgstr "Search a map or paste a beatmap ID..."
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Search a player"
+msgstr "Search a player"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Search a player to browse their plays, or paste a score link."
@@ -17369,6 +17424,7 @@ msgstr "Show fewer"
 msgid "show more"
 msgstr "show more"
 
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/team/TeamProfilePage.tsx
@@ -17472,6 +17528,11 @@ msgstr "Showing {0} of {1} images. Refine your search to see the rest."
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "Showing {0} of {1}, {2} hidden by filters"
 msgstr "Showing {0} of {1}, {2} hidden by filters"
+
+#. placeholder {0}: list.length
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Showing {0} of {total}"
+msgstr "Showing {0} of {total}"
 
 #: src/components/player/BestScoresControls.tsx
 #~ msgid "Showing {grade} plays"

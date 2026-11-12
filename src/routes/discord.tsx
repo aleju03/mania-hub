@@ -27,6 +27,7 @@ import {
   type BotServers,
 } from "../lib/discord-bot";
 import { DiscordLogo, DISCORD_BLURPLE } from "../components/ui/DiscordLogo";
+import { FeedPlayersModal } from "../components/discord/FeedPlayersModal";
 import { Panel } from "../components/companella/primitives";
 import { DiscordMessageBodyView, type DiscordMessageJson } from "../components/discord/message/DiscordMessageView";
 import { DISCORD } from "../components/discord/message/discord-markdown";
@@ -424,10 +425,13 @@ function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState 
 // Which top plays a channel posts: keymodes, a cut to the player's best N of
 // that keymode, a pp floor and a player list. Changes show at once and save in
 // order behind the scenes, since each save waits on Discord for a few seconds.
-function TopPlayFilters({ sub, onSave }: {
+function TopPlayFilters({ sub, channelName, onSave }: {
   sub: BotServer["subscriptions"][number];
+  channelName?: string;
   onSave: (filters: { minPp: number; keys: number[]; keymodeTop: number; players: number[] }) => Promise<boolean>;
 }) {
+  const { t } = useLingui();
+  const [picking, setPicking] = useState(false);
   const [filters, setFilters] = useState(() => filtersOf(sub));
   const pending = useRef(0);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -493,10 +497,30 @@ function TopPlayFilters({ sub, onSave }: {
           </button>
         ) : null}
       </div>
-      <FeedPlayerPicker
-        players={players}
-        onChange={(next) => save({ players: next })}
-      />
+      <div className="flex w-full flex-wrap items-center gap-1.5">
+        <span className="mr-1"><Trans>Players</Trans></span>
+        {players.length === 0 ? <span className="text-osu-l2"><Trans>Everyone</Trans></span> : null}
+        {players.slice(0, 8).map((player) => (
+          <span key={player.id} className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.07] py-1 pl-1.5 pr-2 text-[13px] font-semibold text-white">
+            {player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-4 w-4 rounded-full" /> : null}
+            {player.username}
+          </span>
+        ))}
+        {players.length > 8 ? <span className="text-[12px] text-osu-l2">+{players.length - 8}</span> : null}
+        <button type="button" onClick={() => setPicking(true)} className="rounded-md bg-white/[0.07] px-2.5 py-1 text-[13px] font-semibold text-white hover:bg-white/[0.1]">
+          <Trans>Choose players</Trans>
+        </button>
+      </div>
+      {picking ? (
+        <FeedPlayersModal
+          title={channelName ? t`Players for #${channelName}` : t`Players`}
+          players={players}
+          max={MAX_FEED_PLAYERS}
+          fallbackCountry={sub.country === "GLOBAL" ? null : sub.country}
+          onSave={(next) => save({ players: next })}
+          onClose={() => setPicking(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -835,6 +859,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                       <td colSpan={1 + feedTypes.length + (autoDanAvailable ? 1 : 0)} className="pb-2.5 pt-0.5">
                         <TopPlayFilters
                           sub={topPlays}
+                          channelName={channel.name}
                           onSave={(filters) => saveFilters({ feedFilters: { channelId: channel.id, feedType: "top_play", ...filters } })}
                         />
                       </td>
