@@ -71,7 +71,7 @@ function Emoji({ name, id, animated, jumbo }: { name: string; id: string; animat
   const size = jumbo ? "3rem" : "1.375em";
   // The bot sends a wide pill as a left and a right half (`_l`, `_r`); they touch
   // in Discord, so the margin between them is dropped here too.
-  const margin = name.endsWith("_l") ? "0 0 0 0.1em" : name.endsWith("_r") ? "0 0.05em 0 0" : "0 0.05em 0 0.1em";
+  const margin = /_s?l$/.test(name) ? "0 0 0 0.1em" : /_s?r$/.test(name) ? "0 0.05em 0 0" : "0 0.05em 0 0.1em";
   return (
     <img
       src={emojiUrl(id, animated)}
@@ -110,6 +110,16 @@ function rules(jumbo: boolean): InlineRule[] {
   if (!jumbo && inlineRules) return inlineRules;
   const list: InlineRule[] = [
     { re: /^\\([^0-9A-Za-z\s])/, render: (m) => m[1] },
+    {
+      // A pill sent as two halves: kept on one line, as one piece.
+      re: /^<(a?):(\w{2,30}_s?l):(\d{15,25})>\u2060?<(a?):(\w{2,30}_s?r):(\d{15,25})>/,
+      render: (m, key) => (
+        <span key={key} style={{ whiteSpace: "nowrap" }}>
+          <Emoji animated={m[1] === "a"} name={m[2]} id={m[3]} jumbo={jumbo} />
+          <Emoji animated={m[4] === "a"} name={m[5]} id={m[6]} jumbo={jumbo} />
+        </span>
+      ),
+    },
     {
       re: /^<(a?):(\w{2,32}):(\d{15,25})>/,
       render: (m, key) => <Emoji key={key} animated={m[1] === "a"} name={m[2]} id={m[3]} jumbo={jumbo} />,
