@@ -69,6 +69,9 @@ export function emojiUrl(id: string, animated: boolean): string {
 
 function Emoji({ name, id, animated, jumbo }: { name: string; id: string; animated: boolean; jumbo?: boolean }) {
   const size = jumbo ? "3rem" : "1.375em";
+  // The bot sends a wide pill as a left and a right half (`_l`, `_r`); they touch
+  // in Discord, so the margin between them is dropped here too.
+  const margin = name.endsWith("_l") ? "0 0 0 0.1em" : name.endsWith("_r") ? "0 0.05em 0 0" : "0 0.05em 0 0.1em";
   return (
     <img
       src={emojiUrl(id, animated)}
@@ -81,7 +84,7 @@ function Emoji({ name, id, animated, jumbo }: { name: string; id: string; animat
         const local = `/images/discord/emojis/${name}.png`;
         if (!img.src.endsWith(local)) img.src = local;
       }}
-      style={{ width: size, height: size, objectFit: "contain", verticalAlign: "bottom", margin: "0 0.05em 0 0.1em", display: "inline-block" }}
+      style={{ width: size, height: size, objectFit: "contain", verticalAlign: "bottom", margin, display: "inline-block" }}
     />
   );
 }
