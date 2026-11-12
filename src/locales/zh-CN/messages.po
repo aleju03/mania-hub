@@ -1562,6 +1562,10 @@ msgstr "{months} 个月"
 msgid "{months}mo ago"
 msgstr "{months} 个月前"
 
+#: src/routes/discord.tsx
+msgid "{n}th dan and up"
+msgstr "{n} 段及以上"
+
 #: src/components/CountryWarming.tsx
 msgid "{name} added to queue, come back later :)"
 msgstr "{name} 已加入队列，稍后再来看看吧 :)"
@@ -3628,6 +3632,10 @@ msgstr "不限"
 #: src/routes/tracker.tsx
 msgid "Any"
 msgstr "不限"
+
+#: src/routes/discord.tsx
+msgid "Any dan"
+msgstr "任意段位"
 
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -6211,8 +6219,12 @@ msgstr "国家/地区"
 #~ msgstr "最佳成绩推送的国家"
 
 #: src/routes/discord.tsx
-msgid "Country for top plays without picked players"
-msgstr "未选择玩家时 top plays 的国家"
+msgid "Country for top plays and dan clears without picked players"
+msgstr "未选择玩家时最佳成绩和段位通过的国家"
+
+#: src/routes/discord.tsx
+#~ msgid "Country for top plays without picked players"
+#~ msgstr "未选择玩家时 top plays 的国家"
 
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
@@ -6482,6 +6494,14 @@ msgstr "段位 {0}"
 #: src/components/maps/PlayResults.tsx
 msgid "Dan accuracy"
 msgstr "段位准确率"
+
+#: src/routes/discord.tsx
+msgid "Dan clears"
+msgstr "段位通过"
+
+#: src/routes/discord.tsx
+msgid "Dan clears in"
+msgstr "段位通过键数"
 
 #: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
@@ -7846,12 +7866,16 @@ msgstr "建议已发送"
 #~ msgstr "后端当前已关闭 feed。"
 
 #: src/routes/discord.tsx
+msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Dan clears</1>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <2>New farm maps</2> and <3>Website changelog</3>, which posts each new changelog line. Turn them on with <4>/setup</4> or under Your servers above."
+msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>段位通过</1>（玩家在段位谱或练习谱上接近通过、通过或超额通过时发出）、<2>新的刷分图</2>和<3>网站更新日志</3>（每条新的更新日志都会发出）。用 <4>/setup</4> 或在上方的你的服务器中开启。"
+
+#: src/routes/discord.tsx
 #~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
 #~ msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>新的刷分图</1>和<2>网站更新</2>（每条新的更新日志都会发出）。用 <3>/setup</3> 或在上方的你的服务器中开启。"
 
 #: src/routes/discord.tsx
-msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
-msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>新的刷分图</1>和<2>网站更新日志</2>（每条新的更新日志都会发出）。用 <3>/setup</3> 或在上方的你的服务器中开启。"
+#~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+#~ msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>新的刷分图</1>和<2>网站更新日志</2>（每条新的更新日志都会发出）。用 <3>/setup</3> 或在上方的你的服务器中开启。"
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
@@ -11857,6 +11881,10 @@ msgstr "已命名为 {0}"
 msgid "Near clear"
 msgstr "差一点通过"
 
+#: src/routes/discord.tsx
+msgid "Near clears"
+msgstr "接近通过"
+
 #: src/routes/recommendations.tsx
 msgid "nearby players outscore you"
 msgstr "附近玩家的分数比你高"
@@ -14042,6 +14070,10 @@ msgstr "如果某技能中的通过计入段位比你在该技能最好的五次
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
 msgstr "一个成绩超过多名玩家只算一次狙击，对象是其中排名最高的玩家。"
+
+#: src/routes/discord.tsx
+msgid "Past 10th dan"
+msgstr "10 段以上"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste"

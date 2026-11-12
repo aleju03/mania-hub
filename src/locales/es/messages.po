@@ -1550,6 +1550,10 @@ msgstr "{months}mo"
 msgid "{months}mo ago"
 msgstr "hace {months}mo"
 
+#: src/routes/discord.tsx
+msgid "{n}th dan and up"
+msgstr "Dan {n} o más"
+
 #: src/components/CountryWarming.tsx
 msgid "{name} added to queue, come back later :)"
 msgstr "{name} se agregó a la cola, vuelve más tarde :)"
@@ -3616,6 +3620,10 @@ msgstr "todos"
 #: src/routes/tracker.tsx
 msgid "Any"
 msgstr "Cualquiera"
+
+#: src/routes/discord.tsx
+msgid "Any dan"
+msgstr "Cualquier dan"
 
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -6199,8 +6207,12 @@ msgstr "País"
 #~ msgstr "País para los top plays"
 
 #: src/routes/discord.tsx
-msgid "Country for top plays without picked players"
-msgstr "País para top plays sin jugadores elegidos"
+msgid "Country for top plays and dan clears without picked players"
+msgstr "País para top plays y clears de dan sin jugadores elegidos"
+
+#: src/routes/discord.tsx
+#~ msgid "Country for top plays without picked players"
+#~ msgstr "País para top plays sin jugadores elegidos"
 
 #: src/routes/rankings.tsx
 msgid "Country mania rankings"
@@ -6470,6 +6482,14 @@ msgstr "Dan {0}"
 #: src/components/maps/PlayResults.tsx
 msgid "Dan accuracy"
 msgstr "Precisión para dan"
+
+#: src/routes/discord.tsx
+msgid "Dan clears"
+msgstr "Clears de dan"
+
+#: src/routes/discord.tsx
+msgid "Dan clears in"
+msgstr "Clears de dan en"
 
 #: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
@@ -7834,12 +7854,16 @@ msgstr "Sugerencia enviada"
 #~ msgstr "Los feeds están desactivados en el backend por ahora."
 
 #: src/routes/discord.tsx
+msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Dan clears</1>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <2>New farm maps</2> and <3>Website changelog</3>, which posts each new changelog line. Turn them on with <4>/setup</4> or under Your servers above."
+msgstr "Los feeds publican solos en un canal: <0>Top plays</0>, <1>Clears de dan</1>, que publica cuando un jugador casi hace clear, hace clear u overclear de un dan o de un chart de práctica, <2>Mapas nuevos para farmear</2> y <3>Changelog del sitio</3>, que publica cada línea nueva del changelog. Actívalos con <4>/setup</4> o en Tus servidores arriba."
+
+#: src/routes/discord.tsx
 #~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
 #~ msgstr "Los feeds publican solos en un canal: <0>Top plays</0>, <1>Mapas nuevos para farmear</1> y <2>Novedades del sitio</2>, que publica cada línea nueva del changelog. Actívalos con <3>/setup</3> o en Tus servidores arriba."
 
 #: src/routes/discord.tsx
-msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
-msgstr "Los feeds publican solos en un canal: <0>Top plays</0>, <1>Mapas nuevos para farmear</1> y <2>Changelog del sitio</2>, que publica cada línea nueva del changelog. Actívalos con <3>/setup</3> o en Tus servidores arriba."
+#~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+#~ msgstr "Los feeds publican solos en un canal: <0>Top plays</0>, <1>Mapas nuevos para farmear</1> y <2>Changelog del sitio</2>, que publica cada línea nueva del changelog. Actívalos con <3>/setup</3> o en Tus servidores arriba."
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
@@ -11845,6 +11869,10 @@ msgstr "Guardado como {0}"
 msgid "Near clear"
 msgstr "Casi clear"
 
+#: src/routes/discord.tsx
+msgid "Near clears"
+msgstr "Casi clears"
+
 #: src/routes/recommendations.tsx
 msgid "nearby players outscore you"
 msgstr "jugadores cercanos te superan"
@@ -14030,6 +14058,10 @@ msgstr "Los pases de un skill quedan fuera cuando acreditan más de cinco nivele
 #: src/routes/snipes.tsx
 msgid "Passing several players with one score counts as one snipe, against the highest of them."
 msgstr "Pasar a varios jugadores con un mismo score cuenta como un solo snipe, contra el que estaba más arriba."
+
+#: src/routes/discord.tsx
+msgid "Past 10th dan"
+msgstr "Más de dan 10"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste"

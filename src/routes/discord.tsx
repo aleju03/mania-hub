@@ -417,19 +417,31 @@ function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onCh
 const FILTER_KEYS = [4, 5, 6, 7, 8, 9, 10];
 const KEYMODE_TOP_CHOICES = [0, 100, 50];
 
-type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "except"; countries: string[] };
+// The keymodes with dan courses, and the lowest level a Dan clears feed can
+// ask for. A level is each ladder's own number: 11 is the first past 10th dan.
+const DAN_FILTER_KEYS = [4, 6, 7];
+const MIN_DAN_CHOICES = [0, 5, 8, 10, 11];
+// Feeds of players' plays, which get a row of filters under their channel.
+const PLAYER_FEEDS = ["top_play", "dan_clear"];
+
+type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "except"; countries: string[]; minDan: number; nearClears: boolean };
+type SavedFeedFilters = Omit<TopPlayFilterState, "players"> & { players: number[] };
 
 function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
-  return { minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [], playersMode: sub.playersMode ?? "only", countries: sub.countries ?? [] };
+  return {
+    minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [], playersMode: sub.playersMode ?? "only",
+    countries: sub.countries ?? [], minDan: sub.minDan ?? 0, nearClears: sub.nearClears ?? true,
+  };
 }
 
-// Which top plays a channel posts: keymodes, a cut to the player's best N of
-// that keymode, a pp floor and a player list. Changes show at once and save in
+// Which plays a channel posts. Top plays: keymodes, a cut to the player's best
+// N of that keymode, a pp floor and a player list. Dan clears: keymodes, a
+// lowest level, near clears and a player list. Changes show at once and save in
 // order behind the scenes, since each save waits on Discord for a few seconds.
 function TopPlayFilters({ sub, channelName, onSave }: {
   sub: BotServer["subscriptions"][number];
   channelName?: string;
-  onSave: (filters: { minPp: number; keys: number[]; keymodeTop: number; players: number[]; playersMode: "only" | "except"; countries: string[] }) => Promise<boolean>;
+  onSave: (filters: SavedFeedFilters) => Promise<boolean>;
 }) {
   const { t } = useLingui();
   const [picking, setPicking] = useState(false);
@@ -448,7 +460,7 @@ function TopPlayFilters({ sub, channelName, onSave }: {
     setFilters(next);
     pending.current++;
     queue.current = queue.current
-      .then(() => onSave({ minPp: next.minPp, keys: next.keys, keymodeTop: next.keymodeTop, players: next.players.map((p) => p.id), playersMode: next.playersMode, countries: next.countries }))
+      .then(() => onSave({ ...next, players: next.players.map((p) => p.id) }))
       .then((ok) => {
         pending.current--;
         if (!ok && pending.current === 0) setFilters(filtersOf(sub));
@@ -456,7 +468,8 @@ function TopPlayFilters({ sub, channelName, onSave }: {
   };
   const chip = (active: boolean, interactive = true) =>
     `rounded-md px-2 py-0.5 text-[12px] font-semibold ${active ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2"} ${interactive ? "hover:brightness-110" : "cursor-default"}`;
-  const { keys, keymodeTop, players, playersMode, countries } = filters;
+  const { keys, keymodeTop, players, playersMode, countries, minDan, nearClears } = filters;
+  const danClears = sub.feedType === "dan_clear";
   const scope = countries.length === 0
     ? sub.country === "GLOBAL" ? t`every country` : sub.country
     : findRegionByCountries(countries)?.name ?? (countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`);
@@ -464,9 +477,9 @@ function TopPlayFilters({ sub, channelName, onSave }: {
   return (
     <div className="flex flex-wrap items-center gap-x-4 sm:pl-3 gap-y-2 text-[12px] text-osu-f1">
       <div className="flex flex-wrap items-center gap-1">
-        <span className="mr-1"><Trans>Top plays in</Trans></span>
+        <span className="mr-1">{danClears ? <Trans>Dan clears in</Trans> : <Trans>Top plays in</Trans>}</span>
         <button type="button" className={chip(keys.length === 0, keys.length > 0)} onClick={() => { if (keys.length) save({ keys: [] }); }}><Trans>All keys</Trans></button>
-        {FILTER_KEYS.map((k) => (
+        {(danClears ? DAN_FILTER_KEYS : FILTER_KEYS).map((k) => (
           <button
             key={k}
             type="button"
@@ -477,6 +490,19 @@ function TopPlayFilters({ sub, channelName, onSave }: {
           </button>
         ))}
       </div>
+      {danClears ? (
+        <>
+          <div className="flex flex-wrap items-center gap-1">
+            {MIN_DAN_CHOICES.map((n) => (
+              <button key={n} type="button" className={chip(minDan === n, minDan !== n)} onClick={() => { if (minDan !== n) save({ minDan: n }); }}>
+                {n === 0 ? <Trans>Any dan</Trans> : n > 10 ? <Trans>Past 10th dan</Trans> : <Trans>{n}th dan and up</Trans>}
+              </button>
+            ))}
+          </div>
+          <Toggle checked={nearClears} onChange={(on) => save({ nearClears: on })} label={<Trans>Near clears</Trans>} />
+        </>
+      ) : (
+      <>
       <div className="flex flex-wrap items-center gap-1">
         {KEYMODE_TOP_CHOICES.map((n) => (
           <button key={n} type="button" className={chip(keymodeTop === n, keymodeTop !== n)} onClick={() => { if (keymodeTop !== n) save({ keymodeTop: n }); }}>
@@ -501,6 +527,8 @@ function TopPlayFilters({ sub, channelName, onSave }: {
           </button>
         ) : null}
       </div>
+      </>
+      )}
       <div className="flex w-full flex-wrap items-center gap-1.5">
         <span className="mr-1"><Trans>Players</Trans></span>
         {players.length === 0
@@ -720,6 +748,7 @@ function ServerSkeleton() {
 
 const FEED_NAMES: Record<string, ReturnType<typeof msg>> = {
   top_play: msg`Top plays`,
+  dan_clear: msg`Dan clears`,
   new_map: msg`New farm maps`,
   changelog: msg`Website changelog`,
 };
@@ -810,7 +839,6 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
               four switch columns is wider than the screen there. */}
           <div className="sm:hidden">
             {channels.map((channel) => {
-              const topPlays = server.subscriptions.find((s) => s.channelId === channel.id && s.feedType === "top_play");
               return (
                 <div key={channel.id} className="border-t border-white/[0.07] py-2.5">
                   <div className="text-[14px] font-semibold text-white">
@@ -828,12 +856,12 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                             onChange={(on) => void apply({ feed: { channelId: channel.id, feedType: feed, on, country } })}
                             label={FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed}
                           />
-                          {feed === "top_play" && topPlays ? (
+                          {sub && PLAYER_FEEDS.includes(feed) ? (
                             <div className="mt-2">
                               <TopPlayFilters
-                                sub={topPlays}
+                                sub={sub}
                                 channelName={channel.name}
-                                onSave={(filters) => saveFilters({ feedFilters: { channelId: channel.id, feedType: "top_play", ...filters } })}
+                                onSave={(filters) => saveFilters({ feedFilters: { channelId: channel.id, feedType: feed, ...filters } })}
                               />
                             </div>
                           ) : null}
@@ -864,7 +892,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
               </thead>
               <tbody>
                 {channels.map((channel) => {
-                  const topPlays = server.subscriptions.find((s) => s.channelId === channel.id && s.feedType === "top_play");
+                  const playerFeeds = server.subscriptions.filter((s) => s.channelId === channel.id && PLAYER_FEEDS.includes(s.feedType));
                   return (
                   <Fragment key={channel.id}>
                   <tr className="border-t border-white/[0.05]">
@@ -878,7 +906,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                         <td key={feed} className="px-2 py-1.5 text-center">
                           <div className="inline-flex items-center gap-1.5">
                             <Toggle checked={Boolean(sub)} disabled={busy} onChange={(on) => void apply({ feed: { channelId: channel.id, feedType: feed, on, country } })} />
-                            {sub && feed === "top_play" ? (
+                            {sub && PLAYER_FEEDS.includes(feed) ? (
                               <span className="text-[11px] text-osu-f1">
                                 {sub.players?.length && sub.playersMode !== "except"
                                   ? <Plural value={sub.players.length} one="# player" other="# players" />
@@ -901,17 +929,17 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                       </td>
                     ) : null}
                   </tr>
-                  {topPlays ? (
-                    <tr>
+                  {playerFeeds.map((sub) => (
+                    <tr key={sub.feedType}>
                       <td colSpan={1 + feedTypes.length + (autoDanAvailable ? 1 : 0)} className="pb-2.5 pt-0.5">
                         <TopPlayFilters
-                          sub={topPlays}
+                          sub={sub}
                           channelName={channel.name}
-                          onSave={(filters) => saveFilters({ feedFilters: { channelId: channel.id, feedType: "top_play", ...filters } })}
+                          onSave={(filters) => saveFilters({ feedFilters: { channelId: channel.id, feedType: sub.feedType, ...filters } })}
                         />
                       </td>
                     </tr>
-                  ) : null}
+                  ))}
                   </Fragment>
                   );
                 })}
@@ -935,7 +963,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
             {error ? <span className="text-[12px] text-rose-300"><Trans>That didn't save. Try again.</Trans></span> : null}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[13px] text-osu-l2">
-            <span className="font-semibold text-white"><Trans>Country for top plays without picked players</Trans></span>
+            <span className="font-semibold text-white"><Trans>Country for top plays and dan clears without picked players</Trans></span>
             <input
               value={countryDraft}
               onChange={(event) => setCountryDraft(event.target.value.toUpperCase().slice(0, 6))}
@@ -991,6 +1019,7 @@ const PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
 
 const FEED_PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
   { id: "feed-top-plays", label: FEED_NAMES.top_play },
+  { id: "feed-dan-clears", label: FEED_NAMES.dan_clear },
   { id: "feed-new-maps", label: FEED_NAMES.new_map },
   { id: "feed-changelog", label: FEED_NAMES.changelog },
 ];
@@ -1085,7 +1114,7 @@ function CommandsPanel({ commands }: { commands: DiscordPublicInfo["commands"] }
       </p>
       <p className="mt-2 text-[13px] text-osu-f1">
         <Trans>
-          Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">New farm maps</span> and <span className="font-semibold text-osu-l2">Website changelog</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
+          Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">Dan clears</span>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <span className="font-semibold text-osu-l2">New farm maps</span> and <span className="font-semibold text-osu-l2">Website changelog</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
         </Trans>
       </p>
     </Panel>
