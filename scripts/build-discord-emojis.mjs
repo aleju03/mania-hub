@@ -293,7 +293,8 @@ async function main() {
   for (const [name, def] of Object.entries(HITS)) {
     const png = await buildHit(def);
     await writeFile(join(OUT_DIR, `hit_${name}.png`), png);
-    count += 1;
+    await writeHalves(`hit_${name}`, png);
+    count += 3;
   }
   for (const kind of ["m", "r"]) {
     await writeFile(join(OUT_DIR, `b0_${kind}.png`), await buildBar(kind, 0, null));
