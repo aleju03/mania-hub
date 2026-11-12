@@ -5,21 +5,17 @@ import { Fragment, type ReactNode } from "react";
 // underline/strike/spoiler, masked links, custom emoji, timestamps and
 // mentions. Rules and their order follow Discord's simple-markdown setup.
 
-// Colours measured from the current dark client (2026-11).
 export const DISCORD = {
-  msg: "#000000",
-  hover: "#0a0a0c",
-  embed: "#09090b",
-  deep: "#0f0f12",
-  border: "#242428",
+  msg: "#313338",
+  hover: "#2e3035",
+  embed: "#2b2d31",
+  deep: "#1e1f22",
   text: "#dbdee1",
-  muted: "#87878a",
-  link: "#257bdb",
+  muted: "#949ba4",
+  link: "#00a8fc",
   white: "#f2f3f5",
-  divider: "#2a2a2d",
-  blurple: "#5460e6",
-  button: "#1a1a1c",
-  buttonBorder: "#2c2c30",
+  divider: "#3f4147",
+  blurple: "#5865f2",
   font: '"gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif',
   mono: 'Consolas, "Andale Mono WT", "Andale Mono", "Lucida Console", Monaco, "Courier New", monospace',
 };

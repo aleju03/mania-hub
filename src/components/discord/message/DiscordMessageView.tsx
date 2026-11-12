@@ -62,10 +62,10 @@ function hexColor(value: number | null | undefined): string | null {
 
 const BUTTON_STYLES: Record<number, CSSProperties> = {
   1: { backgroundColor: DISCORD.blurple, color: "#fff" },
-  2: { backgroundColor: DISCORD.button, border: `1px solid ${DISCORD.buttonBorder}`, color: DISCORD.text },
+  2: { backgroundColor: "#4e5058", color: "#fff" },
   3: { backgroundColor: "#248046", color: "#fff" },
   4: { backgroundColor: "#da373c", color: "#fff" },
-  5: { backgroundColor: DISCORD.button, border: `1px solid ${DISCORD.buttonBorder}`, color: DISCORD.text },
+  5: { backgroundColor: "#4e5058", color: "#fff" },
 };
 
 function ExternalIcon() {
@@ -183,13 +183,13 @@ function Component({ component, handlers }: { component: DiscordComponentJson; h
     case 14:
       return (
         <div className={component.spacing === 2 ? "py-2" : "py-0.5"}>
-          {component.divider !== false ? <div className="h-px w-full" style={{ backgroundColor: DISCORD.divider }} /> : null}
+          {component.divider !== false ? <div className="h-px w-full" style={{ backgroundColor: "rgba(255,255,255,0.08)" }} /> : null}
         </div>
       );
     case 17: {
       const accent = hexColor(component.accent_color);
       return (
-        <div className="flex max-w-[600px] overflow-hidden rounded-lg" style={{ backgroundColor: DISCORD.embed, border: `1px solid ${DISCORD.border}` }}>
+        <div className="flex max-w-[600px] overflow-hidden rounded-lg" style={{ backgroundColor: DISCORD.embed, border: "1px solid rgba(255,255,255,0.06)" }}>
           {accent ? <div className="w-1 shrink-0" style={{ backgroundColor: accent }} /> : null}
           <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
             {(component.components ?? []).map((child, index) => <Component key={index} component={child} handlers={handlers} />)}
