@@ -265,13 +265,20 @@ async function buildBar(kind, quarters, color) {
 // Discord fits an emoji into a square, so a wide pill shows at half height. Each
 // pill is also written as a left and a right square (`<name>_l`, `<name>_r`)
 // that the bot places side by side.
-async function writeHalves(name, png) {
-  const wide = await sharp(png)
-    .resize(SIZE * 2, SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+// `scale` below 1 draws the pill smaller, centred in the same squares (the
+// judgement pills, `_sl`/`_sr`, which sit six to a reply).
+async function writeHalves(name, png, { scale = 1, suffix = "" } = {}) {
+  const clear = { r: 0, g: 0, b: 0, alpha: 0 };
+  const pill = await sharp(png)
+    .resize(Math.round(SIZE * 2 * scale), Math.round(SIZE * scale), { fit: "contain", background: clear })
     .png()
     .toBuffer();
-  await writeFile(join(OUT_DIR, `${name}_l.png`), await sharp(wide).extract({ left: 0, top: 0, width: SIZE, height: SIZE }).png().toBuffer());
-  await writeFile(join(OUT_DIR, `${name}_r.png`), await sharp(wide).extract({ left: SIZE, top: 0, width: SIZE, height: SIZE }).png().toBuffer());
+  const wide = await sharp({ create: { width: SIZE * 2, height: SIZE, channels: 4, background: clear } })
+    .composite([{ input: pill, gravity: "centre" }])
+    .png()
+    .toBuffer();
+  await writeFile(join(OUT_DIR, `${name}_${suffix}l.png`), await sharp(wide).extract({ left: 0, top: 0, width: SIZE, height: SIZE }).png().toBuffer());
+  await writeFile(join(OUT_DIR, `${name}_${suffix}r.png`), await sharp(wide).extract({ left: SIZE, top: 0, width: SIZE, height: SIZE }).png().toBuffer());
 }
 
 async function main() {
@@ -293,7 +300,7 @@ async function main() {
   for (const [name, def] of Object.entries(HITS)) {
     const png = await buildHit(def);
     await writeFile(join(OUT_DIR, `hit_${name}.png`), png);
-    await writeHalves(`hit_${name}`, png);
+    await writeHalves(`hit_${name}`, png, { scale: 0.72, suffix: "s" });
     count += 3;
   }
   for (const kind of ["m", "r"]) {
