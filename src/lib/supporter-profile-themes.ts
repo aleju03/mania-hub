@@ -16,7 +16,7 @@ export const SUPPORTER_PROFILE_THEMES = [
   "inferno", "frost", "highway", "storm", "noir", "sunset",
   "judgements", "koi", "hanabi", "vaporwave", "blackhole", "singularity",
   "knight", "knightfight", "sketch", "redtree",
-  "fireflies", "crystal", "maple", "chrome", "aero",
+  "fireflies", "crystal", "maple", "chrome", "aero", "tty",
 ] as const;
 
 export type SupporterProfileThemeId = (typeof SUPPORTER_PROFILE_THEMES)[number];
@@ -44,8 +44,8 @@ export const PROFILE_THEME_LOOKS: Record<SupporterProfileThemeId, ProfileThemeLo
   abyss: { hue: 196, sat: 0.9, base: "#010810", swatch: "linear-gradient(180deg,#0b3a52 0%,#06202f 45%,#010810 100%)", cover: 0.25 },
   cosmos: { hue: 252, sat: 0.8, base: "#04030c", swatch: "radial-gradient(120% 90% at 30% 30%,#3b1f6e 0%,#140b33 45%,#04030c 100%)", cover: 0.25 },
   terminal: { hue: 138, sat: 0.7, base: "#010603", swatch: "linear-gradient(180deg,#02140a 0%,#010603 100%)", cover: 0.2 },
-  inferno: { hue: 16, sat: 1, base: "#0b0302", swatch: "linear-gradient(0deg,#1c0a07 0%,#2c0f08 26%,#a8380c 33%,#3a0c05 38%,#0b0302 100%)", cover: 0.25 },
-  frost: { hue: 204, sat: 0.45, base: "#060a10", swatch: "linear-gradient(180deg,#1b2a3a 0%,#0d1520 60%,#060a10 100%)", cover: 0.3 },
+  inferno: { hue: 16, sat: 1, base: "#0b0302", swatch: "radial-gradient(90% 75% at 45% 100%,#b8400c 0%,#5a1405 36%,#170705 68%,#0b0302 100%)", cover: 0.25 },
+  frost: { hue: 204, sat: 0.45, base: "#050b12", swatch: "linear-gradient(180deg,#070d1a 0%,#17303f 31%,#0a1721 35%,#06202b 70%,#050b12 100%)", cover: 0.3 },
   highway: { hue: 222, sat: 0.75, base: "#03040b", swatch: "linear-gradient(180deg,#03040b 0%,#0d1440 70%,#2a3c9a 100%)", cover: 0.2 },
   storm: { hue: 214, sat: 0.32, base: "#05070a", swatch: "linear-gradient(180deg,#1a2028 0%,#0b0e13 60%,#05070a 100%)", cover: 0.3 },
   noir: { hue: 0, sat: 0, base: "#050505", swatch: "radial-gradient(circle at 30% 70%,#3a3a3a 0 3%,transparent 4%),radial-gradient(circle at 70% 60%,#2e2e2e 0 4%,transparent 5%),linear-gradient(0deg,#1c1c1c 0%,#0c0c0c 50%,#050505 100%)", cover: 0.35 },
@@ -65,6 +65,7 @@ export const PROFILE_THEME_LOOKS: Record<SupporterProfileThemeId, ProfileThemeLo
   maple: { hue: 28, sat: 0.85, base: "#1c1008", swatch: "radial-gradient(60% 70% at 52% 30%,#c08a3a 0%,#7a3a14 45%,#2a160a 100%)", cover: 0.15 },
   chrome: { hue: 230, sat: 0.15, base: "#020203", swatch: "linear-gradient(160deg,#020203 0%,#020203 40%,#9a9aa6 46%,#101014 52%,#020203 70%,#5a5a64 78%,#020203 84%)", cover: 0.2 },
   aero: { hue: 168, sat: 0.7, base: "#03161a", swatch: "radial-gradient(70% 40% at 55% 62%,#3f7a1c 0%,transparent 70%),linear-gradient(180deg,#0a3a40 0%,#06272c 60%,#03161a 100%)", cover: 0.25 },
+  tty: { hue: 36, sat: 0.9, base: "#080502", swatch: "radial-gradient(60% 55% at 68% 34%,#7a4a08 0%,transparent 70%),linear-gradient(180deg,#140b03 0%,#080502 100%)", cover: 0.12 },
 };
 
 export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, MessageDescriptor> = {
@@ -95,6 +96,7 @@ export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, Mes
   maple: msg`Autumn maple`,
   chrome: msg`Liquid chrome`,
   aero: msg`Aero`,
+  tty: msg`Terminal`,
 };
 
 /* A theme's own switches, saved with the pick (the backend keeps the same

@@ -26397,6 +26397,7 @@ msgstr "Temporarily offline"
 #: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 #: src/lib/supporter-name-styles.ts
+#: src/lib/supporter-profile-themes.ts
 msgid "Terminal"
 msgstr "Terminal"
 
