@@ -1,4 +1,4 @@
-// Rasterizes the osu! grade pills, mod glyphs and skill bar segments into PNG emoji assets the
+// Rasterizes the osu! grade pills, mod glyphs, skill bar segments and dan badges into PNG emoji assets the
 // Discord bot uploads as custom application emojis (see
 // backend/src/discord/emojis.ts). Discord only accepts raster emoji
 // (PNG/GIF/JPEG, <=256KB), so the source SVGs are baked here once and the
@@ -11,6 +11,7 @@
 // tone lazer uses (color-mix(in srgb-linear, black, colour 10%)).
 //
 // Run from the repo root:  node scripts/build-discord-emojis.mjs
+// (add `dan` to write the dan badges alone)
 // Re-run after changing the source art or the catalog below.
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -272,6 +273,74 @@ async function buildGain(color) {
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
+// Dan badges (emoji names `dan<keys>[ln]_<level>[_<tier>]_l` and `..._r`): every
+// level of each ladder that has art, plain and with each of its four tier
+// drawings (`m2` "--", `m1` "-", `p1` "+", `p2` "++"). The tier marks widen a
+// drawing past a square, and Discord fits an emoji into a square, so each is
+// written as a left and a right square the bot places side by side, like the
+// pills (`dan_gap`, one blank square, stands in for a right square with nothing
+// in it). A level's five drawings share one crop and one scale, so the badge is
+// the same size at every tier. Mirrors DAN_LADDERS in
+// backend/src/discord/emojis.ts and getDanTierImageSrc in src/lib/dan-images.ts.
+// Ladder -> [folder under public/images/dans, file prefix, levels].
+const DAN_DIR = join(ROOT, "public/images/dans");
+const DAN_SIZE = 96;
+const DAN_TIERS = { "": "", m2: "-low", m1: "-mid-low", p1: "-mid-high", p2: "-high" };
+const numbered = (from, to) => Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
+const SIXK = [...numbered(0, 9), "terra", "celestial", "mystery", "nihility", "finish"];
+const SEVENK = [...numbered(0, 10), "gamma", "azimuth", "zenith", "stellium"];
+const DANS = {
+  dan4: ["reform", "", [...numbered(1, 10), "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa"]],
+  dan4ln: ["ln", "", numbered(1, 17)],
+  dan6: ["6k", "", SIXK],
+  dan6ln: ["6k", "ln-", SIXK],
+  dan7: ["7k", "", SEVENK],
+  dan7ln: ["7k", "ln-", SEVENK],
+};
+
+// One drawing as pixels, with the box its ink sits in.
+async function readDan(folder, file) {
+  for (const extension of ["svg", "webp"]) {
+    const path = join(DAN_DIR, folder, `${file}.${extension}`);
+    if (!(await svgExists(path))) continue;
+    const png = await sharp(await readFile(path), extension === "svg" ? { density: 96 } : undefined).png().toBuffer();
+    const { info } = await sharp(png).trim().toBuffer({ resolveWithObject: true });
+    const left = -(info.trimOffsetLeft ?? 0);
+    const top = -(info.trimOffsetTop ?? 0);
+    return { png, left, top, right: left + info.width, bottom: top + info.height };
+  }
+  throw new Error(`no dan badge at ${folder}/${file}`);
+}
+
+// The five drawings of one level, each as its two squares.
+async function buildDanLevel(folder, file) {
+  const clear = { r: 0, g: 0, b: 0, alpha: 0 };
+  const drawings = {};
+  for (const [tier, suffix] of Object.entries(DAN_TIERS)) drawings[tier] = await readDan(folder, `${file}${suffix}`);
+  const all = Object.values(drawings);
+  const left = Math.min(...all.map((drawing) => drawing.left));
+  const top = Math.min(...all.map((drawing) => drawing.top));
+  const bottom = Math.max(...all.map((drawing) => drawing.bottom));
+  const widest = Math.max(...all.map((drawing) => drawing.right)) - left;
+  const scale = Math.min(DAN_SIZE / (bottom - top), (DAN_SIZE * 2) / widest);
+  const out = {};
+  for (const [tier, drawing] of Object.entries(drawings)) {
+    const cut = await sharp(drawing.png).extract({ left, top, width: drawing.right - left, height: bottom - top }).png().toBuffer();
+    const sized = await sharp(cut).resize({ width: Math.max(1, Math.round((drawing.right - left) * scale)), height: Math.max(1, Math.round((bottom - top) * scale)), fit: "fill" }).png().toBuffer();
+    const wide = await sharp({ create: { width: DAN_SIZE * 2, height: DAN_SIZE, channels: 4, background: clear } })
+      .composite([{ input: sized, gravity: "west" }])
+      .png()
+      .toBuffer();
+    // Palette PNGs: the badges are gradients, and in full colour they weigh several times more.
+    const half = (x) => sharp(wide).extract({ left: x, top: 0, width: DAN_SIZE, height: DAN_SIZE }).png({ palette: true, quality: 90, effort: 10 }).toBuffer();
+    // A drawing that ends inside the first square has nothing in its second: no file, and the bot puts the shared blank there.
+    const alpha = await sharp(wide).extract({ left: DAN_SIZE, top: 0, width: DAN_SIZE, height: DAN_SIZE }).extractChannel("alpha").raw().toBuffer();
+    const inked = alpha.some((value) => value > 24);
+    out[tier] = [await half(0), inked ? await half(DAN_SIZE) : null];
+  }
+  return out;
+}
+
 // Discord fits an emoji into a square, so a wide pill shows at half height. Each
 // pill is also written as a left and a right square (`<name>_l`, `<name>_r`)
 // that the bot places side by side.
@@ -291,9 +360,35 @@ async function writeHalves(name, png, { scale = 1, suffix = "" } = {}) {
   await writeFile(join(OUT_DIR, `${name}_${suffix}r.png`), await sharp(wide).extract({ left: SIZE, top: 0, width: SIZE, height: SIZE }).png().toBuffer());
 }
 
+async function writeDans() {
+  let count = 1;
+  const narrow = [];
+  const clear = { r: 0, g: 0, b: 0, alpha: 0 };
+  await writeFile(join(OUT_DIR, "dan_gap.png"), await sharp({ create: { width: DAN_SIZE, height: DAN_SIZE, channels: 4, background: clear } }).png().toBuffer());
+  for (const [ladder, [folder, prefix, levels]] of Object.entries(DANS)) {
+    for (const level of levels) {
+      for (const [tier, [leftHalf, rightHalf]] of Object.entries(await buildDanLevel(folder, `${prefix}${level}`))) {
+        const name = `${ladder}_${level}${tier ? `_${tier}` : ""}`;
+        await writeFile(join(OUT_DIR, `${name}_l.png`), leftHalf);
+        if (rightHalf) await writeFile(join(OUT_DIR, `${name}_r.png`), rightHalf);
+        else narrow.push(name);
+        count += rightHalf ? 2 : 1;
+      }
+    }
+  }
+  // The badges one emoji wide. DAN_NARROW in backend/src/discord/emojis.ts is this list; its test checks it against the files.
+  console.log(`One emoji wide (${narrow.length}): ${narrow.sort().join(" ")}`);
+  return count;
+}
+
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
   let count = 0;
+  // `node scripts/build-discord-emojis.mjs dan` writes the dan badges alone.
+  if (process.argv[2] === "dan") {
+    console.log(`Wrote ${await writeDans()} dan badge PNGs to ${OUT_DIR}`);
+    return;
+  }
   for (const [name, file] of Object.entries(GRADES)) {
     const png = await buildGrade(name, file);
     await writeFile(join(OUT_DIR, `grade_${name}.png`), png);
@@ -329,6 +424,7 @@ async function main() {
       }
     }
   }
+  count += await writeDans();
   console.log(`Wrote ${count} emoji PNGs to ${OUT_DIR}`);
 }
 
