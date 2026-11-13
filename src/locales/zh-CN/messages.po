@@ -2068,6 +2068,14 @@ msgid "/rankings"
 msgstr "/rankings"
 
 #: src/routes/discord.tsx
+msgid "/rankings shows this country here when none is given, and a Top plays feed you turn on posts its players until you choose others."
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "/rankings shows this country here when none is given, and a Top plays or Dan clears feed you turn on posts its players until you choose others."
+msgstr ""
+
+#: src/routes/discord.tsx
 msgid "/recent"
 msgstr "/recent"
 
@@ -2940,12 +2948,12 @@ msgstr "狙击是指你在某张图上的新最佳成绩超过了原本排在你
 #~ msgstr "低于通过线的计入永远至少比谱面本身低一档，所以差一点没到永远不会被当成完整通过。在 4K LN 上这一档至少是四分之三级。"
 
 #: src/routes/discord.tsx
-msgid "A Top plays feed turned on from here posts players from this country until you choose its players."
-msgstr ""
+#~ msgid "A Top plays feed turned on from here posts players from this country until you choose its players."
+#~ msgstr ""
 
 #: src/routes/discord.tsx
-msgid "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
-msgstr ""
+#~ msgid "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
+#~ msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "a while"
@@ -6571,8 +6579,8 @@ msgid "Dan on score posts"
 msgstr "成绩消息段位回复"
 
 #: src/routes/discord.tsx
-msgid "Dan on score posts in every channel"
-msgstr "所有频道的成绩消息段位回复"
+#~ msgid "Dan on score posts in every channel"
+#~ msgstr "所有频道的成绩消息段位回复"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Dan plays"
@@ -21329,6 +21337,14 @@ msgstr "土耳其语"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Turn off"
 msgstr "关闭"
+
+#: src/routes/discord.tsx
+msgid "Turn off everywhere"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Turn on in every channel"
+msgstr ""
 
 #: src/routes/discord.tsx
 #~ msgid "Turn on Top plays in a channel, then choose the players it posts."

@@ -2079,6 +2079,14 @@ msgid "/rankings"
 msgstr "/rankings"
 
 #: src/routes/discord.tsx
+msgid "/rankings shows this country here when none is given, and a Top plays feed you turn on posts its players until you choose others."
+msgstr "/rankings shows this country here when none is given, and a Top plays feed you turn on posts its players until you choose others."
+
+#: src/routes/discord.tsx
+msgid "/rankings shows this country here when none is given, and a Top plays or Dan clears feed you turn on posts its players until you choose others."
+msgstr "/rankings shows this country here when none is given, and a Top plays or Dan clears feed you turn on posts its players until you choose others."
+
+#: src/routes/discord.tsx
 msgid "/recent"
 msgstr "/recent"
 
@@ -2951,12 +2959,12 @@ msgstr "A snipe is when your new best on a map passes a player who was above you
 #~ msgstr "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 
 #: src/routes/discord.tsx
-msgid "A Top plays feed turned on from here posts players from this country until you choose its players."
-msgstr "A Top plays feed turned on from here posts players from this country until you choose its players."
+#~ msgid "A Top plays feed turned on from here posts players from this country until you choose its players."
+#~ msgstr "A Top plays feed turned on from here posts players from this country until you choose its players."
 
 #: src/routes/discord.tsx
-msgid "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
-msgstr "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
+#~ msgid "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
+#~ msgstr "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
 
 #: src/routes/recommendations.tsx
 msgid "a while"
@@ -6586,8 +6594,8 @@ msgid "Dan on score posts"
 msgstr "Dan on score posts"
 
 #: src/routes/discord.tsx
-msgid "Dan on score posts in every channel"
-msgstr "Dan on score posts in every channel"
+#~ msgid "Dan on score posts in every channel"
+#~ msgstr "Dan on score posts in every channel"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Dan plays"
@@ -21372,6 +21380,14 @@ msgstr "Turkish"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Turn off"
 msgstr "Turn off"
+
+#: src/routes/discord.tsx
+msgid "Turn off everywhere"
+msgstr "Turn off everywhere"
+
+#: src/routes/discord.tsx
+msgid "Turn on in every channel"
+msgstr "Turn on in every channel"
 
 #: src/routes/discord.tsx
 #~ msgid "Turn on Top plays in a channel, then choose the players it posts."

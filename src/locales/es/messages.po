@@ -2056,6 +2056,14 @@ msgid "/rankings"
 msgstr "/rankings"
 
 #: src/routes/discord.tsx
+msgid "/rankings shows this country here when none is given, and a Top plays feed you turn on posts its players until you choose others."
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "/rankings shows this country here when none is given, and a Top plays or Dan clears feed you turn on posts its players until you choose others."
+msgstr ""
+
+#: src/routes/discord.tsx
 msgid "/recent"
 msgstr "/recent"
 
@@ -2928,12 +2936,12 @@ msgstr "Un snipe es cuando tu nuevo mejor score en un mapa pasa a un jugador que
 #~ msgstr "Un crédito por debajo del mínimo siempre queda al menos un paso bajo el nivel del chart, así que quedarse corto nunca se lee como el clear completo. En 4K LN ese paso es de al menos tres cuartos de nivel."
 
 #: src/routes/discord.tsx
-msgid "A Top plays feed turned on from here posts players from this country until you choose its players."
-msgstr ""
+#~ msgid "A Top plays feed turned on from here posts players from this country until you choose its players."
+#~ msgstr ""
 
 #: src/routes/discord.tsx
-msgid "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
-msgstr ""
+#~ msgid "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
+#~ msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "a while"
@@ -6559,8 +6567,8 @@ msgid "Dan on score posts"
 msgstr "Dan en los scores"
 
 #: src/routes/discord.tsx
-msgid "Dan on score posts in every channel"
-msgstr "Dan en los scores en todos los canales"
+#~ msgid "Dan on score posts in every channel"
+#~ msgstr "Dan en los scores en todos los canales"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Dan plays"
@@ -21317,6 +21325,14 @@ msgstr "Turco"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Turn off"
 msgstr "Desactivar"
+
+#: src/routes/discord.tsx
+msgid "Turn off everywhere"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Turn on in every channel"
+msgstr ""
 
 #: src/routes/discord.tsx
 #~ msgid "Turn on Top plays in a channel, then choose the players it posts."

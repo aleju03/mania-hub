@@ -3,7 +3,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type React
 import { createPortal } from "react-dom";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
-import { ChevronDown, CircleHelp, Plus, X } from "lucide-react";
+import { ChevronDown, CircleHelp, Globe, Plus, X } from "lucide-react";
 import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DiscordTabs } from "../components/discord/DiscordTabs";
@@ -30,7 +30,7 @@ import {
 import { DiscordLogo, DISCORD_BLURPLE } from "../components/ui/DiscordLogo";
 import { FeedPlayersModal } from "../components/discord/FeedPlayersModal";
 import { findRegionByCountries } from "../lib/regions";
-import { COUNTRY_OPTIONS, displayCountryName, getCountryFlagUrl, GLOBAL_SCOPE_ICON_URL } from "../lib/country";
+import { COUNTRY_OPTIONS, displayCountryName, getCountryFlagUrl } from "../lib/country";
 import type { AppLocale } from "../lib/locale";
 import { useNoDans } from "../store";
 import { Panel } from "../components/companella/primitives";
@@ -1012,7 +1012,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
   const countryOptions = useMemo(() => {
     const flag = (code: string) => <img src={getCountryFlagUrl(code)} alt="" className="h-3 w-[18px] rounded-[2px] object-cover" />;
     const options = [
-      { value: "GLOBAL", label: displayCountryName("GLOBAL", i18n.locale as AppLocale), leading: <img src={GLOBAL_SCOPE_ICON_URL} alt="" className="h-3.5 w-3.5" /> },
+      { value: "GLOBAL", label: displayCountryName("GLOBAL", i18n.locale as AppLocale), leading: <Globe className="h-3.5 w-[18px] text-osu-l2" /> },
       ...COUNTRY_OPTIONS.map(({ code }) => ({ value: code as string, label: displayCountryName(code, i18n.locale as AppLocale), leading: flag(code) })),
     ];
     return options.some((option) => option.value === country) ? options : [{ value: country, label: country, leading: flag(country) }, ...options];
@@ -1113,6 +1113,11 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                     <div className={feedNote}>
                       {autoDanAll ? <Trans>On in every channel.</Trans> : <Trans>Replies to score posts and beatmap links in the channel with the chart's dan.</Trans>}
                     </div>
+                    {autoDanAll || server.settings.autoDanChannels.includes(channel.id) ? (
+                      <button type="button" onClick={() => void send({ autoDan: { channelId: "*", on: !autoDanAll } })} className="ml-auto text-[12px] font-semibold text-osu-pink-light hover:text-white">
+                        {autoDanAll ? <Trans>Turn off everywhere</Trans> : <Trans>Turn on in every channel</Trans>}
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -1129,13 +1134,6 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                 options={addable.map((channel) => ({ value: channel.id, label: `#${channel.name}`, group: channel.category ?? undefined }))}
               />
             ) : null}
-            {autoDan ? (
-              <Toggle
-                checked={autoDanAll}
-                onChange={(on) => void send({ autoDan: { channelId: "*", on } })}
-                label={<Trans>Dan on score posts in every channel</Trans>}
-              />
-            ) : null}
             {error ? <span className="text-[12px] text-rose-300"><Trans>That didn't save. Try again.</Trans></span> : null}
             <div className="flex items-center gap-2 sm:ml-auto">
               <span className="text-[12px] text-osu-f1"><Trans>Default country</Trans></span>
@@ -1149,8 +1147,8 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
               />
               <HintButton label={t`What the default country does`}>
                 {noDans
-                  ? <Trans>A Top plays feed turned on from here posts players from this country until you choose its players.</Trans>
-                  : <Trans>A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players.</Trans>}
+                  ? <Trans>/rankings shows this country here when none is given, and a Top plays feed you turn on posts its players until you choose others.</Trans>
+                  : <Trans>/rankings shows this country here when none is given, and a Top plays or Dan clears feed you turn on posts its players until you choose others.</Trans>}
               </HintButton>
             </div>
           </div>
