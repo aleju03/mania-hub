@@ -278,13 +278,15 @@ async function buildGain(color) {
 // drawings (`m2` "--", `m1` "-", `p1` "+", `p2` "++"). The tier marks widen a
 // drawing past a square, and Discord fits an emoji into a square, so each is
 // written as a left and a right square the bot places side by side, like the
-// pills (`dan_gap`, one blank square, stands in for a right square with nothing
-// in it). A level's five drawings share one crop and one scale, so the badge is
-// the same size at every tier. Mirrors DAN_LADDERS in
+// pills; a drawing that fits one square (squeezed a little if it must) is one
+// emoji. A level's five drawings share one crop and one scale, so the badge is
+// the same size at every tier unless it was squeezed. Mirrors DAN_LADDERS in
 // backend/src/discord/emojis.ts and getDanTierImageSrc in src/lib/dan-images.ts.
 // Ladder -> [folder under public/images/dans, file prefix, levels].
 const DAN_DIR = join(ROOT, "public/images/dans");
 const DAN_SIZE = 96;
+// How much wider than a square a drawing may be and still be drawn in one.
+const DAN_SQUEEZE = 1.3;
 const DAN_TIERS = { "": "", m2: "-low", m1: "-mid-low", p1: "-mid-high", p2: "-high" };
 const numbered = (from, to) => Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
 const SIXK = [...numbered(0, 9), "terra", "celestial", "mystery", "nihility", "finish"];
@@ -326,14 +328,19 @@ async function buildDanLevel(folder, file) {
   const out = {};
   for (const [tier, drawing] of Object.entries(drawings)) {
     const cut = await sharp(drawing.png).extract({ left, top, width: drawing.right - left, height: bottom - top }).png().toBuffer();
-    const sized = await sharp(cut).resize({ width: Math.max(1, Math.round((drawing.right - left) * scale)), height: Math.max(1, Math.round((bottom - top) * scale)), fit: "fill" }).png().toBuffer();
+    const width = (drawing.right - left) * scale;
+    // A drawing only a little wider than a square is drawn a little smaller in
+    // one square: spilling a sliver of its tier mark into a second square put
+    // a whole blank emoji between the badge and the text after it.
+    const squeeze = width > DAN_SIZE && width <= DAN_SIZE * DAN_SQUEEZE ? DAN_SIZE / width : 1;
+    const sized = await sharp(cut).resize({ width: Math.max(1, Math.round(width * squeeze)), height: Math.max(1, Math.round((bottom - top) * scale * squeeze)), fit: "fill" }).png().toBuffer();
     const wide = await sharp({ create: { width: DAN_SIZE * 2, height: DAN_SIZE, channels: 4, background: clear } })
-      .composite([{ input: sized, gravity: "west" }])
+      .composite([{ input: sized, left: 0, top: Math.round((DAN_SIZE - (bottom - top) * scale * squeeze) / 2) }])
       .png()
       .toBuffer();
     // Palette PNGs: the badges are gradients, and in full colour they weigh several times more.
     const half = (x) => sharp(wide).extract({ left: x, top: 0, width: DAN_SIZE, height: DAN_SIZE }).png({ palette: true, quality: 90, effort: 10 }).toBuffer();
-    // A drawing that ends inside the first square has nothing in its second: no file, and the bot puts the shared blank there.
+    // A drawing that ends inside the first square has nothing in its second: no file, and the badge is one emoji wide.
     const alpha = await sharp(wide).extract({ left: DAN_SIZE, top: 0, width: DAN_SIZE, height: DAN_SIZE }).extractChannel("alpha").raw().toBuffer();
     const inked = alpha.some((value) => value > 24);
     out[tier] = [await half(0), inked ? await half(DAN_SIZE) : null];
@@ -361,10 +368,8 @@ async function writeHalves(name, png, { scale = 1, suffix = "" } = {}) {
 }
 
 async function writeDans() {
-  let count = 1;
+  let count = 0;
   const narrow = [];
-  const clear = { r: 0, g: 0, b: 0, alpha: 0 };
-  await writeFile(join(OUT_DIR, "dan_gap.png"), await sharp({ create: { width: DAN_SIZE, height: DAN_SIZE, channels: 4, background: clear } }).png().toBuffer());
   for (const [ladder, [folder, prefix, levels]] of Object.entries(DANS)) {
     for (const level of levels) {
       for (const [tier, [leftHalf, rightHalf]] of Object.entries(await buildDanLevel(folder, `${prefix}${level}`))) {
