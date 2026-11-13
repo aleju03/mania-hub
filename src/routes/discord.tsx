@@ -1,5 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { ChevronDown, CircleHelp, Plus, X } from "lucide-react";
@@ -32,6 +33,8 @@ import { findRegionByCountries } from "../lib/regions";
 import { Panel } from "../components/companella/primitives";
 import { DiscordMessageBodyView, type DiscordMessageJson } from "../components/discord/message/DiscordMessageView";
 import { DISCORD } from "../components/discord/message/discord-markdown";
+import { SelectMenu } from "../components/ui/SelectMenu";
+import { danScaleImage, danScaleLabel, type DanScaleContext } from "../lib/dan-images";
 import { pageSeo } from "../lib/seo";
 import { KOFI_PAGE_URL } from "../lib/support-links";
 
@@ -414,21 +417,58 @@ function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onCh
   );
 }
 
-// A "?" that opens a line of explanation beside it on click, so it works on touch too.
+// A "?" with a bubble above it, shown on hover and toggled by a tap. The bubble
+// is drawn over the page at the icon's spot, so opening it moves nothing and a
+// scrolling table cannot clip it.
 function HintButton({ label, children }: { label: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [spot, setSpot] = useState<{ x: number; y: number } | null>(null);
+  const ref = useRef<HTMLButtonElement>(null);
+  const open = pinned || hovered;
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = ref.current?.getBoundingClientRect();
+      if (rect) setSpot({ x: Math.min(Math.max(rect.left + rect.width / 2, 128), window.innerWidth - 128), y: rect.top });
+    };
+    place();
+    const close = (event: PointerEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setPinned(false);
+    };
+    document.addEventListener("pointerdown", close);
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
   return (
     <>
       <button
+        ref={ref}
         type="button"
         aria-label={label}
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className={`transition-colors hover:text-white ${open ? "text-white" : "text-osu-f1/60"}`}
+        onClick={() => setPinned((v) => !v)}
+        onPointerEnter={(event) => { if (event.pointerType === "mouse") setHovered(true); }}
+        onPointerLeave={() => setHovered(false)}
+        className={`inline-flex shrink-0 align-middle transition-colors hover:text-white ${open ? "text-white" : "text-osu-f1/60"}`}
       >
-        <CircleHelp size={14} />
+        <CircleHelp size={13} />
       </button>
-      {open ? <span className="text-[12px] text-osu-f1">{children}</span> : null}
+      {open && spot ? createPortal(
+        <span
+          role="tooltip"
+          style={{ left: spot.x, top: spot.y }}
+          className="pointer-events-none fixed z-[400] mt-[-8px] w-60 -translate-x-1/2 -translate-y-full rounded-md bg-osu-b6 px-2.5 py-1.5 text-left text-[12px] font-medium leading-snug text-osu-l1 shadow-[0_8px_20px_rgba(0,0,0,0.5)]"
+        >
+          {children}
+        </span>,
+        document.body,
+      ) : null}
     </>
   );
 }
@@ -439,33 +479,47 @@ const KEYMODE_TOP_CHOICES = [0, 100, 50];
 // The keymodes with dan courses, and the lowest level a Dan clears feed can
 // ask for. A level is each ladder's own number: 11 is the first past 10th dan.
 const DAN_FILTER_KEYS = [4, 6, 7];
-// Each ladder's top level and the levels it names instead of numbering
-// (danCourseLevelFor in the backend's dan-courses.ts).
-const DAN_LADDERS: Array<{ keyCount: number; tag: string; top: number; names: Record<number, string> }> = [
-  { keyCount: 4, tag: "4K", top: 17, names: { 11: "Alpha", 12: "Beta", 13: "Gamma", 14: "Delta", 15: "Epsilon", 16: "Zeta", 17: "Eta" } },
-  { keyCount: 4, tag: "4K LN", top: 17, names: {} },
-  { keyCount: 6, tag: "6K", top: 9, names: {} },
-  { keyCount: 6, tag: "6K LN", top: 14, names: { 10: "Terra", 11: "Celestial", 12: "Mystery", 13: "Nihility", 14: "Finish" } },
-  { keyCount: 7, tag: "7K", top: 14, names: { 11: "Gamma", 12: "Azimuth", 13: "Zenith", 14: "Stellium" } },
+// Each ladder with courses and its top level (danCourseLevelFor in the
+// backend's dan-courses.ts); the badge art and level names come from its scale.
+const DAN_LADDERS: Array<{ keyCount: number; context: DanScaleContext; top: number }> = [
+  { keyCount: 4, context: "reform", top: 17 },
+  { keyCount: 4, context: "ln", top: 17 },
+  { keyCount: 6, context: "6k", top: 9 },
+  { keyCount: 6, context: "6k-ln", top: 14 },
+  { keyCount: 7, context: "7k", top: 14 },
+  { keyCount: 7, context: "7k-ln", top: 14 },
 ];
+
+function danLaddersAt(level: number, keys: number[]) {
+  return DAN_LADDERS.filter((l) => (keys.length === 0 || keys.includes(l.keyCount)) && level <= l.top);
+}
 
 function ordinal(n: number): string {
   const suffix = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
   return `${n}${suffix}`;
 }
 
-/** What a level number is called on the chosen keymodes' ladders, e.g. "10th dan, Terra (6K LN)". */
+/** What a level is called on the chosen keymodes' ladders: "5th dan", or past 10th "11th, Alpha, Gamma". */
 function danLevelName(level: number, keys: number[]): string {
-  const ladders = DAN_LADDERS.filter((l) => (keys.length === 0 || keys.includes(l.keyCount)) && level <= l.top);
-  const named = ladders.filter((l) => l.names[level]);
-  const numbered = ladders.filter((l) => !l.names[level]);
-  // A number only one ladder still has past the named levels says which ladder it is.
-  const parts = numbered.length === 0 ? [] : [named.length && numbered.length === 1 ? `${ordinal(level)} (${numbered[0].tag})` : `${ordinal(level)} dan`];
-  for (const l of named) {
-    const part = `${l.names[level]} (${l.tag})`;
-    if (!parts.includes(part)) parts.push(part);
+  if (level <= 10) return `${ordinal(level)} dan`;
+  const names: string[] = [];
+  for (const l of danLaddersAt(level, keys)) {
+    const name = danScaleLabel(level, l.context);
+    const part = /^\d+$/.test(name) ? ordinal(level) : name;
+    if (!names.includes(part)) names.push(part);
   }
-  return parts.length ? parts.join(", ") : `${ordinal(level)} dan`;
+  return names.length ? names.join(", ") : ordinal(level);
+}
+
+/** The level's badge on each chosen ladder, side by side. */
+function DanLevelBadges({ level, keys }: { level: number; keys: number[] }) {
+  const srcs = [...new Set(danLaddersAt(level, keys).map((l) => danScaleImage(level, l.context)).filter((src): src is string => src != null))];
+  if (!srcs.length) return null;
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      {srcs.map((src) => <img key={src} src={src} alt="" className="h-4 w-auto" />)}
+    </span>
+  );
 }
 
 function danLevelChoices(keys: number[], current: number): number[] {
@@ -543,25 +597,20 @@ function TopPlayFilters({ sub, channelName, onSave }: {
       </div>
       {danClears ? (
         <>
-          <div className="relative">
-            <select
-              value={minDan}
-              onChange={(event) => save({ minDan: Number(event.target.value) })}
-              aria-label={t`Lowest dan`}
-              className="max-w-[min(100%,22rem)] appearance-none truncate rounded-md bg-osu-b5 py-1 pl-2 pr-7 text-[12px] font-semibold text-white hover:brightness-110"
-            >
-              {danLevelChoices(keys, minDan).map((n) => {
-                const name = danLevelName(n, keys);
-                return (
-                  <option key={n} value={n}>
-                    {n === 0 ? t`Any dan` : t`${name} and up`}
-                  </option>
-                );
-              })}
-            </select>
-            <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-osu-l2" />
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <SelectMenu
+            value={String(minDan)}
+            ariaLabel={t`Lowest dan`}
+            onChange={(value) => save({ minDan: Number(value) })}
+            options={danLevelChoices(keys, minDan).map((n) => {
+              const name = danLevelName(n, keys);
+              return {
+                value: String(n),
+                label: n === 0 ? t`Any dan` : t`${name} and up`,
+                leading: n === 0 ? undefined : <DanLevelBadges level={n} keys={keys} />,
+              };
+            })}
+          />
+          <div className="flex items-center gap-1.5">
             <Toggle checked={nearClears} onChange={(on) => save({ nearClears: on })} label={<Trans>Near clears</Trans>} />
             <HintButton label={t`What near clears are`}>
               <Trans>Runs up to one accuracy point under the pass bar. 4K LN courses have none.</Trans>
@@ -820,6 +869,13 @@ const FEED_NAMES: Record<string, ReturnType<typeof msg>> = {
   changelog: msg`Website changelog`,
 };
 
+const FEED_HINTS: Record<string, ReturnType<typeof msg>> = {
+  top_play: msg`Posts a player's new top play, a play that enters their best 200.`,
+  dan_clear: msg`Posts a player's near clear, clear or overclear of a dan course or practice chart.`,
+  new_map: msg`Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty.`,
+  changelog: msg`Posts each new line of the website's changelog.`,
+};
+
 function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, inviteUrl, onServer }: {
   server: BotServer;
   feedTypes: string[];
@@ -828,7 +884,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
   inviteUrl: string | null;
   onServer: (server: BotServer) => void;
 }) {
-  const { i18n } = useLingui();
+  const { i18n, t } = useLingui();
   const [open, setOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -917,12 +973,15 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                       const sub = server.subscriptions.find((s) => s.channelId === channel.id && s.feedType === feed);
                       return (
                         <div key={feed}>
-                          <Toggle
-                            checked={Boolean(sub)}
-                            disabled={busy}
-                            onChange={(on) => void apply({ feed: { channelId: channel.id, feedType: feed, on, country } })}
-                            label={FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed}
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <Toggle
+                              checked={Boolean(sub)}
+                              disabled={busy}
+                              onChange={(on) => void apply({ feed: { channelId: channel.id, feedType: feed, on, country } })}
+                              label={FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed}
+                            />
+                            {FEED_HINTS[feed] ? <HintButton label={t`What ${FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed} posts`}>{i18n._(FEED_HINTS[feed])}</HintButton> : null}
+                          </div>
                           {sub && PLAYER_FEEDS.includes(feed) ? (
                             <div className="mt-2">
                               <TopPlayFilters
@@ -936,12 +995,15 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                       );
                     })}
                     {autoDanAvailable ? (
-                      <Toggle
-                        checked={server.settings.autoDanChannels.includes("*") || server.settings.autoDanChannels.includes(channel.id)}
-                        disabled={busy || server.settings.autoDanChannels.includes("*")}
-                        onChange={(on) => void apply({ autoDan: { channelId: channel.id, on } })}
-                        label={<Trans>Dan on score posts</Trans>}
-                      />
+                      <div className="flex items-center gap-1.5">
+                        <Toggle
+                          checked={server.settings.autoDanChannels.includes("*") || server.settings.autoDanChannels.includes(channel.id)}
+                          disabled={busy || server.settings.autoDanChannels.includes("*")}
+                          onChange={(on) => void apply({ autoDan: { channelId: channel.id, on } })}
+                          label={<Trans>Dan on score posts</Trans>}
+                        />
+                        <HintButton label={t`What Dan on score posts does`}><Trans>Replies to score posts and beatmap links in the channel with the chart's dan.</Trans></HintButton>
+                      </div>
                     ) : null}
                   </div>
                 </div>
@@ -953,8 +1015,25 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
               <thead>
                 <tr className="text-left text-[12px] text-osu-f1">
                   <th className="py-1.5 pr-3 font-semibold"><Trans>Channel</Trans></th>
-                  {feedTypes.map((feed) => <th key={feed} className="px-2 py-1.5 text-center font-semibold">{FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed}</th>)}
-                  {autoDanAvailable ? <th className="px-2 py-1.5 text-center font-semibold"><Trans>Dan on score posts</Trans></th> : null}
+                  {feedTypes.map((feed) => {
+                    const name = FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed;
+                    return (
+                      <th key={feed} className="px-2 py-1.5 text-center font-semibold">
+                        <span className="inline-flex items-center gap-1">
+                          {name}
+                          {FEED_HINTS[feed] ? <HintButton label={t`What ${name} posts`}>{i18n._(FEED_HINTS[feed])}</HintButton> : null}
+                        </span>
+                      </th>
+                    );
+                  })}
+                  {autoDanAvailable ? (
+                    <th className="px-2 py-1.5 text-center font-semibold">
+                      <span className="inline-flex items-center gap-1">
+                        <Trans>Dan on score posts</Trans>
+                        <HintButton label={t`What Dan on score posts does`}><Trans>Replies to score posts and beatmap links in the channel with the chart's dan.</Trans></HintButton>
+                      </span>
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -1176,7 +1255,7 @@ function CommandsPanel({ commands }: { commands: DiscordPublicInfo["commands"] }
       ) : null}
       <p className="mt-2 text-[13px] text-osu-f1">
         <Trans>
-          In servers you can also type <code className="font-semibold text-osu-pink-light">m!r</code>, <code className="font-semibold text-osu-pink-light">m!t</code>, <code className="font-semibold text-osu-pink-light">m!p</code>, <code className="font-semibold text-osu-pink-light">m!s</code>, <code className="font-semibold text-osu-pink-light">m!c</code> or <code className="font-semibold text-osu-pink-light">m!m</code> with a player's name or a map after it, for recent, top, profile, skills, compare and map.
+          In servers you can also type <code className="font-semibold text-osu-pink-light">m!r</code>, <code className="font-semibold text-osu-pink-light">m!t</code>, <code className="font-semibold text-osu-pink-light">m!p</code>, <code className="font-semibold text-osu-pink-light">m!s</code>, <code className="font-semibold text-osu-pink-light">m!c</code>, <code className="font-semibold text-osu-pink-light">m!card</code> or <code className="font-semibold text-osu-pink-light">m!f</code> with a player's name after it, for recent, top, profile, skills, compare, maniacard and farm, <code className="font-semibold text-osu-pink-light">m!m</code> with a map, <code className="font-semibold text-osu-pink-light">m!ch</code> for a challenge and <code className="font-semibold text-osu-pink-light">m!rank</code> with a country.
         </Trans>
       </p>
       <p className="mt-2 text-[13px] text-osu-f1">

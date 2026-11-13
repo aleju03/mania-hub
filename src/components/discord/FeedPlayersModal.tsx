@@ -105,10 +105,28 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
 
   const pickedIds = useMemo(() => new Set(picked.map((player) => player.id)), [picked]);
   const full = picked.length >= max;
-  const toggle = (user: LiveUserSearchEntry) => {
-    if (pickedIds.has(user.id)) setPicked(picked.filter((player) => player.id !== user.id));
-    else if (!full) setPicked([...picked, { id: user.id, username: user.username, avatarUrl: user.avatarUrl || null }]);
-  };
+  const setOn = (user: LiveUserSearchEntry, on: boolean) => setPicked((prev) => {
+    const has = prev.some((player) => player.id === user.id);
+    if (on && !has && prev.length < max) return [...prev, { id: user.id, username: user.username, avatarUrl: user.avatarUrl || null }];
+    if (!on && has) return prev.filter((player) => player.id !== user.id);
+    return prev;
+  });
+  // Holding the mouse on a row and moving over others gives them all the state
+  // the first row took. The press itself toggles, so the click after it is skipped.
+  const drag = useRef<{ on: boolean } | null>(null);
+  const pressed = useRef(false);
+  useEffect(() => {
+    const end = () => {
+      drag.current = null;
+      setTimeout(() => { pressed.current = false; }, 0);
+    };
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, []);
   const addCountry = () => {
     const code = codeDraft.trim().toUpperCase();
     if (/^[A-Z]{2}$/.test(code) && !countries.includes(code)) {
@@ -135,7 +153,7 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      onClick={(event) => { if (event.target === event.currentTarget && !pressed.current) onClose(); }}
     >
       <div className="flex h-full max-h-full w-full max-w-[820px] flex-col rounded-xl bg-osu-b5 p-5 sm:h-[640px]">
         <h2 className="text-[16px] font-bold text-white">{title}</h2>
@@ -220,8 +238,19 @@ export function FeedPlayersModal({ title, players, mode: initialMode, countries:
                         role="checkbox"
                         aria-checked={on}
                         disabled={!on && full}
-                        onClick={() => toggle(user)}
-                        className="flex w-full items-center gap-2.5 border-t border-white/[0.07] px-1.5 py-1.5 text-left hover:bg-white/[0.04] disabled:opacity-40"
+                        onPointerDown={(event) => {
+                          if (event.pointerType !== "mouse" || event.button !== 0 || (!on && full)) return;
+                          event.preventDefault();
+                          pressed.current = true;
+                          drag.current = { on: !on };
+                          setOn(user, !on);
+                        }}
+                        onPointerEnter={() => { if (drag.current) setOn(user, drag.current.on); }}
+                        onClick={() => {
+                          if (pressed.current) pressed.current = false;
+                          else setOn(user, !on);
+                        }}
+                        className="flex w-full select-none items-center gap-2.5 border-t border-white/[0.07] px-1.5 py-1.5 text-left hover:bg-white/[0.04] disabled:opacity-40"
                       >
                         <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] ${on ? "bg-osu-pink" : "bg-white/[0.1]"}`}>
                           {on ? <Check className="h-3 w-3 text-white" strokeWidth={3.5} /> : null}

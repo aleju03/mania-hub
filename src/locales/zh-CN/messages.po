@@ -9516,8 +9516,12 @@ msgid "In server discovery"
 msgstr "已加入服务器发现"
 
 #: src/routes/discord.tsx
-msgid "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4> or <5>m!m</5> with a player's name or a map after it, for recent, top, profile, skills, compare and map."
-msgstr "在服务器里也可以输入 <0>m!r</0>、<1>m!t</1>、<2>m!p</2>、<3>m!s</3>、<4>m!c</4> 或 <5>m!m</5>，后面跟玩家名或谱面，分别对应 recent、top、profile、skills、compare 和 map。"
+#~ msgid "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4> or <5>m!m</5> with a player's name or a map after it, for recent, top, profile, skills, compare and map."
+#~ msgstr "在服务器里也可以输入 <0>m!r</0>、<1>m!t</1>、<2>m!p</2>、<3>m!s</3>、<4>m!c</4> 或 <5>m!m</5>，后面跟玩家名或谱面，分别对应 recent、top、profile、skills、compare 和 map。"
+
+#: src/routes/discord.tsx
+msgid "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4>, <5>m!card</5> or <6>m!f</6> with a player's name after it, for recent, top, profile, skills, compare, maniacard and farm, <7>m!m</7> with a map, <8>m!ch</8> for a challenge and <9>m!rank</9> with a country."
+msgstr ""
 
 #: src/components/player/LivePresence.tsx
 msgid "In song select"
@@ -14711,6 +14715,22 @@ msgstr "发布你的服务器"
 msgid "posted by"
 msgstr "发布者"
 
+#: src/routes/discord.tsx
+msgid "Posts a player's near clear, clear or overclear of a dan course or practice chart."
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Posts a player's new top play, a play that enters their best 200."
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Posts each new line of the website's changelog."
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty."
+msgstr ""
+
 #. placeholder {0}: picked.length
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "Posts top plays from everyone in {where} except the {0} picked."
@@ -16107,6 +16127,10 @@ msgstr "目前找到的可用回放"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Replays play with their player's published skin. Turn off to always use yours."
 msgstr "回放默认使用玩家发布的皮肤。关闭后始终使用你自己的。"
+
+#: src/routes/discord.tsx
+msgid "Replies to score posts and beatmap links in the channel with the chart's dan."
+msgstr ""
 
 #. placeholder {0}: community.name
 #. placeholder {0}: skin.name
@@ -22303,9 +22327,22 @@ msgstr "每周柱状图"
 msgid "Weekly recap"
 msgstr "每周回顾"
 
+#. placeholder {0}: FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed
+#: src/routes/discord.tsx
+msgid "What {0} posts"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "What {name} posts"
+msgstr ""
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "这些谱面适合用来做什么？可以介绍训练重点、难度或推荐游玩顺序。"
+
+#: src/routes/discord.tsx
+msgid "What Dan on score posts does"
+msgstr ""
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx

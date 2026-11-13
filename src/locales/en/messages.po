@@ -9543,8 +9543,12 @@ msgid "In server discovery"
 msgstr "In server discovery"
 
 #: src/routes/discord.tsx
-msgid "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4> or <5>m!m</5> with a player's name or a map after it, for recent, top, profile, skills, compare and map."
-msgstr "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4> or <5>m!m</5> with a player's name or a map after it, for recent, top, profile, skills, compare and map."
+#~ msgid "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4> or <5>m!m</5> with a player's name or a map after it, for recent, top, profile, skills, compare and map."
+#~ msgstr "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4> or <5>m!m</5> with a player's name or a map after it, for recent, top, profile, skills, compare and map."
+
+#: src/routes/discord.tsx
+msgid "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4>, <5>m!card</5> or <6>m!f</6> with a player's name after it, for recent, top, profile, skills, compare, maniacard and farm, <7>m!m</7> with a map, <8>m!ch</8> for a challenge and <9>m!rank</9> with a country."
+msgstr "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4>, <5>m!card</5> or <6>m!f</6> with a player's name after it, for recent, top, profile, skills, compare, maniacard and farm, <7>m!m</7> with a map, <8>m!ch</8> for a challenge and <9>m!rank</9> with a country."
 
 #: src/components/player/LivePresence.tsx
 msgid "In song select"
@@ -14738,6 +14742,22 @@ msgstr "Post your server"
 msgid "posted by"
 msgstr "posted by"
 
+#: src/routes/discord.tsx
+msgid "Posts a player's near clear, clear or overclear of a dan course or practice chart."
+msgstr "Posts a player's near clear, clear or overclear of a dan course or practice chart."
+
+#: src/routes/discord.tsx
+msgid "Posts a player's new top play, a play that enters their best 200."
+msgstr "Posts a player's new top play, a play that enters their best 200."
+
+#: src/routes/discord.tsx
+msgid "Posts each new line of the website's changelog."
+msgstr "Posts each new line of the website's changelog."
+
+#: src/routes/discord.tsx
+msgid "Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty."
+msgstr "Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty."
+
 #. placeholder {0}: picked.length
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "Posts top plays from everyone in {where} except the {0} picked."
@@ -16134,6 +16154,10 @@ msgstr "Replays available so far"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Replays play with their player's published skin. Turn off to always use yours."
 msgstr "Replays play with their player's published skin. Turn off to always use yours."
+
+#: src/routes/discord.tsx
+msgid "Replies to score posts and beatmap links in the channel with the chart's dan."
+msgstr "Replies to score posts and beatmap links in the channel with the chart's dan."
 
 #. placeholder {0}: community.name
 #. placeholder {0}: skin.name
@@ -22346,9 +22370,22 @@ msgstr "Weekly bars"
 msgid "Weekly recap"
 msgstr "Weekly recap"
 
+#. placeholder {0}: FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed
+#: src/routes/discord.tsx
+msgid "What {0} posts"
+msgstr "What {0} posts"
+
+#: src/routes/discord.tsx
+msgid "What {name} posts"
+msgstr "What {name} posts"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
+
+#: src/routes/discord.tsx
+msgid "What Dan on score posts does"
+msgstr "What Dan on score posts does"
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
