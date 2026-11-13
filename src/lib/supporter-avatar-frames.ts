@@ -109,6 +109,18 @@ const FRAME_GEOMETRY = {
   "disc-bounce-7k": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0, 0, 0, 0] },
   "error-cascade": { box: [-0.2419, -0.2419, 1.6129, 1.4839], overhang: [0, 0.1815, 0.3387, 0] },
   "fairy-lights": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0927, 0.0766, 0.0927, 0] },
+  "flames-blue": { roundStill: true, box: [-0.3548, -0.6613, 1.7097, 1.7742], overhang: [0.0847, 0.5, 0.0847, 0.0766] },
+  lightning: { roundStill: true, box: [-0.4516, -0.4516, 1.9032, 1.9032], overhang: [0.2742, 0.2339, 0.2944, 0.1895] },
+  "spectrum-bars": { box: [-0.2419, -0.2419, 1.4839, 1.6613], overhang: [0.0282, 0, 0.0282, 0.3992] },
+  "jewel-case": { squareWindow: true, stillOnly: true, box: [-0.1935, -0.0968, 1.6935, 1.1935], overhang: [0.1492, 0.0524, 0.4556, 0.0524] },
+  "sheet-music": { box: [-0.4194, 0.0, 1.9032, 1.4839], overhang: [0.3508, 0, 0.4476, 0.3387] },
+  "focus-lines": { roundStill: true, box: [-0.5645, -0.5645, 2.129, 2.129], overhang: [0.4718, 0.5323, 0.5161, 0.4435] },
+  "fish-tank": { squareWindow: true, box: [-0.0968, -0.0968, 1.1935, 1.1935], overhang: [0.0685, 0.0726, 0.0685, 0.0726] },
+  "stage-curtains": { squareWindow: true, stillOnly: true, box: [-0.2903, -0.2258, 1.5806, 1.3548], overhang: [0.254, 0.1895, 0.254, 0.1089] },
+  thorns: { roundStill: true, stillOnly: true, box: [-0.1774, -0.1774, 1.3548, 1.3548], overhang: [0.1331, 0.1492, 0.1452, 0.129] },
+  chains: { roundStill: true, stillOnly: true, box: [-0.1774, -0.1774, 1.3548, 1.4839], overhang: [0.0968, 0.0968, 0.0968, 0.2702] },
+  "double-line": { roundStill: true, stillOnly: true, box: [-0.1452, -0.1452, 1.2903, 1.2903], overhang: [0.1008, 0.0968, 0.1008, 0.1089] },
+  flames: { roundStill: true, box: [-0.3548, -0.6613, 1.7097, 1.7742], overhang: [0.0847, 0.5, 0.0847, 0.0766] },
   "five-star-pull": { box: [-0.4032, -0.3226, 1.8065, 1.6935], overhang: [0.3508, 0, 0.3589, 0.1532] },
   "gamma-orbit": { box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.246, 0, 0.254, 0] },
   "greek-circle": { box: [-0.5081, -0.5565, 2.0161, 2.0726], overhang: [0.2621, 0.3105, 0.2621, 0.2742] },
@@ -162,6 +174,7 @@ const FRAME_GEOMETRY = {
   "skill-radar": { box: [-0.5, -0.5, 2.0, 1.9677], overhang: [0.2742, 0.2863, 0.2742, 0.2298] },
   "soul-shatter": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.0081, 0, 0.1532, 0.371] },
   "spell-card": { box: [-0.5484, -0.5484, 2.0968, 2.0968], overhang: [0.5484, 0.5484, 0.5484, 0.5484] },
+  "slim-ring": { roundStill: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.121, 0.121, 0.121, 0.121] },
   "ssr-card": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2097, 0.1694, 0.1008, 0.3185] },
   "stage-four-fail": { box: [-0.4032, -0.3065, 1.6774, 1.5806], overhang: [0.2863, 0.2056, 0.2016, 0.1976] },
   "stair-roll": { box: [-0.2903, -0.2903, 1.5806, 1.5806], overhang: [0.2258, 0.254, 0.2258, 0.2339] },
@@ -176,6 +189,7 @@ const FRAME_GEOMETRY = {
   "term-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.6452], overhang: [0.1694, 0.2298, 0.1694, 0.4032] },
   "time-stop-knives": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3306, 0.3226, 0.3306, 0.3427] },
   "trophy-shelf": { danShelf: true, stillOnly: true, box: [-0.3548, -0.2419, 1.7097, 1.8629], overhang: [0.1492, 0, 0.1492, 0.3871] },
+  viewfinder: { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0806, 0.1895, 0.0806, 0.1976] },
   "wash-ring": { roundStill: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.371, 0.3669, 0.371, 0.371] },
   "wings-feather-1": { roundStill: true, box: [-0.8548, -0.7581, 2.871, 1.9677], overhang: [0.7223, 0, 0.7235, 0] },
   "wings-feather-2": { roundStill: true, box: [-0.8548, -0.7581, 2.871, 1.9677], overhang: [0.7334, 0.2501, 0.7346, 0] },
@@ -318,7 +332,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 84;
+const FRAME_ART_VERSION = 90;
 
 /* A second file of a frame drawn from parts (the Trophy shelf's plaques). */
 export function supporterFramePartSrc(id: SupporterAvatarFrameId, part: string): string {

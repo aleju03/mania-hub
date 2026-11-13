@@ -81,13 +81,13 @@ export interface CustomMotif {
 
 /* A frame's still around the viewer's avatar, fitted into a square. */
 export function FrameThumb({ frame, avatar, size, live = false }: { frame: SupporterAvatarFrameId | null; avatar: string | undefined; size: number; live?: boolean }) {
-  const [left, top, width, height] = frame ? supporterFrameGeometry(frame).box : [0, 0, 1, 1];
-  // fit the art and the avatar together: a frame's canvas need not contain the avatar (a hat sits above it)
-  const minX = Math.min(left, 0), minY = Math.min(top, 0);
-  const spanX = Math.max(left + width, 1) - minX, spanY = Math.max(top + height, 1) - minY;
+  // fit and centre what is drawn (the avatar plus the art past it), not the art's canvas:
+  // a canvas keeps empty room where the art moves or glows, which pushed a frame like Flames off centre
+  const [overLeft, overTop, overRight, overBottom] = frame ? supporterFrameGeometry(frame).overhang : [0, 0, 0, 0];
+  const spanX = 1 + overLeft + overRight, spanY = 1 + overTop + overBottom;
   const scale = size / Math.max(spanX, spanY, 1.6);
-  const avatarLeft = (size - spanX * scale) / 2 - minX * scale;
-  const avatarTop = (size - spanY * scale) / 2 - minY * scale;
+  const avatarLeft = (size - spanX * scale) / 2 + overLeft * scale;
+  const avatarTop = (size - spanY * scale) / 2 + overTop * scale;
   return (
     <span className="relative block" style={{ width: scaledPx(size), height: scaledPx(size) }}>
       <span className="absolute" style={{ left: avatarLeft, top: avatarTop, width: scale, height: scale }}>
@@ -575,7 +575,6 @@ export const LoadoutDrawer = memo(function LoadoutDrawer(props: DrawerProps) {
   );
 });
 
-const ALL_FRAMES = "all";
 const FRAME_ROWS = 3;
 const FRAME_TILE_MIN = 84;
 const FRAME_GAP = 8;
@@ -599,8 +598,8 @@ function useColumns(min: number, gap: number) {
   return [ref, columns] as const;
 }
 
-/* Every frame, three rows at a time; the theme chips narrow it down. */
-const WORKSHOP_FRAMES = "workshop";
+/* Every frame in one list, three rows at a time, with no categories: the
+   built-in ones in FRAME_GROUPS order, then the workshop's. */
 
 /* The workshop's frames this viewer may wear: the shared list and their own,
    as picker entries named by their makers. */
@@ -625,11 +624,8 @@ function useWorkshopFrameEntries(): FrameEntry[] {
 function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) {
   const { t, i18n } = useLingui();
   const frame = current.frame;
-  const [tab, setTab] = useState(ALL_FRAMES);
   const made = useWorkshopFrameEntries();
-  const entries = tab === ALL_FRAMES ? [...FRAME_GROUPS.flatMap((g) => g.entries), ...made]
-    : tab === WORKSHOP_FRAMES ? made
-    : (FRAME_GROUPS.find((g) => g.key === tab) ?? FRAME_GROUPS[0]).entries;
+  const entries = [...FRAME_GROUPS.flatMap((g) => g.entries), ...made];
   const activeSet = entries.find((entry) => "set" in entry && holds(entry, frame));
   const tryOn = (value: SupporterAvatarFrameId | null) => (on: boolean) => onTry("frame", on ? value : undefined);
   const [gridRef, columns] = useColumns(FRAME_TILE_MIN, FRAME_GAP);
@@ -642,10 +638,6 @@ function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) 
   const at = entries.findIndex((entry) => holds(entry, frame));
   const shownPage = Math.min(page ?? (at < 0 ? 0 : Math.floor((at + 1) / perPage)), pages - 1);
   const first = shownPage * perPage;
-  const pick = (key: string) => {
-    setTab(key);
-    setPage(0);
-  };
 
   const tileFor = (entry: FrameEntry) => {
     if ("id" in entry) {
@@ -668,16 +660,6 @@ function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) 
 
   return (
     <div>
-      <Chips
-        value={tab}
-        options={[
-          { value: ALL_FRAMES, label: t`All`, count: FRAME_GROUPS.reduce((sum, g) => sum + g.entries.length, 0) + made.length },
-          ...FRAME_GROUPS.map((g) => ({ value: g.key, label: i18n._(g.title), count: g.entries.length })),
-          ...(made.length > 0 ? [{ value: WORKSHOP_FRAMES, label: t`Workshop`, count: made.length }] : []),
-        ]}
-        onChange={pick}
-        scroll
-      />
       <div ref={gridRef} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
         {first === 0 && (
           <Item active={frame === null} disabled={disabled} onTry={tryOn(null)} onPick={() => onPick("frame", null)}>

@@ -39,3 +39,11 @@ photos, game art or logos.
 
 The Desktop icon, Paint canvas, Paperclip, Blue screen and Pipes frames (November 2026) are drawn for
 this site in code, with no operating system artwork, icons, logos or screenshots.
+
+The Flames, Viewfinder and Slim ring frames (November 2026) are drawn for this site in code, with no
+camera maker's interface artwork, stock footage or textures.
+
+The Blue flames, Lightning, Spectrum bars, Focus lines and Double line frames (November 2026) are
+drawn for this site in code. The Sheet music frame is too; its clef is a glyph of Noto Music (SIL Open
+Font License 1.1). The Jewel case, Fish tank, Stage curtains, Thorns and Chains frames are
+Blender models built and rendered for this site, with no external models, textures or photographs.

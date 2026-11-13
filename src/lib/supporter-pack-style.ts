@@ -14,7 +14,7 @@ import type { MessageDescriptor } from "@lingui/core";
 export const SUPPORTER_CARD_SLEEVES = ["penny", "toploader", "onetouch", "slab"] as const;
 export type SupporterCardSleeveId = (typeof SUPPORTER_CARD_SLEEVES)[number];
 
-export const SUPPORTER_BINDERS = ["leather", "denim", "holo", "carbon", "zip"] as const;
+export const SUPPORTER_BINDERS = ["leather", "denim", "holo", "carbon", "zip", "case"] as const;
 export type SupporterBinderId = (typeof SUPPORTER_BINDERS)[number];
 
 /* The foil the viewer's packs are printed on (packArt.ts draws each). */
@@ -47,6 +47,7 @@ export const SUPPORTER_BINDER_LABELS: Record<SupporterBinderId, MessageDescripto
   holo: msg`Holo`,
   carbon: msg`Carbon fiber`,
   zip: msg`Zip binder`,
+  case: msg`Flight case`,
 };
 
 export const SUPPORTER_WRAPPER_LABELS: Record<SupporterWrapperId, MessageDescriptor> = {

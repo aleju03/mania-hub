@@ -4260,7 +4260,6 @@ msgstr "todos"
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
-#: src/components/supporter/LoadoutSlots.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "All"
@@ -4763,7 +4762,6 @@ msgstr "aprobada"
 msgid "Arabic"
 msgstr "Árabe"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Arcade"
 msgstr "Arcade"
@@ -5588,6 +5586,10 @@ msgid "Blue fairy"
 msgstr "Hada azul"
 
 #: src/components/supporter/loadout.ts
+msgid "Blue flames"
+msgstr "Llamas azules"
+
+#: src/components/supporter/loadout.ts
 msgid "Blue screen"
 msgstr "Pantallazo azul"
 
@@ -5972,6 +5974,10 @@ msgstr "Cancelado"
 msgid "Cancelling"
 msgstr "Cancelando"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Candles"
+#~ msgstr "Velas"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "cannot be rated"
 msgstr "no se puede clasificar"
@@ -6193,8 +6199,8 @@ msgid "Cat parade"
 msgstr "Desfile de gatos"
 
 #: src/components/supporter/loadout.ts
-msgid "Cats"
-msgstr "Gatos"
+#~ msgid "Cats"
+#~ msgstr "Gatos"
 
 #: src/lib/supporter-foils.ts
 #: src/lib/supporter-name-styles.ts
@@ -6237,6 +6243,10 @@ msgstr "Tiradas en cadena y un tercer espacio en la tienda"
 #: src/lib/pack-run.ts
 msgid "Chained cards score twice."
 msgstr "Las cartas encadenadas puntúan dos veces."
+
+#: src/components/supporter/loadout.ts
+msgid "Chains"
+msgstr "Cadenas"
 
 #. placeholder {0}: N.fever.factor
 #. placeholder {1}: N.fever.factor
@@ -8286,8 +8296,8 @@ msgid "Crown"
 msgstr "Corona"
 
 #: src/components/supporter/loadout.ts
-msgid "Crowns"
-msgstr "Coronas"
+#~ msgid "Crowns"
+#~ msgstr "Coronas"
 
 #: src/components/supporter/loadout.ts
 msgid "CRT monitor"
@@ -9042,8 +9052,8 @@ msgstr "no cuenta"
 #~ msgstr "No cuenta para dan."
 
 #: src/components/supporter/loadout.ts
-msgid "Dojo"
-msgstr "Dojo"
+#~ msgid "Dojo"
+#~ msgstr "Dojo"
 
 #: src/lib/supporter-companions.ts
 msgid "Don-chan"
@@ -9079,6 +9089,10 @@ msgstr "Matriz de puntos"
 #: src/lib/supporter-name-fonts.ts
 msgid "Dots"
 msgstr "Puntos"
+
+#: src/components/supporter/loadout.ts
+msgid "Double line"
+msgstr "Línea doble"
 
 #: src/lib/pack-run.ts
 msgid "Double Tap"
@@ -10708,6 +10722,14 @@ msgstr "Terminarlo se ve arriesgado para ti; trátalo como un intento de clear, 
 msgid "Finnish"
 msgstr "Finés"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Fire"
+#~ msgstr "Fuego"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Fire and lightning"
+#~ msgstr "Fuego y rayos"
+
 #: src/lib/supporter-profile-themes.ts
 msgid "Firefly forest"
 msgstr "Bosque de luciérnagas"
@@ -10814,6 +10836,10 @@ msgstr "Primer intento"
 #~ msgid "firsts"
 #~ msgstr "primeras veces"
 
+#: src/components/supporter/loadout.ts
+msgid "Fish tank"
+msgstr "Pecera"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Fit"
 msgstr "Ajustar"
@@ -10863,6 +10889,10 @@ msgstr "arreglado"
 msgid "Fixed"
 msgstr "Arreglos"
 
+#: src/components/supporter/loadout.ts
+msgid "Flames"
+msgstr "Llamas"
+
 #: src/lib/supporter-companions.ts
 msgid "Flandre fumo"
 msgstr "Fumo de Flandre"
@@ -10882,6 +10912,10 @@ msgstr "plano"
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Flat backdrop tinted with the skin's accent"
 msgstr "Fondo plano teñido con el color de acento de la skin"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Flight case"
+msgstr "Maletín de aluminio"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Flip"
@@ -10915,6 +10949,10 @@ msgstr "Invertido"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Flowing ribbons of teal and violet."
 #~ msgstr "Cintas ondulantes de turquesa y violeta."
+
+#: src/components/supporter/loadout.ts
+msgid "Focus lines"
+msgstr "Líneas de enfoque"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Fog"
@@ -11217,8 +11255,8 @@ msgid "Furthest stages"
 msgstr "Etapas más lejanas"
 
 #: src/components/supporter/loadout.ts
-msgid "Gacha"
-msgstr "Gacha"
+#~ msgid "Gacha"
+#~ msgstr "Gacha"
 
 #. placeholder {0}: N.snowball.step
 #: src/lib/pack-run.ts
@@ -12099,6 +12137,7 @@ msgid "Highest tier first, then pp"
 msgstr "Primero el tier más alto, luego pp"
 
 #: src/components/supporter/loadout.ts
+#: src/lib/supporter-name-styles.ts
 msgid "Highlighter"
 msgstr "Resaltador"
 
@@ -13204,6 +13243,10 @@ msgstr "Japonés"
 msgid "Jersey"
 msgstr "Jersey"
 
+#: src/components/supporter/loadout.ts
+msgid "Jewel case"
+msgstr "Caja de CD"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "JinJin dan courses"
 #~ msgstr "Dans de JinJin"
@@ -13363,6 +13406,10 @@ msgstr "Ka-chan"
 #: src/components/supporter/loadout.ts
 msgid "Kappa signal"
 msgstr "Señal Kappa"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Karaoke"
+msgstr "Karaoke"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Katana"
@@ -13591,6 +13638,14 @@ msgstr "Etiquetar como {0}K+1"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Label as a plain {keys}K layout"
 msgstr "Etiquetar como layout normal de {keys}K"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Label tape"
+msgstr "Cinta de etiquetas"
+
+#: src/components/supporter/loadout.ts
+msgid "Labels"
+msgstr "Etiquetas"
 
 #: src/routes/dan-estimates.tsx
 msgid "Ladder"
@@ -13979,6 +14034,7 @@ msgstr "Luz"
 msgid "Light wings"
 msgstr "Alas de luz"
 
+#: src/components/supporter/loadout.ts
 #: src/lib/supporter-pack-style.ts
 msgid "Lightning"
 msgstr "Rayo"
@@ -14676,6 +14732,10 @@ msgstr "Inicia sesión con osu! para subir una skin"
 #: src/components/layout/Nav.tsx
 msgid "Logout"
 msgstr "Cerrar sesión"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Long note"
+msgstr "Nota larga"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "long notes"
@@ -15833,6 +15893,10 @@ msgstr "Multiplayer"
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
 msgstr "Música"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Music and stage"
+#~ msgstr "Música y escenario"
 
 #: src/components/packs/run/chain/ChainHowTo.tsx
 msgid "Music: \"Cool Vibes\" by Kevin MacLeod (<0>incompetech.com</0>), CC BY 4.0"
@@ -18419,8 +18483,8 @@ msgid "osu! team"
 msgstr "Equipo de osu!"
 
 #: src/components/supporter/loadout.ts
-msgid "osu!mania"
-msgstr "osu!mania"
+#~ msgid "osu!mania"
+#~ msgstr "osu!mania"
 
 #: src/routes/rankings.tsx
 msgid "osu!mania country rankings"
@@ -21774,7 +21838,6 @@ msgstr "Reanudar este mapa"
 msgid "Retention And Controls"
 msgstr "Retención y controles"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Retro"
 msgstr "Retro"
@@ -22699,8 +22762,8 @@ msgid "searching"
 msgstr "buscando"
 
 #: src/components/supporter/loadout.ts
-msgid "Seasons and nature"
-msgstr "Estaciones y naturaleza"
+#~ msgid "Seasons and nature"
+#~ msgstr "Estaciones y naturaleza"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Second colour"
@@ -23289,6 +23352,10 @@ msgstr "Compartición de datos"
 msgid "Shattered stars"
 msgstr "Estrellas rotas"
 
+#: src/components/supporter/loadout.ts
+msgid "Sheet music"
+msgstr "Partitura"
+
 #: src/lib/pattern-labels.ts
 #~ msgid "Shield Streams"
 #~ msgstr "Streams de shields"
@@ -23660,8 +23727,8 @@ msgid "Shows your cards with a quick fade instead of the full reveal"
 msgstr "Las cartas aparecen de una vez, sin la animación completa al abrir el sobre"
 
 #: src/components/supporter/loadout.ts
-msgid "Shrine and magic"
-msgstr "Santuario y magia"
+#~ msgid "Shrine and magic"
+#~ msgstr "Santuario y magia"
 
 #: src/components/supporter/loadout.ts
 msgid "Shrine gate"
@@ -23948,7 +24015,6 @@ msgstr "Variedad de tamaño"
 msgid "Sketch crown"
 msgstr "Corona de boceto"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-profile-themes.ts
 msgid "Sketchbook"
 msgstr "Cuaderno de bocetos"
@@ -24197,6 +24263,10 @@ msgstr "cortadas"
 #: src/routes/workshop.index.tsx
 msgid "Slide {0}"
 msgstr "Diapositiva {0}"
+
+#: src/components/supporter/loadout.ts
+msgid "Slim ring"
+msgstr "Aro fino"
 
 #. placeholder {0}: slot + 1
 #: src/components/player/ProfileStatCards.tsx
@@ -24518,8 +24588,8 @@ msgid "Sorting lowest star rating first - left click to clear, right click for d
 msgstr "Ordenando del rating de estrellas más bajo al más alto - clic izquierdo para quitar, clic derecho para descendente"
 
 #: src/components/supporter/loadout.ts
-msgid "Soul"
-msgstr "Alma"
+#~ msgid "Soul"
+#~ msgstr "Alma"
 
 #: src/components/supporter/loadout.ts
 msgid "Soul shatter"
@@ -24576,6 +24646,10 @@ msgstr "Espectadores"
 #: src/lib/pack-run.ts
 msgid "Spectrum"
 msgstr "Espectro"
+
+#: src/components/supporter/loadout.ts
+msgid "Spectrum bars"
+msgstr "Barras de espectro"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/pack-run.ts
@@ -24730,6 +24804,10 @@ msgstr "Arte del escenario (derecha)"
 #: src/lib/pack-run.ts
 msgid "Stage cleared"
 msgstr "Etapa superada"
+
+#: src/components/supporter/loadout.ts
+msgid "Stage curtains"
+msgstr "Telón"
 
 #: src/components/packs/run/RunEnd.tsx
 msgid "Stage reached"
@@ -25703,7 +25781,6 @@ msgstr "Tektur"
 msgid "Temporarily offline"
 msgstr "Temporalmente fuera de línea"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-profile-themes.ts
@@ -28000,6 +28077,10 @@ msgstr "Esto permitirá a {appNameInline}:"
 msgid "This works with <0>{sendSetting}</0> turned off too."
 msgstr "Esto también funciona con <0>{sendSetting}</0> desactivado."
 
+#: src/components/supporter/loadout.ts
+msgid "Thorns"
+msgstr "Espinas"
+
 #: src/routes/report.tsx
 msgid "Those files are no longer available."
 msgstr "Esos archivos ya no están disponibles."
@@ -29573,6 +29654,10 @@ msgstr "Ver clears verificados por skillset"
 msgid "Viewer editor"
 msgstr "Editor del visor"
 
+#: src/components/supporter/loadout.ts
+msgid "Viewfinder"
+msgstr "Visor"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -30160,12 +30245,16 @@ msgid "Windows and Linux"
 msgstr "Windows y Linux"
 
 #: src/components/supporter/loadout.ts
-msgid "Wings"
-msgstr "Alas"
+#~ msgid "Wings"
+#~ msgstr "Alas"
 
 #: src/components/supporter/loadout.ts
 msgid "Winter pine"
 msgstr "Pino invernal"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Wireframe"
+msgstr "Contorno"
 
 #: src/components/packs/MissingPlayerTile.tsx
 msgid "Wish"

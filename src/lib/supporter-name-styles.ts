@@ -39,6 +39,11 @@ export const SUPPORTER_NAME_STYLES = [
   "inferno",
   "hellfire",
   "aero",
+  "karaoke",
+  "wireframe",
+  "label-tape",
+  "highlighter",
+  "long-note",
 ] as const;
 
 type BuiltInNameStyleId = (typeof SUPPORTER_NAME_STYLES)[number];
@@ -143,4 +148,9 @@ export const SUPPORTER_NAME_STYLE_LABELS: Record<BuiltInNameStyleId, MessageDesc
   mesh: msg`Mesh gradient`,
   inferno: msg`Inferno`,
   hellfire: msg`Hellfire`,
+  karaoke: msg`Karaoke`,
+  wireframe: msg`Wireframe`,
+  "label-tape": msg`Label tape`,
+  highlighter: msg`Highlighter`,
+  "long-note": msg`Long note`,
 };

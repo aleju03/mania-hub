@@ -4272,7 +4272,6 @@ msgstr "全部"
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
-#: src/components/supporter/LoadoutSlots.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "All"
@@ -4775,7 +4774,6 @@ msgstr "批准于"
 msgid "Arabic"
 msgstr "阿拉伯语"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Arcade"
 msgstr "街机"
@@ -5600,6 +5598,10 @@ msgid "Blue fairy"
 msgstr "蓝色妖精"
 
 #: src/components/supporter/loadout.ts
+msgid "Blue flames"
+msgstr "蓝焰"
+
+#: src/components/supporter/loadout.ts
 msgid "Blue screen"
 msgstr "蓝屏"
 
@@ -5984,6 +5986,10 @@ msgstr "已取消"
 msgid "Cancelling"
 msgstr "正在取消"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Candles"
+#~ msgstr "蜡烛"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "cannot be rated"
 msgstr "无法评分"
@@ -6205,8 +6211,8 @@ msgid "Cat parade"
 msgstr "猫猫游行"
 
 #: src/components/supporter/loadout.ts
-msgid "Cats"
-msgstr "猫"
+#~ msgid "Cats"
+#~ msgstr "猫"
 
 #: src/lib/supporter-foils.ts
 #: src/lib/supporter-name-styles.ts
@@ -6249,6 +6255,10 @@ msgstr "连锁抽卡和第三个商店栏位"
 #: src/lib/pack-run.ts
 msgid "Chained cards score twice."
 msgstr "连锁的卡片计分两次。"
+
+#: src/components/supporter/loadout.ts
+msgid "Chains"
+msgstr "锁链"
 
 #. placeholder {0}: N.fever.factor
 #. placeholder {1}: N.fever.factor
@@ -8298,8 +8308,8 @@ msgid "Crown"
 msgstr "王冠"
 
 #: src/components/supporter/loadout.ts
-msgid "Crowns"
-msgstr "王冠"
+#~ msgid "Crowns"
+#~ msgstr "王冠"
 
 #: src/components/supporter/loadout.ts
 msgid "CRT monitor"
@@ -9054,8 +9064,8 @@ msgstr "不计入"
 #~ msgstr "不计入段位。"
 
 #: src/components/supporter/loadout.ts
-msgid "Dojo"
-msgstr "道场"
+#~ msgid "Dojo"
+#~ msgstr "道场"
 
 #: src/lib/supporter-companions.ts
 msgid "Don-chan"
@@ -9091,6 +9101,10 @@ msgstr "点阵屏"
 #: src/lib/supporter-name-fonts.ts
 msgid "Dots"
 msgstr "圆点"
+
+#: src/components/supporter/loadout.ts
+msgid "Double line"
+msgstr "双线"
 
 #: src/lib/pack-run.ts
 msgid "Double Tap"
@@ -10720,6 +10734,14 @@ msgstr "以你的水平打完这张有风险，把它当作通关尝试而不是
 msgid "Finnish"
 msgstr "芬兰语"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Fire"
+#~ msgstr "火焰"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Fire and lightning"
+#~ msgstr "火与闪电"
+
 #: src/lib/supporter-profile-themes.ts
 msgid "Firefly forest"
 msgstr "萤火森林"
@@ -10826,6 +10848,10 @@ msgstr "一次成功"
 #~ msgid "firsts"
 #~ msgstr "首次"
 
+#: src/components/supporter/loadout.ts
+msgid "Fish tank"
+msgstr "鱼缸"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Fit"
 msgstr "适应宽度"
@@ -10875,6 +10901,10 @@ msgstr "已修复"
 msgid "Fixed"
 msgstr "修复"
 
+#: src/components/supporter/loadout.ts
+msgid "Flames"
+msgstr "烈焰"
+
 #: src/lib/supporter-companions.ts
 msgid "Flandre fumo"
 msgstr "芙兰朵露 fumo"
@@ -10894,6 +10924,10 @@ msgstr "纯色"
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Flat backdrop tinted with the skin's accent"
 msgstr "使用皮肤主色调的纯色背景"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Flight case"
+msgstr "航空箱"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Flip"
@@ -10927,6 +10961,10 @@ msgstr "翻转"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Flowing ribbons of teal and violet."
 #~ msgstr "流动的青绿与紫色光带。"
+
+#: src/components/supporter/loadout.ts
+msgid "Focus lines"
+msgstr "集中线"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Fog"
@@ -11229,8 +11267,8 @@ msgid "Furthest stages"
 msgstr "最远关卡"
 
 #: src/components/supporter/loadout.ts
-msgid "Gacha"
-msgstr "抽卡"
+#~ msgid "Gacha"
+#~ msgstr "抽卡"
 
 #. placeholder {0}: N.snowball.step
 #: src/lib/pack-run.ts
@@ -12111,6 +12149,7 @@ msgid "Highest tier first, then pp"
 msgstr "先按等级从高到低，再按 pp"
 
 #: src/components/supporter/loadout.ts
+#: src/lib/supporter-name-styles.ts
 msgid "Highlighter"
 msgstr "荧光笔"
 
@@ -13216,6 +13255,10 @@ msgstr "日语"
 msgid "Jersey"
 msgstr "Jersey"
 
+#: src/components/supporter/loadout.ts
+msgid "Jewel case"
+msgstr "CD 盒"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "JinJin dan courses"
 #~ msgstr "JinJin 的段位课题"
@@ -13375,6 +13418,10 @@ msgstr "小咔"
 #: src/components/supporter/loadout.ts
 msgid "Kappa signal"
 msgstr "Kappa 信号"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Karaoke"
+msgstr "卡拉 OK"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Katana"
@@ -13603,6 +13650,14 @@ msgstr "标记为 {0}K+1"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Label as a plain {keys}K layout"
 msgstr "标记为普通 {keys}K 布局"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Label tape"
+msgstr "标签带"
+
+#: src/components/supporter/loadout.ts
+msgid "Labels"
+msgstr "标签"
 
 #: src/routes/dan-estimates.tsx
 msgid "Ladder"
@@ -13991,6 +14046,7 @@ msgstr "灯光"
 msgid "Light wings"
 msgstr "光之翼"
 
+#: src/components/supporter/loadout.ts
 #: src/lib/supporter-pack-style.ts
 msgid "Lightning"
 msgstr "闪电"
@@ -14688,6 +14744,10 @@ msgstr "用 osu! 登录以上传皮肤"
 #: src/components/layout/Nav.tsx
 msgid "Logout"
 msgstr "退出登录"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Long note"
+msgstr "长条"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "long notes"
@@ -15845,6 +15905,10 @@ msgstr "多人游戏"
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
 msgstr "音乐"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Music and stage"
+#~ msgstr "音乐与舞台"
 
 #: src/components/packs/run/chain/ChainHowTo.tsx
 msgid "Music: \"Cool Vibes\" by Kevin MacLeod (<0>incompetech.com</0>), CC BY 4.0"
@@ -18431,8 +18495,8 @@ msgid "osu! team"
 msgstr "osu! 战队"
 
 #: src/components/supporter/loadout.ts
-msgid "osu!mania"
-msgstr "osu!mania"
+#~ msgid "osu!mania"
+#~ msgstr "osu!mania"
 
 #: src/routes/rankings.tsx
 msgid "osu!mania country rankings"
@@ -21786,7 +21850,6 @@ msgstr "继续这张谱面"
 msgid "Retention And Controls"
 msgstr "数据保留与控制"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Retro"
 msgstr "复古"
@@ -22711,8 +22774,8 @@ msgid "searching"
 msgstr "搜索中"
 
 #: src/components/supporter/loadout.ts
-msgid "Seasons and nature"
-msgstr "四季与自然"
+#~ msgid "Seasons and nature"
+#~ msgstr "四季与自然"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Second colour"
@@ -23301,6 +23364,10 @@ msgstr "数据共享"
 msgid "Shattered stars"
 msgstr "碎星"
 
+#: src/components/supporter/loadout.ts
+msgid "Sheet music"
+msgstr "乐谱"
+
 #: src/lib/pattern-labels.ts
 #~ msgid "Shield Streams"
 #~ msgstr "盾流"
@@ -23672,8 +23739,8 @@ msgid "Shows your cards with a quick fade instead of the full reveal"
 msgstr "开包时卡片直接淡入，不播放完整的揭晓动画"
 
 #: src/components/supporter/loadout.ts
-msgid "Shrine and magic"
-msgstr "神社与魔法"
+#~ msgid "Shrine and magic"
+#~ msgstr "神社与魔法"
 
 #: src/components/supporter/loadout.ts
 msgid "Shrine gate"
@@ -23960,7 +24027,6 @@ msgstr "大小差异"
 msgid "Sketch crown"
 msgstr "手绘王冠"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-profile-themes.ts
 msgid "Sketchbook"
 msgstr "素描本"
@@ -24209,6 +24275,10 @@ msgstr "已撕开"
 #: src/routes/workshop.index.tsx
 msgid "Slide {0}"
 msgstr "第 {0} 张"
+
+#: src/components/supporter/loadout.ts
+msgid "Slim ring"
+msgstr "细环"
 
 #. placeholder {0}: slot + 1
 #: src/components/player/ProfileStatCards.tsx
@@ -24530,8 +24600,8 @@ msgid "Sorting lowest star rating first - left click to clear, right click for d
 msgstr "按星级从低到高排序 - 左键清除，右键切换降序"
 
 #: src/components/supporter/loadout.ts
-msgid "Soul"
-msgstr "灵魂"
+#~ msgid "Soul"
+#~ msgstr "灵魂"
 
 #: src/components/supporter/loadout.ts
 msgid "Soul shatter"
@@ -24588,6 +24658,10 @@ msgstr "观众"
 #: src/lib/pack-run.ts
 msgid "Spectrum"
 msgstr "频谱"
+
+#: src/components/supporter/loadout.ts
+msgid "Spectrum bars"
+msgstr "频谱条"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/pack-run.ts
@@ -24742,6 +24816,10 @@ msgstr "面板图片（右）"
 #: src/lib/pack-run.ts
 msgid "Stage cleared"
 msgstr "关卡通过"
+
+#: src/components/supporter/loadout.ts
+msgid "Stage curtains"
+msgstr "舞台幕布"
 
 #: src/components/packs/run/RunEnd.tsx
 msgid "Stage reached"
@@ -25715,7 +25793,6 @@ msgstr "Tektur"
 msgid "Temporarily offline"
 msgstr "暂时离线"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-profile-themes.ts
@@ -28012,6 +28089,10 @@ msgstr "这将允许 {appNameInline}："
 msgid "This works with <0>{sendSetting}</0> turned off too."
 msgstr "关闭 <0>{sendSetting}</0> 时也能用。"
 
+#: src/components/supporter/loadout.ts
+msgid "Thorns"
+msgstr "荆棘"
+
 #: src/routes/report.tsx
 msgid "Those files are no longer available."
 msgstr "这些文件已无法查看。"
@@ -29585,6 +29666,10 @@ msgstr "查看已认证的技能组通过记录"
 msgid "Viewer editor"
 msgstr "回放外观编辑器"
 
+#: src/components/supporter/loadout.ts
+msgid "Viewfinder"
+msgstr "取景器"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -30172,12 +30257,16 @@ msgid "Windows and Linux"
 msgstr "Windows 和 Linux"
 
 #: src/components/supporter/loadout.ts
-msgid "Wings"
-msgstr "翅膀"
+#~ msgid "Wings"
+#~ msgstr "翅膀"
 
 #: src/components/supporter/loadout.ts
 msgid "Winter pine"
 msgstr "冬日松树"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Wireframe"
+msgstr "线框"
 
 #: src/components/packs/MissingPlayerTile.tsx
 msgid "Wish"

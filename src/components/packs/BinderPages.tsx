@@ -9,7 +9,9 @@ import type { SupporterBinderId } from "#/lib/supporter-pack-style";
    holes of two black card-stock pages, and on each page a sheet of nine
    welded clear pockets under one faint sheen. The zip binder is the ringless
    kind: a zipper round a padded weave cover, its sheets stitched into a soft
-   spine, side-loading pockets. Nothing repaints on scroll or
+   spine, side-loading pockets. The flight case is not a book: an aluminium
+   case lying open on a piano hinge, its two halves trays of foam with a
+   cut-out for each card. Nothing repaints on scroll or
    hover; the only motion is a page turn, a transform on its own layer. Turning to the next page of the collection
    turns a page: the right-hand leaf swings over the spine onto the left. */
 
@@ -148,14 +150,23 @@ export function BinderPages({ binder, page = 0, ready = true, settled = true, ch
   }, [turn]);
 
   /* A zip binder's sheets are bound into its spine, with no rings or holes,
-     and a zipper runs round its cover. */
-  const ringed = binder !== "zip";
+     and a zipper runs round its cover; the flight case has a hinge there. */
+  const ringed = binder !== "zip" && binder !== "case";
   // While the next page loads, the spread on screen stays put.
   const spread = pending ? shown.current : { page, left, right };
 
   return (
     <div className={`bnd bnd--${binder} ${className}`}>
-      {!ringed && <span className="bnd-zip-pull" aria-hidden />}
+      {binder === "zip" && <span className="bnd-zip-pull" aria-hidden />}
+      {binder === "case" && (
+        <>
+          <span className="bnd-case-part bnd-case-strike bnd-case-part--a" aria-hidden />
+          <span className="bnd-case-part bnd-case-strike bnd-case-part--b" aria-hidden />
+          <span className="bnd-case-part bnd-case-latch bnd-case-part--a" aria-hidden />
+          <span className="bnd-case-part bnd-case-latch bnd-case-part--b" aria-hidden />
+          <span className="bnd-case-part bnd-case-handle" aria-hidden />
+        </>
+      )}
       <div className="bnd-spread">
         <div className="bnd-slot bnd-slot--left">
           <Page items={turn?.direction === "next" ? turn.under : spread.left} side="left" />
@@ -165,7 +176,7 @@ export function BinderPages({ binder, page = 0, ready = true, settled = true, ch
           <Mechanism key={`mechanism-${turn?.id ?? 0}`} turning={turn !== null} />
         ) : (
           // A zip binder has no rings: its pages are stitched into a soft spine.
-          <div className="bnd-spine bnd-spine--soft" aria-hidden />
+          <div className={`bnd-spine ${binder === "case" ? "bnd-spine--hinge" : "bnd-spine--soft"}`} aria-hidden />
         )}
         <div className="bnd-slot bnd-slot--right">
           <Page items={turn?.direction === "prev" ? turn.under : spread.right} side="right" />

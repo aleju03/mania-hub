@@ -152,10 +152,9 @@ const wings = (set: string, label: MessageDescriptor): FrameEntry => ({
   shown: 1,
 });
 
-export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: FrameEntry[] }[] = [
+export const FRAME_GROUPS: { key: string; entries: FrameEntry[] }[] = [
   {
     key: "mania",
-    title: msg`osu!mania`,
     entries: [
       { id: "judgement-pop", label: msg`Judgements` },
       { id: "dfjk-keys", label: msg`DFJK` },
@@ -224,7 +223,6 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
   },
   {
     key: "retro",
-    title: msg`Retro`,
     entries: [
       { id: "classic-window", label: msg`Classic window` },
       { id: "xp-window", label: msg`XP window` },
@@ -250,11 +248,11 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
       { id: "pipes", label: msg`Pipes` },
       { id: "pixel-hearts", label: msg`Pixel hearts` },
       { id: "old-photo", label: msg`Old photo` },
+      { id: "viewfinder", label: msg`Viewfinder` },
     ],
   },
   {
     key: "terminal",
-    title: msg`Terminal`,
     entries: [
       { id: "term-window", label: msg`Terminal window` },
       { id: "term-rain", label: msg`Matrix rain` },
@@ -264,7 +262,6 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
   },
   {
     key: "nature",
-    title: msg`Seasons and nature`,
     entries: [
       { id: "sakura", label: msg`Sakura` },
       { id: "wisteria", label: msg`Wisteria` },
@@ -274,11 +271,11 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
       { id: "bronze-laurel", label: msg`Bronze laurel` },
       { id: "rain-cloud", label: msg`Rain cloud` },
       { id: "fairy-lights", label: msg`Fairy lights` },
+      { id: "fish-tank", label: msg`Fish tank` },
     ],
   },
   {
     key: "cats",
-    title: msg`Cats`,
     entries: [
       { id: "cat-parade", label: msg`Cat parade` },
       { id: "makiba-peek", label: msg`Makiba` },
@@ -288,18 +285,15 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
   },
   {
     key: "crowns",
-    title: msg`Crowns`,
     entries: [{ id: "crown", label: msg`Crown` }, { id: "crown-sketch", label: msg`Sketch crown` }, { id: "crown-sketch-gold", label: msg`Gold sketch crown` }],
   },
   {
     // a dan is a martial-arts grade first
     key: "dojo",
-    title: msg`Dojo`,
     entries: [{ id: "black-belt", label: msg`Black belt` }],
   },
   {
     key: "shrine",
-    title: msg`Shrine and magic`,
     entries: [
       { id: "yinyang-orbs", label: msg`Yin-yang orbs` },
       { id: "reimu-ribbon", label: msg`Shrine ribbon` },
@@ -316,7 +310,6 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
   },
   {
     key: "arcade",
-    title: msg`Arcade`,
     entries: [
       { id: "wash-ring", label: msg`Touch ring` },
       { id: "knob-lasers", label: msg`Knob lasers` },
@@ -327,7 +320,6 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
   },
   {
     key: "gacha",
-    title: msg`Gacha`,
     entries: [
       { id: "halo-cyan", label: msg`Halo` },
       { id: "halo-pink", label: msg`Pink halo` },
@@ -339,18 +331,49 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
   },
   {
     key: "sketchbook",
-    title: msg`Sketchbook`,
     entries: [
       { id: "pencil-boil", label: msg`Pencil test` },
       { id: "taped-page", label: msg`Taped page` },
       { id: "margin-doodles", label: msg`Margin doodles` },
       { id: "highlighter-loop", label: msg`Highlighter` },
       { id: "crayon-border", label: msg`Crayon` },
+      { id: "focus-lines", label: msg`Focus lines` },
+    ],
+  },
+  {
+    key: "fire",
+    entries: [
+      { id: "flames", label: msg`Flames` },
+      { id: "flames-blue", label: msg`Blue flames` },
+      { id: "lightning", label: msg`Lightning` },
+    ],
+  },
+  {
+    key: "stage",
+    entries: [
+      { id: "spectrum-bars", label: msg`Spectrum bars` },
+      { id: "sheet-music", label: msg`Sheet music` },
+      { id: "jewel-case", label: msg`Jewel case` },
+      { id: "stage-curtains", label: msg`Stage curtains` },
+    ],
+  },
+  {
+    key: "gothic",
+    entries: [
+      { id: "thorns", label: msg`Thorns` },
+      { id: "chains", label: msg`Chains` },
+    ],
+  },
+  {
+    // for a profile that wants a frame and no joke
+    key: "plain",
+    entries: [
+      { id: "slim-ring", label: msg`Slim ring` },
+      { id: "double-line", label: msg`Double line` },
     ],
   },
   {
     key: "soul",
-    title: msg`Soul`,
     entries: [
       { id: "bullet-board", label: msg`Bullet board` },
       { id: "dialogue-box", label: msg`Dialogue box` },
@@ -363,7 +386,6 @@ export const FRAME_GROUPS: { key: string; title: MessageDescriptor; entries: Fra
   },
   {
     key: "wings",
-    title: msg`Wings`,
     entries: [
       wings("light-wings", msg`Light wings`),
       wings("ai-wings", msg`Angel wings`),
@@ -394,7 +416,8 @@ export const NAME_STYLE_GROUPS: { key: string; title: MessageDescriptor; styles:
     styles: ["chrome", "molten-gold", "ethereal", "pearl", "galaxy", "heatmap", "note-rain", "plasma", "ink", "caustics", "lava", "inferno", "hellfire", "dither", "mesh", "aurora", "glitch"],
   },
   { key: "gradients", title: msg`Gradients`, styles: ["holo", "gold", "rainbow", "sunset", "ember", "frost", "aero"] },
-  { key: "glow", title: msg`Glow and retro`, styles: ["neon", "hit-light", "300g", "pixel", "terminal", "sticker", "plate"] },
+  { key: "glow", title: msg`Glow and retro`, styles: ["neon", "hit-light", "300g", "pixel", "terminal", "sticker", "karaoke", "wireframe"] },
+  { key: "labels", title: msg`Labels`, styles: ["plate", "label-tape", "highlighter", "long-note"] },
 ];
 
 export const NAME_FONT_GROUPS: { key: string; title: MessageDescriptor; fonts: SupporterNameFontId[] }[] = [

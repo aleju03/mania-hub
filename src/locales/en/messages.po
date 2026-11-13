@@ -4402,7 +4402,6 @@ msgstr "all"
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
-#: src/components/supporter/LoadoutSlots.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "All"
@@ -4937,7 +4936,6 @@ msgstr "approved"
 msgid "Arabic"
 msgstr "Arabic"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Arcade"
 msgstr "Arcade"
@@ -5802,6 +5800,10 @@ msgid "Blue fairy"
 msgstr "Blue fairy"
 
 #: src/components/supporter/loadout.ts
+msgid "Blue flames"
+msgstr "Blue flames"
+
+#: src/components/supporter/loadout.ts
 msgid "Blue screen"
 msgstr "Blue screen"
 
@@ -6194,6 +6196,10 @@ msgstr "Cancelled"
 msgid "Cancelling"
 msgstr "Cancelling"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Candles"
+#~ msgstr "Candles"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "cannot be rated"
 msgstr "cannot be rated"
@@ -6415,8 +6421,8 @@ msgid "Cat parade"
 msgstr "Cat parade"
 
 #: src/components/supporter/loadout.ts
-msgid "Cats"
-msgstr "Cats"
+#~ msgid "Cats"
+#~ msgstr "Cats"
 
 #: src/lib/supporter-foils.ts
 #: src/lib/supporter-name-styles.ts
@@ -6459,6 +6465,10 @@ msgstr "Chain pulls and a third shop slot"
 #: src/lib/pack-run.ts
 msgid "Chained cards score twice."
 msgstr "Chained cards score twice."
+
+#: src/components/supporter/loadout.ts
+msgid "Chains"
+msgstr "Chains"
 
 #. placeholder {0}: N.fever.factor
 #. placeholder {1}: N.fever.factor
@@ -8576,8 +8586,8 @@ msgid "Crown"
 msgstr "Crown"
 
 #: src/components/supporter/loadout.ts
-msgid "Crowns"
-msgstr "Crowns"
+#~ msgid "Crowns"
+#~ msgstr "Crowns"
 
 #: src/components/supporter/loadout.ts
 msgid "CRT monitor"
@@ -9341,8 +9351,8 @@ msgstr "does not count"
 #~ msgstr "Does not count for dan."
 
 #: src/components/supporter/loadout.ts
-msgid "Dojo"
-msgstr "Dojo"
+#~ msgid "Dojo"
+#~ msgstr "Dojo"
 
 #: src/lib/supporter-companions.ts
 msgid "Don-chan"
@@ -9378,6 +9388,10 @@ msgstr "Dot matrix"
 #: src/lib/supporter-name-fonts.ts
 msgid "Dots"
 msgstr "Dots"
+
+#: src/components/supporter/loadout.ts
+msgid "Double line"
+msgstr "Double line"
 
 #: src/lib/pack-run.ts
 msgid "Double Tap"
@@ -11048,6 +11062,14 @@ msgstr "Finishing this looks risky for you; treat it as a clear attempt, not a f
 msgid "Finnish"
 msgstr "Finnish"
 
+#: src/components/supporter/loadout.ts
+#~ msgid "Fire"
+#~ msgstr "Fire"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Fire and lightning"
+#~ msgstr "Fire and lightning"
+
 #: src/lib/supporter-profile-themes.ts
 msgid "Firefly forest"
 msgstr "Firefly forest"
@@ -11158,6 +11180,10 @@ msgstr "First Try"
 #~ msgid "firsts"
 #~ msgstr "firsts"
 
+#: src/components/supporter/loadout.ts
+msgid "Fish tank"
+msgstr "Fish tank"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Fit"
 msgstr "Fit"
@@ -11207,6 +11233,10 @@ msgstr "fixed"
 msgid "Fixed"
 msgstr "Fixed"
 
+#: src/components/supporter/loadout.ts
+msgid "Flames"
+msgstr "Flames"
+
 #: src/lib/supporter-companions.ts
 msgid "Flandre fumo"
 msgstr "Flandre fumo"
@@ -11226,6 +11256,10 @@ msgstr "flat"
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Flat backdrop tinted with the skin's accent"
 msgstr "Flat backdrop tinted with the skin's accent"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Flight case"
+msgstr "Flight case"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Flip"
@@ -11259,6 +11293,10 @@ msgstr "Flipped"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Flowing ribbons of teal and violet."
 #~ msgstr "Flowing ribbons of teal and violet."
+
+#: src/components/supporter/loadout.ts
+msgid "Focus lines"
+msgstr "Focus lines"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Fog"
@@ -11565,8 +11603,8 @@ msgid "Furthest stages"
 msgstr "Furthest stages"
 
 #: src/components/supporter/loadout.ts
-msgid "Gacha"
-msgstr "Gacha"
+#~ msgid "Gacha"
+#~ msgstr "Gacha"
 
 #. placeholder {0}: N.snowball.step
 #: src/lib/pack-run.ts
@@ -12459,6 +12497,7 @@ msgid "Highest tier first, then pp"
 msgstr "Highest tier first, then pp"
 
 #: src/components/supporter/loadout.ts
+#: src/lib/supporter-name-styles.ts
 msgid "Highlighter"
 msgstr "Highlighter"
 
@@ -13605,6 +13644,10 @@ msgstr "Japanese"
 msgid "Jersey"
 msgstr "Jersey"
 
+#: src/components/supporter/loadout.ts
+msgid "Jewel case"
+msgstr "Jewel case"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "JinJin dan courses"
 #~ msgstr "JinJin dan courses"
@@ -13764,6 +13807,10 @@ msgstr "Ka-chan"
 #: src/components/supporter/loadout.ts
 msgid "Kappa signal"
 msgstr "Kappa signal"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Karaoke"
+msgstr "Karaoke"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Katana"
@@ -13996,6 +14043,14 @@ msgstr "Label as {0}K+1"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Label as a plain {keys}K layout"
 msgstr "Label as a plain {keys}K layout"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Label tape"
+msgstr "Label tape"
+
+#: src/components/supporter/loadout.ts
+msgid "Labels"
+msgstr "Labels"
 
 #: src/routes/dan-estimates.tsx
 msgid "Ladder"
@@ -14396,6 +14451,7 @@ msgstr "Light"
 msgid "Light wings"
 msgstr "Light wings"
 
+#: src/components/supporter/loadout.ts
 #: src/lib/supporter-pack-style.ts
 msgid "Lightning"
 msgstr "Lightning"
@@ -15101,6 +15157,10 @@ msgstr "Log in with osu! to upload a skin"
 #: src/components/layout/Nav.tsx
 msgid "Logout"
 msgstr "Logout"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Long note"
+msgstr "Long note"
 
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "long notes"
@@ -16287,6 +16347,10 @@ msgstr "Multiplayer"
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
 msgstr "Music"
+
+#: src/components/supporter/loadout.ts
+#~ msgid "Music and stage"
+#~ msgstr "Music and stage"
 
 #: src/components/packs/run/chain/ChainHowTo.tsx
 msgid "Music: \"Cool Vibes\" by Kevin MacLeod (<0>incompetech.com</0>), CC BY 4.0"
@@ -18960,8 +19024,8 @@ msgid "osu! team"
 msgstr "osu! team"
 
 #: src/components/supporter/loadout.ts
-msgid "osu!mania"
-msgstr "osu!mania"
+#~ msgid "osu!mania"
+#~ msgstr "osu!mania"
 
 #: src/routes/rankings.tsx
 msgid "osu!mania country rankings"
@@ -22377,7 +22441,6 @@ msgstr "Resume this map"
 msgid "Retention And Controls"
 msgstr "Retention And Controls"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Retro"
 msgstr "Retro"
@@ -23327,8 +23390,8 @@ msgid "searching"
 msgstr "searching"
 
 #: src/components/supporter/loadout.ts
-msgid "Seasons and nature"
-msgstr "Seasons and nature"
+#~ msgid "Seasons and nature"
+#~ msgstr "Seasons and nature"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Second colour"
@@ -23933,6 +23996,10 @@ msgstr "Sharing"
 msgid "Shattered stars"
 msgstr "Shattered stars"
 
+#: src/components/supporter/loadout.ts
+msgid "Sheet music"
+msgstr "Sheet music"
+
 #: src/lib/pattern-labels.ts
 #~ msgid "Shield Streams"
 #~ msgstr "Shield Streams"
@@ -24312,8 +24379,8 @@ msgid "Shows your cards with a quick fade instead of the full reveal"
 msgstr "Shows your cards with a quick fade instead of the full reveal"
 
 #: src/components/supporter/loadout.ts
-msgid "Shrine and magic"
-msgstr "Shrine and magic"
+#~ msgid "Shrine and magic"
+#~ msgstr "Shrine and magic"
 
 #: src/components/supporter/loadout.ts
 msgid "Shrine gate"
@@ -24616,7 +24683,6 @@ msgstr "Size variety"
 msgid "Sketch crown"
 msgstr "Sketch crown"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-profile-themes.ts
 msgid "Sketchbook"
 msgstr "Sketchbook"
@@ -24865,6 +24931,10 @@ msgstr "sliced"
 #: src/routes/workshop.index.tsx
 msgid "Slide {0}"
 msgstr "Slide {0}"
+
+#: src/components/supporter/loadout.ts
+msgid "Slim ring"
+msgstr "Slim ring"
 
 #. placeholder {0}: slot + 1
 #: src/components/player/ProfileStatCards.tsx
@@ -25194,8 +25264,8 @@ msgid "Sorting lowest star rating first - left click to clear, right click for d
 msgstr "Sorting lowest star rating first - left click to clear, right click for descending"
 
 #: src/components/supporter/loadout.ts
-msgid "Soul"
-msgstr "Soul"
+#~ msgid "Soul"
+#~ msgstr "Soul"
 
 #: src/components/supporter/loadout.ts
 msgid "Soul shatter"
@@ -25252,6 +25322,10 @@ msgstr "Spectators"
 #: src/lib/pack-run.ts
 msgid "Spectrum"
 msgstr "Spectrum"
+
+#: src/components/supporter/loadout.ts
+msgid "Spectrum bars"
+msgstr "Spectrum bars"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/pack-run.ts
@@ -25410,6 +25484,10 @@ msgstr "Stage art (right)"
 #: src/lib/pack-run.ts
 msgid "Stage cleared"
 msgstr "Stage cleared"
+
+#: src/components/supporter/loadout.ts
+msgid "Stage curtains"
+msgstr "Stage curtains"
 
 #: src/components/packs/run/RunEnd.tsx
 msgid "Stage reached"
@@ -26399,7 +26477,6 @@ msgstr "Tektur"
 msgid "Temporarily offline"
 msgstr "Temporarily offline"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/supporter-name-fonts.ts
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-profile-themes.ts
@@ -28764,6 +28841,10 @@ msgstr "This will allow {appNameInline} to"
 msgid "This works with <0>{sendSetting}</0> turned off too."
 msgstr "This works with <0>{sendSetting}</0> turned off too."
 
+#: src/components/supporter/loadout.ts
+msgid "Thorns"
+msgstr "Thorns"
+
 #: src/routes/report.tsx
 msgid "Those files are no longer available."
 msgstr "Those files are no longer available."
@@ -30373,6 +30454,10 @@ msgstr "View verified skillset clears"
 msgid "Viewer editor"
 msgstr "Viewer editor"
 
+#: src/components/supporter/loadout.ts
+msgid "Viewfinder"
+msgstr "Viewfinder"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -30973,12 +31058,16 @@ msgid "Windows and Linux"
 msgstr "Windows and Linux"
 
 #: src/components/supporter/loadout.ts
-msgid "Wings"
-msgstr "Wings"
+#~ msgid "Wings"
+#~ msgstr "Wings"
 
 #: src/components/supporter/loadout.ts
 msgid "Winter pine"
 msgstr "Winter pine"
+
+#: src/lib/supporter-name-styles.ts
+msgid "Wireframe"
+msgstr "Wireframe"
 
 #: src/components/packs/MissingPlayerTile.tsx
 msgid "Wish"

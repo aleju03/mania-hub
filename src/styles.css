@@ -1017,6 +1017,8 @@ html[data-custom-cursor="true"] * {
 .name-tag--mesh,
 .name-tag--inferno,
 .name-tag--hellfire,
+.name-tag--karaoke,
+.name-tag--wireframe,
 .name-tag--aero {
   -webkit-background-clip: text;
   background-clip: text;
@@ -1283,6 +1285,116 @@ html[data-custom-cursor="true"] * {
     linear-gradient(180deg, #2a1d45, #160f29) padding-box,
     linear-gradient(90deg, #ff66b3, #9b7bff) border-box;
   box-shadow: inset 0.14em 0 0 #ff66b3;
+}
+
+/* Embossing label tape: a strip of glossy red plastic with the letters pressed
+   up through it, white where the plastic stretched. Drawn like the plate. */
+.name-tag--label-tape {
+  position: relative;
+  isolation: isolate;
+  padding-inline: 0.42em;
+  margin-inline: -0.42em -0.2em;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  text-shadow: 0 0.035em 0 rgba(70, 0, 12, 0.75), 0 -0.02em 0 rgba(255, 255, 255, 0.55), 0 0 0.09em rgba(255, 255, 255, 0.55);
+}
+
+.name-tag--label-tape::before {
+  content: "";
+  position: absolute;
+  inset: 0.05em 0.12em;
+  z-index: -1;
+  border-radius: 0.04em;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0 9%, rgba(255, 255, 255, 0) 30%, rgba(0, 0, 0, 0) 72%, rgba(0, 0, 0, 0.24) 100%),
+    #cf1f3a;
+  box-shadow: 0 0.05em 0.08em rgba(0, 0, 0, 0.5), inset 0 0 0 0.02em rgba(255, 255, 255, 0.16);
+  /* the cut ends of the tape, a little off square */
+  clip-path: polygon(0.05em 0, 100% 0, calc(100% - 0.04em) 100%, 0 100%);
+}
+
+/* A highlighter stroke: dark ink under a fat marker line that runs a little
+   uphill and ends unevenly. Still, like a mark on paper. */
+.name-tag--highlighter {
+  position: relative;
+  isolation: isolate;
+  padding-inline: 0.42em;
+  margin-inline: -0.42em -0.2em;
+  color: #17151d;
+  -webkit-text-fill-color: #17151d;
+}
+
+.name-tag--highlighter::before {
+  content: "";
+  position: absolute;
+  inset: 0.17em 0.1em 0.1em;
+  z-index: -1;
+  transform: rotate(-1.1deg);
+  border-radius: 0.3em 0.1em 0.34em 0.12em / 0.2em 0.3em 0.16em 0.34em;
+  background:
+    repeating-linear-gradient(178deg, rgba(255, 255, 255, 0.2) 0 0.05em, rgba(255, 255, 255, 0) 0.05em 0.19em),
+    linear-gradient(90deg, #ffe838, #f9f04a 60%, #ffe22e);
+}
+
+/* A long note lying on its side: a bright head, the held body and a paler
+   tail, with the light of a hold running along it. */
+.name-tag--long-note {
+  position: relative;
+  isolation: isolate;
+  padding-inline: 0.58em 0.46em;
+  margin-inline: -0.58em -0.24em;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  text-shadow: 0 0.04em 0.07em rgba(0, 30, 70, 0.75);
+}
+
+.name-tag--long-note::before {
+  content: "";
+  position: absolute;
+  inset: 0.07em 0.12em;
+  z-index: -1;
+  border-radius: 0.14em;
+  background:
+    linear-gradient(180deg, #ffffff, #c8ecff) left / 0.22em 100% no-repeat,
+    linear-gradient(180deg, #bfe6ff, #8fcfff) right / 0.1em 100% no-repeat,
+    linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0) 100%) 0% 0 / 45% 100% no-repeat,
+    linear-gradient(180deg, #4fb4ff, #2a7df0);
+  box-shadow: 0 0 0.3em rgba(70, 170, 255, 0.6);
+  animation: name-tag-hold 2.2s linear infinite;
+}
+
+/* the light enters past the head and leaves past the tail (a 45%-wide image
+   is fully off either end at these positions) */
+@keyframes name-tag-hold {
+  from { background-position: left, right, -82% 0, 0 0; }
+  to { background-position: left, right, 182% 0, 0 0; }
+}
+
+/* Karaoke: the name fills with colour from the left as a sung line does,
+   holds a moment and starts over. */
+.name-tag--karaoke {
+  background-image: linear-gradient(90deg, #ff5fa8 0%, #ffb23e 25%, #ffe45c 49.6%, #f4f6ff 50.4%, #f4f6ff 100%);
+  background-size: 200% 100%;
+  background-position: 50% 0;
+  filter: drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.75)) drop-shadow(0 0 0.02em rgba(0, 0, 0, 0.9));
+  animation: name-tag-karaoke 4.2s linear infinite;
+}
+
+@keyframes name-tag-karaoke {
+  0% { background-position: 100% 0; }
+  6% { background-position: 100% 0; }
+  82% { background-position: 0% 0; }
+  100% { background-position: 0% 0; }
+}
+
+/* Wireframe: hollow outlined letters with a band of light passing through. */
+.name-tag--wireframe {
+  -webkit-text-stroke: max(0.05em, 0.8px) #8fe6ff;
+  /* a faint fill under the band keeps small names readable */
+  background-image: linear-gradient(100deg, rgba(143, 230, 255, 0.2) 0 38%, rgba(190, 242, 255, 0.8) 50%, rgba(143, 230, 255, 0.2) 62% 100%);
+  background-size: 200% 100%;
+  filter: drop-shadow(0 0 0.09em rgba(60, 200, 255, 0.7)) drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.6));
+  animation: name-tag-slide 5s linear infinite;
 }
 
 /* Synthwave chrome: a sunset gradient sliced by horizon lines. */
@@ -2434,6 +2546,7 @@ html[data-custom-cursor="true"] * {
 }
 @media (prefers-reduced-motion: reduce) {
   .name-tag,
+  .name-tag::before,
   .name-tag::after {
     animation: none !important;
   }
@@ -2841,6 +2954,127 @@ html[data-custom-cursor="true"] * {
     border-radius: 50% 0 0 50% / 5px 0 0 5px;
     background: linear-gradient(270deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
   }
+}
+/* The flight case: not a book. An aluminium case lying open, seen from
+   above. Its hardware is Blender renders (3d-modelling/binder-case): the rim
+   with its corner caps is one square picture nine-sliced round the box, the
+   hinge is a tile, and the latches, their strike plates and the folded handle
+   are placed on the rim. Inside, two trays of charcoal foam (a generated
+   tile) with a cut-out for every card and a finger notch under each. A page
+   turn lifts a tray over the hinge. */
+.bnd--case {
+  --spine-w: 32px;
+  --case-rim: 42px;
+  border: var(--case-rim) solid transparent;
+  /* 136 of the picture's 840 px reach from its edge to the inside of a corner cap */
+  border-image: url("/images/binders/case-frame.webp") 136 / var(--case-rim) stretch;
+  border-radius: 0;
+  background: #0b0b0d;
+  background-clip: padding-box;
+  box-shadow: 0 34px 70px -28px rgba(0, 0, 0, 0.9), 0 12px 22px -10px rgba(0, 0, 0, 0.75);
+}
+.bnd.bnd--case,
+.bnd.bnd--case.bnd--contained {
+  padding: 0;
+}
+.bnd.bnd--case::before,
+.bnd.bnd--case::after {
+  display: none;
+}
+.bnd-case-part {
+  position: absolute;
+  z-index: 3;
+  background: center / contain no-repeat;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+}
+.bnd-case-latch {
+  /* across the rim of the base, its hook hanging off the edge */
+  right: calc(var(--case-rim) * -1 - 10px);
+  width: 32px;
+  height: 80px;
+  margin-top: -40px;
+  background-image: url("/images/binders/case-latch.webp");
+  transform: rotate(90deg);
+}
+.bnd-case-strike {
+  /* the plate a latch hooks, on the lid's rim */
+  left: calc(var(--case-rim) * -1 + 6px);
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+  background-image: url("/images/binders/case-strike.webp");
+  transform: rotate(90deg);
+}
+.bnd-case-part--a { top: 19%; }
+.bnd-case-part--b { top: 81%; }
+.bnd-case-handle {
+  /* folded flat along the rim between the latches */
+  right: calc(var(--case-rim) * -1 + 7px);
+  top: 50%;
+  width: 25px;
+  height: 157px;
+  margin-top: -78px;
+  background-image: url("/images/binders/case-handle.webp");
+}
+@media (max-width: 639px) {
+  .bnd--case { --case-rim: 22px; }
+  .bnd-case-handle { display: none; }
+  .bnd-case-latch { right: calc(var(--case-rim) * -1 - 5px); width: 17px; height: 42px; margin-top: -21px; }
+  .bnd-case-strike { left: calc(var(--case-rim) * -1 + 3px); width: 15px; height: 15px; margin-top: -7px; }
+}
+.bnd--case .bnd-spread {
+  border-radius: 0;
+  background: #0b0b0d;
+  box-shadow: inset 0 6px 16px rgba(0, 0, 0, 0.8);
+}
+.bnd--case .bnd-holes,
+.bnd--case .bnd-sheet-glare {
+  display: none;
+}
+.bnd.bnd--case .bnd-page {
+  /* a tray of charcoal foam */
+  padding: 12px;
+  border-radius: 3px;
+  background: #2a2b31 url("/images/binders/case-foam.webp") 0 0 / 128px 128px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 20px rgba(0, 0, 0, 0.45), 0 6px 12px rgba(0, 0, 0, 0.55);
+}
+.bnd--case .bnd-sheet {
+  /* no plastic: the pockets are cut into the foam */
+  gap: 12px 8px;
+  padding: 2px 2px 9px;
+  background: none;
+  box-shadow: none;
+}
+.bnd--case .bnd-pocket {
+  padding: 4px;
+  border-radius: 5px;
+  background: #09090b;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.95), inset 0 0 0 1px rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.bnd--case .bnd-pocket::before {
+  /* the finger notch: a half-round bite out of the foam under the card */
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: -8px;
+  width: 24px;
+  height: 9px;
+  margin-left: -12px;
+  border: none;
+  border-radius: 0 0 12px 12px;
+  background: #09090b;
+  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.bnd--case .bnd-pocket::after {
+  /* the foam wall's shadow on the card */
+  background: none;
+  box-shadow: inset 0 5px 6px -3px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+.bnd-spine--hinge {
+  /* a piano hinge: one rendered knuckle and its screws, tiled */
+  background: url("/images/binders/case-hinge.webp") center top / 32px 20px repeat-y;
+  filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.7));
 }
 .bnd-leaf {
   position: absolute;
