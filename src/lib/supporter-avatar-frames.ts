@@ -113,8 +113,8 @@ const FRAME_GEOMETRY = {
   "gamma-orbit": { box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.246, 0, 0.254, 0] },
   "greek-circle": { box: [-0.5081, -0.5565, 2.0161, 2.0726], overhang: [0.2621, 0.3105, 0.2621, 0.2742] },
   "hakurei-torii": { roundStill: true, box: [-0.3548, -0.4839, 1.7097, 1.8226], overhang: [0.3548, 0.4839, 0.3548, 0.2419] },
-  "halo-cyan": { box: [-0.371, -0.5, 1.7419, 1.6129], overhang: [0, 0.4919, 0, 0] },
-  "halo-pink": { box: [-0.371, -0.5, 1.7419, 1.6129], overhang: [0, 0.4798, 0, 0] },
+  "halo-cyan": { box: [-0.2419, -0.5161, 1.4839, 1.5161], overhang: [0, 0.3548, 0, 0] },
+  "halo-pink": { box: [-0.2419, -0.5161, 1.4839, 1.5161], overhang: [0, 0.3468, 0, 0] },
   "hanging-stellium": { box: [-0.2984, -0.2984, 1.4839, 1.4839], overhang: [0, 0.0847, 0.1008, 0] },
   "highlighter-loop": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2137, 0.1089, 0.1815, 0.1613] },
   "hit-error": { box: [-0.2419, -0.2419, 1.4839, 1.6935], overhang: [0.0202, 0, 0.0202, 0.2218] },
@@ -318,7 +318,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 82;
+const FRAME_ART_VERSION = 84;
 
 /* A second file of a frame drawn from parts (the Trophy shelf's plaques). */
 export function supporterFramePartSrc(id: SupporterAvatarFrameId, part: string): string {
