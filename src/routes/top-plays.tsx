@@ -579,8 +579,8 @@ function PopOffsPage() {
       </div>
 
       <div className="relative z-10 bg-osu-d5/90 border-b border-osu-b3/20 backdrop-blur-[1px]">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2 flex items-center justify-between gap-2">
-          <div className="min-h-7 flex items-center gap-0.5">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="min-h-7 shrink-0 flex items-center gap-0.5">
             {range === "all" && ([
               ["plays", t`All plays`, undefined],
               ["best", t`Best play`, t`Each player's best play`],
@@ -599,7 +599,7 @@ function PopOffsPage() {
                 }}
                 title={title}
                 aria-pressed={view === id}
-                className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+                className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] ${
                   view === id ? "bg-osu-b3 text-osu-l2" : "text-osu-f1 hover:text-osu-l2"
                 }`}
               >
@@ -615,7 +615,7 @@ function PopOffsPage() {
               </button>
             )}
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
             {/* The 200th play is read from the whole top 200, so it takes no key or rate filter. */}
             {view !== "floor" && (<>
             {/* Nothing picked keeps everything; clicking a picked filter clears it. */}
