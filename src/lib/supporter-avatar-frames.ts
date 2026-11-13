@@ -70,7 +70,7 @@ export function parseFrameDan(raw: unknown): FrameDan | null {
 }
 
 const FRAME_GEOMETRY = {
-  crown: { box: [-0.2419, -0.6452, 1.5323, 1.0484], overhang: [0.1935, 0.4516, 0, 0] },
+  crown: { stillOnly: true, box: [-0.371, -0.6452, 1.6613, 1.0484], overhang: [0.3024, 0.5121, 0, 0] },
   sakura: { box: [-0.4355, -0.4194, 1.629, 1.6613], overhang: [0.3589, 0.3387, 0.1935, 0.2016] },
   stardust: { box: [-0.8548, -0.3548, 2.1935, 2.129], overhang: [0.8427, 0, 0.2823, 0.7742] },
   wisteria: { roundStill: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2258, 0, 0.2419] },
@@ -156,8 +156,8 @@ const FRAME_GEOMETRY = {
   "reimu-ribbon": { box: [0.0806, -0.5161, 1.4194, 1.0484], overhang: [0, 0.3669, 0.3548, 0] },
   "results-grade": { squareWindow: true, box: [-0.3145, -0.3145, 1.7742, 1.7419], overhang: [0.1089, 0.1089, 0.3347, 0.2863], stillOnly: true },
   "save-star": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0, 0, 0.3266, 0.0363] },
-  "scarlet-moon": { roundStill: true, box: [-0.4516, -0.4839, 1.871, 1.6129], overhang: [0.4516, 0.4637, 0.4194, 0] },
-  "scratch-deck": { box: [-0.371, -0.371, 1.7419, 1.871], overhang: [0.3629, 0, 0.3629, 0.5] },
+  "scarlet-moon": { roundStill: true, box: [-0.4516, -0.6613, 2.0323, 1.7903], overhang: [0, 0.5484, 0.4677, 0] },
+  "scratch-deck": { box: [-0.371, -0.371, 1.7419, 1.871], overhang: [0.2097, 0, 0.2097, 0.3952] },
   "seven-key": { box: [-0.3387, -0.2419, 1.6774, 1.6452], overhang: [0.1089, 0, 0.1089, 0.1815] },
   "skill-radar": { box: [-0.5, -0.5, 2.0, 1.9677], overhang: [0.2742, 0.2863, 0.2742, 0.2298] },
   "soul-shatter": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.0081, 0, 0.1532, 0.371] },
@@ -318,7 +318,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 79;
+const FRAME_ART_VERSION = 82;
 
 /* A second file of a frame drawn from parts (the Trophy shelf's plaques). */
 export function supporterFramePartSrc(id: SupporterAvatarFrameId, part: string): string {

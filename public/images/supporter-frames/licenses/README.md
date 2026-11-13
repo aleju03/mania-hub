@@ -4,14 +4,12 @@ The shrine-and-magic frames (yinyang-orbs, reimu-ribbon, hakurei-torii, spell-ca
 stardust, witch-broom, ice-fairy, scarlet-moon, rainbow-crystal-wings, time-stop-knives) use:
 
 - LottieFiles animations under the Lottie Simple License (https://lottiefiles.com/page/license):
-  "af magic circle" by Masahiro Kaneko, "3d rotating crystal" by Arslan Ali,
-  "Bat - Halloween" by Priyanshu Rijhwani.
+  "af magic circle" by Masahiro Kaneko, "3d rotating crystal" by Arslan Ali.
 
 Everything else is drawn for this site: the green hat (witch-hat), the yin-yang orbs, the shrine ribbon, the shrine gate and
 its blossoms, the broom and star bullets, the snowflakes and the knives. The
-scarlet moon is NASA's Lunar Reconnaissance Orbiter mosaic of the near side (public domain,
-NASA/GSFC/Arizona State University, Wikimedia Commons "Moon_nearside_LRO.jpg"), flattened into
-scarlet cel tones.
+scarlet moon is a Blender model built and rendered for this site (its seas and craters come from
+noise, not from a photo), and its bats are drawn here.
 
 None of them uses art from the official Touhou Project games.
 
@@ -34,6 +32,10 @@ The CRT monitor frame's monitor is a Blender model built and rendered for this s
 external models, textures or images.
 The cloud in the Rain cloud frame and the snow in the Fairy lights frame are Blender renders made
 for this site.
+The Crown frame's crown is a Blender model built and rendered for this site; the sky it is lit by is
+Poly Haven's "Kloofendal 48d Partly Cloudy (Pure Sky)" HDRI (CC0).
+The Turntable frame's deck is a Blender model built and rendered for this site, with no controller
+photos, game art or logos.
 
 The Desktop icon, Paint canvas, Paperclip, Blue screen and Pipes frames (November 2026) are drawn for
 this site in code, with no operating system artwork, icons, logos or screenshots.
