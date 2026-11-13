@@ -1,6 +1,6 @@
 // The strip at the top of the Discord bot's top play post: the beatmap's cover
 // with the player's avatar and name on it, and the play's pp, gain and accuracy
-// at its right end. Components V2 has no small image slot beside text and no
+// at its right end (a Dan clears post has the course's dan badge there). Components V2 has no small image slot beside text and no
 // coloured text, so they are drawn into one picture here.
 //
 // sharp does the photographs and satori only the text, which keeps a render
@@ -40,8 +40,13 @@ export interface PlayBannerParts {
   avatar: Buffer | null;
   username: string | null;
   stats?: PlayBannerStats | null;
+  /** A dan badge's art (SVG or raster) for the right end, in place of the numbers. */
+  emblem?: { source: Buffer; isSvg: boolean } | null;
   fonts: [ArrayBuffer, ArrayBuffer];
 }
+
+const EMBLEM_HEIGHT = 104;
+const EMBLEM_RIGHT = 28;
 
 const GAIN_GREEN = "#a8ee4a";
 const GAIN_SMALL = "#c5c7cf";
@@ -95,7 +100,20 @@ function statsColumn(stats: PlayBannerStats) {
   );
 }
 
-async function nameOverlay(username: string, withAvatar: boolean, stats: PlayBannerStats | null, fonts: [ArrayBuffer, ArrayBuffer]): Promise<Buffer> {
+// The shade behind a badge at the right end, as the numbers have.
+function emblemShade() {
+  return h("div", {
+    key: "shade",
+    style: {
+      display: "flex",
+      width: "320px",
+      height: `${PLAY_BANNER_HEIGHT}px`,
+      backgroundImage: "linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 60%, rgba(0,0,0,0.82) 100%)",
+    },
+  });
+}
+
+async function nameOverlay(username: string, withAvatar: boolean, stats: PlayBannerStats | null, withEmblem: boolean, fonts: [ArrayBuffer, ArrayBuffer]): Promise<Buffer> {
   const ringSize = AVATAR_SIZE + AVATAR_RING * 2;
   const fontList = ogFontList(...fonts);
   return renderOgPng(
@@ -137,8 +155,8 @@ async function nameOverlay(username: string, withAvatar: boolean, stats: PlayBan
         },
         username,
       ),
-      stats ? h("div", { key: "gap", style: { display: "flex", flexGrow: 1 } }) : null,
-      stats ? statsColumn(stats) : null,
+      stats || withEmblem ? h("div", { key: "gap", style: { display: "flex", flexGrow: 1 } }) : null,
+      stats ? statsColumn(stats) : withEmblem ? emblemShade() : null,
     ),
     { width: PLAY_BANNER_WIDTH, height: PLAY_BANNER_HEIGHT, fonts: fontList },
   );
@@ -180,8 +198,23 @@ export async function drawPlayBanner(parts: PlayBannerParts): Promise<Buffer> {
         avatar = null;
       }
     }
-    layers.push({ input: await nameOverlay(parts.username, Boolean(avatar), parts.stats ?? null, parts.fonts), left: 0, top: 0 });
+    let emblem: Buffer | null = null;
+    if (parts.emblem) {
+      try {
+        emblem = await sharp(parts.emblem.source, parts.emblem.isSvg ? { density: 300 } : undefined)
+          .resize({ height: EMBLEM_HEIGHT, width: 260, fit: "inside" })
+          .png()
+          .toBuffer();
+      } catch {
+        emblem = null;
+      }
+    }
+    layers.push({ input: await nameOverlay(parts.username, Boolean(avatar), parts.stats ?? null, Boolean(emblem), parts.fonts), left: 0, top: 0 });
     if (avatar) layers.push({ input: avatar, left: AVATAR_LEFT, top: Math.round((PLAY_BANNER_HEIGHT - AVATAR_SIZE) / 2) });
+    if (emblem) {
+      const { width = 0, height = 0 } = await sharp(emblem).metadata();
+      layers.push({ input: emblem, left: PLAY_BANNER_WIDTH - EMBLEM_RIGHT - width, top: Math.round((PLAY_BANNER_HEIGHT - height) / 2) });
+    }
   }
   return canvas.composite(layers).jpeg({ quality: 88 }).toBuffer();
 }

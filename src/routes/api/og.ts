@@ -1752,14 +1752,20 @@ function danEmblemAssetPath(label: string, family: string, keyCount: number | nu
 // the wider tier drawings, so those are fitted inside the square instead.
 const DAN_EMBLEM_SIZE = 384;
 
-async function renderDanEmblemOg(request: Request, label: string, family: string, keyCount: number | null): Promise<Response> {
+/** A dan badge's art, as stored: an SVG or a raster, or null when the ladder has none for the level. */
+async function fetchDanEmblemSource(request: Request, label: string, family: string, keyCount: number | null): Promise<{ source: Buffer; isSvg: boolean } | null> {
   const assetPath = danEmblemAssetPath(label, family, keyCount);
-  if (!assetPath) throw new OgFallbackError(`no dan emblem for ${keyCount ?? 4}K ${family}/${label}`);
+  if (!assetPath) return null;
   const assetResponse = await fetch(new URL(assetPath, getAssetOrigin(request)).toString());
-  if (!assetResponse.ok) throw new OgFallbackError(`dan emblem ${assetResponse.status}`);
-  const source = Buffer.from(await assetResponse.arrayBuffer());
+  if (!assetResponse.ok) return null;
+  return { source: Buffer.from(await assetResponse.arrayBuffer()), isSvg: assetPath.split("?")[0]!.endsWith(".svg") };
+}
+
+async function renderDanEmblemOg(request: Request, label: string, family: string, keyCount: number | null): Promise<Response> {
+  const art = await fetchDanEmblemSource(request, label, family, keyCount);
+  if (!art) throw new OgFallbackError(`no dan emblem for ${keyCount ?? 4}K ${family}/${label}`);
+  const { source, isSvg } = art;
   const { default: sharp } = await import("sharp");
-  const isSvg = assetPath.split("?")[0]!.endsWith(".svg");
   const png = await sharp(source, isSvg ? { density: 300 } : undefined)
     .resize(DAN_EMBLEM_SIZE, DAN_EMBLEM_SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
@@ -1786,19 +1792,41 @@ function playBannerStats(params: URLSearchParams): PlayBannerStats | null {
   return { pp, accuracy: bannerNumber(params.get("acc"), 100), gain: bannerNumber(params.get("gain"), 100_000) };
 }
 
-async function renderPlayBannerOg(request: Request, beatmapsetId: number, userId: number, stats: PlayBannerStats | null): Promise<Response> {
-  const key = `${beatmapsetId}:${userId}:${stats ? `${stats.pp}:${stats.accuracy}:${stats.gain}` : ""}`;
+/** A dan badge for the banner's right end (a Dan clears post), from the query. */
+function playBannerDan(params: URLSearchParams): { label: string; family: string; keyCount: number } | null {
+  const label = (params.get("dan") ?? "").trim().toLowerCase().slice(0, 14);
+  if (!/^[a-z0-9]+$/.test(label)) return null;
+  const keyCount = Number(params.get("dk"));
+  return { label, family: params.get("df") === "ln" ? "ln" : "dan", keyCount: Number.isInteger(keyCount) && keyCount > 0 && keyCount <= 18 ? keyCount : 4 };
+}
+
+async function renderPlayBannerOg(
+  request: Request,
+  beatmapsetId: number,
+  userId: number,
+  stats: PlayBannerStats | null,
+  dan: { label: string; family: string; keyCount: number } | null = null,
+): Promise<Response> {
+  const key = `${beatmapsetId}:${userId}:${stats ? `${stats.pp}:${stats.accuracy}:${stats.gain}` : ""}:${dan ? `${dan.keyCount}${dan.family}${dan.label}` : ""}`;
   let pending = inFlightPlayBanners.get(key);
   if (!pending) {
     pending = (async () => {
-      const [player, fonts, [cover, avatar]] = await Promise.all([
+      const [player, fonts, [cover, avatar], emblem] = await Promise.all([
         fetchLivePlayerSummaryDirect(String(userId), { lookup: "id" }).catch(() => null),
         loadOgFonts(request),
         fetchPlayBannerSources(beatmapsetId, userId),
+        dan ? fetchDanEmblemSource(request, dan.label, dan.family, dan.keyCount).catch(() => null) : null,
       ]);
       if (!player && !cover) return null;
       // Only the drawing holds a render slot, not the waits on osu!'s image hosts.
-      return ogRenderGate.run(() => drawPlayBanner({ cover, avatar: player ? avatar : null, username: player?.user.username ?? null, stats: player ? stats : null, fonts }));
+      return ogRenderGate.run(() => drawPlayBanner({
+        cover,
+        avatar: player ? avatar : null,
+        username: player?.user.username ?? null,
+        stats: player && !emblem ? stats : null,
+        emblem: player ? emblem : null,
+        fonts,
+      }));
     })().finally(() => {
       inFlightPlayBanners.delete(key);
     });
@@ -5310,7 +5338,7 @@ export const Route = createFileRoute("/api/og")({
             return new Response(null, { status: 400 });
           }
           try {
-            return await renderPlayBannerOg(request, beatmapsetId, userId, playBannerStats(url.searchParams));
+            return await renderPlayBannerOg(request, beatmapsetId, userId, playBannerStats(url.searchParams), playBannerDan(url.searchParams));
           } catch (err) {
             console.warn("[og] play banner render failed", err);
             return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
