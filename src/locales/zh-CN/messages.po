@@ -1534,6 +1534,10 @@ msgstr "{members} 名成员"
 msgid "{message} ({percent}%)"
 msgstr "{message}（{percent}%）"
 
+#: src/routes/discord.tsx
+msgid "{minPp}pp and up"
+msgstr ""
+
 #: src/components/me/MyStatsInsights.tsx
 #: src/lib/format.ts
 #: src/lib/goal-format.ts
@@ -2668,8 +2672,8 @@ msgid "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the p
 msgstr "有新更新时，页面底部的<2>更新日志</2>旁会出现一个<0><1>圆点</1></0>。"
 
 #: src/routes/discord.tsx
-msgid "A 2-letter code, or GLOBAL for every country."
-msgstr "两个字母的国家代码，或填 GLOBAL 表示所有国家。"
+#~ msgid "A 2-letter code, or GLOBAL for every country."
+#~ msgstr "两个字母的国家代码，或填 GLOBAL 表示所有国家。"
 
 #: src/routes/dan-estimates.tsx
 msgid "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
@@ -2935,6 +2939,14 @@ msgstr "狙击是指你在某张图上的新最佳成绩超过了原本排在你
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "低于通过线的计入永远至少比谱面本身低一档，所以差一点没到永远不会被当成完整通过。在 4K LN 上这一档至少是四分之三级。"
 
+#: src/routes/discord.tsx
+msgid "A Top plays feed turned on from here posts players from this country until you choose its players."
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "a while"
 msgstr "一段时间"
@@ -3164,6 +3176,14 @@ msgstr "将 {cardCount} 张卡牌添加到卡组…"
 msgid "Add a card to your showcase"
 msgstr "把一张卡片加入展示柜"
 
+#: src/routes/discord.tsx
+msgid "Add a channel"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Add a channel, then turn on what it posts."
+msgstr ""
+
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "Add a country code"
 msgstr "添加国家代码"
@@ -3365,6 +3385,7 @@ msgstr "全部"
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/routes/discord.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "All"
@@ -3372,8 +3393,8 @@ msgstr "全部"
 
 #. placeholder {0}: server.channels.length
 #: src/routes/discord.tsx
-msgid "All {0} channels"
-msgstr "全部 {0} 个频道"
+#~ msgid "All {0} channels"
+#~ msgstr "全部 {0} 个频道"
 
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "all 10"
@@ -4772,8 +4793,8 @@ msgid "Changing who can see this skin failed. Try again."
 msgstr "修改皮肤可见范围失败。请重试。"
 
 #: src/routes/discord.tsx
-msgid "Channel"
-msgstr "频道"
+#~ msgid "Channel"
+#~ msgstr "频道"
 
 #: src/components/companella/SubmissionDetail.tsx
 #: src/components/rankings/ClearLeaderboardBoard.tsx
@@ -6223,8 +6244,8 @@ msgstr "国家/地区"
 #~ msgstr "最佳成绩推送的国家"
 
 #: src/routes/discord.tsx
-msgid "Country for top plays and dan clears without picked players"
-msgstr "未选择玩家时最佳成绩和段位通过的国家"
+#~ msgid "Country for top plays and dan clears without picked players"
+#~ msgstr "未选择玩家时最佳成绩和段位通过的国家"
 
 #: src/routes/discord.tsx
 #~ msgid "Country for top plays without picked players"
@@ -6504,8 +6525,8 @@ msgid "Dan clears"
 msgstr "段位通过"
 
 #: src/routes/discord.tsx
-msgid "Dan clears in"
-msgstr "段位通过键数"
+#~ msgid "Dan clears in"
+#~ msgstr "段位通过键数"
 
 #: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
@@ -6631,6 +6652,10 @@ msgstr "减少"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "default"
 msgstr "默认"
+
+#: src/routes/discord.tsx
+msgid "Default country"
+msgstr ""
 
 #: src/components/maps/MapPreviewAudio.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -6965,6 +6990,7 @@ msgstr "刷够"
 #: src/components/packs/GiftSpareDialog.tsx
 #: src/components/settings/CompanellaGroup.tsx
 #: src/components/skins/SkinReportModal.tsx
+#: src/routes/discord.tsx
 msgid "Done"
 msgstr "完成"
 
@@ -7298,6 +7324,7 @@ msgstr "Easy、No Fail、Random 以及任何让谱面变慢的模组都会使这
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/communities_.$id.tsx
+#: src/routes/discord.tsx
 msgid "Edit"
 msgstr "编辑"
 
@@ -8377,8 +8404,8 @@ msgid "Friends"
 msgstr "好友"
 
 #: src/routes/discord.tsx
-msgid "From"
-msgstr "不低于"
+#~ msgid "From"
+#~ msgstr "不低于"
 
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
@@ -9988,6 +10015,7 @@ msgstr "键数"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/snipes.tsx
@@ -10960,6 +10988,10 @@ msgstr "低 pp"
 
 #: src/routes/discord.tsx
 msgid "Lowest dan"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Lowest pp"
 msgstr ""
 
 #: src/components/player/BestScoresControls.tsx
@@ -13372,6 +13404,10 @@ msgstr "在 4K 叠键谱面上，通过线以上的加分减半，因为这类�
 #~ msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
 #~ msgstr "在密集谱面上，Stream 和 Technical 的评分经常只差一丝，哪个略微领先几乎等于抛硬币。这种几乎持平的情况通常判给速度，但当 Technical 咬得这么紧、而谱面分析本身也确信这张谱是技时，这次通过就会改归到技。"
 
+#: src/routes/discord.tsx
+msgid "On in every channel."
+msgstr ""
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
 msgstr "在低 OD 谱面上，判定区间很宽，以固定节拍按下所有键也能打中大部分音符。Prism 现在会用谱面的判定区间来判定这种乱拍：如果一段乱拍能打到 90% 以上，而且比读谱打简单得多，这一段就按乱拍来评分。"
@@ -13437,8 +13473,8 @@ msgid "Only approve a request you started yourself. If someone sent you this lin
 msgstr "只批准你自己发起的请求。如果这个链接是别人发给你的，请关闭它。"
 
 #: src/routes/discord.tsx
-msgid "Only channels with something on"
-msgstr "只显示已开启功能的频道"
+#~ msgid "Only channels with something on"
+#~ msgstr "只显示已开启功能的频道"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
@@ -16483,7 +16519,6 @@ msgstr "周六"
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
-#: src/routes/discord.tsx
 msgid "Save"
 msgstr "保存"
 
@@ -21050,6 +21085,10 @@ msgstr "前 {GLOBAL_ALBUM_CAP} 名玩家"
 msgid "Top {n} of the keymode"
 msgstr "该键数前 {n}"
 
+#: src/routes/discord.tsx
+msgid "Top {top} of the keymode"
+msgstr ""
+
 #: src/lib/packs.ts
 msgid "Top 10%, new cards first"
 msgstr "前 10%，新卡优先"
@@ -21115,8 +21154,8 @@ msgid "Top plays from"
 msgstr "以下玩家的最佳成绩"
 
 #: src/routes/discord.tsx
-msgid "Top plays in"
-msgstr "最佳成绩键数"
+#~ msgid "Top plays in"
+#~ msgstr "最佳成绩键数"
 
 #: src/components/player/InsightModals.tsx
 msgid "top pp"
@@ -21292,8 +21331,8 @@ msgid "Turn off"
 msgstr "关闭"
 
 #: src/routes/discord.tsx
-msgid "Turn on Top plays in a channel, then choose the players it posts."
-msgstr "在频道中开启 Top plays，然后选择要发布的玩家。"
+#~ msgid "Turn on Top plays in a channel, then choose the players it posts."
+#~ msgstr "在频道中开启 Top plays，然后选择要发布的玩家。"
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Turn your phone sideways to watch."
@@ -22329,20 +22368,20 @@ msgstr "每周回顾"
 
 #. placeholder {0}: FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed
 #: src/routes/discord.tsx
-msgid "What {0} posts"
-msgstr ""
+#~ msgid "What {0} posts"
+#~ msgstr ""
 
 #: src/routes/discord.tsx
-msgid "What {name} posts"
-msgstr ""
+#~ msgid "What {name} posts"
+#~ msgstr ""
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "这些谱面适合用来做什么？可以介绍训练重点、难度或推荐游玩顺序。"
 
 #: src/routes/discord.tsx
-msgid "What Dan on score posts does"
-msgstr ""
+#~ msgid "What Dan on score posts does"
+#~ msgstr ""
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -22376,6 +22415,10 @@ msgstr "与你水平相近的玩家最近在打什么"
 #: src/routes/report.tsx
 msgid "What seems wrong?"
 msgstr "哪里看起来不对？"
+
+#: src/routes/discord.tsx
+msgid "What the default country does"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "What the number is not"
@@ -22476,6 +22519,10 @@ msgstr "玩家分布"
 #: src/routes/dan-estimates.tsx
 msgid "Where to see it"
 msgstr "在哪里看"
+
+#: src/routes/discord.tsx
+msgid "Which plays"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "Which plays are looked at"

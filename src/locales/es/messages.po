@@ -1522,6 +1522,10 @@ msgstr "{members} miembros"
 msgid "{message} ({percent}%)"
 msgstr "{message} ({percent}%)"
 
+#: src/routes/discord.tsx
+msgid "{minPp}pp and up"
+msgstr ""
+
 #: src/components/me/MyStatsInsights.tsx
 #: src/lib/format.ts
 #: src/lib/goal-format.ts
@@ -2656,8 +2660,8 @@ msgid "A <0><1>dot</1></0> shows next to <2>changelog</2> at the bottom of the p
 msgstr "Aparece un <0><1>punto</1></0> junto a <2>novedades</2> al final de la página cuando hay algo nuevo."
 
 #: src/routes/discord.tsx
-msgid "A 2-letter code, or GLOBAL for every country."
-msgstr "Un código de 2 letras, o GLOBAL para todos los países."
+#~ msgid "A 2-letter code, or GLOBAL for every country."
+#~ msgstr "Un código de 2 letras, o GLOBAL para todos los países."
 
 #: src/routes/dan-estimates.tsx
 msgid "A 4K chart is LN when holds make up at least 45% of its notes and those holds still need real releases at the rate you played. Holds short enough to play like taps make it a regular chart. On 7K the line is 37.5%."
@@ -2923,6 +2927,14 @@ msgstr "Un snipe es cuando tu nuevo mejor score en un mapa pasa a un jugador que
 #~ msgid "A sub-bar credit is always at least a step under the chart's own level, so a near miss never reads as the full clear. On 4K LN that step is at least three quarters of a level."
 #~ msgstr "Un crédito por debajo del mínimo siempre queda al menos un paso bajo el nivel del chart, así que quedarse corto nunca se lee como el clear completo. En 4K LN ese paso es de al menos tres cuartos de nivel."
 
+#: src/routes/discord.tsx
+msgid "A Top plays feed turned on from here posts players from this country until you choose its players."
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
+msgstr ""
+
 #: src/routes/recommendations.tsx
 msgid "a while"
 msgstr "un tiempo"
@@ -3152,6 +3164,14 @@ msgstr "Añadir {cardCount} cartas al conjunto..."
 msgid "Add a card to your showcase"
 msgstr "Agrega una carta a tus destacados"
 
+#: src/routes/discord.tsx
+msgid "Add a channel"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Add a channel, then turn on what it posts."
+msgstr ""
+
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "Add a country code"
 msgstr "Agrega un código de país"
@@ -3353,6 +3373,7 @@ msgstr "todos"
 #: src/components/player/BestScoresControls.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
+#: src/routes/discord.tsx
 #: src/routes/snipes.tsx
 #: src/routes/tracker.tsx
 msgid "All"
@@ -3360,8 +3381,8 @@ msgstr "Todos"
 
 #. placeholder {0}: server.channels.length
 #: src/routes/discord.tsx
-msgid "All {0} channels"
-msgstr "Los {0} canales"
+#~ msgid "All {0} channels"
+#~ msgstr "Los {0} canales"
 
 #: src/components/packs/StreakLeaderboard.tsx
 msgid "all 10"
@@ -4760,8 +4781,8 @@ msgid "Changing who can see this skin failed. Try again."
 msgstr "No se pudo cambiar quién puede ver esta skin. Inténtalo de nuevo."
 
 #: src/routes/discord.tsx
-msgid "Channel"
-msgstr "Canal"
+#~ msgid "Channel"
+#~ msgstr "Canal"
 
 #: src/components/companella/SubmissionDetail.tsx
 #: src/components/rankings/ClearLeaderboardBoard.tsx
@@ -6211,8 +6232,8 @@ msgstr "País"
 #~ msgstr "País para los top plays"
 
 #: src/routes/discord.tsx
-msgid "Country for top plays and dan clears without picked players"
-msgstr "País para top plays y clears de dan sin jugadores elegidos"
+#~ msgid "Country for top plays and dan clears without picked players"
+#~ msgstr "País para top plays y clears de dan sin jugadores elegidos"
 
 #: src/routes/discord.tsx
 #~ msgid "Country for top plays without picked players"
@@ -6492,8 +6513,8 @@ msgid "Dan clears"
 msgstr "Clears de dan"
 
 #: src/routes/discord.tsx
-msgid "Dan clears in"
-msgstr "Clears de dan en"
+#~ msgid "Dan clears in"
+#~ msgstr "Clears de dan en"
 
 #: src/components/rankings/ClearLeaderboardBoard.tsx
 #: src/components/rankings/DanLeaderboardBoard.tsx
@@ -6619,6 +6640,10 @@ msgstr "Reducir"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "default"
 msgstr "predeterminado"
+
+#: src/routes/discord.tsx
+msgid "Default country"
+msgstr ""
 
 #: src/components/maps/MapPreviewAudio.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -6953,6 +6978,7 @@ msgstr "suficiente"
 #: src/components/packs/GiftSpareDialog.tsx
 #: src/components/settings/CompanellaGroup.tsx
 #: src/components/skins/SkinReportModal.tsx
+#: src/routes/discord.tsx
 msgid "Done"
 msgstr "Listo"
 
@@ -7286,6 +7312,7 @@ msgstr "Easy, No Fail, Random y cualquier cosa que haga el chart más lento anul
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/communities_.$id.tsx
+#: src/routes/discord.tsx
 msgid "Edit"
 msgstr "Editar"
 
@@ -8365,8 +8392,8 @@ msgid "Friends"
 msgstr "Amigos"
 
 #: src/routes/discord.tsx
-msgid "From"
-msgstr "Desde"
+#~ msgid "From"
+#~ msgstr "Desde"
 
 #. placeholder {0}: nf(cur)
 #. placeholder {1}: nf(reachTargetNum - cur)
@@ -9976,6 +10003,7 @@ msgstr "modo"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/snipes.tsx
@@ -10948,6 +10976,10 @@ msgstr "PP bajo"
 
 #: src/routes/discord.tsx
 msgid "Lowest dan"
+msgstr ""
+
+#: src/routes/discord.tsx
+msgid "Lowest pp"
 msgstr ""
 
 #: src/components/player/BestScoresControls.tsx
@@ -13360,6 +13392,10 @@ msgstr "En charts de jack de 4K el bono por encima del mínimo se reduce a la mi
 #~ msgid "On dense charts Stream and Technical often rate within a fraction of each other, and whichever edges ahead is close to a coin flip. Speed normally wins those near-ties, but when Technical sits that close and the chart analysis itself is confident the chart is tech, the pass files under tech instead."
 #~ msgstr "En charts densos, Stream y Technical suelen puntuar a una fracción el uno del otro, y cuál queda por delante es casi un cara o cruz. Speed normalmente gana esos casi empates, pero cuando Technical queda así de cerca y el propio análisis del chart está seguro de que el chart es tech, esa play se archiva en tech."
 
+#: src/routes/discord.tsx
+msgid "On in every channel."
+msgstr ""
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
 msgstr "En charts de OD bajo las ventanas de acierto son tan amplias que presionar todas las teclas a ritmo constante igual le pega a la mayoría de las notas. Prism ahora juzga ese mash con las ventanas del chart, y cuando una sección con mash saca 90% o más siendo mucho más fácil que leerla, la sección se califica como el mash."
@@ -13425,8 +13461,8 @@ msgid "Only approve a request you started yourself. If someone sent you this lin
 msgstr "Aprueba solo una solicitud que hayas iniciado tú. Si alguien te mandó este link, ciérralo."
 
 #: src/routes/discord.tsx
-msgid "Only channels with something on"
-msgstr "Solo los canales con algo activado"
+#~ msgid "Only channels with something on"
+#~ msgstr "Solo los canales con algo activado"
 
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Only me"
@@ -16471,7 +16507,6 @@ msgstr "sábados"
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
-#: src/routes/discord.tsx
 msgid "Save"
 msgstr "Guardar"
 
@@ -21038,6 +21073,10 @@ msgstr "Top {GLOBAL_ALBUM_CAP} jugadores"
 msgid "Top {n} of the keymode"
 msgstr "Top {n} del modo de teclas"
 
+#: src/routes/discord.tsx
+msgid "Top {top} of the keymode"
+msgstr ""
+
 #: src/lib/packs.ts
 msgid "Top 10%, new cards first"
 msgstr "Top 10%, cartas nuevas primero"
@@ -21103,8 +21142,8 @@ msgid "Top plays from"
 msgstr "Mejores jugadas de"
 
 #: src/routes/discord.tsx
-msgid "Top plays in"
-msgstr "Top plays en"
+#~ msgid "Top plays in"
+#~ msgstr "Top plays en"
 
 #: src/components/player/InsightModals.tsx
 msgid "top pp"
@@ -21280,8 +21319,8 @@ msgid "Turn off"
 msgstr "Desactivar"
 
 #: src/routes/discord.tsx
-msgid "Turn on Top plays in a channel, then choose the players it posts."
-msgstr "Activa Top plays en un canal y luego elige los jugadores que publica."
+#~ msgid "Turn on Top plays in a channel, then choose the players it posts."
+#~ msgstr "Activa Top plays en un canal y luego elige los jugadores que publica."
 
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Turn your phone sideways to watch."
@@ -22317,20 +22356,20 @@ msgstr "Resumen semanal"
 
 #. placeholder {0}: FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed
 #: src/routes/discord.tsx
-msgid "What {0} posts"
-msgstr ""
+#~ msgid "What {0} posts"
+#~ msgstr ""
 
 #: src/routes/discord.tsx
-msgid "What {name} posts"
-msgstr ""
+#~ msgid "What {name} posts"
+#~ msgstr ""
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "Tipo de mapas, dificultad y orden recomendado para jugarlos."
 
 #: src/routes/discord.tsx
-msgid "What Dan on score posts does"
-msgstr ""
+#~ msgid "What Dan on score posts does"
+#~ msgstr ""
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -22364,6 +22403,10 @@ msgstr "lo último que jugaron los jugadores cerca de ti"
 #: src/routes/report.tsx
 msgid "What seems wrong?"
 msgstr "¿Qué parece estar mal?"
+
+#: src/routes/discord.tsx
+msgid "What the default country does"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "What the number is not"
@@ -22464,6 +22507,10 @@ msgstr "Dónde quedan los jugadores"
 #: src/routes/dan-estimates.tsx
 msgid "Where to see it"
 msgstr "Dónde verlo"
+
+#: src/routes/discord.tsx
+msgid "Which plays"
+msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "Which plays are looked at"
