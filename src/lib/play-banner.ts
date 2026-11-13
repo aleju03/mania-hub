@@ -1,8 +1,9 @@
 // The strip at the top of the Discord bot's top play post: the beatmap's cover
-// with the player's avatar and name on it. Components V2 has no small image
-// slot beside text, so the two are drawn into one picture here.
+// with the player's avatar and name on it, and the play's pp, gain and accuracy
+// at its right end. Components V2 has no small image slot beside text and no
+// coloured text, so they are drawn into one picture here.
 //
-// sharp does the photographs and satori only the name, which keeps a render
+// sharp does the photographs and satori only the text, which keeps a render
 // near 30ms; a full satori card with two embedded photos is several times that.
 
 import { createElement as h } from "react";
@@ -25,14 +26,76 @@ const FALLBACK_BACKGROUND = { r: 27, g: 28, b: 32 };
 const FETCH_TIMEOUT_MS = 5_000;
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 
+/** The play's numbers at the banner's right end. */
+export interface PlayBannerStats {
+  pp: number;
+  /** Shown accuracy, 0 to 100. */
+  accuracy: number | null;
+  /** pp the play added to the player's total; nothing is drawn at 0. */
+  gain: number | null;
+}
+
 export interface PlayBannerParts {
   cover: Buffer | null;
   avatar: Buffer | null;
   username: string | null;
+  stats?: PlayBannerStats | null;
   fonts: [ArrayBuffer, ArrayBuffer];
 }
 
-async function nameOverlay(username: string, withAvatar: boolean, fonts: [ArrayBuffer, ArrayBuffer]): Promise<Buffer> {
+const GAIN_GREEN = "#a8ee4a";
+const GAIN_SMALL = "#c5c7cf";
+
+/** The gain as the post words it: whole pp from 1 up, one decimal under it, nothing at 0. */
+export function playBannerGain(gain: number | null | undefined): { text: string; small: boolean } | null {
+  if (gain == null || !Number.isFinite(gain)) return null;
+  const tenths = Math.round(gain * 10) / 10;
+  if (tenths <= 0) return null;
+  const small = tenths < 1;
+  return { text: `+${small ? tenths.toFixed(1) : Math.round(gain).toLocaleString("en-US")}pp`, small };
+}
+
+// pp large, then the gain and the accuracy under it, over a shade of their own.
+function statsColumn(stats: PlayBannerStats) {
+  const gain = playBannerGain(stats.gain);
+  const shadow = "0 2px 6px rgba(0,0,0,0.75)";
+  return h(
+    "div",
+    {
+      key: "stats",
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        height: `${PLAY_BANNER_HEIGHT}px`,
+        paddingLeft: "150px",
+        paddingRight: "30px",
+        backgroundImage: "linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.78) 55%, rgba(0,0,0,0.86) 100%)",
+        color: "#fff",
+        fontWeight: 900,
+      },
+    },
+    h(
+      "div",
+      { key: "pp", style: { display: "flex", alignItems: "baseline", fontSize: "58px", lineHeight: 1, textShadow: shadow } },
+      Math.round(stats.pp).toLocaleString("en-US"),
+      h("div", { key: "unit", style: { fontSize: "30px", marginLeft: "3px" } }, "pp"),
+    ),
+    gain || stats.accuracy != null
+      ? h(
+        "div",
+        { key: "under", style: { display: "flex", alignItems: "baseline", marginTop: "8px", fontSize: "26px", lineHeight: 1, textShadow: shadow } },
+        gain ? h("div", { key: "gain", style: { color: gain.small ? GAIN_SMALL : GAIN_GREEN } }, gain.text) : null,
+        stats.accuracy != null
+          ? h("div", { key: "acc", style: { marginLeft: gain ? "18px" : "0px" } }, `${stats.accuracy.toFixed(2)}%`)
+          : null,
+      )
+      : null,
+  );
+}
+
+async function nameOverlay(username: string, withAvatar: boolean, stats: PlayBannerStats | null, fonts: [ArrayBuffer, ArrayBuffer]): Promise<Buffer> {
   const ringSize = AVATAR_SIZE + AVATAR_RING * 2;
   const fontList = ogFontList(...fonts);
   return renderOgPng(
@@ -74,6 +137,8 @@ async function nameOverlay(username: string, withAvatar: boolean, fonts: [ArrayB
         },
         username,
       ),
+      stats ? h("div", { key: "gap", style: { display: "flex", flexGrow: 1 } }) : null,
+      stats ? statsColumn(stats) : null,
     ),
     { width: PLAY_BANNER_WIDTH, height: PLAY_BANNER_HEIGHT, fonts: fontList },
   );
@@ -115,7 +180,7 @@ export async function drawPlayBanner(parts: PlayBannerParts): Promise<Buffer> {
         avatar = null;
       }
     }
-    layers.push({ input: await nameOverlay(parts.username, Boolean(avatar), parts.fonts), left: 0, top: 0 });
+    layers.push({ input: await nameOverlay(parts.username, Boolean(avatar), parts.stats ?? null, parts.fonts), left: 0, top: 0 });
     if (avatar) layers.push({ input: avatar, left: AVATAR_LEFT, top: Math.round((PLAY_BANNER_HEIGHT - AVATAR_SIZE) / 2) });
   }
   return canvas.composite(layers).jpeg({ quality: 88 }).toBuffer();

@@ -1563,12 +1563,16 @@ msgid "{months}mo ago"
 msgstr "{months} 个月前"
 
 #: src/routes/discord.tsx
-msgid "{n}th dan and up"
-msgstr "{n} 段及以上"
+#~ msgid "{n}th dan and up"
+#~ msgstr "{n} 段及以上"
 
 #: src/components/CountryWarming.tsx
 msgid "{name} added to queue, come back later :)"
 msgstr "{name} 已加入队列，稍后再来看看吧 :)"
+
+#: src/routes/discord.tsx
+msgid "{name} and up"
+msgstr ""
 
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
@@ -10950,6 +10954,10 @@ msgstr "社区喜爱"
 msgid "Low PP"
 msgstr "低 pp"
 
+#: src/routes/discord.tsx
+msgid "Lowest dan"
+msgstr ""
+
 #: src/components/player/BestScoresControls.tsx
 msgid "Lowest PP first"
 msgstr "pp 从低到高"
@@ -14072,8 +14080,8 @@ msgid "Passing several players with one score counts as one snipe, against the h
 msgstr "一个成绩超过多名玩家只算一次狙击，对象是其中排名最高的玩家。"
 
 #: src/routes/discord.tsx
-msgid "Past 10th dan"
-msgstr "10 段以上"
+#~ msgid "Past 10th dan"
+#~ msgstr "10 段以上"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste"
@@ -16427,6 +16435,10 @@ msgstr "规则"
 #: src/routes/communities.tsx
 msgid "Run an osu!mania server? Post it and it shows up here once it is approved."
 msgstr "在运营 osu!mania 服务器？发布它，通过审核后就会显示在这里。"
+
+#: src/routes/discord.tsx
+msgid "Runs up to one accuracy point under the pass bar. 4K LN courses have none."
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Russian"
@@ -22311,6 +22323,10 @@ msgstr "服务器简介"
 #: src/routes/dan-estimates.tsx
 #~ msgid "What it looks like across everyone"
 #~ msgstr "所有人加起来是什么样"
+
+#: src/routes/discord.tsx
+msgid "What near clears are"
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "what nearby players actually farm"

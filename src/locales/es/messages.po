@@ -1551,12 +1551,16 @@ msgid "{months}mo ago"
 msgstr "hace {months}mo"
 
 #: src/routes/discord.tsx
-msgid "{n}th dan and up"
-msgstr "Dan {n} o más"
+#~ msgid "{n}th dan and up"
+#~ msgstr "Dan {n} o más"
 
 #: src/components/CountryWarming.tsx
 msgid "{name} added to queue, come back later :)"
 msgstr "{name} se agregó a la cola, vuelve más tarde :)"
+
+#: src/routes/discord.tsx
+msgid "{name} and up"
+msgstr ""
 
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
@@ -10938,6 +10942,10 @@ msgstr "Amado"
 msgid "Low PP"
 msgstr "PP bajo"
 
+#: src/routes/discord.tsx
+msgid "Lowest dan"
+msgstr ""
+
 #: src/components/player/BestScoresControls.tsx
 msgid "Lowest PP first"
 msgstr "PP más bajo primero"
@@ -14060,8 +14068,8 @@ msgid "Passing several players with one score counts as one snipe, against the h
 msgstr "Pasar a varios jugadores con un mismo score cuenta como un solo snipe, contra el que estaba más arriba."
 
 #: src/routes/discord.tsx
-msgid "Past 10th dan"
-msgstr "Más de dan 10"
+#~ msgid "Past 10th dan"
+#~ msgstr "Más de dan 10"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste"
@@ -16415,6 +16423,10 @@ msgstr "Reglas"
 #: src/routes/communities.tsx
 msgid "Run an osu!mania server? Post it and it shows up here once it is approved."
 msgstr "¿Tienes un servidor de osu!mania? Publícalo y aparecerá aquí cuando se apruebe."
+
+#: src/routes/discord.tsx
+msgid "Runs up to one accuracy point under the pass bar. 4K LN courses have none."
+msgstr ""
 
 #: src/components/communities/field-options.tsx
 msgid "Russian"
@@ -22299,6 +22311,10 @@ msgstr "Descripción"
 #: src/routes/dan-estimates.tsx
 #~ msgid "What it looks like across everyone"
 #~ msgstr "Cómo se reparte entre todos"
+
+#: src/routes/discord.tsx
+msgid "What near clears are"
+msgstr ""
 
 #: src/routes/recommendations.tsx
 msgid "what nearby players actually farm"

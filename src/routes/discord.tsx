@@ -2,7 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
-import { ChevronDown, Plus, X } from "lucide-react";
+import { ChevronDown, CircleHelp, Plus, X } from "lucide-react";
 import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DiscordTabs } from "../components/discord/DiscordTabs";
@@ -414,13 +414,64 @@ function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onCh
   );
 }
 
+// A "?" that opens a line of explanation beside it on click, so it works on touch too.
+function HintButton({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={`transition-colors hover:text-white ${open ? "text-white" : "text-osu-f1/60"}`}
+      >
+        <CircleHelp size={14} />
+      </button>
+      {open ? <span className="text-[12px] text-osu-f1">{children}</span> : null}
+    </>
+  );
+}
+
 const FILTER_KEYS = [4, 5, 6, 7, 8, 9, 10];
 const KEYMODE_TOP_CHOICES = [0, 100, 50];
 
 // The keymodes with dan courses, and the lowest level a Dan clears feed can
 // ask for. A level is each ladder's own number: 11 is the first past 10th dan.
 const DAN_FILTER_KEYS = [4, 6, 7];
-const MIN_DAN_CHOICES = [0, 5, 8, 10, 11];
+// Each ladder's top level and the levels it names instead of numbering
+// (danCourseLevelFor in the backend's dan-courses.ts).
+const DAN_LADDERS: Array<{ keyCount: number; tag: string; top: number; names: Record<number, string> }> = [
+  { keyCount: 4, tag: "4K", top: 17, names: { 11: "Alpha", 12: "Beta", 13: "Gamma", 14: "Delta", 15: "Epsilon", 16: "Zeta", 17: "Eta" } },
+  { keyCount: 4, tag: "4K LN", top: 17, names: {} },
+  { keyCount: 6, tag: "6K", top: 9, names: {} },
+  { keyCount: 6, tag: "6K LN", top: 14, names: { 10: "Terra", 11: "Celestial", 12: "Mystery", 13: "Nihility", 14: "Finish" } },
+  { keyCount: 7, tag: "7K", top: 14, names: { 11: "Gamma", 12: "Azimuth", 13: "Zenith", 14: "Stellium" } },
+];
+
+function ordinal(n: number): string {
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
+/** What a level number is called on the chosen keymodes' ladders, e.g. "10th dan, Terra (6K LN)". */
+function danLevelName(level: number, keys: number[]): string {
+  const ladders = DAN_LADDERS.filter((l) => (keys.length === 0 || keys.includes(l.keyCount)) && level <= l.top);
+  const named = ladders.filter((l) => l.names[level]);
+  const numbered = ladders.filter((l) => !l.names[level]);
+  // A number only one ladder still has past the named levels says which ladder it is.
+  const parts = numbered.length === 0 ? [] : [named.length && numbered.length === 1 ? `${ordinal(level)} (${numbered[0].tag})` : `${ordinal(level)} dan`];
+  for (const l of named) {
+    const part = `${l.names[level]} (${l.tag})`;
+    if (!parts.includes(part)) parts.push(part);
+  }
+  return parts.length ? parts.join(", ") : `${ordinal(level)} dan`;
+}
+
+function danLevelChoices(keys: number[], current: number): number[] {
+  const top = Math.max(...DAN_LADDERS.filter((l) => keys.length === 0 || keys.includes(l.keyCount)).map((l) => l.top));
+  return Array.from({ length: Math.max(top, current) + 1 }, (_, n) => n);
+}
 // Feeds of players' plays, which get a row of filters under their channel.
 const PLAYER_FEEDS = ["top_play", "dan_clear"];
 
@@ -492,14 +543,30 @@ function TopPlayFilters({ sub, channelName, onSave }: {
       </div>
       {danClears ? (
         <>
-          <div className="flex flex-wrap items-center gap-1">
-            {MIN_DAN_CHOICES.map((n) => (
-              <button key={n} type="button" className={chip(minDan === n, minDan !== n)} onClick={() => { if (minDan !== n) save({ minDan: n }); }}>
-                {n === 0 ? <Trans>Any dan</Trans> : n > 10 ? <Trans>Past 10th dan</Trans> : <Trans>{n}th dan and up</Trans>}
-              </button>
-            ))}
+          <div className="relative">
+            <select
+              value={minDan}
+              onChange={(event) => save({ minDan: Number(event.target.value) })}
+              aria-label={t`Lowest dan`}
+              className="max-w-[min(100%,22rem)] appearance-none truncate rounded-md bg-osu-b5 py-1 pl-2 pr-7 text-[12px] font-semibold text-white hover:brightness-110"
+            >
+              {danLevelChoices(keys, minDan).map((n) => {
+                const name = danLevelName(n, keys);
+                return (
+                  <option key={n} value={n}>
+                    {n === 0 ? t`Any dan` : t`${name} and up`}
+                  </option>
+                );
+              })}
+            </select>
+            <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-osu-l2" />
           </div>
-          <Toggle checked={nearClears} onChange={(on) => save({ nearClears: on })} label={<Trans>Near clears</Trans>} />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Toggle checked={nearClears} onChange={(on) => save({ nearClears: on })} label={<Trans>Near clears</Trans>} />
+            <HintButton label={t`What near clears are`}>
+              <Trans>Runs up to one accuracy point under the pass bar. 4K LN courses have none.</Trans>
+            </HintButton>
+          </div>
         </>
       ) : (
       <>

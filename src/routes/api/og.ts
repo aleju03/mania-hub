@@ -29,7 +29,7 @@ import { bridgeAuthHeaders } from "../../lib/live-backend-tokens";
 import { parsePackCardKey } from "../../lib/pack-collection";
 import { getCountryName, isGlobalScope, isSupportedCountryCode, isSupportedCountryScope } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
-import { drawPlayBanner, fetchPlayBannerSources } from "../../lib/play-banner";
+import { drawPlayBanner, fetchPlayBannerSources, type PlayBannerStats } from "../../lib/play-banner";
 import {
   getDisplayedAccuracy,
   getDisplayedRank,
@@ -1767,14 +1767,27 @@ async function renderDanEmblemOg(request: Request, label: string, family: string
   return new Response(new Uint8Array(png), { headers: { "Content-Type": "image/png", "Cache-Control": OG_CACHE_HEADER } });
 }
 
-// The strip on the Discord bot's top play post (lib/play-banner.ts). Only two
+// The strip on the Discord bot's top play post (lib/play-banner.ts). Only
 // numbers come from the request: the name is read from the stored player, so a
 // URL cannot put its own text on a banner. Not kept in R2: Discord fetches a
 // post's banner once and holds its own copy.
 const inFlightPlayBanners = new Map<string, Promise<Buffer | null>>();
 
-async function renderPlayBannerOg(request: Request, beatmapsetId: number, userId: number): Promise<Response> {
-  const key = `${beatmapsetId}:${userId}`;
+function bannerNumber(value: string | null, max: number): number | null {
+  if (value == null || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 && number <= max ? number : null;
+}
+
+/** The play's pp, accuracy and gain from the query, or null when the banner carries none. */
+function playBannerStats(params: URLSearchParams): PlayBannerStats | null {
+  const pp = bannerNumber(params.get("pp"), 100_000);
+  if (pp == null) return null;
+  return { pp, accuracy: bannerNumber(params.get("acc"), 100), gain: bannerNumber(params.get("gain"), 100_000) };
+}
+
+async function renderPlayBannerOg(request: Request, beatmapsetId: number, userId: number, stats: PlayBannerStats | null): Promise<Response> {
+  const key = `${beatmapsetId}:${userId}:${stats ? `${stats.pp}:${stats.accuracy}:${stats.gain}` : ""}`;
   let pending = inFlightPlayBanners.get(key);
   if (!pending) {
     pending = (async () => {
@@ -1785,7 +1798,7 @@ async function renderPlayBannerOg(request: Request, beatmapsetId: number, userId
       ]);
       if (!player && !cover) return null;
       // Only the drawing holds a render slot, not the waits on osu!'s image hosts.
-      return ogRenderGate.run(() => drawPlayBanner({ cover, avatar: player ? avatar : null, username: player?.user.username ?? null, fonts }));
+      return ogRenderGate.run(() => drawPlayBanner({ cover, avatar: player ? avatar : null, username: player?.user.username ?? null, stats: player ? stats : null, fonts }));
     })().finally(() => {
       inFlightPlayBanners.delete(key);
     });
@@ -5297,7 +5310,7 @@ export const Route = createFileRoute("/api/og")({
             return new Response(null, { status: 400 });
           }
           try {
-            return await renderPlayBannerOg(request, beatmapsetId, userId);
+            return await renderPlayBannerOg(request, beatmapsetId, userId, playBannerStats(url.searchParams));
           } catch (err) {
             console.warn("[og] play banner render failed", err);
             return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
