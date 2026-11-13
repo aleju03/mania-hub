@@ -530,7 +530,7 @@ function danLevelChoices(keys: number[], current: number): number[] {
   return Array.from({ length: Math.max(top, current) + 1 }, (_, n) => n);
 }
 // Feeds of players' plays, which get a row of filters under their channel.
-const PLAYER_FEEDS = ["top_play", "dan_clear"];
+const PLAYER_FEEDS = ["top_play", "dan_clear", "goal"];
 
 type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "except"; countries: string[]; minDan: number; nearClears: boolean };
 type SavedFeedFilters = Omit<TopPlayFilterState, "players"> & { players: number[] };
@@ -578,6 +578,8 @@ function TopPlayFilters({ sub, channelName, onSave }: {
     `rounded-md px-2 py-0.5 text-[12px] font-semibold ${active ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"} ${interactive ? "hover:brightness-110" : "cursor-default"}`;
   const { keys, keymodeTop, players, playersMode, countries, minDan, nearClears } = filters;
   const danClears = sub.feedType === "dan_clear";
+  // A Goals feed only has its players to choose.
+  const goals = sub.feedType === "goal";
   const scope = countries.length === 0
     ? sub.country === "GLOBAL" ? t`every country` : sub.country
     : findRegionByCountries(countries)?.name ?? (countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`);
@@ -587,6 +589,8 @@ function TopPlayFilters({ sub, channelName, onSave }: {
 
   return (
     <div className="grid gap-3 rounded-lg bg-osu-b5 px-3.5 py-3 text-[12px] text-osu-f1">
+      {goals ? null : (
+      <>
       <div className={row}>
         <span className={label}><Trans>Keys</Trans></span>
         <div className="flex flex-wrap items-center gap-1">
@@ -660,6 +664,8 @@ function TopPlayFilters({ sub, channelName, onSave }: {
             </div>
           </div>
         </>
+      )}
+      </>
       )}
       <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
         <span className={`${label} sm:pt-1.5`}><Trans>Players</Trans></span>
@@ -883,6 +889,7 @@ function ServerSkeleton() {
 const FEED_NAMES: Record<string, ReturnType<typeof msg>> = {
   top_play: msg`Top plays`,
   dan_clear: msg`Dan clears`,
+  goal: msg`Goals`,
   new_map: msg`New farm maps`,
   changelog: msg`Website changelog`,
 };
@@ -890,6 +897,7 @@ const FEED_NAMES: Record<string, ReturnType<typeof msg>> = {
 const FEED_HINTS: Record<string, ReturnType<typeof msg>> = {
   top_play: msg`Posts a player's new top play, a play that enters their best 200.`,
   dan_clear: msg`Posts a player's near clear, clear or overclear of a dan course or practice chart.`,
+  goal: msg`Posts a goal when its player completes it.`,
   new_map: msg`Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty.`,
   changelog: msg`Posts each new line of the website's changelog.`,
 };
@@ -931,8 +939,10 @@ function SummaryParts({ parts }: { parts: ReactNode[] }) {
 function FeedSummary({ sub }: { sub: ServerSub }) {
   const { i18n } = useLingui();
   const keys = sub.keys ?? [];
-  const parts: ReactNode[] = [keys.length ? keys.map((k) => `${k}K`).join(", ") : <Trans>All keys</Trans>];
-  if (sub.feedType === "dan_clear") {
+  const parts: ReactNode[] = sub.feedType === "goal" ? [] : [keys.length ? keys.map((k) => `${k}K`).join(", ") : <Trans>All keys</Trans>];
+  if (sub.feedType === "goal") {
+    // Only its players, below.
+  } else if (sub.feedType === "dan_clear") {
     const name = danLevelName(sub.minDan ?? 0, keys);
     parts.push(sub.minDan ? <Trans>{name} and up</Trans> : <Trans>Any dan</Trans>);
     if (sub.nearClears ?? true) parts.push(<Trans>Near clears</Trans>);
@@ -1192,6 +1202,7 @@ const PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
 const FEED_PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
   { id: "feed-top-plays", label: FEED_NAMES.top_play },
   { id: "feed-dan-clears", label: FEED_NAMES.dan_clear },
+  { id: "feed-goals", label: FEED_NAMES.goal },
   { id: "feed-new-maps", label: FEED_NAMES.new_map },
   { id: "feed-changelog", label: FEED_NAMES.changelog },
 ];

@@ -8669,6 +8669,7 @@ msgstr "goals"
 #: src/components/layout/Nav.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/lib/signature-shared.ts
+#: src/routes/discord.tsx
 #: src/routes/goals.tsx
 #: src/routes/hashi.tsx
 msgid "Goals"
@@ -14785,6 +14786,10 @@ msgstr "Post your server"
 #: src/routes/communities_.$id.tsx
 msgid "posted by"
 msgstr "posted by"
+
+#: src/routes/discord.tsx
+msgid "Posts a goal when its player completes it."
+msgstr "Posts a goal when its player completes it."
 
 #: src/routes/discord.tsx
 msgid "Posts a player's near clear, clear or overclear of a dan course or practice chart."

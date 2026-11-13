@@ -8650,6 +8650,7 @@ msgstr "目标"
 #: src/components/layout/Nav.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/lib/signature-shared.ts
+#: src/routes/discord.tsx
 #: src/routes/goals.tsx
 #: src/routes/hashi.tsx
 msgid "Goals"
@@ -14758,6 +14759,10 @@ msgstr "发布你的服务器"
 #: src/routes/communities_.$id.tsx
 msgid "posted by"
 msgstr "发布者"
+
+#: src/routes/discord.tsx
+msgid "Posts a goal when its player completes it."
+msgstr ""
 
 #: src/routes/discord.tsx
 msgid "Posts a player's near clear, clear or overclear of a dan course or practice chart."

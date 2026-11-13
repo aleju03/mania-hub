@@ -89,7 +89,7 @@ interface InteractionRequest {
 }
 
 interface FeedRequest {
-  feed: "top_play" | "dan_clear" | "snipe" | "new_map" | "inflated_map" | "changelog";
+  feed: "top_play" | "dan_clear" | "goal" | "snipe" | "new_map" | "inflated_map" | "changelog";
   country: string;
 }
 
@@ -155,6 +155,7 @@ const FEEDS: Array<{ feed: FeedRequest["feed"]; label: string }> = [
   { feed: "snipe", label: "Snipe" },
   { feed: "new_map", label: "New farm map" },
   { feed: "dan_clear", label: "Dan clear" },
+  { feed: "goal", label: "Goal" },
   { feed: "inflated_map", label: "Inflated map" },
   { feed: "changelog", label: "Site update" },
 ];
