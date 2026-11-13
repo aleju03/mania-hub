@@ -81,13 +81,13 @@ export interface CustomMotif {
 
 /* A frame's still around the viewer's avatar, fitted into a square. */
 export function FrameThumb({ frame, avatar, size, live = false }: { frame: SupporterAvatarFrameId | null; avatar: string | undefined; size: number; live?: boolean }) {
-  // fit and centre what is drawn (the avatar plus the art past it), not the art's canvas:
-  // a canvas keeps empty room where the art moves or glows, which pushed a frame like Flames off centre
+  // the avatar sits dead centre whatever the frame, sized so the art fits round it: room is
+  // kept on both sides for the larger overhang of each pair, so a crown or a flame never
+  // pushes the picture off centre
   const [overLeft, overTop, overRight, overBottom] = frame ? supporterFrameGeometry(frame).overhang : [0, 0, 0, 0];
-  const spanX = 1 + overLeft + overRight, spanY = 1 + overTop + overBottom;
-  const scale = size / Math.max(spanX, spanY, 1.6);
-  const avatarLeft = (size - spanX * scale) / 2 + overLeft * scale;
-  const avatarTop = (size - spanY * scale) / 2 + overTop * scale;
+  const scale = size / Math.max(1 + 2 * Math.max(overLeft, overRight), 1 + 2 * Math.max(overTop, overBottom), 1.6);
+  const avatarLeft = (size - scale) / 2;
+  const avatarTop = (size - scale) / 2;
   return (
     <span className="relative block" style={{ width: scaledPx(size), height: scaledPx(size) }}>
       <span className="absolute" style={{ left: avatarLeft, top: avatarTop, width: scale, height: scale }}>
