@@ -327,6 +327,39 @@ html[data-custom-cursor="true"] * {
   background-size: 320% 100%;
   animation: frame-sheen 14s infinite;
 }
+/* The Trophy shelf frame (LiveTrophyShelf), on one 6 s clock: a display light
+   glides along the glass from 0.7 s to 2.7 s, a band crossing each plaque as
+   it passes (each plaque's delay is set where it stands); then the last plaque
+   lifts, its light rising, and settles. */
+@keyframes shelf-light {
+  0%, 11.7% { transform: translateX(0); animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  45%, 100% { transform: translateX(196px); }
+}
+@keyframes shelf-light-glow {
+  0%, 11.7% { opacity: 0; }
+  17.5%, 39.2% { opacity: 0.85; }
+  45%, 100% { opacity: 0; }
+}
+@keyframes shelf-band {
+  0% { opacity: 0; transform: translateX(-13px) skewX(-22deg); }
+  2%, 8% { opacity: 0.6; }
+  10%, 100% { opacity: 0; transform: translateX(13px) skewX(-22deg); }
+}
+@keyframes shelf-lift {
+  0%, 42.5% { transform: translateY(0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  50%, 55.8% { transform: translateY(-3.2px); animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1); }
+  65.8%, 100% { transform: translateY(0); }
+}
+@keyframes shelf-proud {
+  0%, 42.5% { opacity: 0.36; }
+  50%, 55.8% { opacity: 0.85; }
+  69%, 100% { opacity: 0.36; }
+}
+.shelf-light { animation: shelf-light 6s infinite; }
+.shelf-light-glow { opacity: 0; animation: shelf-light-glow 6s infinite; }
+.shelf-band { opacity: 0; transform-box: fill-box; transform-origin: center; animation: shelf-band 6s infinite; }
+.shelf-lift { animation: shelf-lift 6s infinite; }
+.shelf-proud { animation: shelf-proud 6s infinite; }
 /* The Desktop icon frame (LiveDesktopIcon), on one 6 s clock: a rubber band
    drags across, the label and the shortcut arrow take the selection as it
    lets go, and they drop it again near the end. At rest it stays selected. */

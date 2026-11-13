@@ -29,6 +29,9 @@ interface FrameGeometry {
   /* Drawn live instead of from its files, because it carries the wearer's own
      name as a label (LiveDesktopIcon in SupporterAvatarFrame.tsx). */
   nameLabel?: true;
+  /* Drawn live from parts, because it stands the wearer's own dans on it
+     (LiveTrophyShelf in SupporterAvatarFrame.tsx): its still is the bare shelf. */
+  danShelf?: true;
   /* Where the wearer's own dan badge sits on the art, [left, top, width, height]
      as fractions of the art's canvas, for a frame that shows it. */
   danWindow?: readonly [number, number, number, number];
@@ -88,7 +91,7 @@ const FRAME_GEOMETRY = {
   "classic-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0726, 0.2056, 0.0726, 0.0847] },
   "clutch-hp": { squareWindow: true, box: [-0.3065, -0.3065, 1.6129, 1.6129], overhang: [0.1169, 0.1169, 0.1169, 0.1169] },
   "combo-break": { box: [-0.2419, -0.2419, 1.4839, 1.8065], overhang: [0, 0, 0, 0.2823] },
-  "course-run": { box: [-0.2419, -0.5645, 1.7419, 1.9355], overhang: [0, 0.3468, 0.1452, 0] },
+  "course-run": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2137, 0.2137, 0.2137, 0.2097] },
   "crayon-border": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2056, 0.2016, 0.2097, 0.2056] },
   "crown-sketch": { box: [-0.2419, -0.6452, 1.5323, 1.129], overhang: [0.1411, 0.4435, 0, 0] },
   "crown-sketch-gold": { box: [-0.2419, -0.6452, 1.5323, 1.129], overhang: [0.1411, 0.4315, 0, 0] },
@@ -160,7 +163,7 @@ const FRAME_GEOMETRY = {
   "soul-shatter": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.0081, 0, 0.1532, 0.371] },
   "spell-card": { box: [-0.5484, -0.5484, 2.0968, 2.0968], overhang: [0.5484, 0.5484, 0.5484, 0.5484] },
   "ssr-card": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.2097, 0.1694, 0.1008, 0.3185] },
-  "stage-four-fail": { box: [-0.2419, -0.5645, 1.7419, 1.9355], overhang: [0, 0.2742, 0.3065, 0.0806] },
+  "stage-four-fail": { box: [-0.4032, -0.3065, 1.6774, 1.5806], overhang: [0.2863, 0.2056, 0.2016, 0.1976] },
   "stair-roll": { box: [-0.2903, -0.2903, 1.5806, 1.5806], overhang: [0.2258, 0.254, 0.2258, 0.2339] },
   "stellium-orbit": { roundStill: true, box: [-0.3065, -0.371, 1.6129, 1.6774], overhang: [0.3065, 0.3266, 0.3065, 0.2298] },
   "step-pad": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.371, 0.371, 0.371, 0.371] },
@@ -172,7 +175,7 @@ const FRAME_GEOMETRY = {
   "term-rain": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2339, 0.2419, 0.2177, 0.2419] },
   "term-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.6452], overhang: [0.1694, 0.2298, 0.1694, 0.4032] },
   "time-stop-knives": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3306, 0.3226, 0.3306, 0.3427] },
-  "trophy-shelf": { box: [-0.3548, -0.2419, 1.7097, 1.8629], overhang: [0.1492, 0, 0.1492, 0.3871] },
+  "trophy-shelf": { danShelf: true, stillOnly: true, box: [-0.3548, -0.2419, 1.7097, 1.8629], overhang: [0.1492, 0, 0.1492, 0.3871] },
   "wash-ring": { roundStill: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.371, 0.3669, 0.371, 0.371] },
   "wings-feather-1": { roundStill: true, box: [-0.8548, -0.7581, 2.871, 1.9677], overhang: [0.7223, 0, 0.7235, 0] },
   "wings-feather-2": { roundStill: true, box: [-0.8548, -0.7581, 2.871, 1.9677], overhang: [0.7334, 0.2501, 0.7346, 0] },
@@ -315,7 +318,12 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 77;
+const FRAME_ART_VERSION = 79;
+
+/* A second file of a frame drawn from parts (the Trophy shelf's plaques). */
+export function supporterFramePartSrc(id: SupporterAvatarFrameId, part: string): string {
+  return `/images/supporter-frames/${id}-${part}.png?v=${FRAME_ART_VERSION}`;
+}
 
 /* `round`: the still for a round avatar, where the frame has one. */
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still", { round = false }: { round?: boolean } = {}): string {

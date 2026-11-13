@@ -18312,6 +18312,10 @@ msgstr "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can c
 msgid "On the results screen"
 msgstr "On the results screen"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "On the shelf"
+msgstr "On the shelf"
+
 #: src/routes/report.tsx
 msgid "on the to-do list"
 msgstr "on the to-do list"
@@ -27855,6 +27859,14 @@ msgstr "The servers you are in, so we can show you the ones you can post"
 msgid "The session changed by {0} points; the map estimates add up to {1}. This is the difference between them, not a separate bonus."
 msgstr "The session changed by {0} points; the map estimates add up to {1}. This is the difference between them, not a separate bonus."
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "The shelf is full. Take one off to add another."
+msgstr "The shelf is full. Take one off to add another."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "The shelf shows your dans once you have one."
+msgstr "The shelf shows your dans once you have one."
+
 #. placeholder {0}: N.beatmapListing.offers
 #: src/lib/pack-run.ts
 msgid "The shop shows +{0} charm."
@@ -29801,6 +29813,10 @@ msgstr "Up to 200 MB"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Up to 50 MB."
 msgstr "Up to 50 MB."
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Up to five, in the order you pick them."
+msgstr "Up to five, in the order you pick them."
 
 #: src/routes/dan-estimates.tsx
 msgid "up to the chart's level +0.1"

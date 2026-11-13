@@ -4934,12 +4934,14 @@ export interface SupporterProfileLook {
   packStyle: SupporterPackStyle;
   /* Their own dan, which the Dan license frame shows; null without a verdict. */
   dan: FrameDan | null;
+  /* The dans on their Trophy shelf frame, left to right (five at most). */
+  shelf: FrameDan[];
   /* Their osu! name, which the Desktop icon frame labels itself with. */
   username: string | null;
   /* The figure beside their profile's numbers, null for none. */
   companion: SupporterCompanion | null;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, renewing: false, patron: false, shownRank: null, rankFire: true, frame: null, nameStyle: null, nameFont: null, nameOutline: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileSkillKeys: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null, username: null };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, renewing: false, patron: false, shownRank: null, rankFire: true, frame: null, nameStyle: null, nameFont: null, nameOutline: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileSkillKeys: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null, shelf: [], username: null };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -5046,6 +5048,7 @@ export function parseSupporterProfileLook(raw: unknown): SupporterProfileLook {
     packStyle: parsePackStyle(body.packStyle),
     companion: parseSupporterCompanion(body.companion),
     dan: parseFrameDan(body.dan),
+    shelf: Array.isArray(body.shelf) ? body.shelf.map(parseFrameDan).filter((dan): dan is FrameDan => dan !== null).slice(0, 5) : [],
     username: typeof body.username === "string" && body.username ? body.username : null,
   };
 }

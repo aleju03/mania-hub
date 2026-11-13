@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react";
 
 import { LiveDfjkKeys } from "./LiveDfjkKeys";
 import { LiveSevenKey } from "./LiveSevenKey";
 import { startNoteHighway } from "./liveNoteHighway";
+import { DAN_BADGE_BOXES } from "../../lib/dan-badge-boxes";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
 import { fetchLiveSupporterProfileLook } from "../../lib/live-backend";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
-import { isDrawableFrame, subscribeWorkshopFrames, supporterFrameGeometry, supporterFrameSrc, workshopFramesVersion, type FrameDan, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
+import { isDrawableFrame, subscribeWorkshopFrames, supporterFrameGeometry, supporterFramePartSrc, supporterFrameSrc, workshopFramesVersion, type FrameDan, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
 
 /* The frame art over a supporter's avatar. Place it inside a relative box the
    exact size of the avatar; it reaches past that box by the frame's overhang
@@ -18,9 +19,11 @@ import { isDrawableFrame, subscribeWorkshopFrames, supporterFrameGeometry, suppo
    SSR. `still` holds it on the PNG anyway (a picker sweeping through frames
    would otherwise start a video decode per frame), as does a still-only frame.
    A frame with a dan window lays the wearer's own dan badge (`userId`) on its
-   art; with no one to ask (a signed-out showcase) it shows a sample. */
+   art, and the Trophy shelf stands their dans on itself; with no one to ask (a
+   signed-out showcase) they show a sample. */
 
 const SAMPLE_DAN: FrameDan = { key: "4:rc:overall", label: "alpha", family: "rc", keyCount: 4, skillset: null };
+const SAMPLE_SHELF: FrameDan[] = ["9", "10", "alpha", "beta", "gamma"].map((label) => ({ ...SAMPLE_DAN, label }));
 
 /* Bumped when the viewer picks another dan, so every frame showing theirs asks again. */
 let danPickVersion = 0;
@@ -34,23 +37,26 @@ function subscribeDanPicks(listener: () => void): () => void {
   return () => danPickListeners.delete(listener);
 }
 
-function useFrameDan(frame: SupporterAvatarFrameId, userId: number | null | undefined): FrameDan | null {
-  const wants = Boolean(supporterFrameGeometry(frame).danWindow);
-  const [dan, setDan] = useState<{ userId: number; dan: FrameDan | null } | null>(null);
+/* The wearer's dan for a frame with a dan window, and their shelf of dans for
+   the Trophy shelf (null while it is on its way). */
+function useFrameDans(frame: SupporterAvatarFrameId, userId: number | null | undefined): { dan: FrameDan | null; shelf: FrameDan[] | null } {
+  const geometry = supporterFrameGeometry(frame);
+  const wants = Boolean(geometry.danWindow || geometry.danShelf);
+  const [dan, setDan] = useState<{ userId: number; dan: FrameDan | null; shelf: FrameDan[] } | null>(null);
   const picks = useSyncExternalStore(subscribeDanPicks, () => danPickVersion, () => 0);
   useEffect(() => {
     if (!wants || !userId) return;
     let alive = true;
     void fetchLiveSupporterProfileLook(userId).then((value) => {
-      if (alive) setDan({ userId, dan: value.dan });
+      if (alive) setDan({ userId, dan: value.dan, shelf: value.shelf });
     });
     return () => {
       alive = false;
     };
   }, [wants, userId, picks]);
-  if (!wants) return null;
-  if (!userId) return SAMPLE_DAN;
-  return dan?.userId === userId ? dan.dan : null;
+  if (!wants) return { dan: null, shelf: null };
+  if (!userId) return { dan: SAMPLE_DAN, shelf: SAMPLE_SHELF };
+  return dan?.userId === userId ? { dan: dan.dan, shelf: dan.shelf } : { dan: null, shelf: null };
 }
 
 /* The name a name-label frame prints: the one handed in, else the wearer's
@@ -85,7 +91,7 @@ function canPlayAlphaVideo(): boolean {
 export function SupporterAvatarFrame({ frame, still: holdStill = false, round = false, userId, name }: { frame: SupporterAvatarFrameId; still?: boolean; /* drawn round, as lists do */ round?: boolean; userId?: number | null; /* the wearer's name, where the caller has it (saves a name-label frame asking) */ name?: string | null }) {
   const [animate, setAnimate] = useState(false);
   useEffect(() => setAnimate(canPlayAlphaVideo()), []);
-  const dan = useFrameDan(frame, userId);
+  const { dan, shelf } = useFrameDans(frame, userId);
   const label = useFrameName(frame, userId, name);
   const { i18n } = useLingui();
   // a workshop frame draws once its art has arrived with some payload
@@ -105,6 +111,7 @@ export function SupporterAvatarFrame({ frame, still: holdStill = false, round = 
 
   const playing = animate && !holdStill;
   if (geometry.nameLabel) return <LiveDesktopIcon name={label} playing={playing} className={className} style={style} />;
+  if (geometry.danShelf) return <LiveTrophyShelf frame={frame} dans={shelf ?? []} playing={playing} className={className} style={style} />;
   // the DFJK keycaps and the 7K board also answer the viewer's own keys (LiveDfjkKeys, LiveSevenKey)
   const liveKeys = playing && (frame === "dfjk-keys" || frame === "seven-key");
   const wrapped = Boolean(geometry.danWindow) || liveKeys;
@@ -172,6 +179,76 @@ export function SupporterAvatarFrame({ frame, still: holdStill = false, round = 
         />
       )}
     </div>
+  );
+}
+
+/* The Trophy shelf frame, drawn live because the awards on it are the wearer's
+   own dans: the bare glass shelf (its still), then for each dan a clear plaque
+   on a plinth, the next a touch taller than the last, with the dan's badge set
+   inside over a light in the badge's colour. Playing, on a 6 s clock
+   (styles.css): a display light glides along the shelf, each plaque catching
+   it in turn, then the last plaque lifts a little and settles. Units are the
+   design's (foundry/designs/trophy-shelf): the avatar is 124 wide at 30,30. */
+const SHELF_W = 17.4, SHELF_GAP = 9, SHELF_FOOT = 181.2, SHELF_CHAMFER = 3.4;
+function LiveTrophyShelf({ frame, dans, playing, className, style }: { frame: SupporterAvatarFrameId; dans: FrameDan[]; playing: boolean; className: string; style: CSSProperties }) {
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const x0 = 92 - (dans.length * SHELF_W + (dans.length - 1) * SHELF_GAP) / 2;
+  const plaques = supporterFramePartSrc(frame, "plaques");
+  return (
+    <svg aria-hidden viewBox="-14 0 212 231" className={className} style={style}>
+      <defs>
+        <filter id={`${uid}b`} x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="2.2" /></filter>
+        <linearGradient id={`${uid}l`}>
+          <stop offset="0" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0.5" stopColor="#fff" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <clipPath id={`${uid}s`}><rect x="17" y="190.5" width="150" height="7" /></clipPath>
+      </defs>
+      <image href={supporterFrameSrc(frame, "still")} x="-14" y="0" width="212" height="231" />
+      {dans.map((dan, i) => {
+        const x = x0 + i * (SHELF_W + SHELF_GAP), cx = x + SHELF_W / 2;
+        const height = 23.6 + i * 1.1, top = SHELF_FOOT - height, mid = top + height * 0.46;
+        const src = getDanImageSrc(danBareLabel(dan.label), dan.family, dan.keyCount);
+        const box = src ? DAN_BADGE_BOXES[src] : undefined;
+        // the badge by its drawing, not its image: as large as the plaque's face takes
+        const size = box ? Math.min(13.6 / (box[2] - box[0]), 16.4 / (box[3] - box[1])) : 13.6;
+        const bx = box ? cx - ((box[0] + box[2]) / 2) * size : cx - size / 2, by = box ? mid - ((box[1] + box[3]) / 2) * size : mid - size / 2;
+        const last = i === dans.length - 1;
+        const name = danBareLabel(dan.label);
+        // when the gliding light reaches this plaque (it eases along the shelf from 0.7 s to 2.7 s)
+        const reach = 0.7 + (2 * Math.acos(1 - (2 * (cx + 6)) / 196)) / Math.PI;
+        const face = [[x, top + SHELF_CHAMFER], [x + SHELF_CHAMFER, top], [x + SHELF_W - SHELF_CHAMFER, top], [x + SHELF_W, top + SHELF_CHAMFER], [x + SHELF_W, top + height], [x, top + height]];
+        return (
+          <g key={dan.key + i} className={playing && last ? "shelf-lift" : undefined}>
+            <svg x={cx - 15} y="149" width="30" height="46" viewBox={`${i * 30} 0 30 46`}>
+              <image href={plaques} width="150" height="46" />
+            </svg>
+            <ellipse cx={cx} cy={mid} rx="7.5" ry="8.5" fill={box?.[4] ?? "#dfe8ff"} opacity="0.36" filter={`url(#${uid}b)`} className={playing && last ? "shelf-proud" : undefined} />
+            {src ? (
+              <image href={src} x={bx} y={by} width={size} height={size} />
+            ) : (
+              <text x={cx} y={mid + 3} textAnchor="middle" fill="#eef3ff" fontSize="8.5" fontWeight={700} fontFamily="Tracker Round, sans-serif" textLength={name.length > 2 ? 13 : undefined} lengthAdjust="spacingAndGlyphs">{name}</text>
+            )}
+            {playing && (
+              <>
+                <clipPath id={`${uid}c${i}`}><polygon points={face.map((point) => point.join(",")).join(" ")} /></clipPath>
+                <g clipPath={`url(#${uid}c${i})`}>
+                  <rect className="shelf-band" x={cx - 2.6} y={top - 3} width="5.2" height={height + 6} fill="#fff" style={{ animationDelay: `${(reach - 0.3).toFixed(2)}s` }} />
+                </g>
+              </>
+            )}
+          </g>
+        );
+      })}
+      {playing && (
+        <g clipPath={`url(#${uid}s)`}>
+          <g className="shelf-light">
+            <rect className="shelf-light-glow" x="-26" y="190.8" width="40" height="5.6" fill={`url(#${uid}l)`} />
+          </g>
+        </g>
+      )}
+    </svg>
   );
 }
 

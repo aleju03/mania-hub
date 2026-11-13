@@ -19,7 +19,7 @@ import { SupporterStyledName } from "./SupporterNameStyle";
 import { announceFrameDanPicked, frameDanName, SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
-import { fetchFrameDanChoices, fetchOwnWorkshopFrames, saveFrameDanChoice, type FrameDanChoices } from "../../lib/supporter-look-settings";
+import { fetchFrameDanChoices, fetchOwnWorkshopFrames, FRAME_SHELF_MAX, saveFrameDanChoice, saveFrameShelfChoice, type FrameDanChoices } from "../../lib/supporter-look-settings";
 import { fetchLiveWorkshopFrames, forgetLiveSupporterLook } from "../../lib/live-backend";
 import { registerSubmittedFrames, type SubmittedFrame } from "../../lib/workshop-frames";
 import { avatarUrlUserId } from "../ui/Avatar";
@@ -695,6 +695,7 @@ function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) 
         </div>
       )}
       {frame && supporterFrameGeometry(frame).danWindow && <FrameDanPicker avatar={avatar} disabled={disabled} />}
+      {frame && supporterFrameGeometry(frame).danShelf && <FrameDanPicker shelf avatar={avatar} disabled={disabled} />}
       {activeSet && "set" in activeSet && (
         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] text-osu-f1">
           <span className="mr-1">{i18n._(activeSet.chips)}</span>
@@ -720,8 +721,10 @@ function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) 
 
 /* Which of the viewer's dans the Dan license shows, picked in three steps:
    the keymode, rice or LN, then the overall dan or one skillset's, each tile
-   showing its badge. A pick saves at once. */
-function FrameDanPicker({ avatar, disabled }: { avatar: string | undefined; disabled: boolean }) {
+   showing its badge. A pick saves at once. `shelf`: the Trophy shelf's dans
+   instead, up to five, each tile numbered with its place on the shelf (they
+   stand in the order picked; a second click takes one off). */
+function FrameDanPicker({ avatar, disabled, shelf = false }: { avatar: string | undefined; disabled: boolean; shelf?: boolean }) {
   const { t, i18n } = useLingui();
   const [choices, setChoices] = useState<FrameDanChoices | null>(null);
   const [saving, setSaving] = useState(false);
@@ -729,14 +732,14 @@ function FrameDanPicker({ avatar, disabled }: { avatar: string | undefined; disa
   const [family, setFamily] = useState<"rc" | "ln" | null>(null);
   useEffect(() => {
     let alive = true;
-    void fetchFrameDanChoices().then((value) => alive && setChoices(value)).catch(() => alive && setChoices({ options: [], shown: null }));
+    void fetchFrameDanChoices().then((value) => alive && setChoices(value)).catch(() => alive && setChoices({ options: [], shown: null, shelf: [] }));
     return () => {
       alive = false;
     };
   }, []);
   if (!choices) return null;
   if (choices.options.length === 0) {
-    return <p className="mt-3 text-[11px] text-osu-f1">{t`The card shows your dan once you have one.`}</p>;
+    return <p className="mt-3 text-[11px] text-osu-f1">{shelf ? t`The shelf shows your dans once you have one.` : t`The card shows your dan once you have one.`}</p>;
   }
   const shown = choices.options.find((dan) => dan.key === choices.shown) ?? choices.options[0];
   const keyCounts = [...new Set(choices.options.map((dan) => dan.keyCount))];
@@ -746,10 +749,16 @@ function FrameDanPicker({ avatar, disabled }: { avatar: string | undefined; disa
   const tiles = choices.options.filter((dan) => dan.keyCount === kc && dan.family === fam);
 
   const pickDan = (key: string) => {
-    if (saving || key === choices.shown) return;
+    if (saving) return;
+    let next: string[] = [];
+    if (shelf) {
+      // a full shelf takes no more until one comes off; the last one stays
+      next = choices.shelf.includes(key) ? choices.shelf.filter((held) => held !== key) : [...choices.shelf, key];
+      if (next.length > FRAME_SHELF_MAX || next.length === 0) return;
+    } else if (key === choices.shown) return;
     setSaving(true);
-    setChoices({ ...choices, shown: key });
-    void saveFrameDanChoice({ data: { dan: key } })
+    setChoices(shelf ? { ...choices, shelf: next } : { ...choices, shown: key });
+    void (shelf ? saveFrameShelfChoice({ data: { shelf: next } }) : saveFrameDanChoice({ data: { dan: key } }))
       .then((value) => {
         setChoices(value);
         const userId = avatarUrlUserId(avatar);
@@ -762,7 +771,7 @@ function FrameDanPicker({ avatar, disabled }: { avatar: string | undefined; disa
   return (
     <div className="mt-4 border-t border-white/5 pt-3">
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-[11px] text-osu-f1">{t`Dan`}</span>
+        <span className="mr-1 text-[11px] text-osu-f1">{shelf ? t`On the shelf` : t`Dan`}</span>
         {keyCounts.map((count) => (
           <button key={count} type="button" onClick={() => { setKeyCount(count); setFamily(null); }} aria-pressed={kc === count} className={chip(kc === count)}>
             {count}K
@@ -774,6 +783,11 @@ function FrameDanPicker({ avatar, disabled }: { avatar: string | undefined; disa
             {side === "rc" ? t`Rice` : "LN"}
           </button>
         ))}
+        {shelf && (
+          <span className="ml-auto text-[11px] text-osu-f1">
+            {choices.shelf.length >= FRAME_SHELF_MAX ? t`The shelf is full. Take one off to add another.` : t`Up to five, in the order you pick them.`}
+          </span>
+        )}
       </div>
       <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))" }}>
         {tiles.map((dan) => {
@@ -785,9 +799,12 @@ function FrameDanPicker({ avatar, disabled }: { avatar: string | undefined; disa
               type="button"
               disabled={disabled || saving}
               onClick={() => pickDan(dan.key)}
-              aria-pressed={choices.shown === dan.key}
-              className={tile(choices.shown === dan.key)}
+              aria-pressed={shelf ? choices.shelf.includes(dan.key) : choices.shown === dan.key}
+              className={tile(shelf ? choices.shelf.includes(dan.key) : choices.shown === dan.key)}
             >
+              {shelf && choices.shelf.includes(dan.key) && (
+                <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-osu-pink text-[10px] font-bold leading-none text-white">{choices.shelf.indexOf(dan.key) + 1}</span>
+              )}
               {badge ? <img src={badge} alt="" className="h-8 w-8 object-contain" /> : <span className="h-8 w-8" />}
               <span className="w-full truncate text-center">{dan.skillset ? (skill ? i18n._(skill.labelMsg) : dan.skillset) : t`Overall`}</span>
               <span className="-mt-1 text-[10px] font-medium text-osu-f1">{frameDanName(dan.label)}</span>

@@ -146,21 +146,25 @@ export const saveSupporterFrameSetting = createServerFn({ method: "POST" })
     return readState(body);
   });
 
-/* Every dan the viewer holds and the one their Dan license shows. */
+/* Every dan the viewer holds, the one their Dan license shows and the ones on their Trophy shelf. */
 export interface FrameDanChoices {
   options: FrameDan[];
   shown: string | null;
+  shelf: string[];
 }
 
+export const FRAME_SHELF_MAX = 5;
+
 function readFrameDanChoices(raw: unknown): FrameDanChoices {
-  const body = (raw && typeof raw === "object" ? raw : {}) as { options?: unknown; shown?: unknown };
+  const body = (raw && typeof raw === "object" ? raw : {}) as { options?: unknown; shown?: unknown; shelf?: unknown };
   const options = Array.isArray(body.options) ? body.options.map(parseFrameDan).filter((dan): dan is FrameDan => dan !== null) : [];
-  return { options, shown: typeof body.shown === "string" ? body.shown : null };
+  const shelf = Array.isArray(body.shelf) ? body.shelf.filter((key): key is string => typeof key === "string").slice(0, FRAME_SHELF_MAX) : [];
+  return { options, shown: typeof body.shown === "string" ? body.shown : null, shelf };
 }
 
 export const fetchFrameDanChoices = createServerFn({ method: "GET" }).handler(async (): Promise<FrameDanChoices> => {
   const viewer = await requireViewer();
-  if (!viewer) return { options: [], shown: null };
+  if (!viewer) return { options: [], shown: null, shelf: [] };
   const response = await fetch(`${viewer.base}/api/supporters/self/frame-dan?userId=${viewer.userId}`, { headers: bridgeAuthHeaders() });
   if (!response.ok) throw new Error(`Server ${response.status}`);
   return readFrameDanChoices(await response.json().catch(() => null));
@@ -179,6 +183,27 @@ export const saveFrameDanChoice = createServerFn({ method: "POST" })
       method: "POST",
       headers: bridgeAuthHeaders(true),
       body: JSON.stringify({ userId: viewer.userId, dan: data.dan }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown } | null;
+    if (response.status === 403) throw new Error("Your supporter time has run out.");
+    if (!response.ok) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    return readFrameDanChoices(body);
+  });
+
+/* Sets the dans on the Trophy shelf, in order; an empty list goes back to the default. */
+export const saveFrameShelfChoice = createServerFn({ method: "POST" })
+  .validator((data: { shelf?: unknown }) => {
+    const shelf = data?.shelf;
+    if (!Array.isArray(shelf) || shelf.length > FRAME_SHELF_MAX || !shelf.every((key) => typeof key === "string" && /^\d{1,2}:(rc|ln):[a-z]{1,16}$/.test(key))) throw new Error("Pick up to five dans.");
+    return { shelf: shelf as string[] };
+  })
+  .handler(async ({ data }): Promise<FrameDanChoices> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/frame-dan`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, shelf: data.shelf }),
     });
     const body = await response.json().catch(() => null) as { error?: unknown } | null;
     if (response.status === 403) throw new Error("Your supporter time has run out.");

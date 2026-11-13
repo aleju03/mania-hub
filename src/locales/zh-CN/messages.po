@@ -17803,6 +17803,10 @@ msgstr "在 Ko-fi 面板上，付款前勾选「Make this monthly」。你可以
 msgid "On the results screen"
 msgstr "查看结算中"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "On the shelf"
+msgstr "架上展示"
+
 #: src/routes/report.tsx
 msgid "on the to-do list"
 msgstr "已列入待办"
@@ -27141,6 +27145,14 @@ msgstr "你所在的服务器列表，好让我们列出你能发布的那些"
 msgid "The session changed by {0} points; the map estimates add up to {1}. This is the difference between them, not a separate bonus."
 msgstr "本次游玩的评分变化为 {0} 点，谱面贡献的估算合计为 {1} 点。这里显示的是两者的差额，并非额外加分。"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "The shelf is full. Take one off to add another."
+msgstr "展示架已满，取下一个才能再添加。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "The shelf shows your dans once you have one."
+msgstr "获得段位后，展示架会显示你的段位。"
+
 #. placeholder {0}: N.beatmapListing.offers
 #: src/lib/pack-run.ts
 msgid "The shop shows +{0} charm."
@@ -29029,6 +29041,10 @@ msgstr "最大 200 MB"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Up to 50 MB."
 msgstr "最大 50 MB。"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Up to five, in the order you pick them."
+msgstr "最多五个，按选择的顺序摆放。"
 
 #: src/routes/dan-estimates.tsx
 msgid "up to the chart's level +0.1"
