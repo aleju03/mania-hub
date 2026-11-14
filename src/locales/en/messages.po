@@ -4741,6 +4741,10 @@ msgstr "Another replay video is still exporting. Finish or cancel it first."
 msgid "Another skin or archive inside it"
 msgstr "Another skin or archive inside it"
 
+#: src/lib/supporter-pack-style.ts
+msgid "Anti-static bag"
+msgstr "Anti-static bag"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/recommendations.tsx
@@ -13966,6 +13970,10 @@ msgstr "Key split"
 msgid "Key Split"
 msgstr "Key Split"
 
+#: src/lib/supporter-pack-style.ts
+msgid "Keycaps"
+msgstr "Keycaps"
+
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -14057,6 +14065,10 @@ msgstr "Korean"
 #: src/lib/replay-overlays.ts
 msgid "KPS counter"
 msgstr "KPS counter"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Kraft parcel"
+msgstr "Kraft parcel"
 
 #: src/lib/replay-overlays.ts
 msgid "L/R miss counter"
@@ -20184,8 +20196,8 @@ msgid "Players you hide are filtered out of rankings and feeds across the site. 
 msgstr "Players you hide are filtered out of rankings and feeds across the site. This list is stored on this browser only."
 
 #: src/lib/supporter-pack-style.ts
-msgid "Playfield"
-msgstr "Playfield"
+#~ msgid "Playfield"
+#~ msgstr "Playfield"
 
 #: src/components/player/LivePresence.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx

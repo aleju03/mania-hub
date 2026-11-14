@@ -6,6 +6,7 @@ import { Trans } from "@lingui/react/macro";
 import { packDamageFromCut, type PackDamage } from "#/lib/pack-damage";
 import type { PackTypeDef } from "#/lib/packs";
 import { useWindowActive } from "#/lib/window-activity";
+import { useWrapperArtVersion } from "./wrapperArt";
 import {
   createPackBackCanvas,
   DEFAULT_PACK_ART_STYLE,
@@ -624,6 +625,8 @@ export function PackStage({
     sceneRef.current?.setReducedMotion(reducedMotion);
   }, [reducedMotion, sceneReady]);
 
+  // a wrapper's renders arrive after the first paint: the pack is printed again then
+  const wrapperArtVersion = useWrapperArtVersion();
   useEffect(() => {
     const nextStyle = { ...(artStyle ?? (packType ? packArtStyleFor(packType) : DEFAULT_PACK_ART_STYLE)), wrapper };
     const next = getCachedPackFrontCanvas(nextStyle);
@@ -640,7 +643,7 @@ export function PackStage({
       paintPackBackCanvas(back, nextStyle.accent, wrapper);
       sceneRef.current?.markBackArtDirty();
     }
-  }, [artStyle, packType, sceneReady, wrapper]);
+  }, [artStyle, packType, sceneReady, wrapper, wrapperArtVersion]);
 
   // Blade trail: while the pointer is held down anywhere on the stage, a
   // fading streak chases the cursor (on and off the pack), so the slash

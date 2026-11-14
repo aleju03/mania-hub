@@ -4607,6 +4607,10 @@ msgstr "已有一个回放视频正在导出，请先完成或取消它。"
 msgid "Another skin or archive inside it"
 msgstr "里面还有另一个皮肤或压缩包"
 
+#: src/lib/supporter-pack-style.ts
+msgid "Anti-static bag"
+msgstr "防静电袋"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/recommendations.tsx
@@ -13573,6 +13577,10 @@ msgstr "键数分布"
 msgid "Key Split"
 msgstr "键数分布"
 
+#: src/lib/supporter-pack-style.ts
+msgid "Keycaps"
+msgstr "键帽"
+
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -13664,6 +13672,10 @@ msgstr "韩语"
 #: src/lib/replay-overlays.ts
 msgid "KPS counter"
 msgstr "KPS 计数"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Kraft parcel"
+msgstr "牛皮纸包裹"
 
 #: src/lib/replay-overlays.ts
 msgid "L/R miss counter"
@@ -19639,8 +19651,8 @@ msgid "Players you hide are filtered out of rankings and feeds across the site. 
 msgstr "被你隐藏的玩家会从全站的排行榜和信息流中过滤掉。此列表仅保存在当前浏览器中。"
 
 #: src/lib/supporter-pack-style.ts
-msgid "Playfield"
-msgstr "游玩区"
+#~ msgid "Playfield"
+#~ msgstr "游玩区"
 
 #: src/components/player/LivePresence.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx

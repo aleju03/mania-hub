@@ -17,8 +17,9 @@ export type SupporterCardSleeveId = (typeof SUPPORTER_CARD_SLEEVES)[number];
 export const SUPPORTER_BINDERS = ["leather", "denim", "holo", "carbon", "zip", "case"] as const;
 export type SupporterBinderId = (typeof SUPPORTER_BINDERS)[number];
 
-/* The foil the viewer's packs are printed on (packArt.ts draws each). */
-export const SUPPORTER_WRAPPERS = ["holo", "playfield", "cassette", "envelope"] as const;
+/* The stock the viewer's packs are printed on (packArt.ts draws each; the
+   renders some are made of are in wrapperArt.ts). */
+export const SUPPORTER_WRAPPERS = ["holo", "keycaps", "cassette", "envelope", "parcel", "antistatic"] as const;
 export type SupporterWrapperId = (typeof SUPPORTER_WRAPPERS)[number];
 
 /* The blade a pack is opened with: its streak, sparks and sounds (packBlades.ts). */
@@ -52,9 +53,11 @@ export const SUPPORTER_BINDER_LABELS: Record<SupporterBinderId, MessageDescripto
 
 export const SUPPORTER_WRAPPER_LABELS: Record<SupporterWrapperId, MessageDescriptor> = {
   holo: msg`Holo foil`,
-  playfield: msg`Playfield`,
+  keycaps: msg`Keycaps`,
   cassette: msg`Cassette`,
   envelope: msg`Sealed envelope`,
+  parcel: msg`Kraft parcel`,
+  antistatic: msg`Anti-static bag`,
 };
 
 export const SUPPORTER_BLADE_LABELS: Record<SupporterBladeId, MessageDescriptor> = {

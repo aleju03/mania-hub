@@ -22,6 +22,7 @@ import {
   packArtStyleFor,
   PACK_ASPECT,
 } from "../components/packs/packArt";
+import { useWrapperArtVersion, wrapperArtPending } from "../components/packs/wrapperArt";
 import { PackStage } from "../components/packs/PackStage";
 import { StreakGame } from "../components/packs/StreakGame";
 import { PackSummary } from "../components/packs/PackSummary";
@@ -353,6 +354,7 @@ function usePackArtThumbs(enabled: boolean, wrapper: SupporterWrapperId | null):
     }),
   ) as Partial<Record<PackTypeId, string>>;
   const [thumbs, setThumbs] = useState<Partial<Record<PackTypeId, string>>>(cachedFor);
+  const wrapperArtVersion = useWrapperArtVersion();
   useEffect(() => {
     setThumbs(cachedFor());
     if (!enabled) return;
@@ -383,7 +385,7 @@ function usePackArtThumbs(enabled: boolean, wrapper: SupporterWrapperId | null):
       if (context) {
         context.drawImage(full, 0, 0, small.width, small.height);
         const url = small.toDataURL("image/png");
-        packThumbCache.set(packThumbKey(type.id, wrapper), url);
+        if (!wrapperArtPending(wrapper)) packThumbCache.set(packThumbKey(type.id, wrapper), url);
         setThumbs((current) => ({ ...current, [type.id]: url }));
       }
       if (pending.length > 0) {
@@ -404,7 +406,7 @@ function usePackArtThumbs(enabled: boolean, wrapper: SupporterWrapperId | null):
       if (idleHandle !== null) idleWindow.cancelIdleCallback?.(idleHandle);
       if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
     };
-  }, [enabled, wrapper]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [enabled, wrapper, wrapperArtVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   return thumbs;
 }
 

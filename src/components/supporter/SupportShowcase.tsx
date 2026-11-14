@@ -13,6 +13,7 @@ import { FoilPreview } from "./FoilPreview";
 import { GiftTicket3D } from "./GiftTicket3D";
 import { CompanionFigure, CompanionThumb } from "./Companion";
 import { BinderBook, FoilCard, FrameThumb, SleeveCard, wrapperThumb } from "./LoadoutSlots";
+import { useWrapperArtVersion } from "../packs/wrapperArt";
 import { BladeSwatch } from "../packs/BladeSwatch";
 import { playBladeRip, warmBladeSounds } from "../packs/packSfx";
 import { bladeLook } from "../packs/packBlades";
@@ -648,13 +649,14 @@ export function PacksShowcase() {
   const { t, i18n } = useLingui();
   const [ref, near] = useNearView<HTMLDivElement>();
   const [wrappers, setWrappers] = useState<Partial<Record<string, string>>>({});
+  const wrapperArtVersion = useWrapperArtVersion();
   // Each is a whole pack drawn on a canvas, so they wait until the section is
   // near and then come in one per quiet moment.
   useEffect(() => {
     if (!near) return;
     const cancels = SUPPORTER_WRAPPERS.map((id) => queueGpuWork(() => setWrappers((current) => ({ ...current, [id]: wrapperThumb(id) }))));
     return () => cancels.forEach((cancel) => cancel());
-  }, [near]);
+  }, [near, wrapperArtVersion]);
   const group = "min-w-0";
   const heading = "mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-osu-f1";
   const label = "mt-1.5 truncate text-center text-[11px] text-osu-l2";

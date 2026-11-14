@@ -4595,6 +4595,10 @@ msgstr "Todavía se está exportando otro video. Termínalo o cancélalo primero
 msgid "Another skin or archive inside it"
 msgstr "Otra skin o archivo comprimido dentro"
 
+#: src/lib/supporter-pack-style.ts
+msgid "Anti-static bag"
+msgstr "Bolsa antiestática"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/routes/recommendations.tsx
@@ -13561,6 +13565,10 @@ msgstr "Modos de teclas"
 msgid "Key Split"
 msgstr "Distribución de modos"
 
+#: src/lib/supporter-pack-style.ts
+msgid "Keycaps"
+msgstr "Keycaps"
+
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -13652,6 +13660,10 @@ msgstr "Coreano"
 #: src/lib/replay-overlays.ts
 msgid "KPS counter"
 msgstr "Contador de KPS"
+
+#: src/lib/supporter-pack-style.ts
+msgid "Kraft parcel"
+msgstr "Paquete kraft"
 
 #: src/lib/replay-overlays.ts
 msgid "L/R miss counter"
@@ -19627,8 +19639,8 @@ msgid "Players you hide are filtered out of rankings and feeds across the site. 
 msgstr "Los jugadores que ocultas se filtran de rankings y feeds en todo el sitio. Esta lista se guarda solo en este navegador."
 
 #: src/lib/supporter-pack-style.ts
-msgid "Playfield"
-msgstr "Playfield"
+#~ msgid "Playfield"
+#~ msgstr "Playfield"
 
 #: src/components/player/LivePresence.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx

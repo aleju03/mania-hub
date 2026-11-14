@@ -381,7 +381,7 @@ const PERKS: { id: PerkId; title: MessageDescriptor; body: MessageDescriptor }[]
    (wrapperThumb), saved as a file so the tile shows it with the page instead
    of drawing it in after load. */
 function PackThumb() {
-  return <img src="/images/supporter-perks/pack-holo.webp" alt="" width={28} height={46} className="h-[46px] w-[28px] rounded-[2px] object-cover shadow-[0_2px_6px_rgba(0,0,0,0.5)]" />;
+  return <img src="/images/supporter-perks/pack-holo-2.webp" alt="" width={28} height={46} className="h-[46px] w-[28px] rounded-[2px] object-cover shadow-[0_2px_6px_rgba(0,0,0,0.5)]" />;
 }
 
 /* Each perk's tile: a small piece of the real thing where there is one. */

@@ -26,6 +26,7 @@ import { avatarUrlUserId } from "../ui/Avatar";
 import { CheckBadge, LockIcon, PasteIcon, UploadIcon } from "./LoadoutIcons";
 import { FoilPreview } from "./FoilPreview";
 import { DEFAULT_PACK_ART_STYLE, getCachedPackFrontCanvas } from "../packs/packArt";
+import { useWrapperArtVersion, wrapperArtPending } from "../packs/wrapperArt";
 import { BladeSwatch } from "../packs/BladeSwatch";
 import { SectionArt } from "./SectionArt";
 import { playBladeRip, warmBladeSounds } from "../packs/packSfx";
@@ -178,6 +179,7 @@ function NoArt({ className }: { className?: string }) {
 }
 
 function SlotThumb({ slot, loadout, avatar }: { slot: SlotId; loadout: Loadout; avatar: string | undefined }) {
+  useWrapperArtVersion();
   if (slot === "theme") {
     const own = wornOwnTheme(loadout.theme);
     return loadout.theme
@@ -259,7 +261,8 @@ export function wrapperThumb(wrapper: SupporterWrapperId | null): string {
   canvas.height = 300;
   canvas.getContext("2d")?.drawImage(art, 0, 0, canvas.width, canvas.height);
   const url = canvas.toDataURL("image/jpeg", 0.86);
-  wrapperThumbs.set(key, url);
+  // drawn before the wrapper's renders were in: shown for now, drawn again once they are
+  if (!wrapperArtPending(wrapper)) wrapperThumbs.set(key, url);
   return url;
 }
 
@@ -1267,6 +1270,7 @@ function BinderDrawer({ current, disabled, onTry, onPick }: DrawerProps) {
 
 function WrapperDrawer({ current, disabled, onTry, onPick }: DrawerProps) {
   const { t, i18n } = useLingui();
+  useWrapperArtVersion();
   const tryOn = (value: SupporterWrapperId | null) => (on: boolean) => onTry("wrapper", on ? value : undefined);
   return (
     <div>
