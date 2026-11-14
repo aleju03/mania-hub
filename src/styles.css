@@ -2805,7 +2805,9 @@ html[data-custom-cursor="true"] * {
 .bnd-ring:nth-child(2) { top: calc(50% - 24px); }
 .bnd-ring:nth-child(3) { top: calc(82% - 24px); }
 .bnd-slot {
+  /* isolated: a card's marks (z 7) stay on their page, under a turning leaf (z 6) */
   position: relative;
+  isolation: isolate;
   min-width: 0;
 }
 .bnd-page {
