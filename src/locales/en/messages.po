@@ -3696,7 +3696,6 @@ msgstr "any"
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -9086,8 +9085,8 @@ msgid "Highest PP first"
 msgstr "Highest PP first"
 
 #: src/routes/discord.tsx
-msgid "Highest stars"
-msgstr "Highest stars"
+#~ msgid "Highest stars"
+#~ msgstr "Highest stars"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Highest tier first, then pp"
@@ -11082,8 +11081,8 @@ msgstr "Lowest PP first"
 #~ msgstr "Lowest rarities first. You keep at least one of every card."
 
 #: src/routes/discord.tsx
-msgid "Lowest stars"
-msgstr "Lowest stars"
+#~ msgid "Lowest stars"
+#~ msgstr "Lowest stars"
 
 #: src/routes/__root.tsx
 msgid "made by"
@@ -18635,6 +18634,7 @@ msgstr "Standard"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/lib/replay-overlays.ts
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
@@ -21071,7 +21071,6 @@ msgstr "Title, artist, difficulty, mapper, star rating and dan."
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/team/TeamProfilePage.tsx
-#: src/routes/discord.tsx
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "to"

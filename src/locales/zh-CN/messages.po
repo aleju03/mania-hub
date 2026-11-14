@@ -3681,7 +3681,6 @@ msgstr "不限"
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
-#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -9067,8 +9066,8 @@ msgid "Highest PP first"
 msgstr "pp 从高到低"
 
 #: src/routes/discord.tsx
-msgid "Highest stars"
-msgstr "最高星数"
+#~ msgid "Highest stars"
+#~ msgstr "最高星数"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Highest tier first, then pp"
@@ -11055,8 +11054,8 @@ msgstr "pp 从低到高"
 #~ msgstr "优先使用低稀有度卡片。每张卡片至少保留一份。"
 
 #: src/routes/discord.tsx
-msgid "Lowest stars"
-msgstr "最低星数"
+#~ msgid "Lowest stars"
+#~ msgstr "最低星数"
 
 #: src/routes/__root.tsx
 msgid "made by"
@@ -18600,6 +18599,7 @@ msgstr "标准"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/lib/replay-overlays.ts
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/recommendations.tsx
 #: src/routes/replay_.community.tsx
@@ -21028,7 +21028,6 @@ msgstr "标题、艺术家、难度、谱师、星级和段位。"
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/team/TeamProfilePage.tsx
-#: src/routes/discord.tsx
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "至"

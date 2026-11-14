@@ -36,6 +36,7 @@ import { useNoDans } from "../store";
 import { Panel } from "../components/companella/primitives";
 import { DiscordMessageBodyView, type DiscordMessageJson } from "../components/discord/message/DiscordMessageView";
 import { DISCORD } from "../components/discord/message/discord-markdown";
+import { StarRangePill } from "../components/maps/StarRangePill";
 import { SelectMenu } from "../components/ui/SelectMenu";
 import { danScaleImage, danScaleLabel, type DanScaleContext } from "../lib/dan-images";
 import { pageSeo } from "../lib/seo";
@@ -565,17 +566,6 @@ function TopPlayFilters({ sub, channelName, onSave }: {
   const [minPpDraft, setMinPpDraft] = useState(sub.minPp ? String(sub.minPp) : "");
   useEffect(() => setMinPpDraft(sub.minPp ? String(sub.minPp) : ""), [sub.minPp]);
   const draftPp = Math.max(0, Math.floor(Number(minPpDraft) || 0));
-  const [minStarsDraft, setMinStarsDraft] = useState(starsText(sub.minStars));
-  const [maxStarsDraft, setMaxStarsDraft] = useState(starsText(sub.maxStars));
-  useEffect(() => setMinStarsDraft(starsText(sub.minStars)), [sub.minStars]);
-  useEffect(() => setMaxStarsDraft(starsText(sub.maxStars)), [sub.maxStars]);
-  const saveStars = () => {
-    const minStars = starsValue(minStarsDraft);
-    const maxStars = starsValue(maxStarsDraft);
-    setMinStarsDraft(starsText(minStars));
-    setMaxStarsDraft(starsText(maxStars));
-    if (minStars !== filters.minStars || maxStars !== filters.maxStars) save({ minStars, maxStars });
-  };
 
   const save = (patch: Partial<TopPlayFilterState>) => {
     const next = { ...filters, ...patch };
@@ -638,22 +628,15 @@ function TopPlayFilters({ sub, channelName, onSave }: {
         <div className={row}>
           <span className={label}><Trans>Stars</Trans></span>
           <div className="flex items-center gap-1.5">
-            {([[minStarsDraft, setMinStarsDraft, t`Lowest stars`], [maxStarsDraft, setMaxStarsDraft, t`Highest stars`]] as const).map(([value, setValue, name], index) => (
-              <Fragment key={index}>
-                {index ? <span><Trans>to</Trans></span> : null}
-                <input
-                  value={value}
-                  inputMode="decimal"
-                  aria-label={name}
-                  onChange={(event) => setValue(event.target.value.replace(/[^0-9.]/g, "").slice(0, 4))}
-                  onKeyDown={(event) => { if (event.key === "Enter") saveStars(); }}
-                  onBlur={saveStars}
-                  placeholder={index ? t`Any` : "0"}
-                  className="w-14 rounded-md bg-osu-b4 px-2 py-1 text-[13px] text-white outline-none focus:ring-1 focus:ring-osu-pink/60"
-                />
-              </Fragment>
-            ))}
-            <span>★</span>
+            <StarRangePill
+              lo={0}
+              hi={15}
+              min={filters.minStars}
+              max={filters.maxStars}
+              step={0.1}
+              ariaLabel={t`Star rating`}
+              onChange={(minStars, maxStars) => { if (minStars !== filters.minStars || maxStars !== filters.maxStars) save({ minStars, maxStars }); }}
+            />
             <HintButton label={t`Which stars count`}>
               <Trans>A chart posted for HT or DT counts at its stars with that mod.</Trans>
             </HintButton>
@@ -756,17 +739,6 @@ function TopPlayFilters({ sub, channelName, onSave }: {
 }
 
 const MAX_FEED_PLAYERS = 200;
-
-// A star bound as typed: 0 is no bound, shown empty.
-function starsText(value: number | undefined): string {
-  return value ? String(value) : "";
-}
-
-// What the backend keeps: a tenth, 0 to 20.
-function starsValue(text: string): number {
-  const value = Math.round(Number(text) * 10) / 10;
-  return Number.isFinite(value) ? Math.min(20, Math.max(0, value)) : 0;
-}
 
 // The players a top-play feed is limited to, picked from players the site
 // tracks. Empty means everyone in the feed's country.
