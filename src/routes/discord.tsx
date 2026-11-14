@@ -113,6 +113,8 @@ function DiscordToolPage() {
             <Hero info={info} />
             {info.configured ? <AccountPanel account={account} onChange={setAccount} /> : null}
             {info.configured ? <ServersPanel account={account} inviteUrl={info.inviteUrl} /> : null}
+            {/* After the servers: feeds matter to more people than DMs. */}
+            {info.configured && account?.signedIn && account.alerts?.supporter ? <DmAlertsSection account={account} alerts={account.alerts} onChange={setAccount} /> : null}
             {info.configured && account?.alerts && !account.alerts.supporter ? <DmPerkLine /> : null}
             {info.configured ? <PreviewPanel initialProfile={profilePreview} /> : null}
             {info.configured ? <CommandsPanel commands={info.commands} /> : null}
@@ -284,8 +286,6 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
           </div>
         </div>
       ) : null}
-
-      {account.alerts?.supporter ? <DmAlertsSection account={account} alerts={account.alerts} onChange={onChange} /> : null}
     </Panel>
   );
 }
@@ -344,7 +344,7 @@ function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; a
   const blocked = testResult === "blocked" || (testResult == null && alerts.failedAt != null);
 
   return (
-    <div className="mt-4 border-t border-white/[0.07] pt-4">
+    <section className="border-t border-white/[0.07] pt-5">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="text-[13px] font-semibold text-white"><Trans>DMs from the bot</Trans></span>
         <span className="rounded bg-osu-pink/15 px-1.5 py-0.5 text-[11px] font-semibold text-osu-pink-light"><Trans>Supporters</Trans></span>
@@ -399,7 +399,7 @@ function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; a
       {blocked ? (
         <p className="mt-3 text-[12px] text-rose-300"><Trans>Discord didn't let the bot message you. It needs to share a server with you, with DMs from that server turned on.</Trans></p>
       ) : null}
-    </div>
+    </section>
   );
 }
 
