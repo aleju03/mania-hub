@@ -52,6 +52,7 @@ import { ChainHowTo } from "./ChainHowTo";
 import { setWysiRunKey } from "./wysiSeen";
 import { boardLayout, type BoardLayout } from "./chainLayout";
 import { ChainPackStage, chainPackType, DeckPile, type PackKeepOutcome, type StageName } from "./ChainPackStage";
+import { warmChainFire } from "./ChainFire";
 import { ChainScoring } from "./ChainScoring";
 import { ChainBoostChips } from "./ChainReel";
 import { ContractTracker } from "./ChainContracts";
@@ -260,6 +261,8 @@ export function ChainTable(props: ChainTableProps) {
   const [playShudderX, playShudder] = useShudder(reducedMotion);
   const signal = useCallback((name: string) => script?.onSignal?.(name), [script]);
 
+  // The score fire is warmed while the table sits idle, so catching costs no frame.
+  useEffect(() => warmChainFire(), []);
   useEffect(() => {
     setBackUrl(getCachedCardBackDataUrl());
     runSound.prefetch();
@@ -686,6 +689,8 @@ export function ChainTable(props: ChainTableProps) {
   );
 
   const playRow = useCallback(async () => {
+    // A card still held over the row (a second finger on the button) is not laid yet.
+    if (dragRowRef.current) return;
     if (!shown || !arranging || !rowUids.length) {
       if (shown && !rowUids.length) {
         playShudder();
@@ -719,6 +724,9 @@ export function ChainTable(props: ChainTableProps) {
       setPlay(null);
       setScoreOverride(null);
       setHold(null);
+      // The chain may already have caught fire by the time the request fails.
+      runSound.fireLoopStop();
+      setHandsLit([]);
       if (!outcome.ok && outcome.error === "stale") setRowUids([]);
       else {
         playShudder();
@@ -732,6 +740,7 @@ export function ChainTable(props: ChainTableProps) {
   }, [arranging, doAct, playShudder, rowEntries, rowUids, shown, signal]);
 
   const redraw = useCallback(async () => {
+    if (dragRowRef.current) return;
     if (!shown || !arranging || !rowUids.length || shown.redrawsLeft <= 0) return;
     // An Eternal never goes back: it stays laid out while the rest redraw.
     const eternal = new Set(shown.hand.filter((entry) => entry.card.eternal).map((entry) => entry.uid));

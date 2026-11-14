@@ -129,10 +129,14 @@ function randomSeed(): number {
 /* Same shape as useChainRun, so the table plays a guest run unchanged. */
 export function useGuestChainRun(enabled: boolean): ChainRunApi {
   const { i18n } = useLingui();
-  const [available, setAvailable] = useState<boolean>(enabled);
+  // Unknown until the saved run is read, so a saved run never opens on the start screen.
+  const [available, setAvailable] = useState<boolean | null>(enabled ? null : false);
   const [view, setView] = useState<ChainRunView | null>(null);
   const [savedBest, setSavedBest] = useState<Saved["best"]>(null);
   const [busy, setBusy] = useState(false);
+  /* Loud actions still queued or running: busy clears when the last one lands,
+     whatever quiet one was queued behind it. */
+  const busyCountRef = useRef(0);
   const savedRef = useRef<Saved>({ state: null, cards: [], goats: [], best: null, lastRunNo: 0 });
   /* The pool the current run plays on: the saved roster, or the server's
      slice once fetched for a new run. */
@@ -218,8 +222,11 @@ export function useGuestChainRun(enabled: boolean): ChainRunApi {
     const quiet = action.kind === "sign";
     if (!quiet) setBusy(true);
     const run = () => apply(action).catch((): ChainActOutcome => ({ ok: false, error: "failed", view: null }));
+    if (!quiet) busyCountRef.current += 1;
     const outcome = queueRef.current.then(run, run).finally(() => {
-      if (!quiet && queueRef.current === outcome) setBusy(false);
+      if (quiet) return;
+      busyCountRef.current -= 1;
+      if (busyCountRef.current === 0) setBusy(false);
     });
     queueRef.current = outcome;
     return outcome;

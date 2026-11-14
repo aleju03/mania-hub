@@ -194,7 +194,10 @@ export const actOnOwnChainRun = createServerFn({ method: "POST" })
     });
     if (response.status === 404) return null;
     if (response.status === 409 || response.status === 503) {
-      const body = (await response.json().catch(() => null)) as Partial<ChainRunResponse> & { error?: unknown };
+      const body = (await response.json().catch(() => null)) as (Partial<ChainRunResponse> & { error?: unknown }) | null;
+      // A refusal of the backend's own carries the run; anything else (a proxy's
+      // error page) says nothing about it and must not blank the table.
+      if (!body || typeof body.rev !== "number") throw new Error(`Chain run action failed (${response.status}).`);
       return {
         status: "refused",
         error: typeof body?.error === "string" ? body.error : "refused",

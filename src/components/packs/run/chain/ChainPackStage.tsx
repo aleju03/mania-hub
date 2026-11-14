@@ -624,7 +624,9 @@ export function ChainPackStage(props: ChainPackStageProps) {
         ),
       );
       window.setTimeout(() => mountedRef.current && setDeckBump((value) => value + 1), reducedMotion ? 0 : CHAIN_FEEL.pack.keepFlyMs);
-      await wait(CHAIN_FEEL.pack.keepFlyMs + CHAIN_FEEL.pack.afterKeepMs);
+      // The stage leaves once the last shard has landed, never under one in flight.
+      const landed = reducedMotion || !list.length ? 0 : list[list.length - 1].delayMs + CHAIN_FEEL.pack.tokenMs + 40;
+      await wait(Math.max(CHAIN_FEEL.pack.keepFlyMs + CHAIN_FEEL.pack.afterKeepMs, landed));
     } else {
       onShards(outcome.gained);
       await wait(CHAIN_FEEL.pack.afterKeepMs);

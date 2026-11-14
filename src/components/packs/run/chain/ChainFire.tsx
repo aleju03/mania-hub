@@ -167,6 +167,8 @@ function compile(gl: WebGLRenderingContext, type: number, source: string): WebGL
 interface FireGl {
   upload: (mask: HTMLCanvasElement) => void;
   draw: (time: number, shade: Shade, reach: number, flare: number, span: [number, number], base: number) => void;
+  /* Blocks until what was drawn is really done. */
+  finish: () => void;
   dispose: () => void;
 }
 
@@ -241,6 +243,7 @@ function createFireGl(canvas: HTMLCanvasElement): FireGl | null {
       gl.uniform1f(u.base, base);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     },
+    finish: () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4)),
     dispose: () => {
       gl.deleteTexture(texture);
       gl.deleteBuffer(buffer);
@@ -249,6 +252,52 @@ function createFireGl(canvas: HTMLCanvasElement): FireGl | null {
       gl.deleteShader(fs);
       release();
     },
+  };
+}
+
+/* One fire kept ready between burns. The driver builds the shader on its
+   first draw (tens of milliseconds, a dropped-frame hitch right as the number
+   catches), so the table warms one while idle and each burn takes it. */
+interface WarmFire {
+  canvas: HTMLCanvasElement;
+  fire: FireGl;
+}
+let spare: WarmFire | null = null;
+
+function makeFire(): WarmFire | null {
+  const canvas = document.createElement("canvas");
+  canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated";
+  canvas.width = 4;
+  canvas.height = 4;
+  const fire = createFireGl(canvas);
+  if (!fire) return null;
+  // One real draw, so the program is built before it is needed.
+  fire.upload(canvas);
+  fire.draw(0, SHADES[0], 4, 0, [0, 0], 0);
+  fire.finish();
+  return { canvas, fire };
+}
+
+function takeFire(): WarmFire | null {
+  const warm = spare ?? makeFire();
+  spare = null;
+  return warm;
+}
+
+/* Called by the table while it sits idle; the returned function lets the
+   spare go when the table leaves. */
+export function warmChainFire(): () => void {
+  let cancelled = false;
+  const warm = () => {
+    if (!cancelled && !spare) spare = makeFire();
+  };
+  const idle = typeof requestIdleCallback === "function" ? requestIdleCallback(warm, { timeout: 2000 }) : window.setTimeout(warm, 300);
+  return () => {
+    cancelled = true;
+    if (typeof cancelIdleCallback === "function") cancelIdleCallback(idle);
+    else window.clearTimeout(idle);
+    spare?.fire.dispose();
+    spare = null;
   };
 }
 
@@ -277,8 +326,9 @@ export function ChainFire({
   ratio: number;
   reducedMotion: boolean;
 }) {
-  /* The canvas is the effect's own, made and dropped with it: a released
-     canvas only ever hands back its lost context, so each run takes a new one. */
+  /* The canvas comes warm from the table (takeFire) and goes back when the
+     fire goes out; one that lost its context is dropped, since a released
+     canvas only ever hands back its lost context. */
   const hostRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const redraw = useRef<(() => void) | null>(null);
@@ -293,15 +343,14 @@ export function ChainFire({
   useEffect(() => {
     const host = hostRef.current;
     if (!host || !on) return;
-    const canvas = document.createElement("canvas");
-    canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated";
-    host.appendChild(canvas);
-    const fire = createFireGl(canvas);
-    if (!fire) {
-      canvas.remove();
+    const taken = takeFire();
+    if (!taken) {
       setFailed(true);
       return;
     }
+    const { canvas, fire } = taken;
+    host.appendChild(canvas);
+    let dead = false;
     const mask = document.createElement("canvas");
     const font = getComputedStyle(canvas).fontFamily || "sans-serif";
     let drawn = "";
@@ -391,6 +440,7 @@ export function ChainFire({
     document.addEventListener("visibilitychange", wake);
     const lost = (event: Event) => {
       event.preventDefault();
+      dead = true;
       setFailed(true);
     };
     canvas.addEventListener("webglcontextlost", lost);
@@ -401,8 +451,9 @@ export function ChainFire({
       document.removeEventListener("visibilitychange", wake);
       canvas.removeEventListener("webglcontextlost", lost);
       redraw.current = null;
-      fire.dispose();
       canvas.remove();
+      if (dead || spare) fire.dispose();
+      else spare = taken;
     };
   }, [on, reducedMotion]);
   useEffect(() => {
