@@ -1396,6 +1396,10 @@ msgstr "{firstName} and {secondName}"
 msgid "{firstName} only"
 msgstr "{firstName} only"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{firstRemoved} and {moreRemoved} more"
+msgstr "{firstRemoved} and {moreRemoved} more"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "{forNextPass} wait for the next rating pass."
 msgstr "{forNextPass} wait for the next rating pass."
@@ -10314,6 +10318,10 @@ msgstr "Left click for highest star rating first, right click for lowest first"
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Left out"
 #~ msgstr "Left out"
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Left out {removedNames} because skins can't include programs, shortcuts or other archives."
+msgstr "Left out {removedNames} because skins can't include programs, shortcuts or other archives."
 
 #: src/routes/replay.tsx
 msgid "Left thumb"

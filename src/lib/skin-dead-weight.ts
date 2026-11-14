@@ -190,3 +190,37 @@ export async function trimSkinArchive(zip: JSZip, deadWeight: SkinDeadWeight, fi
   const blob = await trimmed.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
   return new File([blob], file.name, { type: file.type || "application/octet-stream" });
 }
+
+// Programs, scripts, shortcuts and archives inside the archive. The backend
+// refuses an .osk holding any of them (backend/src/skins/blocked-files.ts, the
+// list this copies), so the form strips them before anything else reads the
+// file. osu! loads none of them.
+const BLOCKED_EXTENSIONS = new Set([
+  "exe", "dll", "scr", "com", "pif", "cpl", "msi", "msp", "msix", "appx", "sys", "drv", "ocx",
+  "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh", "hta", "reg", "lnk", "url", "scf", "jar",
+  "sh", "command", "app", "dmg", "pkg", "deb", "rpm", "apk", "appimage", "iso", "vhd", "vhdx",
+  "osk", "olz", "osz", "zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "cab",
+]);
+
+export function isBlockedSkinFile(path: string): boolean {
+  const normalized = path.replace(/\\/g, "/");
+  if (normalized.endsWith("/")) return false;
+  if (/(^|\/)[^/]+\.app\//i.test(normalized)) return true;
+  const base = normalized.slice(normalized.lastIndexOf("/") + 1).toLowerCase();
+  const dot = base.lastIndexOf(".");
+  return dot > 0 && BLOCKED_EXTENSIONS.has(base.slice(dot + 1));
+}
+
+// The picked .osk without its blocked files, and the names it left out. An
+// archive with none comes back as the same File.
+export async function stripBlockedSkinFiles(file: File): Promise<{ file: File; removed: string[] }> {
+  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const blocked = Object.values(zip.files).filter((entry) => !entry.dir && isBlockedSkinFile(entry.name));
+  if (blocked.length === 0) return { file, removed: [] };
+  const deadWeight: SkinDeadWeight = {
+    files: blocked.map((entry) => ({ path: normalizePath(entry.name), bytes: 0, kind: "leftover" })),
+    bytes: 0,
+  };
+  const removed = blocked.map((entry) => basename(normalizePath(entry.name)));
+  return { file: await trimSkinArchive(zip, deadWeight, file), removed };
+}

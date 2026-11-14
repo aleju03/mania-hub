@@ -1385,6 +1385,10 @@ msgstr "{firstName} 和 {secondName}"
 msgid "{firstName} only"
 msgstr "仅 {firstName}"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{firstRemoved} and {moreRemoved} more"
+msgstr "{firstRemoved} 等 {moreRemoved} 个"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "{forNextPass} wait for the next rating pass."
 msgstr "{forNextPass} 个成绩等待下一轮评分。"
@@ -10287,6 +10291,10 @@ msgstr "左键按星级从高到低，右键从低到高"
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Left out"
 #~ msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Left out {removedNames} because skins can't include programs, shortcuts or other archives."
+msgstr "已移除 {removedNames}，皮肤不能包含程序、快捷方式或其他压缩包。"
 
 #: src/routes/replay.tsx
 msgid "Left thumb"

@@ -1373,6 +1373,10 @@ msgstr "{firstName} y {secondName}"
 msgid "{firstName} only"
 msgstr "Solo {firstName}"
 
+#: src/components/skins/SkinUploadModal.tsx
+msgid "{firstRemoved} and {moreRemoved} more"
+msgstr "{firstRemoved} y {moreRemoved} más"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "{forNextPass} wait for the next rating pass."
 msgstr "{forNextPass} esperan el próximo cálculo."
@@ -10275,6 +10279,10 @@ msgstr "Clic izquierdo para la SR más alta primero, clic derecho para la más b
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "Left out"
 #~ msgstr ""
+
+#: src/components/skins/SkinUploadModal.tsx
+msgid "Left out {removedNames} because skins can't include programs, shortcuts or other archives."
+msgstr "Se dejó fuera {removedNames} porque las skins no pueden incluir programas, accesos directos ni otros archivos comprimidos."
 
 #: src/routes/replay.tsx
 msgid "Left thumb"
