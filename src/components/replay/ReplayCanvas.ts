@@ -5014,6 +5014,7 @@ export class ManiaReplayRenderer {
     keyBoxWidth: number,
     _keyBoxHeight: number,
     keyGap: number,
+    columns: number[],
   ) {
     if (!this.inputOverlayKeyHistory || this.frames.length === 0) return;
 
@@ -5035,8 +5036,8 @@ export class ManiaReplayRenderer {
     const minBlockHeight = (keyBoxWidth <= 32 * hudScale ? 8 : 10) * hudScale;
     const fadeHeight = Math.min(48 * hudScale, Math.max(28 * hudScale, height * 0.32));
 
-    for (let col = 0; col < this.keyCount; col++) {
-      const laneX = keyRowX + col * (keyBoxWidth + keyGap) + laneInset;
+    for (const [slot, col] of columns.entries()) {
+      const laneX = keyRowX + slot * (keyBoxWidth + keyGap) + laneInset;
       const color = this.getSkinTapColor(col);
 
       const segments = this.segments[col];
@@ -5358,11 +5359,13 @@ export class ManiaReplayRenderer {
     };
   }
 
-  private getKeypressOverlayMetrics(scale: number): KeypressOverlayMetrics {
+  // Box size follows the keymode, so a split strip keeps the boxes the whole
+  // strip had.
+  private getKeypressOverlayMetrics(scale: number, boxes = this.keyCount): KeypressOverlayMetrics {
     const keyGap = Math.round((this.keyCount >= 8 ? 4 : 6) * scale);
     const keyBoxWidth = Math.round((this.keyCount >= 8 ? 36 : 40) * scale);
     const keyBoxHeight = Math.round(38 * scale);
-    const width = this.keyCount * keyBoxWidth + Math.max(0, this.keyCount - 1) * keyGap;
+    const width = boxes * keyBoxWidth + Math.max(0, boxes - 1) * keyGap;
     return { scale, keyGap, keyBoxWidth, keyBoxHeight, width, height: keyBoxHeight };
   }
 
@@ -5574,17 +5577,27 @@ export class ManiaReplayRenderer {
     });
   }
 
-  private renderKeypressOverlay(layout: Layout) {
-    const metrics = this.getKeypressOverlayMetrics(this.getOverlayScale(layout, "keypresses"));
+  // Split by hand, "keypresses" holds the left hand's columns and
+  // "keypressesRight" the right's, each placed on its own. The middle lane of
+  // an odd keymode goes with the thumb the hand overlays use.
+  private renderKeypressOverlay(layout: Layout, id: "keypresses" | "keypressesRight") {
+    const split = this.overlaySettings.keypresses.splitHands === true;
+    if (id === "keypressesRight" && (!split || !this.overlaySettings.keypresses.enabled)) return;
+    const allColumns = Array.from({ length: this.keyCount }, (_, col) => col);
+    const columns = split
+      ? allColumns.filter((col) => getReplayHandForColumn(col, this.keyCount, this.missThumbHand) === (id === "keypresses" ? "left" : "right"))
+      : allColumns;
+    if (columns.length === 0) return;
+    const metrics = this.getKeypressOverlayMetrics(this.getOverlayScale(layout, id), columns.length);
     const { scale, keyGap, keyBoxWidth, keyBoxHeight } = metrics;
-    const frame = this.getOverlayFrame(layout, "keypresses", metrics.width, metrics.height);
+    const frame = this.getOverlayFrame(layout, id, metrics.width, metrics.height);
     if (!frame) return;
 
     const currentState = this.currentKeyState;
-    this.renderKeyInputHistory(layout, frame.x, frame.y, keyBoxWidth, keyBoxHeight, keyGap);
+    this.renderKeyInputHistory(layout, frame.x, frame.y, keyBoxWidth, keyBoxHeight, keyGap, columns);
 
-    for (let col = 0; col < this.keyCount; col++) {
-      const x = frame.x + col * (keyBoxWidth + keyGap);
+    for (const [slot, col] of columns.entries()) {
+      const x = frame.x + slot * (keyBoxWidth + keyGap);
       const pressed = (currentState & (1 << col)) !== 0;
       const color = this.getSkinTapColor(col);
       const keyFill = pressed ? "#0a0a12" : "#ffffff";
@@ -6052,19 +6065,27 @@ export class ManiaReplayRenderer {
       // the shape rather than of the gap under it.
       : style === "meters" ? valueFontSize + labelGap + trackHeight
       : valueFontSize;
-    const width = this.keyCount * cellWidth + (this.keyCount - 1) * cellGap;
-    const height = Math.ceil(shapeHeight + labelGap + labelFontSize);
+    // Vertical stacks the cells top to bottom with the column number to the
+    // left of each, so the strip can stand beside the stage.
+    const vertical = this.overlaySettings.columnStats.vertical === true;
+    const labelColumn = vertical ? Math.ceil(this.measureTextWidth("10", labelFontSize, "700") + 6 * scale) : 0;
+    const rowGap = Math.max(cellGap, Math.round(4 * scale));
+    const width = vertical ? labelColumn + cellWidth : this.keyCount * cellWidth + (this.keyCount - 1) * cellGap;
+    const height = vertical
+      ? Math.ceil(this.keyCount * shapeHeight + (this.keyCount - 1) * rowGap)
+      : Math.ceil(shapeHeight + labelGap + labelFontSize);
     const frame = this.getOverlayFrame(layout, "columnStats", width, height);
     if (!frame) return;
 
     cells.forEach((cell, col) => {
-      const x = frame.x + col * (cellWidth + cellGap);
+      const x = vertical ? frame.x + labelColumn : frame.x + col * (cellWidth + cellGap);
+      const top = vertical ? frame.y + col * (shapeHeight + rowGap) : frame.y;
       const center = x + cellWidth / 2;
-      let valueY = frame.y + valueFontSize / 2;
+      let valueY = top + valueFontSize / 2;
       let valueColor = "#ffffff";
 
       if (style === "circles") {
-        const cy = frame.y + radius;
+        const cy = top + radius;
         valueY = cy;
         this.circle(center, cy, radius, "#111019", 0.85);
         this.circle(center, cy, radius - 3.5 * scale, cell.color, 0.22);
@@ -6074,8 +6095,8 @@ export class ManiaReplayRenderer {
       } else if (style === "leaderboard") {
         // The same shear as lazer's leaderboard, with upright readable text.
         const inset = panelHeight * shear;
-        valueY = frame.y + panelHeight / 2;
-        this.graphics.save().setTransform(1, 0, -shear, 1, x + inset, frame.y)
+        valueY = top + panelHeight / 2;
+        this.graphics.save().setTransform(1, 0, -shear, 1, x + inset, top)
           .roundRect(0, 0, cellWidth - inset, panelHeight, 6 * scale).fill({ color: 0x17151e, alpha: 0.85 })
           .roundRect(0, 0, cellWidth - inset, panelHeight, 6 * scale).fill({ color: hexToNumber(cell.color), alpha: 0.14 })
           .roundRect(scale, scale, cellWidth - inset - 2 * scale, panelHeight - 2 * scale, 5 * scale)
@@ -6084,7 +6105,7 @@ export class ManiaReplayRenderer {
         // Nothing to carry the colour but the number itself.
         valueColor = cell.color;
       } else {
-        const trackY = frame.y + valueFontSize + labelGap;
+        const trackY = top + valueFontSize + labelGap;
         this.fillRect(x, trackY, cellWidth, trackHeight, "#ffffff", 0.12);
         if (cell.fill * cellWidth > 0.5) this.fillRect(x, trackY, cellWidth * cell.fill, trackHeight, cell.color, 0.95);
       }
@@ -6103,7 +6124,7 @@ export class ManiaReplayRenderer {
         anchorY: 0.5,
         dropShadow: style === "meters" || style === "plain",
       });
-      this.addText(String(col + 1), center, frame.y + height - labelFontSize / 2, {
+      this.addText(String(col + 1), vertical ? frame.x + labelColumn / 2 - 2 * scale : center, vertical ? valueY : frame.y + height - labelFontSize / 2, {
         fontSize: labelFontSize,
         fill: "#ffffff",
         alpha: 0.5,
@@ -6350,7 +6371,8 @@ export class ManiaReplayRenderer {
     this.inOverlayLayer("leaderboard", () => this.renderLeaderboard(layout));
     if (this.shouldRenderCustomOverlays(layout)) {
       this.inOverlayLayer("replayMaster", () => this.renderReplayMasterOverlay(layout));
-      this.inOverlayLayer("keypresses", () => this.renderKeypressOverlay(layout));
+      this.inOverlayLayer("keypresses", () => this.renderKeypressOverlay(layout, "keypresses"));
+      this.inOverlayLayer("keypressesRight", () => this.renderKeypressOverlay(layout, "keypressesRight"));
       this.inOverlayLayer("kps", () => this.renderKpsOverlay(layout));
       this.inOverlayLayer("misses", () => this.renderMissOverlay(layout));
       this.inOverlayLayer("accuracy", () => this.renderAccuracyOverlay(layout));

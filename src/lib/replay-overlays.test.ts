@@ -345,3 +345,21 @@ describe("measureReplayCustomMedia", () => {
     expect(measureReplayCustomMedia(media, null)).toEqual({ width: 320, height: 180 });
   });
 });
+
+describe("split keypresses and vertical per-finger stats", () => {
+  it("keeps both switches, including on a placement the legacy defaults reset", () => {
+    const settings = normalizeReplayOverlaySettings({
+      keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75, splitHands: true },
+      columnStats: { enabled: true, x: 0.2, y: 0.3, scale: 1, vertical: true },
+    });
+    expect(settings.keypresses.splitHands).toBe(true);
+    expect(settings.columnStats.vertical).toBe(true);
+    expect(settings.keypressesRight.enabled).toBe(true);
+  });
+
+  it("leaves both off for settings saved before them", () => {
+    const settings = normalizeReplayOverlaySettings({ keypresses: { enabled: true, x: 0.1, y: 0.5, scale: 1 } });
+    expect(settings.keypresses.splitHands).toBeUndefined();
+    expect(settings.columnStats.vertical).toBeUndefined();
+  });
+});

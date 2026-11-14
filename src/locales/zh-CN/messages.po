@@ -1385,6 +1385,7 @@ msgstr "{firstName} 和 {secondName}"
 msgid "{firstName} only"
 msgstr "仅 {firstName}"
 
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{firstRemoved} and {moreRemoved} more"
 msgstr "{firstRemoved} 等 {moreRemoved} 个"
@@ -10020,6 +10021,10 @@ msgstr "键数"
 msgid "Keypresses"
 msgstr "按键数"
 
+#: src/lib/replay-overlays.ts
+msgid "Keypresses (right hand)"
+msgstr "按键数（右手）"
+
 #: src/routes/recommendations.tsx
 #: src/routes/skins.tsx
 msgid "keys"
@@ -10292,6 +10297,7 @@ msgstr "左键按星级从高到低，右键从低到高"
 #~ msgid "Left out"
 #~ msgstr ""
 
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Left out {removedNames} because skins can't include programs, shortcuts or other archives."
 msgstr "已移除 {removedNames}，皮肤不能包含程序、快捷方式或其他压缩包。"
@@ -18479,6 +18485,11 @@ msgstr "把歌曲加快到 1.5倍速并提高音调。"
 msgid "Speeds the song up to 1.5x."
 msgstr "把歌曲加快到 1.5倍速。"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/replay.tsx
+msgid "Split hands"
+msgstr "分开左右手"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
@@ -20668,7 +20679,7 @@ msgstr "此次导出对该浏览器来说太大了。请选择更短的范围或
 msgid "This file could not be decoded."
 msgstr "无法解码这个文件。"
 
-#. placeholder {0}: formatSkinFileSize(picked.size)
+#. placeholder {0}: formatSkinFileSize(original.size)
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "This file is {0}. The limit is 50 MB."
 msgstr "这个文件有 {0}，上限是 50 MB。"
@@ -21940,7 +21951,9 @@ msgstr "已认证通过"
 msgid "Verify"
 msgstr "验证"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/replay-overlays.ts
+#: src/routes/replay.tsx
 msgid "Vertical"
 msgstr "纵向"
 

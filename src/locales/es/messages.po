@@ -1373,6 +1373,7 @@ msgstr "{firstName} y {secondName}"
 msgid "{firstName} only"
 msgstr "Solo {firstName}"
 
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{firstRemoved} and {moreRemoved} more"
 msgstr "{firstRemoved} y {moreRemoved} más"
@@ -10008,6 +10009,10 @@ msgstr "Modos de teclas"
 msgid "Keypresses"
 msgstr "Pulsaciones"
 
+#: src/lib/replay-overlays.ts
+msgid "Keypresses (right hand)"
+msgstr "Pulsaciones (mano derecha)"
+
 #: src/routes/recommendations.tsx
 #: src/routes/skins.tsx
 msgid "keys"
@@ -10280,6 +10285,7 @@ msgstr "Clic izquierdo para la SR más alta primero, clic derecho para la más b
 #~ msgid "Left out"
 #~ msgstr ""
 
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Left out {removedNames} because skins can't include programs, shortcuts or other archives."
 msgstr "Se dejó fuera {removedNames} porque las skins no pueden incluir programas, accesos directos ni otros archivos comprimidos."
@@ -18467,6 +18473,11 @@ msgstr "Sube la velocidad de la canción a 1.5x y sube el tono."
 msgid "Speeds the song up to 1.5x."
 msgstr "Sube la velocidad de la canción a 1.5x."
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/replay.tsx
+msgid "Split hands"
+msgstr "Separar manos"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
@@ -20656,7 +20667,7 @@ msgstr "Esta exportación es demasiado grande para este navegador. Elige un rang
 msgid "This file could not be decoded."
 msgstr "No se pudo decodificar este archivo."
 
-#. placeholder {0}: formatSkinFileSize(picked.size)
+#. placeholder {0}: formatSkinFileSize(original.size)
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "This file is {0}. The limit is 50 MB."
 msgstr "Este archivo pesa {0}. El límite es 50 MB."
@@ -21928,7 +21939,9 @@ msgstr "Clear verificado"
 msgid "Verify"
 msgstr "Verificar"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/replay-overlays.ts
+#: src/routes/replay.tsx
 msgid "Vertical"
 msgstr "Vertical"
 

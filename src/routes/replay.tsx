@@ -2800,9 +2800,22 @@ function ReplayViewer({
     applyOverlaySettings({ ...current, judgements: { ...current.judgements, style } });
     setOverlayMenu(null);
   }, [applyOverlaySettings]);
+  const toggleOverlayOptionFromMenu = useCallback((id: "keypresses" | "columnStats", option: "splitHands" | "vertical") => {
+    const current = overlaySettingsRef.current;
+    const on = current[id][option] !== true;
+    applyOverlaySettings({
+      ...current,
+      [id]: { ...current[id], [option]: on },
+      // Splitting always brings the right hand up, even one removed earlier.
+      ...(option === "splitHands" && on ? { keypressesRight: { ...current.keypressesRight, enabled: true } } : {}),
+    });
+    setOverlayMenu(null);
+  }, [applyOverlaySettings]);
+  // The right-hand keypress strip exists only while Keypresses is split.
   const hiddenOverlayIds = overlayMenu && !overlayMenu.targetId
     ? REPLAY_OVERLAY_IDS.filter((id) => !overlaySettings[id]?.enabled
-      && (!isReplayStageArtOverlay(id) || overlayMenu.stageArtIds.includes(id)))
+      && (!isReplayStageArtOverlay(id) || overlayMenu.stageArtIds.includes(id))
+      && (id !== "keypressesRight" || (overlaySettings.keypresses?.enabled && overlaySettings.keypresses.splitHands === true)))
     : [];
   // Reads as "Remove misses" mid-sentence, so the label is lowercased before
   // it goes into the message.
@@ -5354,6 +5367,22 @@ function ReplayViewer({
                     />
                   </div>
                 )}
+                {(overlayMenu.targetId === "keypresses" || overlayMenu.targetId === "keypressesRight") && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => toggleOverlayOptionFromMenu("keypresses", "splitHands")}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <Check
+                        className={`h-3.5 w-3.5 text-osu-pink ${overlaySettings.keypresses.splitHands === true ? "" : "invisible"}`}
+                        aria-hidden="true"
+                      />
+                      <Trans>Split hands</Trans>
+                    </button>
+                    <div className="my-1 h-px bg-white/10" />
+                  </>
+                )}
                 {overlayMenu.targetId === "handAccuracy" && (
                   <>
                     <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-white/45"><Trans>Style</Trans></div>
@@ -5426,6 +5455,18 @@ function ReplayViewer({
                         {i18n._(REPLAY_COLUMN_STAT_METRIC_LABELS[metric])}
                       </button>
                     ))}
+                    <div className="my-1 h-px bg-white/10" />
+                    <button
+                      type="button"
+                      onClick={() => toggleOverlayOptionFromMenu("columnStats", "vertical")}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <Check
+                        className={`h-3.5 w-3.5 text-osu-pink ${overlaySettings.columnStats.vertical === true ? "" : "invisible"}`}
+                        aria-hidden="true"
+                      />
+                      <Trans>Vertical</Trans>
+                    </button>
                     <div className="my-1 h-px bg-white/10" />
                   </>
                 )}

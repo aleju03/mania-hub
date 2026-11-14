@@ -1396,6 +1396,7 @@ msgstr "{firstName} and {secondName}"
 msgid "{firstName} only"
 msgstr "{firstName} only"
 
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{firstRemoved} and {moreRemoved} more"
 msgstr "{firstRemoved} and {moreRemoved} more"
@@ -10047,6 +10048,10 @@ msgstr "Keymodes"
 msgid "Keypresses"
 msgstr "Keypresses"
 
+#: src/lib/replay-overlays.ts
+msgid "Keypresses (right hand)"
+msgstr "Keypresses (right hand)"
+
 #: src/routes/recommendations.tsx
 #: src/routes/skins.tsx
 msgid "keys"
@@ -10319,6 +10324,7 @@ msgstr "Left click for highest star rating first, right click for lowest first"
 #~ msgid "Left out"
 #~ msgstr "Left out"
 
+#: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Left out {removedNames} because skins can't include programs, shortcuts or other archives."
 msgstr "Left out {removedNames} because skins can't include programs, shortcuts or other archives."
@@ -18514,6 +18520,11 @@ msgstr "Speeds the song up to 1.5x and raises the pitch."
 msgid "Speeds the song up to 1.5x."
 msgstr "Speeds the song up to 1.5x."
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/replay.tsx
+msgid "Split hands"
+msgstr "Split hands"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Spoiler text"
@@ -20711,7 +20722,7 @@ msgstr "This export is too large for this browser. Pick a shorter range or a low
 msgid "This file could not be decoded."
 msgstr "This file could not be decoded."
 
-#. placeholder {0}: formatSkinFileSize(picked.size)
+#. placeholder {0}: formatSkinFileSize(original.size)
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "This file is {0}. The limit is 50 MB."
 msgstr "This file is {0}. The limit is 50 MB."
@@ -21983,7 +21994,9 @@ msgstr "Verified clear"
 msgid "Verify"
 msgstr "Verify"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/lib/replay-overlays.ts
+#: src/routes/replay.tsx
 msgid "Vertical"
 msgstr "Vertical"
 
