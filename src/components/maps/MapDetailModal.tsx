@@ -1415,7 +1415,7 @@ export function MapDetailModal({
                     <>
                       <a
                         href={oszDownloadUrl(entry.beatmapsetId)}
-                        className="order-first inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-osu-pink px-3.5 py-2 text-[12px] font-bold text-white shadow-[0_2px_10px_-2px] shadow-osu-pink/50 hover:bg-osu-pink-light transition-colors sm:justify-start"
+                        className="order-first inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-osu-pink px-3.5 py-2 text-[12px] font-bold text-white hover:bg-osu-pink-light transition-colors sm:justify-start"
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
                           <path d="M12 3v10" />

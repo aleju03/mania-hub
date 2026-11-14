@@ -2684,7 +2684,7 @@ function MapDetailsContent({
       <div className="shrink-0 border-t border-white/5 p-3.5 flex flex-wrap items-center gap-2">
         <a
           href={oszDownloadUrl(setId)}
-          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-osu-pink px-3.5 py-2 text-[12px] font-bold text-white shadow-[0_2px_10px_-2px] shadow-osu-pink/50 hover:bg-osu-pink-light transition-colors"
+          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-osu-pink px-3.5 py-2 text-[12px] font-bold text-white hover:bg-osu-pink-light transition-colors"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
             <path d="M12 3v10" />

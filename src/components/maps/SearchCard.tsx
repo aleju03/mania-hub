@@ -363,7 +363,7 @@ export function OszButton({ beatmapsetId }: { beatmapsetId: number }) {
       onClick={stop}
       title={t`Download .osz`}
       aria-label={t`Download .osz`}
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-osu-pink text-white shadow-[0_2px_10px_-2px] shadow-osu-pink/50 transition-colors hover:bg-osu-pink-light"
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-osu-pink text-white transition-colors hover:bg-osu-pink-light"
     >
       <DownloadIcon />
     </a>
