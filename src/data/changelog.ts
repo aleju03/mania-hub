@@ -155,7 +155,7 @@ export const UPDATES: ChangelogUpdate[] = [
     ],
   },
   { date: "2026-11-09", text: "Redesigned map cards. They show what the chart is made of and its top three patterns, and MSD is now called Rating.", kind: "change", to: "/maps", image: { src: "/images/changelog/2026-11-09-map-cards.webp", alt: "Three map cards", width: 640, height: 122 } },
-  { date: "2026-11-09", text: "The site font is now Tracker Round, a rounded font made for the site.", kind: "change" },
+  { date: "2026-11-09", text: "The website's font is now Tracker Round, a rounded font made for it.", kind: "change" },
   { date: "2026-11-09", text: "Fixed the chart preview on map cards blocking scrolling on phones.", to: "/maps" },
   {
     date: "2026-11-01",

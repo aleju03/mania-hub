@@ -9,7 +9,7 @@ import { loadRenderModBadges, renderModBadge } from "./og-mod-badge";
 afterEach(() => vi.unstubAllGlobals());
 
 const fontFile = (name: string) => readFile(new URL(`../../public/fonts/${name}`, import.meta.url)).then((data) => data.buffer as ArrayBuffer);
-const fonts = async () => ogFontList(await fontFile("Torus-Regular.otf"), await fontFile("Torus-Heavy.otf"));
+const fonts = async () => ogFontList(await fontFile("TrackerRound-Regular.ttf"), await fontFile("TrackerRound-Heavy-v2.ttf"));
 
 it("preserves a custom speed when the badge assets fail to load", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 503 })));

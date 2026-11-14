@@ -31,7 +31,7 @@ const EMBLEM_SIZE = 46;
 const FLAG_WIDTH = 42;
 const FLAG_HEIGHT = 28;
 const VALUE_SIZE = 32;
-// Torus digits differ in width; each gets the same box so numbers line up.
+// Tracker Round digits differ in width; each gets the same box so numbers line up.
 const DIGIT_WIDTH = 20;
 const BACKGROUND = { r: 30, g: 31, b: 36 };
 const RANK_COLORS: Record<number, string> = { 1: "#f5c542", 2: "#c9ced6", 3: "#d08a52" };

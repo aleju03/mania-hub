@@ -1773,7 +1773,7 @@ msgstr "{min}★ a {max}★"
 
 #: src/routes/discord.tsx
 msgid "{minPp}pp and up"
-msgstr ""
+msgstr "{minPp}pp o más"
 
 #: src/components/me/MyStatsInsights.tsx
 #: src/lib/format.ts
@@ -1817,7 +1817,7 @@ msgstr "{name} se agregó a la cola, vuelve más tarde :)"
 
 #: src/routes/discord.tsx
 msgid "{name} and up"
-msgstr ""
+msgstr "{name} o más"
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "{name} claimed your gift week. Every $4 you give brings a new code."
@@ -2362,11 +2362,11 @@ msgstr "/rankings"
 
 #: src/routes/discord.tsx
 msgid "/rankings shows this country here when none is given, and a Top plays feed you turn on posts its players until you choose others."
-msgstr ""
+msgstr "/rankings muestra este país aquí cuando no se indica ninguno, y un feed de Top plays que actives publica a sus jugadores hasta que elijas otros."
 
 #: src/routes/discord.tsx
 msgid "/rankings shows this country here when none is given, and a Top plays or Dan clears feed you turn on posts its players until you choose others."
-msgstr ""
+msgstr "/rankings muestra este país aquí cuando no se indica ninguno, y un feed de Top plays o de Clears de dan que actives publica a sus jugadores hasta que elijas otros."
 
 #: src/routes/discord.tsx
 msgid "/recent"
@@ -3996,11 +3996,11 @@ msgstr "Agrega una carta a tus destacados"
 
 #: src/routes/discord.tsx
 msgid "Add a channel"
-msgstr ""
+msgstr "Agregar un canal"
 
 #: src/routes/discord.tsx
 msgid "Add a channel, then turn on what it posts."
-msgstr ""
+msgstr "Agrega un canal y luego activa lo que publica."
 
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "Add a country code"
@@ -8736,7 +8736,7 @@ msgstr "Predeterminado"
 
 #: src/routes/discord.tsx
 msgid "Default country"
-msgstr ""
+msgstr "País por defecto"
 
 #: src/components/maps/MapPreviewAudio.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -12906,7 +12906,7 @@ msgstr "En el directorio de servidores"
 
 #: src/routes/discord.tsx
 msgid "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4>, <5>m!card</5> or <6>m!f</6> with a player's name after it, for recent, top, profile, skills, compare, maniacard and farm, <7>m!m</7> with a map, <8>m!ch</8> for a challenge and <9>m!rank</9> with a country."
-msgstr ""
+msgstr "En servidores también puedes escribir <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4>, <5>m!card</5> o <6>m!f</6> con el nombre de un jugador después, para recent, top, profile, skills, compare, maniacard y farm, <7>m!m</7> con un mapa, <8>m!ch</8> para un challenge y <9>m!rank</9> con un país."
 
 #. placeholder {0}: at + 1
 #: src/components/player/ProfileStatCards.tsx
@@ -14850,11 +14850,11 @@ msgstr "PP bajo"
 
 #: src/routes/discord.tsx
 msgid "Lowest dan"
-msgstr ""
+msgstr "Dan mínimo"
 
 #: src/routes/discord.tsx
 msgid "Lowest pp"
-msgstr ""
+msgstr "pp mínimo"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Lowest PP first"
@@ -17942,7 +17942,7 @@ msgstr "En charts de jack de 4K el bono por encima del mínimo se reduce a la mi
 
 #: src/routes/discord.tsx
 msgid "On in every channel."
-msgstr ""
+msgstr "Activado en todos los canales."
 
 #: src/components/prism/PrismUpdates.tsx
 msgid "On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
@@ -19874,23 +19874,23 @@ msgstr "publicado por"
 
 #: src/routes/discord.tsx
 msgid "Posts a goal when its player completes it."
-msgstr ""
+msgstr "Publica una meta cuando su jugador la completa."
 
 #: src/routes/discord.tsx
 msgid "Posts a player's near clear, clear or overclear of a dan course or practice chart."
-msgstr ""
+msgstr "Publica cuando un jugador casi hace clear, hace clear u overclear de un dan o de un chart de práctica."
 
 #: src/routes/discord.tsx
 msgid "Posts a player's new top play, a play that enters their best 200."
-msgstr ""
+msgstr "Publica la nueva top play de un jugador, una jugada que entra en sus mejores 200."
 
 #: src/routes/discord.tsx
 msgid "Posts each new line of the website's changelog."
-msgstr ""
+msgstr "Publica cada línea nueva del changelog del sitio."
 
 #: src/routes/discord.tsx
 msgid "Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty."
-msgstr ""
+msgstr "Publica mapas recién rankeados en los que los jugadores están ganando pp, y charts nuevos de 4K y 7K que dan más pp de lo que pide su dificultad."
 
 #. placeholder {0}: picked.length
 #: src/components/discord/FeedPlayersModal.tsx
@@ -21762,7 +21762,7 @@ msgstr "Los replays se reproducen con el skin publicado de su jugador. Desactív
 
 #: src/routes/discord.tsx
 msgid "Replies to score posts and beatmap links in the channel with the chart's dan."
-msgstr ""
+msgstr "Responde a los scores y links de mapas del canal con el dan del chart."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/supporter/CustomThemeCredit.tsx
@@ -22292,7 +22292,7 @@ msgstr "¡Partida ganada! Desde aquí es infinita"
 
 #: src/routes/discord.tsx
 msgid "Runs up to one accuracy point under the pass bar. 4K LN courses have none."
-msgstr ""
+msgstr "Jugadas de hasta un punto de accuracy por debajo del mínimo para pasar. Los cursos de 4K LN no tienen."
 
 #: src/components/communities/field-options.tsx
 msgid "Russian"
@@ -28413,7 +28413,7 @@ msgstr "Top {n} del modo de teclas"
 
 #: src/routes/discord.tsx
 msgid "Top {top} of the keymode"
-msgstr ""
+msgstr "Top {top} del modo de teclas"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "top {top}%"
@@ -28755,7 +28755,7 @@ msgstr "Desactivar"
 
 #: src/routes/discord.tsx
 msgid "Turn off everywhere"
-msgstr ""
+msgstr "Desactivar en todos"
 
 #: src/components/settings/SkillVisibilitySetting.tsx
 msgid "Turn off your skill ratings?"
@@ -28763,7 +28763,7 @@ msgstr "¿Desactivar tus ratings de skill?"
 
 #: src/routes/discord.tsx
 msgid "Turn on in every channel"
-msgstr ""
+msgstr "Activar en todos los canales"
 
 #: src/routes/discord.tsx
 #~ msgid "Turn on Top plays in a channel, then choose the players it posts."
@@ -30069,7 +30069,7 @@ msgstr "Cómo se llama"
 
 #: src/routes/discord.tsx
 msgid "What near clears are"
-msgstr ""
+msgstr "Qué es un casi clear"
 
 #: src/routes/recommendations.tsx
 msgid "what nearby players actually farm"
@@ -30090,7 +30090,7 @@ msgstr "Lo que obtienes al apoyar"
 
 #: src/routes/discord.tsx
 msgid "What the default country does"
-msgstr ""
+msgstr "Qué hace el país por defecto"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "What the number is not"
@@ -30214,7 +30214,7 @@ msgstr "Qué mapas"
 
 #: src/routes/discord.tsx
 msgid "Which plays"
-msgstr ""
+msgstr "Qué jugadas"
 
 #: src/routes/dan-estimates.tsx
 msgid "Which plays are looked at"

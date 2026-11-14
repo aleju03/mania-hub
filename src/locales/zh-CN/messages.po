@@ -1785,7 +1785,7 @@ msgstr "{min}★ 至 {max}★"
 
 #: src/routes/discord.tsx
 msgid "{minPp}pp and up"
-msgstr ""
+msgstr "{minPp}pp 及以上"
 
 #: src/components/me/MyStatsInsights.tsx
 #: src/lib/format.ts
@@ -1829,7 +1829,7 @@ msgstr "{name} 已加入队列，稍后再来看看吧 :)"
 
 #: src/routes/discord.tsx
 msgid "{name} and up"
-msgstr ""
+msgstr "{name} 及以上"
 
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "{name} claimed your gift week. Every $4 you give brings a new code."
@@ -2374,11 +2374,11 @@ msgstr "/rankings"
 
 #: src/routes/discord.tsx
 msgid "/rankings shows this country here when none is given, and a Top plays feed you turn on posts its players until you choose others."
-msgstr ""
+msgstr "未指定国家/地区时，/rankings 在这里显示这个国家/地区；你开启的最佳成绩推送也会发布它的玩家，直到你选择其他玩家。"
 
 #: src/routes/discord.tsx
 msgid "/rankings shows this country here when none is given, and a Top plays or Dan clears feed you turn on posts its players until you choose others."
-msgstr ""
+msgstr "未指定国家/地区时，/rankings 在这里显示这个国家/地区；你开启的最佳成绩或段位通过推送也会发布它的玩家，直到你选择其他玩家。"
 
 #: src/routes/discord.tsx
 msgid "/recent"
@@ -4008,11 +4008,11 @@ msgstr "把一张卡片加入展示柜"
 
 #: src/routes/discord.tsx
 msgid "Add a channel"
-msgstr ""
+msgstr "添加频道"
 
 #: src/routes/discord.tsx
 msgid "Add a channel, then turn on what it posts."
-msgstr ""
+msgstr "先添加一个频道，再开启它要发布的内容。"
 
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "Add a country code"
@@ -8748,7 +8748,7 @@ msgstr "默认"
 
 #: src/routes/discord.tsx
 msgid "Default country"
-msgstr ""
+msgstr "默认国家/地区"
 
 #: src/components/maps/MapPreviewAudio.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -12918,7 +12918,7 @@ msgstr "已加入服务器发现"
 
 #: src/routes/discord.tsx
 msgid "In servers you can also type <0>m!r</0>, <1>m!t</1>, <2>m!p</2>, <3>m!s</3>, <4>m!c</4>, <5>m!card</5> or <6>m!f</6> with a player's name after it, for recent, top, profile, skills, compare, maniacard and farm, <7>m!m</7> with a map, <8>m!ch</8> for a challenge and <9>m!rank</9> with a country."
-msgstr ""
+msgstr "在服务器里也可以输入 <0>m!r</0>、<1>m!t</1>、<2>m!p</2>、<3>m!s</3>、<4>m!c</4>、<5>m!card</5> 或 <6>m!f</6>，后面跟玩家名，分别对应 recent、top、profile、skills、compare、maniacard 和 farm；<7>m!m</7> 后面跟谱面，<8>m!ch</8> 用于挑战，<9>m!rank</9> 后面跟国家/地区。"
 
 #. placeholder {0}: at + 1
 #: src/components/player/ProfileStatCards.tsx
@@ -14862,11 +14862,11 @@ msgstr "低 pp"
 
 #: src/routes/discord.tsx
 msgid "Lowest dan"
-msgstr ""
+msgstr "最低段位"
 
 #: src/routes/discord.tsx
 msgid "Lowest pp"
-msgstr ""
+msgstr "最低 pp"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Lowest PP first"
@@ -17954,7 +17954,7 @@ msgstr "在 4K 叠键谱面上，通过线以上的加分减半，因为这类�
 
 #: src/routes/discord.tsx
 msgid "On in every channel."
-msgstr ""
+msgstr "所有频道均已开启。"
 
 #: src/components/prism/PrismUpdates.tsx
 msgid "On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
@@ -19886,23 +19886,23 @@ msgstr "发布者"
 
 #: src/routes/discord.tsx
 msgid "Posts a goal when its player completes it."
-msgstr ""
+msgstr "玩家完成目标时发布。"
 
 #: src/routes/discord.tsx
 msgid "Posts a player's near clear, clear or overclear of a dan course or practice chart."
-msgstr ""
+msgstr "玩家在段位谱或练习谱上接近通过、通过或超额通过时发布。"
 
 #: src/routes/discord.tsx
 msgid "Posts a player's new top play, a play that enters their best 200."
-msgstr ""
+msgstr "发布玩家新的最佳成绩，即进入其前 200 名的成绩。"
 
 #: src/routes/discord.tsx
 msgid "Posts each new line of the website's changelog."
-msgstr ""
+msgstr "发布网站更新日志的每一条新内容。"
 
 #: src/routes/discord.tsx
 msgid "Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty."
-msgstr ""
+msgstr "发布玩家正在刷 pp 的新上架谱面，以及给出的 pp 高于其难度的新 4K 和 7K 谱面。"
 
 #. placeholder {0}: picked.length
 #: src/components/discord/FeedPlayersModal.tsx
@@ -21774,7 +21774,7 @@ msgstr "回放默认使用玩家发布的皮肤。关闭后始终使用你自己
 
 #: src/routes/discord.tsx
 msgid "Replies to score posts and beatmap links in the channel with the chart's dan."
-msgstr ""
+msgstr "回复频道中的成绩和谱面链接，告诉大家这张谱面的段位。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 #: src/components/supporter/CustomThemeCredit.tsx
@@ -22304,7 +22304,7 @@ msgstr "本局胜利！之后进入无尽模式"
 
 #: src/routes/discord.tsx
 msgid "Runs up to one accuracy point under the pass bar. 4K LN courses have none."
-msgstr ""
+msgstr "准确率比通过线低不超过 1 个百分点的成绩。4K LN 段位没有这一项。"
 
 #: src/components/communities/field-options.tsx
 msgid "Russian"
@@ -28425,7 +28425,7 @@ msgstr "该键数前 {n}"
 
 #: src/routes/discord.tsx
 msgid "Top {top} of the keymode"
-msgstr ""
+msgstr "该键数前 {top} 名"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "top {top}%"
@@ -28767,7 +28767,7 @@ msgstr "关闭"
 
 #: src/routes/discord.tsx
 msgid "Turn off everywhere"
-msgstr ""
+msgstr "全部关闭"
 
 #: src/components/settings/SkillVisibilitySetting.tsx
 msgid "Turn off your skill ratings?"
@@ -28775,7 +28775,7 @@ msgstr "关闭你的技能评分？"
 
 #: src/routes/discord.tsx
 msgid "Turn on in every channel"
-msgstr ""
+msgstr "在所有频道开启"
 
 #: src/routes/discord.tsx
 #~ msgid "Turn on Top plays in a channel, then choose the players it posts."
@@ -30081,7 +30081,7 @@ msgstr "主题名称"
 
 #: src/routes/discord.tsx
 msgid "What near clears are"
-msgstr ""
+msgstr "什么是接近通过"
 
 #: src/routes/recommendations.tsx
 msgid "what nearby players actually farm"
@@ -30102,7 +30102,7 @@ msgstr "支持可获得的福利"
 
 #: src/routes/discord.tsx
 msgid "What the default country does"
-msgstr ""
+msgstr "默认国家/地区的作用"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "What the number is not"
@@ -30226,7 +30226,7 @@ msgstr "哪些谱面"
 
 #: src/routes/discord.tsx
 msgid "Which plays"
-msgstr ""
+msgstr "哪些成绩"
 
 #: src/routes/dan-estimates.tsx
 msgid "Which plays are looked at"
