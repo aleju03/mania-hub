@@ -227,7 +227,12 @@ function ClassicEmbed({ embed }: { embed: DiscordEmbedJson }) {
     <div className="grid max-w-[516px] rounded" style={{ backgroundColor: DISCORD.embed, borderLeft: `4px solid ${accent}` }}>
       <div className="flex gap-4 px-4 pb-4 pt-2">
         <div className="min-w-0 flex-1 space-y-2">
-          {embed.author ? <div className="text-[14px] font-semibold" style={{ color: DISCORD.white }}>{embed.author.name}</div> : null}
+          {embed.author ? (
+            <div className="flex items-center gap-2 text-[14px] font-semibold" style={{ color: DISCORD.white }}>
+              {embed.author.icon_url ? <img src={embed.author.icon_url} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" /> : null}
+              <span>{embed.author.name}</span>
+            </div>
+          ) : null}
           {embed.title ? <div className="font-semibold" style={{ color: embed.url ? DISCORD.link : DISCORD.white }}>{embed.title}</div> : null}
           {embed.description ? <DiscordMarkdown content={embed.description} /> : null}
           {embed.fields?.map((field, index) => (
