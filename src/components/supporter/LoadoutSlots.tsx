@@ -14,7 +14,7 @@ import {
   type SupporterAvatarFrameId,
 } from "../../lib/supporter-avatar-frames";
 import { SUPPORTER_NAME_FONT_LABELS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
-import { baseNameStyle, DEFAULT_SOLID_COLOUR, isSolidNameStyle, TERMINAL_STEADY, NAME_OUTLINE_THICKEST, nameOutlineThickness, nameOutlineValue, nameStyleLabel, solidNameColour, solidNameStyle, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { baseNameStyle, DEFAULT_SOLID_COLOUR, isSolidNameStyle, TERMINAL_BARE, NAME_OUTLINE_THICKEST, nameOutlineThickness, nameOutlineValue, nameStyleLabel, solidNameColour, solidNameStyle, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "./SupporterNameStyle";
 import { announceFrameDanPicked, frameDanName, SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
@@ -853,16 +853,16 @@ function NameStyleDrawer({ current, disabled, username, onTry, onPick, onNameOut
           <button
             type="button"
             role="switch"
-            aria-checked={nameStyle !== TERMINAL_STEADY}
-            aria-label={t`Blinking cursor`}
+            aria-checked={nameStyle !== TERMINAL_BARE}
+            aria-label={t`Cursor`}
             disabled={disabled}
-            onClick={() => onPick("nameStyle", nameStyle === TERMINAL_STEADY ? "terminal" : TERMINAL_STEADY)}
+            onClick={() => onPick("nameStyle", nameStyle === TERMINAL_BARE ? "terminal" : TERMINAL_BARE)}
             className="relative h-5 w-9 shrink-0 cursor-pointer rounded-full disabled:cursor-default"
           >
-            <span className={`absolute inset-0 rounded-full transition-colors ${nameStyle !== TERMINAL_STEADY ? "bg-osu-pink" : "bg-osu-b2"}`} />
-            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${nameStyle !== TERMINAL_STEADY ? "left-[18px]" : "left-0.5"}`} />
+            <span className={`absolute inset-0 rounded-full transition-colors ${nameStyle !== TERMINAL_BARE ? "bg-osu-pink" : "bg-osu-b2"}`} />
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${nameStyle !== TERMINAL_BARE ? "left-[18px]" : "left-0.5"}`} />
           </button>
-          <span className="text-[12.5px] text-osu-f1">{t`Blinking cursor`}</span>
+          <span className="text-[12.5px] text-osu-f1">{t`Cursor`}</span>
         </div>
       )}
       <NameOutlineSwitch outline={nameOutline} disabled={disabled} onChange={onNameOutline} />

@@ -5586,8 +5586,8 @@ msgid "Blend"
 msgstr "混合"
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "Blinking cursor"
-msgstr "光标闪烁"
+#~ msgid "Blinking cursor"
+#~ msgstr "光标闪烁"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
@@ -8380,6 +8380,10 @@ msgstr "本月"
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "Current view"
 #~ msgstr "当前视图"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Cursor"
+msgstr "光标"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Cursor trail"

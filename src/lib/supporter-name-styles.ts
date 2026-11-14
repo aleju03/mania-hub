@@ -50,15 +50,15 @@ type BuiltInNameStyleId = (typeof SUPPORTER_NAME_STYLES)[number];
 /* A solid colour of the supporter's choosing: "solid-" and six lowercase hex
    digits, stored in the same column as the named styles. */
 export type SolidNameStyle = `solid-${string}`;
-/* Terminal with its cursor held still, for a wearer who does not want the
-   blink: the one style's other setting, kept as its own id the way a solid
+/* Terminal without its cursor, for a wearer who does not want the block
+   blinking after the name: the one style's other setting, kept as its own id the way a solid
    colour is, so it is no tile of its own and adds nothing to the count. */
-export const TERMINAL_STEADY = "terminal-steady";
-export type SupporterNameStyleId = BuiltInNameStyleId | SolidNameStyle | typeof TERMINAL_STEADY;
+export const TERMINAL_BARE = "terminal-bare";
+export type SupporterNameStyleId = BuiltInNameStyleId | SolidNameStyle | typeof TERMINAL_BARE;
 
 /** The style an id is drawn, listed and labelled as. */
 export function baseNameStyle(id: SupporterNameStyleId): BuiltInNameStyleId | SolidNameStyle {
-  return id === TERMINAL_STEADY ? "terminal" : id;
+  return id === TERMINAL_BARE ? "terminal" : id;
 }
 
 const SOLID_NAME_STYLE = /^solid-[0-9a-f]{6}$/;
@@ -118,7 +118,7 @@ export function isShaderNameStyle(value: SupporterNameStyleId): value is ShaderN
 }
 
 export function isSupporterNameStyle(value: unknown): value is SupporterNameStyleId {
-  return typeof value === "string" && ((SUPPORTER_NAME_STYLES as readonly string[]).includes(value) || SOLID_NAME_STYLE.test(value) || value === TERMINAL_STEADY);
+  return typeof value === "string" && ((SUPPORTER_NAME_STYLES as readonly string[]).includes(value) || SOLID_NAME_STYLE.test(value) || value === TERMINAL_BARE);
 }
 
 export function nameStyleLabel(id: SupporterNameStyleId): MessageDescriptor {

@@ -5788,8 +5788,8 @@ msgid "Blend"
 msgstr "Blend"
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "Blinking cursor"
-msgstr "Blinking cursor"
+#~ msgid "Blinking cursor"
+#~ msgstr "Blinking cursor"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
@@ -8658,6 +8658,10 @@ msgstr "Current month"
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "Current view"
 #~ msgstr "Current view"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Cursor"
+msgstr "Cursor"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Cursor trail"

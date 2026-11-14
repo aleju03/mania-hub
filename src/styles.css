@@ -1255,9 +1255,9 @@ html[data-custom-cursor="true"] * {
   display: inline-block;
 }
 
-/* The wearer's choice of a cursor that does not blink. */
-.name-tag--terminal.name-tag--steady::after {
-  animation: none;
+/* The wearer's choice of no cursor at all. */
+.name-tag--terminal.name-tag--bare::after {
+  display: none;
 }
 
 @keyframes name-tag-caret {

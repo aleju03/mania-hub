@@ -5574,8 +5574,8 @@ msgid "Blend"
 msgstr "Fusión"
 
 #: src/components/supporter/LoadoutSlots.tsx
-msgid "Blinking cursor"
-msgstr "Cursor parpadeante"
+#~ msgid "Blinking cursor"
+#~ msgstr "Cursor parpadeante"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
@@ -8368,6 +8368,10 @@ msgstr "Mes actual"
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "Current view"
 #~ msgstr "Vista actual"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Cursor"
+msgstr "Cursor"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Cursor trail"

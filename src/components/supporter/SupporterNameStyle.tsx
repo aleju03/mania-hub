@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
-import { baseNameStyle, isShaderNameStyle, isSolidNameStyle, TERMINAL_STEADY, nameOutlineInline, solidNameColour, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { baseNameStyle, isShaderNameStyle, isSolidNameStyle, TERMINAL_BARE, nameOutlineInline, solidNameColour, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { useWebGlSlot } from "../../lib/gl-budget";
 
 /* A supporter's name in their name tag style and/or name font. One element whose look comes
@@ -86,7 +86,7 @@ export function SupporterStyledName({ nameStyle, nameFont = null, outline = null
   }, [stilled, nameStyle, nameFont, name]);
 
   return (
-    <span ref={spanRef} style={nameStyleInline(nameStyle, outline)} className={`${className ?? ""}${outline ? " name-outline" : ""}${nameStyle ? ` name-tag name-tag--${isSolidNameStyle(nameStyle) ? "solid" : baseNameStyle(nameStyle)}${nameStyle === TERMINAL_STEADY ? " name-tag--steady" : ""}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${live || (still && isShader) ? " name-tag--hero" : ""}${shaded || stilled ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : still && isShader ? " name-tag--waiting" : ""}`}>
+    <span ref={spanRef} style={nameStyleInline(nameStyle, outline)} className={`${className ?? ""}${outline ? " name-outline" : ""}${nameStyle ? ` name-tag name-tag--${isSolidNameStyle(nameStyle) ? "solid" : baseNameStyle(nameStyle)}${nameStyle === TERMINAL_BARE ? " name-tag--bare" : ""}` : ""}${nameFont ? ` name-font--${nameFont}` : ""}${live || (still && isShader) ? " name-tag--hero" : ""}${shaded || stilled ? " relative" : ""}${ready ? " name-tag--live" : shaded ? " name-tag--pending" : still && isShader ? " name-tag--waiting" : ""}`}>
       {name}
       {(shaded || stilled) && <span ref={hostRef} aria-hidden className="name-tag-shader" />}
     </span>
