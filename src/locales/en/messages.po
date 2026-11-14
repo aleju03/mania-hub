@@ -3058,6 +3058,7 @@ msgstr "accuracy"
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/dan-estimates.tsx
+#: src/routes/discord.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 #: src/routes/teams.tsx
@@ -9331,6 +9332,10 @@ msgstr "how many players near you have it"
 msgid "How recommendations work"
 msgstr "How recommendations work"
 
+#: src/routes/discord.tsx
+msgid "How the pp is worked out"
+msgstr "How the pp is worked out"
+
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "How to pick"
@@ -14896,6 +14901,10 @@ msgstr "pp"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "PP"
 msgstr "PP"
+
+#: src/routes/discord.tsx
+msgid "pp at"
+msgstr "pp at"
 
 #: src/routes/player/$username.tsx
 msgid "PP by keymode"
@@ -22518,6 +22527,10 @@ msgstr "Weekly recap"
 #: src/routes/discord.tsx
 #~ msgid "What {name} posts"
 #~ msgstr "What {name} posts"
+
+#: src/routes/discord.tsx
+msgid "What a play on stable at that accuracy gives, at the speed the post names."
+msgstr "What a play on stable at that accuracy gives, at the speed the post names."
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."

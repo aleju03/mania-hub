@@ -150,6 +150,21 @@ const MAX_ENTRIES = 40;
 const BOOT_POLL_MS = 1500;
 const RERUN_ON_RELOAD_LIMIT = 8;
 
+interface SampleDmResult {
+  kind: string;
+  source: string;
+  result: string;
+  error?: string;
+}
+
+const SAMPLE_DM_LABELS: Record<string, string> = {
+  snipe: "Snipe",
+  follow_top_play: "Followed top play",
+  new_map: "New farm map",
+  card_pull: "Card pulled",
+  weekly_recap: "Weekly recap",
+};
+
 const FEEDS: Array<{ feed: FeedRequest["feed"]; label: string }> = [
   { feed: "top_play", label: "Top play" },
   { feed: "snipe", label: "Snipe" },
@@ -170,6 +185,7 @@ interface PersistedState {
   values: Record<string, Record<string, string>>;
   feedCountry: string;
   autoRerun: boolean;
+  sampleDiscordId: string;
 }
 
 function readPersisted(): Partial<PersistedState> {
@@ -261,6 +277,7 @@ function DiscordPlaygroundPage() {
   const [values, setValues] = useState<Record<string, Record<string, string>>>(persisted.values ?? {});
   const [feedCountry, setFeedCountry] = useState(persisted.feedCountry ?? "");
   const [autoRerun, setAutoRerun] = useState(persisted.autoRerun ?? true);
+  const [sampleDiscordId, setSampleDiscordId] = useState(persisted.sampleDiscordId ?? "");
   const [search, setSearch] = useState("");
   // An uploaded screenshot for the message menu, kept out of localStorage (it can be megabytes).
   const [messageImage, setMessageImage] = useState<string | null>(null);
@@ -268,6 +285,7 @@ function DiscordPlaygroundPage() {
   const [busyButton, setBusyButton] = useState<string | null>(null);
   const [jsonOpen, setJsonOpen] = useState<Record<string, boolean>>({});
   const [backendState, setBackendState] = useState<"up" | "down" | "reloaded">("up");
+  const [sampleDms, setSampleDms] = useState<{ busy: boolean; results: SampleDmResult[] | null; error: string | null }>({ busy: false, results: null, error: null });
   const bootIdRef = useRef<string | null>(null);
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
@@ -276,14 +294,14 @@ function DiscordPlaygroundPage() {
   useEffect(() => {
     const state: PersistedState = {
       entries: entries.filter((entry) => !entry.pending).slice(-MAX_ENTRIES),
-      actorId, inGuild, manageGuild, command: commandName, values, feedCountry, autoRerun,
+      actorId, inGuild, manageGuild, command: commandName, values, feedCountry, autoRerun, sampleDiscordId,
     };
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
       // Storage full or blocked: the playground still works, it just forgets.
     }
-  }, [entries, actorId, inGuild, manageGuild, commandName, values, feedCountry, autoRerun]);
+  }, [entries, actorId, inGuild, manageGuild, commandName, values, feedCountry, autoRerun, sampleDiscordId]);
 
   const loadInfo = useCallback(async () => {
     try {
@@ -407,6 +425,17 @@ function DiscordPlaygroundPage() {
     const country = (feedCountry || info?.defaultCountry || "GLOBAL").toUpperCase();
     startEntry(`${label} feed, ${country}`, { kind: "feed", request: { feed, country } }, { name: "feed", avatar: null });
   }, [feedCountry, info, startEntry]);
+
+  const sendSampleDms = useCallback(async () => {
+    setSampleDms({ busy: true, results: null, error: null });
+    try {
+      const country = (feedCountry || info?.defaultCountry || "").toUpperCase() || undefined;
+      const body = await runDiscordPlayground({ data: { action: "sample-dms", body: { country, discordUserId: sampleDiscordId.trim() || undefined } } }) as { results: SampleDmResult[] };
+      setSampleDms({ busy: false, results: body.results, error: null });
+    } catch (error) {
+      setSampleDms({ busy: false, results: null, error: error instanceof Error ? error.message : String(error) });
+    }
+  }, [feedCountry, info, sampleDiscordId]);
 
   const clickButton = useCallback(async (entry: Entry, component: DiscordComponentJson) => {
     if (!component.custom_id || entry.source.kind !== "interaction") return;
@@ -673,6 +702,37 @@ function DiscordPlaygroundPage() {
               ))}
             </div>
             <p className="text-[11px] leading-relaxed text-osu-f1">Built from the newest local data, the way the channel feeds post it.</p>
+          </section>
+
+          <section className="space-y-2 border-t border-white/[0.07] pt-4">
+            <Label>Supporter DMs</Label>
+            <input
+              value={sampleDiscordId}
+              onChange={(event) => setSampleDiscordId(event.target.value.replace(/\D/g, ""))}
+              placeholder="Your Discord user ID (default: your linked account)"
+              className="w-full rounded-md border border-white/[0.07] bg-osu-b4 px-2 py-1.5 text-[13px] text-osu-l1 outline-none placeholder:text-osu-f1 focus:border-osu-pink/60"
+            />
+            <button
+              type="button"
+              onClick={() => void sendSampleDms()}
+              disabled={sampleDms.busy}
+              className="rounded-md bg-osu-b4 px-3 py-1.5 text-[12px] font-semibold text-osu-l1 hover:brightness-110 disabled:opacity-50"
+            >
+              {sampleDms.busy ? "Sending..." : "Send me one of each"}
+            </button>
+            {sampleDms.error ? <p className="text-[12px] text-red-300">{sampleDms.error}</p> : null}
+            {sampleDms.results ? (
+              <ul className="space-y-1 text-[12px]">
+                {sampleDms.results.map((entry) => (
+                  <li key={entry.kind} className="flex gap-2">
+                    <span className={entry.result === "sent" ? "text-emerald-300" : "text-amber-300"}>{entry.result}</span>
+                    <span className="text-osu-l1">{SAMPLE_DM_LABELS[entry.kind] ?? entry.kind}</span>
+                    <span className="min-w-0 truncate text-osu-f1" title={entry.error ?? entry.source}>{entry.error ?? entry.source}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <p className="text-[11px] leading-relaxed text-osu-f1">Sends real DMs from the bot to your own linked Discord, in your DM language.</p>
           </section>
         </aside>
 

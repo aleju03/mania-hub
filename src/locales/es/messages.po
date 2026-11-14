@@ -3035,6 +3035,7 @@ msgstr "Acc"
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/dan-estimates.tsx
+#: src/routes/discord.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 #: src/routes/teams.tsx
@@ -9296,6 +9297,10 @@ msgstr "cuántos jugadores cerca de ti lo tienen"
 msgid "How recommendations work"
 msgstr "Cómo funcionan las recomendaciones"
 
+#: src/routes/discord.tsx
+msgid "How the pp is worked out"
+msgstr "Cómo se calcula el pp"
+
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "Cómo elegir"
@@ -11041,7 +11046,7 @@ msgstr ""
 
 #: src/routes/discord.tsx
 msgid "Lowest pp"
-msgstr ""
+msgstr "pp mínimo"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Lowest PP first"
@@ -14857,6 +14862,10 @@ msgstr "pp"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "PP"
 msgstr "PP"
+
+#: src/routes/discord.tsx
+msgid "pp at"
+msgstr "pp con"
 
 #: src/routes/player/$username.tsx
 msgid "PP by keymode"
@@ -22463,6 +22472,10 @@ msgstr "Resumen semanal"
 #: src/routes/discord.tsx
 #~ msgid "What {name} posts"
 #~ msgstr ""
+
+#: src/routes/discord.tsx
+msgid "What a play on stable at that accuracy gives, at the speed the post names."
+msgstr "Lo que da una play en stable con ese acc, a la velocidad que dice el post."
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."

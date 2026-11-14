@@ -3047,6 +3047,7 @@ msgstr "准确率"
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/dan-estimates.tsx
+#: src/routes/discord.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 #: src/routes/teams.tsx
@@ -9308,6 +9309,10 @@ msgstr "有多少与你水平相近的玩家打过它"
 msgid "How recommendations work"
 msgstr "推荐是如何生成的"
 
+#: src/routes/discord.tsx
+msgid "How the pp is worked out"
+msgstr "pp 的计算方式"
+
 #: src/routes/maps.tsx
 msgid "How to pick"
 msgstr "抽取方式"
@@ -11053,7 +11058,7 @@ msgstr ""
 
 #: src/routes/discord.tsx
 msgid "Lowest pp"
-msgstr ""
+msgstr "最低 pp"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Lowest PP first"
@@ -14869,6 +14874,10 @@ msgstr "pp"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "PP"
 msgstr "pp"
+
+#: src/routes/discord.tsx
+msgid "pp at"
+msgstr "pp，准确率"
 
 #: src/routes/player/$username.tsx
 msgid "PP by keymode"
@@ -22475,6 +22484,10 @@ msgstr "每周回顾"
 #: src/routes/discord.tsx
 #~ msgid "What {name} posts"
 #~ msgstr ""
+
+#: src/routes/discord.tsx
+msgid "What a play on stable at that accuracy gives, at the speed the post names."
+msgstr "在 stable 上以该准确率游玩、按帖子标注的速度能拿到的 pp。"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."

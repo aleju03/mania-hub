@@ -1609,11 +1609,18 @@ export const fetchDiscordGuilds = createServerFn({ method: "GET" })
 // feed post through the bot's real handlers and returns the reply body.
 export const runDiscordPlayground = createServerFn({ method: "POST" })
   .validator((data: { action?: unknown; body?: unknown }) => ({
-    action: data?.action === "interaction" || data?.action === "feed" ? data.action : "info",
-    body: data?.body && typeof data.body === "object" ? data.body : {},
+    action: data?.action === "interaction" || data?.action === "feed" || data?.action === "sample-dms" ? data.action : "info",
+    body: data?.body && typeof data.body === "object" ? data.body as Record<string, unknown> : {},
   }))
   .handler(async ({ data }): Promise<any> => {
     await requireAdminAccess("Discord playground");
+    if (data.action === "sample-dms") {
+      // Always to the signed-in admin's own Discord, never someone picked in the page.
+      const { readCurrentAuth } = await import("./auth-server");
+      const viewerId = (await readCurrentAuth()).viewer?.id;
+      if (!viewerId) throw new Error("Sign in with osu! to get the sample DMs.");
+      data.body = { country: data.body.country, osuUserId: viewerId };
+    }
     const base = getServerLiveBackendUrl();
     if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
     const headers: Record<string, string> = { "content-type": "application/json" };
