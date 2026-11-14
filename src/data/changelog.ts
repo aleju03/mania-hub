@@ -71,7 +71,7 @@ export const UPDATES: ChangelogUpdate[] = [
     kind: "new",
     to: "/support",
     more: [
-      { text: "Supporters get avatar frames, name styles and name fonts that show on their profile and next to their name across the site, profile themes that put a moving backdrop behind their profile, and a mascot that stands next to their profile stats." },
+      { text: "Supporters get avatar frames, name styles and name fonts that show on their profile and next to their name across the site, profile themes that put a moving backdrop behind their profile, and a stand, a figure that sits next to their profile stats." },
       { text: "Their pack cards get foils, their own card art, 3D card cases, binders, pack wrappers and blades to slice packs open with." },
       { text: "They also get a rank badge next to their name that goes up a rank for every month in a row, profile stat cards they can swap, plays they pick to show on their profile, and links for exported replay videos that play in Discord." },
       { text: "Anyone can try all of it on with Preview on my profile, which shows your own profile wearing what you picked, only to you." },

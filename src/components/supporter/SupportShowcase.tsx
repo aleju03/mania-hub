@@ -803,21 +803,25 @@ export function ClipShowcase() {
 
 const DM_GREEN = 0x88da20;
 const DM_PINK = 0xff66ab;
-const DM_RED = 0xff4d6d;
+
+// the DT pill as the bot sends it, two halves; the zero id draws the site's own copy
+const DM_DT = "<:mod_dt_l:000000000000000000>\u2060<:mod_dt_r:000000000000000000>";
 
 const dmText = (content: string): DiscordComponentJson => ({ type: 10, content });
 // a link button without its url, so the preview draws it but it goes nowhere
 const dmLink = (label: string): DiscordComponentJson => ({ type: 2, style: 5, label });
 
-/* A DM in the bot's own layout (backend discord/dm-alerts.ts, weekly-recap.ts):
-   a container with the accent strip, text beside a thumbnail, then the rest. */
-function dmMessage(accent: number, lines: string[], image: string, rest: DiscordComponentJson[]): DiscordMessageJson {
+/* A DM in the bot's own layout (backend discord/dm-alerts.ts, weekly-recap.ts,
+   panels.ts newMapPost): a container with the accent strip, a small line over
+   it when the message has one, text beside a thumbnail, then the rest. */
+function dmMessage(accent: number, lines: string[], image: string, rest: DiscordComponentJson[], over?: string): DiscordMessageJson {
   return {
     flags: FLAG_COMPONENTS_V2,
     components: [{
       type: 17,
       accent_color: accent,
       components: [
+        ...(over ? [dmText(over)] : []),
         { type: 9, components: lines.map(dmText), accessory: { type: 11, media: { url: image } } },
         ...rest,
       ],
@@ -825,8 +829,8 @@ function dmMessage(accent: number, lines: string[], image: string, rest: Discord
   };
 }
 
-/* The bot's DMs as they land in Discord: a snipe, a card pulled, the weekly
-   recap. Example numbers. */
+/* The bot's DMs as they land in Discord: a new farm map, a card pulled, the
+   weekly recap. Example numbers. */
 export function BotDmShowcase() {
   const { t } = useLingui();
   const reduced = useReducedMotion();
@@ -834,9 +838,15 @@ export function BotDmShowcase() {
   // the viewer's own card, as the bot attaches it; the site logo when signed out
   const cardImage = you.id ? `/api/og?kind=maniacard&username=${encodeURIComponent(you.name)}` : you.avatar;
   const messages = [
-    dmMessage(DM_RED, [`-# ${t`**ExamplePlayer** sniped you from #1`}`, `### ${t`Example Song [Insane]`}`, t`98.42%  **312pp**  Score **948,120** vs 941,377`], "/images/supporter-perks/play-cover.webp", [
-      { type: 1, components: [dmLink(t`Beatmap`), dmLink(t`Snipes`)] },
-    ]),
+    // the speeds worth playing it at and what each pays, as the bot prices a 2,000-note chart
+    dmMessage(DM_GREEN, [
+      `### ${t`Example Artist - Example Song`}`,
+      `**${t`Insane`}**\n-# ${t`4K  ranked 2 hours ago`}`,
+      "**6.20★**\n95% **289pp**  97% **340pp**  99% **398pp**\n-# Lazer  305pp  356pp  413pp",
+    ], "/images/supporter-perks/play-cover.webp", [
+      dmText(`**8.60★** ${DM_DT}\n95% **602pp**  97% **709pp**  99% **830pp**\n-# Lazer  636pp  742pp  861pp`),
+      { type: 1, components: [dmLink(t`Map`), dmLink("osu!")] },
+    ], `-# ${t`New farm map`}`),
     dmMessage(DM_GREEN, [t`**ExamplePlayer** pulled your card`, `-# ${t`the first copy anyone has pulled`}`], cardImage, [
       { type: 1, components: [dmLink(t`Their collection`), dmLink(t`Packs`)] },
     ]),

@@ -74,7 +74,8 @@ function Emoji({ name, id, animated, jumbo }: { name: string; id: string; animat
   const margin = /_s?l$/.test(name) ? "0 0 0 0.1em" : /_s?r$/.test(name) ? "0 0.05em 0 0" : "0 0.05em 0 0.1em";
   return (
     <img
-      src={emojiUrl(id, animated)}
+      // an all-zero id is an example's emoji: the site's own copy, with no trip to Discord
+      src={/^0+$/.test(id) ? `/images/discord/emojis/${name}.png` : emojiUrl(id, animated)}
       alt={`:${name}:`}
       title={`:${name}:`}
       draggable={false}

@@ -97,7 +97,7 @@ function TermsPage() {
         </LegalParagraph>
         <LegalParagraph>
           <Trans>
-            This covers themes, avatar frames, companions and every image. None of them may carry
+            This covers themes, avatar frames, stands and every image. None of them may carry
             sexual or graphic content, hate or harassment, or political or religious messaging, such
             as slogans, symbols of parties or movements, or imagery of wars and conflicts. A
             country's flag on its own is fine.
@@ -116,7 +116,7 @@ function TermsPage() {
         <LegalParagraph>
           <Trans>
             Supporter status is optional. It unlocks cosmetic extras on the site, such as profile
-            themes, avatar frames, name styles and mascots, and changes nothing about rankings,
+            themes, avatar frames, name styles and stands, and changes nothing about rankings,
             scores or ratings. The extras on offer may change over time.
           </Trans>
         </LegalParagraph>

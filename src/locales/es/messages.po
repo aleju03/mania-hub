@@ -2329,12 +2329,16 @@ msgid "**186** plays  **4** new top plays  **1** goal completed"
 msgstr "**186** plays  **4** top plays nuevas  **1** meta completada"
 
 #: src/components/supporter/SupportShowcase.tsx
+#~ msgid "**23** players gained pp on it already, **1,840pp** in total"
+#~ msgstr "**23** jugadores ya ganaron pp con este mapa, **1,840pp** en total"
+
+#: src/components/supporter/SupportShowcase.tsx
 msgid "**ExamplePlayer** pulled your card"
 msgstr "**ExamplePlayer** sacó tu carta"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**ExamplePlayer** sniped you from #1"
-msgstr "**ExamplePlayer** te hizo snipe desde el #1"
+#~ msgid "**ExamplePlayer** sniped you from #1"
+#~ msgstr "**ExamplePlayer** te hizo snipe desde el #1"
 
 #: src/routes/discord.tsx
 msgid "/challenge"
@@ -3059,6 +3063,14 @@ msgstr "4. Tu dan es el promedio de tus skills"
 msgid "4K"
 msgstr "4K"
 
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "4K  5.84★  ranked 2 hours ago"
+#~ msgstr "4K  5.84★  rankeado hace 2 horas"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "4K  ranked 2 hours ago"
+msgstr "4K  rankeado hace 2 horas"
+
 #. placeholder {0}: N.fourKeys.chips
 #: src/lib/pack-run.ts
 msgid "4K cards give +{0} notes."
@@ -3285,8 +3297,8 @@ msgid "97%, on ScoreV2 accuracy"
 msgstr "97%, con acc de ScoreV2"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "98.42%  **312pp**  Score **948,120** vs 941,377"
-msgstr "98.42%  **312pp**  Score **948,120** vs 941,377"
+#~ msgid "98.42%  **312pp**  Score **948,120** vs 941,377"
+#~ msgstr "98.42%  **312pp**  Score **948,120** vs 941,377"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "A .glb model (up to 100,000 triangles, textures inside it), an image or a GIF, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
@@ -5319,8 +5331,8 @@ msgid "BBCode editor"
 msgstr "Editor de BBCode"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Beatmap"
-msgstr "Mapa"
+#~ msgid "Beatmap"
+#~ msgstr "Mapa"
 
 #. placeholder {0}: mark.beatmapId
 #: src/routes/recommendations.tsx
@@ -8561,6 +8573,10 @@ msgstr "Dan {0}"
 #~ msgid "Dan {0} range"
 #~ msgstr "Rango de dan {0}"
 
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "Dan **10**"
+#~ msgstr "Dan **10**"
+
 #: src/components/maps/PlayResults.tsx
 msgid "Dan accuracy"
 msgstr "Precisión para dan"
@@ -10178,12 +10194,16 @@ msgid "Exact estimate: {0}"
 msgstr "Estimación exacta: {0}"
 
 #: src/components/supporter/SupportShowcase.tsx
+msgid "Example Artist - Example Song"
+msgstr "Example Artist - Example Song"
+
+#: src/components/supporter/SupportShowcase.tsx
 msgid "Example numbers."
 msgstr "Números de ejemplo."
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Example Song [Insane]"
-msgstr "Example Song [Insane]"
+#~ msgid "Example Song [Insane]"
+#~ msgstr "Example Song [Insane]"
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Excluded sections"
@@ -12102,6 +12122,7 @@ msgid "Hide it from everyone else, instead of showing it with no way in"
 msgstr "Ocultarlo para todos los demás, en vez de mostrarlo sin forma de entrar"
 
 #: src/components/supporter/LoadoutSlots.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Hide my osu! banner"
 msgstr "Ocultar mi banner de osu!"
 
@@ -13032,6 +13053,7 @@ msgstr "Opciones del overlay de input"
 msgid "Inputs"
 msgstr "Inputs"
 
+#: src/components/supporter/SupportShowcase.tsx
 #: src/lib/pack-run.ts
 msgid "Insane"
 msgstr "Insane"
@@ -15154,6 +15176,7 @@ msgstr "mapa"
 #: src/components/maps/DanProgressRail.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
+#: src/components/supporter/SupportShowcase.tsx
 msgid "Map"
 msgstr "Mapa"
 
@@ -15320,14 +15343,13 @@ msgstr "marcado difícil"
 msgid "Marker"
 msgstr "Marcador"
 
-#: src/components/supporter/loadout.ts
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Mascot"
 msgstr "Mascota"
 
 #: src/routes/support.tsx
-msgid "Mascots"
-msgstr "Mascotas"
+#~ msgid "Mascots"
+#~ msgstr "Mascotas"
 
 #: src/components/prism/MashOdExplorer.tsx
 #~ msgid "Mash accuracy"
@@ -16193,6 +16215,10 @@ msgstr "nueva colección"
 msgid "New collection"
 msgstr "Nueva colección"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "New farm map"
+msgstr "Mapa nuevo para farmear"
+
 #: src/routes/discord.tsx
 msgid "New farm maps"
 msgstr "Mapas nuevos para farmear"
@@ -16752,8 +16778,8 @@ msgid "No maps match your search"
 msgstr "Ningún mapa coincide con tu búsqueda"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "No mascot"
-msgstr "Sin mascota"
+#~ msgid "No mascot"
+#~ msgstr "Sin mascota"
 
 #: src/routes/recommendations.tsx
 msgid "no matches"
@@ -17102,6 +17128,10 @@ msgstr "Ningún snipe coincide con los filtros actuales."
 #: src/routes/snipes.tsx
 msgid "No snipes tracked yet for {countryName}."
 msgstr "Aún no hay snipes trackeados para {countryName}."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "No stand"
+msgstr "Sin stand"
 
 #: src/components/packs/StreakGame.tsx
 msgid "No streak this time."
@@ -24453,7 +24483,6 @@ msgstr "Sniper"
 msgid "snipes"
 msgstr "snipes"
 
-#: src/components/supporter/SupportShowcase.tsx
 #: src/routes/snipes.tsx
 msgid "Snipes"
 msgstr "Snipes"
@@ -24956,6 +24985,11 @@ msgstr "STAM"
 msgid "Stamina"
 msgstr "Stamina"
 
+#: src/components/supporter/loadout.ts
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Stand"
+msgstr "Stand"
+
 #: src/lib/pack-run.ts
 #: src/lib/packs.ts
 msgid "Standard"
@@ -24968,6 +25002,10 @@ msgstr "Hoja estándar"
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Standard foil"
 msgstr "Foil estándar"
+
+#: src/routes/support.tsx
+msgid "Stands"
+msgstr "Stands"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/lib/replay-overlays.ts
@@ -25459,8 +25497,12 @@ msgid "Supporter status is bought as time on your osu! account: $4 buys 30 days,
 msgstr "El estado de supporter se compra como tiempo en tu cuenta de osu!: $4 compran 30 días, cualquier otro monto compra tiempo proporcional al día, y un solo pago de $40 o más compra un año completo por cada $40. Un pago se suma al tiempo que te queda, y el estado termina cuando se acaba el tiempo. El tiempo de supporter queda ligado a la cuenta para la que se pagó y no se puede pasar a otra, salvo con los códigos de regalo que da el sitio."
 
 #: src/routes/terms.tsx
-msgid "Supporter status is optional. It unlocks cosmetic extras on the site, such as profile themes, avatar frames, name styles and mascots, and changes nothing about rankings, scores or ratings. The extras on offer may change over time."
-msgstr "El estado de supporter es opcional. Desbloquea extras cosméticos en el sitio, como temas de perfil, marcos de avatar, estilos de nombre y mascotas, y no cambia nada de rankings, scores ni ratings. Los extras que se ofrecen pueden cambiar con el tiempo."
+#~ msgid "Supporter status is optional. It unlocks cosmetic extras on the site, such as profile themes, avatar frames, name styles and mascots, and changes nothing about rankings, scores or ratings. The extras on offer may change over time."
+#~ msgstr "El estado de supporter es opcional. Desbloquea extras cosméticos en el sitio, como temas de perfil, marcos de avatar, estilos de nombre y mascotas, y no cambia nada de rankings, scores ni ratings. Los extras que se ofrecen pueden cambiar con el tiempo."
+
+#: src/routes/terms.tsx
+msgid "Supporter status is optional. It unlocks cosmetic extras on the site, such as profile themes, avatar frames, name styles and stands, and changes nothing about rankings, scores or ratings. The extras on offer may change over time."
+msgstr "El estado de supporter es opcional. Desbloquea extras cosméticos en el sitio, como temas de perfil, marcos de avatar, estilos de nombre y stands, y no cambia nada de rankings, scores ni ratings. Los extras que se ofrecen pueden cambiar con el tiempo."
 
 #: src/routes/terms.tsx
 msgid "Supporter Themes And Uploads"
@@ -25492,8 +25534,12 @@ msgid "Supporting keeps the servers running and new features coming. As thanks, 
 msgstr "Apoyar mantiene los servidores en marcha y las novedades llegando. Como agradecimiento, los supporters tienen todo lo de esta página."
 
 #: src/routes/support.tsx
-msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, mascots, card foils, packs cosmetics, extra profile stats, video share links and DMs from the Discord bot."
-msgstr "Apoyar paga los servidores. Los supporters tienen temas de perfil, marcos de avatar, estilos de nombre, mascotas, foils de carta, cosméticos de sobres, estadísticas extra de perfil, enlaces para compartir videos y DMs del bot de Discord."
+#~ msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, mascots, card foils, packs cosmetics, extra profile stats, video share links and DMs from the Discord bot."
+#~ msgstr "Apoyar paga los servidores. Los supporters tienen temas de perfil, marcos de avatar, estilos de nombre, mascotas, foils de carta, cosméticos de sobres, estadísticas extra de perfil, enlaces para compartir videos y DMs del bot de Discord."
+
+#: src/routes/support.tsx
+msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, stands, card foils, packs cosmetics, extra profile stats, video share links and DMs from the Discord bot."
+msgstr "Apoyar paga los servidores. Los supporters tienen temas de perfil, marcos de avatar, estilos de nombre, stands, foils de carta, cosméticos de sobres, estadísticas extra de perfil, enlaces para compartir videos y DMs del bot de Discord."
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "sure?"
@@ -27814,8 +27860,12 @@ msgid "This country's opt-in list is full right now. Check back later."
 msgstr "La lista de este país está llena por ahora. Vuelve más tarde."
 
 #: src/routes/terms.tsx
-msgid "This covers themes, avatar frames, companions and every image. None of them may carry sexual or graphic content, hate or harassment, or political or religious messaging, such as slogans, symbols of parties or movements, or imagery of wars and conflicts. A country's flag on its own is fine."
-msgstr "Esto aplica a temas, marcos de avatar, compañeros y cualquier imagen. Ninguno puede tener contenido sexual o gráfico, odio o acoso, ni mensajes políticos o religiosos, como eslóganes, símbolos de partidos o movimientos, o imágenes de guerras y conflictos. La bandera de un país por sí sola está bien."
+#~ msgid "This covers themes, avatar frames, companions and every image. None of them may carry sexual or graphic content, hate or harassment, or political or religious messaging, such as slogans, symbols of parties or movements, or imagery of wars and conflicts. A country's flag on its own is fine."
+#~ msgstr "Esto aplica a temas, marcos de avatar, compañeros y cualquier imagen. Ninguno puede tener contenido sexual o gráfico, odio o acoso, ni mensajes políticos o religiosos, como eslóganes, símbolos de partidos o movimientos, o imágenes de guerras y conflictos. La bandera de un país por sí sola está bien."
+
+#: src/routes/terms.tsx
+msgid "This covers themes, avatar frames, stands and every image. None of them may carry sexual or graphic content, hate or harassment, or political or religious messaging, such as slogans, symbols of parties or movements, or imagery of wars and conflicts. A country's flag on its own is fine."
+msgstr "Esto aplica a temas, marcos de avatar, stands y cualquier imagen. Ninguno puede tener contenido sexual o gráfico, odio o acoso, ni mensajes políticos o religiosos, como eslóganes, símbolos de partidos o movimientos, o imágenes de guerras y conflictos. La bandera de un país por sí sola está bien."
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "This does not give the app your osu! account. You can revoke it any time on Mania Tracker."

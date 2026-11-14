@@ -231,7 +231,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
   const credit = shown && "builtIn" in shown ? shown.builtIn.credit : null;
   const by = shown && "submitted" in shown ? shown.submitted.submittedBy : null;
   const unlisted = shown && "submitted" in shown && !shown.submitted.listed;
-  const shownName = !shown ? t`No mascot` : "builtIn" in shown ? i18n._(shown.builtIn.name) : shown.submitted.name;
+  const shownName = !shown ? t`No stand` : "builtIn" in shown ? i18n._(shown.builtIn.name) : shown.submitted.name;
   const tile = (active: boolean) =>
     `relative grid h-[58px] place-items-center overflow-hidden rounded-[10px] bg-osu-b6 transition-[box-shadow,background-color] ${active ? "ring-2 ring-osu-pink" : "ring-1 ring-inset ring-white/[0.06] hover:bg-osu-b4"} ${supporter ? "cursor-pointer" : "cursor-default"}`;
 
@@ -284,7 +284,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
           <div className="grid grid-cols-[repeat(auto-fill,minmax(58px,1fr))] gap-1.5">
             <button
               type="button"
-              aria-label={t`No mascot`}
+              aria-label={t`No stand`}
               disabled={!supporter}
               onMouseEnter={() => pointAt(NONE)}
               onMouseLeave={pointAway}
@@ -371,7 +371,7 @@ const PERKS: { id: PerkId; title: MessageDescriptor; body: MessageDescriptor }[]
   { id: "packs", title: msg`Packs cosmetics`, body: msg`Keep your cards in a 3D case (toploader, magnetic case or graded slab), show your collection as binder pages, print your packs on your own wrapper, and open them with your own blade.` },
   { id: "stats", title: msg`Profile stats`, body: msg`Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile.` },
   { id: "plays", title: msg`Your own plays`, body: msg`Put any play the site tracked of you under your profile stats, with a title of your own and its pp, rating or dan.` },
-  { id: "companion", title: msg`Mascot`, body: msg`A figure that stands beside your profile's numbers. Pick one from the list, or submit your own.` },
+  { id: "companion", title: msg`Stand`, body: msg`A figure that stands beside your profile's numbers. Pick one from the list, or submit your own.` },
   { id: "clips", title: msg`Video share links`, body: msg`After exporting a replay video, get a link that plays it right in Discord chat.` },
   { id: "dms", title: msg`DMs from the bot`, body: msg`Optional Discord DMs when you get sniped, someone pulls your card or a new farm map at your level gets ranked, and a weekly recap. Off until you turn them on from the Discord bot page.` },
   { id: "gift", title: msg`A week for a friend`, body: msg`A one-time code that gives someone else a week of supporter.` },

@@ -1722,11 +1722,15 @@ float hbGlow(float d, float w) {
   return k * k * k;
 }
 
-/* A streak of light from a to b at x, brightest at b. */
+/* A streak of light from a to b at x, brightest at b. It dims back from b over
+   its own length, or over its glow's reach when it is shorter than that: a
+   short streak that dimmed over its length cut its glow off at a flat line. */
 float hbStreak(vec2 x, vec2 a, vec2 b, float w) {
   vec2 pa = x - a, ba = b - a;
-  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-7), 0., 1.);
-  float d = length(pa - ba * h);
+  float len = sqrt(max(dot(ba, ba), 1e-7));
+  float along = dot(pa, ba) / len;
+  float d = length(pa - ba * clamp(along / len, 0., 1.));
+  float h = clamp(1. - (len - along) / max(len, 12. * w), 0., 1.);
   return (exp(-d / w) + hbGlow(d, w) * .22) * (.15 + .85 * h * h);
 }
 

@@ -2341,12 +2341,16 @@ msgid "**186** plays  **4** new top plays  **1** goal completed"
 msgstr "**186** 次游玩  **4** 个新的最佳成绩  完成 **1** 个目标"
 
 #: src/components/supporter/SupportShowcase.tsx
+#~ msgid "**23** players gained pp on it already, **1,840pp** in total"
+#~ msgstr "已有 **23** 名玩家在这张谱面上涨了 pp，共 **1,840pp**"
+
+#: src/components/supporter/SupportShowcase.tsx
 msgid "**ExamplePlayer** pulled your card"
 msgstr "**ExamplePlayer** 抽到了你的卡片"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**ExamplePlayer** sniped you from #1"
-msgstr "**ExamplePlayer** 狙击了你（从第 1 名）"
+#~ msgid "**ExamplePlayer** sniped you from #1"
+#~ msgstr "**ExamplePlayer** 狙击了你（从第 1 名）"
 
 #: src/routes/discord.tsx
 msgid "/challenge"
@@ -3071,6 +3075,14 @@ msgstr "4. 你的段位是各技能的平均"
 msgid "4K"
 msgstr "4K"
 
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "4K  5.84★  ranked 2 hours ago"
+#~ msgstr "4K  5.84★  上架于 2 小时前"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "4K  ranked 2 hours ago"
+msgstr "4K  上架于 2 小时前"
+
 #. placeholder {0}: N.fourKeys.chips
 #: src/lib/pack-run.ts
 msgid "4K cards give +{0} notes."
@@ -3297,8 +3309,8 @@ msgid "97%, on ScoreV2 accuracy"
 msgstr "97%，按 ScoreV2 准确率"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "98.42%  **312pp**  Score **948,120** vs 941,377"
-msgstr "98.42%  **312pp**  分数 **948,120** vs 941,377"
+#~ msgid "98.42%  **312pp**  Score **948,120** vs 941,377"
+#~ msgstr "98.42%  **312pp**  分数 **948,120** vs 941,377"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "A .glb model (up to 100,000 triangles, textures inside it), an image or a GIF, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
@@ -5331,8 +5343,8 @@ msgid "BBCode editor"
 msgstr "BBCode 编辑器"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Beatmap"
-msgstr "谱面"
+#~ msgid "Beatmap"
+#~ msgstr "谱面"
 
 #. placeholder {0}: mark.beatmapId
 #: src/routes/recommendations.tsx
@@ -8573,6 +8585,10 @@ msgstr "段位 {0}"
 #~ msgid "Dan {0} range"
 #~ msgstr "段位 {0} 区间"
 
+#: src/components/supporter/SupportShowcase.tsx
+#~ msgid "Dan **10**"
+#~ msgstr "段位 **10**"
+
 #: src/components/maps/PlayResults.tsx
 msgid "Dan accuracy"
 msgstr "段位准确率"
@@ -10190,12 +10206,16 @@ msgid "Exact estimate: {0}"
 msgstr "精确估计：{0}"
 
 #: src/components/supporter/SupportShowcase.tsx
+msgid "Example Artist - Example Song"
+msgstr "Example Artist - Example Song"
+
+#: src/components/supporter/SupportShowcase.tsx
 msgid "Example numbers."
 msgstr "示例数据。"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Example Song [Insane]"
-msgstr "Example Song [Insane]"
+#~ msgid "Example Song [Insane]"
+#~ msgstr "Example Song [Insane]"
 
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Excluded sections"
@@ -12114,6 +12134,7 @@ msgid "Hide it from everyone else, instead of showing it with no way in"
 msgstr "对其他人隐藏，而不是显示出来却进不去"
 
 #: src/components/supporter/LoadoutSlots.tsx
+#: src/routes/workshop.themes.index.tsx
 msgid "Hide my osu! banner"
 msgstr "隐藏我的 osu! 横幅"
 
@@ -13044,6 +13065,7 @@ msgstr "输入覆盖层选项"
 msgid "Inputs"
 msgstr "输入"
 
+#: src/components/supporter/SupportShowcase.tsx
 #: src/lib/pack-run.ts
 msgid "Insane"
 msgstr "Insane"
@@ -15166,6 +15188,7 @@ msgstr "谱面"
 #: src/components/maps/DanProgressRail.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
+#: src/components/supporter/SupportShowcase.tsx
 msgid "Map"
 msgstr "谱面"
 
@@ -15332,14 +15355,13 @@ msgstr "已标记太难"
 msgid "Marker"
 msgstr "马克笔"
 
-#: src/components/supporter/loadout.ts
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Mascot"
 msgstr "吉祥物"
 
 #: src/routes/support.tsx
-msgid "Mascots"
-msgstr "吉祥物"
+#~ msgid "Mascots"
+#~ msgstr "吉祥物"
 
 #: src/components/prism/MashOdExplorer.tsx
 #~ msgid "Mash accuracy"
@@ -16205,6 +16227,10 @@ msgstr "新建收藏夹"
 msgid "New collection"
 msgstr "新建收藏夹"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "New farm map"
+msgstr "新的刷分图"
+
 #: src/routes/discord.tsx
 msgid "New farm maps"
 msgstr "新的刷分图"
@@ -16764,8 +16790,8 @@ msgid "No maps match your search"
 msgstr "没有符合搜索条件的谱面"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "No mascot"
-msgstr "无吉祥物"
+#~ msgid "No mascot"
+#~ msgstr "无吉祥物"
 
 #: src/routes/recommendations.tsx
 msgid "no matches"
@@ -17114,6 +17140,10 @@ msgstr "没有符合当前筛选的狙击。"
 #: src/routes/snipes.tsx
 msgid "No snipes tracked yet for {countryName}."
 msgstr "{countryName} 还没有狙击记录。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "No stand"
+msgstr "无替身"
 
 #: src/components/packs/StreakGame.tsx
 msgid "No streak this time."
@@ -24465,7 +24495,6 @@ msgstr "狙击者"
 msgid "snipes"
 msgstr "Snipe"
 
-#: src/components/supporter/SupportShowcase.tsx
 #: src/routes/snipes.tsx
 msgid "Snipes"
 msgstr "Snipe"
@@ -24968,6 +24997,11 @@ msgstr "耐力"
 msgid "Stamina"
 msgstr "耐力"
 
+#: src/components/supporter/loadout.ts
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Stand"
+msgstr "替身"
+
 #: src/lib/pack-run.ts
 #: src/lib/packs.ts
 msgid "Standard"
@@ -24980,6 +25014,10 @@ msgstr "标准刀锋"
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Standard foil"
 msgstr "标准箔"
+
+#: src/routes/support.tsx
+msgid "Stands"
+msgstr "替身"
 
 #: src/components/maps/MapSearchSection.tsx
 #: src/lib/replay-overlays.ts
@@ -25471,8 +25509,12 @@ msgid "Supporter status is bought as time on your osu! account: $4 buys 30 days,
 msgstr "支持者身份以 osu! 账号上的时长购买：$4 可购买 30 天，其他金额按天折算，一次支付 $40 或以上，每 $40 可获得整整一年。每次付款都会累加到剩余时长上，时长用完后身份结束。支持者时长绑定在付款对应的账号上，不能转给其他账号，网站发放的礼物兑换码除外。"
 
 #: src/routes/terms.tsx
-msgid "Supporter status is optional. It unlocks cosmetic extras on the site, such as profile themes, avatar frames, name styles and mascots, and changes nothing about rankings, scores or ratings. The extras on offer may change over time."
-msgstr "支持者身份是可选的。它会解锁网站上的外观类内容，例如个人资料主题、头像框、名字样式和吉祥物，不会改变排名、成绩或评分。提供的内容可能会随时间变化。"
+#~ msgid "Supporter status is optional. It unlocks cosmetic extras on the site, such as profile themes, avatar frames, name styles and mascots, and changes nothing about rankings, scores or ratings. The extras on offer may change over time."
+#~ msgstr "支持者身份是可选的。它会解锁网站上的外观类内容，例如个人资料主题、头像框、名字样式和吉祥物，不会改变排名、成绩或评分。提供的内容可能会随时间变化。"
+
+#: src/routes/terms.tsx
+msgid "Supporter status is optional. It unlocks cosmetic extras on the site, such as profile themes, avatar frames, name styles and stands, and changes nothing about rankings, scores or ratings. The extras on offer may change over time."
+msgstr "支持者身份是可选的。它会解锁网站上的外观类内容，例如个人资料主题、头像框、名字样式和替身，不会改变排名、成绩或评分。提供的内容可能会随时间变化。"
 
 #: src/routes/terms.tsx
 msgid "Supporter Themes And Uploads"
@@ -25504,8 +25546,12 @@ msgid "Supporting keeps the servers running and new features coming. As thanks, 
 msgstr "你的支持让服务器持续运行，也让新功能不断上线。作为感谢，支持者可获得本页上的所有内容。"
 
 #: src/routes/support.tsx
-msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, mascots, card foils, packs cosmetics, extra profile stats, video share links and DMs from the Discord bot."
-msgstr "支持用于支付服务器费用。支持者可获得个人资料主题、头像框、名字样式、吉祥物、卡片闪膜、卡包外观、额外的个人资料数据、视频分享链接和 Discord 机器人私信。"
+#~ msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, mascots, card foils, packs cosmetics, extra profile stats, video share links and DMs from the Discord bot."
+#~ msgstr "支持用于支付服务器费用。支持者可获得个人资料主题、头像框、名字样式、吉祥物、卡片闪膜、卡包外观、额外的个人资料数据、视频分享链接和 Discord 机器人私信。"
+
+#: src/routes/support.tsx
+msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, stands, card foils, packs cosmetics, extra profile stats, video share links and DMs from the Discord bot."
+msgstr "支持用于支付服务器费用。支持者可获得个人资料主题、头像框、名字样式、替身、卡片闪膜、卡包外观、额外的个人资料数据、视频分享链接和 Discord 机器人私信。"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "sure?"
@@ -27826,8 +27872,12 @@ msgid "This country's opt-in list is full right now. Check back later."
 msgstr "这个国家/地区的加入名额已满。请稍后再来。"
 
 #: src/routes/terms.tsx
-msgid "This covers themes, avatar frames, companions and every image. None of them may carry sexual or graphic content, hate or harassment, or political or religious messaging, such as slogans, symbols of parties or movements, or imagery of wars and conflicts. A country's flag on its own is fine."
-msgstr "这适用于主题、头像框、小伙伴以及所有图片。它们都不得包含色情或血腥内容、仇恨或骚扰，以及政治或宗教信息，例如口号、政党或运动的标志，或战争与冲突的画面。单独使用国家旗帜没问题。"
+#~ msgid "This covers themes, avatar frames, companions and every image. None of them may carry sexual or graphic content, hate or harassment, or political or religious messaging, such as slogans, symbols of parties or movements, or imagery of wars and conflicts. A country's flag on its own is fine."
+#~ msgstr "这适用于主题、头像框、小伙伴以及所有图片。它们都不得包含色情或血腥内容、仇恨或骚扰，以及政治或宗教信息，例如口号、政党或运动的标志，或战争与冲突的画面。单独使用国家旗帜没问题。"
+
+#: src/routes/terms.tsx
+msgid "This covers themes, avatar frames, stands and every image. None of them may carry sexual or graphic content, hate or harassment, or political or religious messaging, such as slogans, symbols of parties or movements, or imagery of wars and conflicts. A country's flag on its own is fine."
+msgstr "这适用于主题、头像框、替身以及所有图片。它们都不得包含色情或血腥内容、仇恨或骚扰，以及政治或宗教信息，例如口号、政党或运动的标志，或战争与冲突的画面。单独使用国家旗帜没问题。"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "This does not give the app your osu! account. You can revoke it any time on Mania Tracker."

@@ -332,7 +332,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 91;
+const FRAME_ART_VERSION = 92;
 
 /* A second file of a frame drawn from parts (the Trophy shelf's plaques). */
 export function supporterFramePartSrc(id: SupporterAvatarFrameId, part: string): string {
