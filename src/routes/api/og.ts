@@ -30,6 +30,8 @@ import { parsePackCardKey } from "../../lib/pack-collection";
 import { getCountryName, isGlobalScope, isSupportedCountryCode, isSupportedCountryScope } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
 import { drawPlayBanner, fetchPlayBannerSources, type PlayBannerStats } from "../../lib/play-banner";
+import { liveBridgeToken } from "../../lib/live-backend-tokens";
+import { drawRankingsBoard, fetchRankingsBoardAvatars, readRankingsBoard, type RankingsBoardRow } from "../../lib/rankings-board";
 import {
   getDisplayedAccuracy,
   getDisplayedRank,
@@ -1835,6 +1837,38 @@ async function renderPlayBannerOg(
   const buffer = await pending;
   if (!buffer) return new Response(null, { status: 404, headers: { "Cache-Control": "public, max-age=300" } });
   return imageResponse(buffer, "image/jpeg", OG_CACHE_HEADER);
+}
+
+// The picture in the Discord bot's /rankings reply (lib/rankings-board.ts).
+// Not kept in R2: the URL is the board's contents, and Discord and the CDN
+// hold their copies by URL.
+const inFlightRankingsBoards = new Map<string, Promise<Buffer>>();
+
+async function renderRankingsBoardOg(request: Request, key: string, rows: RankingsBoardRow[]): Promise<Response> {
+  let pending = inFlightRankingsBoards.get(key);
+  if (!pending) {
+    pending = (async () => {
+      // One fetch per badge, however many rows wear it.
+      const badges = new Map<string, ReturnType<typeof fetchDanEmblemSource>>();
+      const badgeFor = (row: RankingsBoardRow) => {
+        if (!row.emblem) return null;
+        const id = `${row.emblem.keyCount}:${row.emblem.family}:${row.emblem.label}`;
+        let art = badges.get(id);
+        if (!art) {
+          art = fetchDanEmblemSource(request, row.emblem.label, row.emblem.family, row.emblem.keyCount).catch(() => null);
+          badges.set(id, art);
+        }
+        return art;
+      };
+      const [fonts, avatars, emblems] = await Promise.all([loadOgFonts(request), fetchRankingsBoardAvatars(rows), Promise.all(rows.map(badgeFor))]);
+      // Only the drawing holds a render slot, not the waits on osu!'s image host.
+      return ogRenderGate.run(() => drawRankingsBoard(rows, avatars, fonts, emblems));
+    })().finally(() => {
+      inFlightRankingsBoards.delete(key);
+    });
+    inFlightRankingsBoards.set(key, pending);
+  }
+  return imageResponse(await pending, "image/png", OG_CACHE_HEADER);
 }
 
 /* Polaroid card primitive used by both home and rankings OGs. Renders an
@@ -5328,6 +5362,17 @@ export const Route = createFileRoute("/api/og")({
             } catch (err) {
               if (!isOgFallbackError(err)) console.warn("[og] dan-emblem render failed, falling back", err);
             }
+          }
+        }
+
+        if (kind === "rankings-board") {
+          const rows = readRankingsBoard(url.searchParams.get("d"), url.searchParams.get("s"), liveBridgeToken());
+          if (!rows || rows.length === 0) return new Response(null, { status: 400 });
+          try {
+            return await renderRankingsBoardOg(request, url.searchParams.get("d") ?? "", rows);
+          } catch (err) {
+            console.warn("[og] rankings board render failed", err);
+            return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
           }
         }
 
