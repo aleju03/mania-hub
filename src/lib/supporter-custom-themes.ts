@@ -54,7 +54,7 @@ export interface CustomThemeDraft extends CustomThemeSummary {
 
 export interface OwnCustomThemes {
   themes: CustomThemeSummary[];
-  worn: { themeId: number; rows: boolean } | null;
+  worn: { themeId: number; rows: boolean; hideCover?: boolean } | null;
   disabled: boolean;
 }
 
@@ -217,11 +217,13 @@ export const deleteOwnCustomTheme = createServerFn({ method: "POST" })
     if (!response.ok) throw new Error((await readError(response)).error);
   });
 
-/* Puts a theme (theirs, or one from the gallery) on the viewer's profile, or takes it off (null). */
+/* Puts a theme (theirs, or one from the gallery) on the viewer's profile, or
+   takes it off (null). Its switches are sent only when named; left out, the
+   ones already worn stay. */
 export const wearCustomTheme = createServerFn({ method: "POST" })
-  .validator((data: { themeId?: unknown; rows?: unknown }) => ({
+  .validator((data: { themeId?: unknown; rows?: unknown; hideCover?: unknown }) => ({
     themeId: data?.themeId == null ? null : readThemeId(data.themeId),
-    rows: data?.rows === true,
+    ...(data?.rows !== undefined || data?.hideCover !== undefined ? { rows: data.rows === true, hideCover: data.hideCover === true } : {}),
   }))
   .handler(async ({ data }): Promise<void> => {
     const viewer = await requireViewer();

@@ -140,7 +140,7 @@ function OwnThemesPage() {
                         wearing ? (
                           <button type="button" disabled={busy !== null} onClick={() => void act(theme.id, () => wearCustomTheme({ data: { themeId: null } }))} className={BUTTON}>{t`Stop using`}</button>
                         ) : (
-                          <button type="button" disabled={busy !== null} onClick={() => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id, rows: worn?.rows ?? false } }))} className={BUTTON}>{t`Use`}</button>
+                          <button type="button" disabled={busy !== null} onClick={() => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id } }))} className={BUTTON}>{t`Use`}</button>
                         )
                       ) : null}
                       {!taken && !unpublished ? (
@@ -156,16 +156,28 @@ function OwnThemesPage() {
                       <button type="button" disabled={busy !== null} onClick={() => setDeleting(theme)} className={`${BUTTON} ml-auto text-rose-300 hover:text-rose-200`}>{t`Delete`}</button>
                     </div>
                     {wearing ? (
-                      <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-[12px] text-osu-l2">
-                        <input
-                          type="checkbox"
-                          checked={worn?.rows ?? false}
-                          disabled={busy !== null}
-                          onChange={(event) => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id, rows: event.target.checked } }))}
-                          className="accent-osu-pink"
-                        />
-                        {t`Show its banner behind my rows in lists`}
-                      </label>
+                      <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1.5">
+                        <label className="flex cursor-pointer items-center gap-2 text-[12px] text-osu-l2">
+                          <input
+                            type="checkbox"
+                            checked={worn?.rows ?? false}
+                            disabled={busy !== null}
+                            onChange={(event) => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id, rows: event.target.checked, hideCover: worn?.hideCover ?? false } }))}
+                            className="accent-osu-pink"
+                          />
+                          {t`Show its banner behind my rows in lists`}
+                        </label>
+                        <label className="flex cursor-pointer items-center gap-2 text-[12px] text-osu-l2">
+                          <input
+                            type="checkbox"
+                            checked={worn?.hideCover ?? false}
+                            disabled={busy !== null}
+                            onChange={(event) => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id, rows: worn?.rows ?? false, hideCover: event.target.checked } }))}
+                            className="accent-osu-pink"
+                          />
+                          {t`Hide my osu! banner`}
+                        </label>
+                      </div>
                     ) : null}
                   </div>
                 </article>

@@ -48,7 +48,7 @@ import {
   type LivePackCardSnapshot,
 } from "../lib/live-backend";
 import type { SupporterLook } from "../lib/supporter-card-looks";
-import { parseProfileThemeOptions, profileThemeStyle } from "../lib/supporter-profile-themes";
+import { parseProfileThemeOptions, profileThemeStyle, type ProfileThemeOptions } from "../lib/supporter-profile-themes";
 import { registerWorkshopFrames } from "../lib/supporter-avatar-frames";
 import { rememberViewerSupporter } from "../lib/viewer-supporter";
 import { CompanionSection, ProfileStatsSection, SupporterPerks } from "../components/supporter/SupporterExtras";
@@ -249,7 +249,7 @@ function SupporterPage() {
   /* One of the viewer's own themes on (or off, with null). It is stored apart
      from the built-ins, so the saved look is read back afterwards: a worn own
      theme leaves no built-in picked. */
-  const wearOwnTheme = (themeId: number | null) => new Promise<void>((resolve) => {
+  const wearOwnTheme = (themeId: number | null, options?: ProfileThemeOptions) => new Promise<void>((resolve) => {
     if (!supporter || !viewer) {
       resolve();
       return;
@@ -258,7 +258,8 @@ function SupporterPage() {
     saveChain.current = saveChain.current.then(async () => {
       setBusy(true);
       try {
-        await wearCustomTheme({ data: { themeId, rows: false } });
+        // without options the theme's switches stay as they were
+        await wearCustomTheme({ data: { themeId, ...(options ? { rows: !!options.rows, hideCover: !!options.hideCover } : {}) } });
         const latest = await fetchSupporterLookState();
         setState(latest);
         saved.current = loadoutOf(latest);
@@ -486,7 +487,7 @@ function SupporterPage() {
   const onEditCustom = useCallback(() => latest.current.editCustom(), []);
   const onThemeOptions = useCallback((options: Loadout["themeOptions"]) => latest.current.setThemeOptions(options), []);
   const onNameOutline = useCallback((outline: string | null, commit: boolean) => latest.current.setNameOutline(outline, commit), []);
-  const onWearOwnTheme = useCallback((themeId: number | null) => latest.current.wearOwnTheme(themeId), []);
+  const onWearOwnTheme = useCallback((themeId: number | null, options?: ProfileThemeOptions) => latest.current.wearOwnTheme(themeId, options), []);
 
   const giftFrom = state?.giftFrom ?? null;
   const until = supporter && state?.expiresAt

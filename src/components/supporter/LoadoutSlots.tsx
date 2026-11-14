@@ -47,7 +47,7 @@ import {
 } from "../../lib/supporter-pack-style";
 import { ProfileThemeSwatch } from "./ProfileThemeBackdrop";
 import { supporterRowBackground } from "./SupporterRowBanner";
-import { SUPPORTER_PROFILE_THEME_LABELS, SUPPORTER_PROFILE_THEMES, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
+import { SUPPORTER_PROFILE_THEME_LABELS, SUPPORTER_PROFILE_THEMES, type ProfileThemeOptions, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
 import {
   FRAME_GROUPS,
   FRAME_NAMES,
@@ -547,8 +547,9 @@ export interface DrawerProps {
   onThemeOptions: (options: Loadout["themeOptions"]) => void;
   /** The name's outline: previewed while `commit` is false, worn and saved when true. */
   onNameOutline: (outline: string | null, commit: boolean) => void;
-  /** Puts on one of the viewer's own themes, or takes it off with null. */
-  onWearOwnTheme: (themeId: number | null) => Promise<void>;
+  /** Puts on one of the viewer's own themes, or takes it off with null; with
+      `options`, sets its switches too (left out, they stay as they are). */
+  onWearOwnTheme: (themeId: number | null, options?: ProfileThemeOptions) => Promise<void>;
 }
 
 /* Memoised: the page re-renders on every hover, and the drawer's props hold still through one. */
@@ -1347,11 +1348,15 @@ function ThemeDrawer({ current, disabled, avatar, username, canUpload, onTry, on
   const ownLive = (own?.themes ?? []).filter((theme) => theme.state === "live" && theme.liveRevision != null);
   // a worn own theme leaves no built-in picked (the page reads it back as none)
   const wornOwn = current.theme === null ? own?.worn?.themeId ?? null : null;
-  const wearOwn = (themeId: number | null) => {
-    void onWearOwnTheme(themeId).then(() => {
-      if (ownThemes) setOwnThemes({ ...ownThemes, worn: themeId === null ? null : { themeId, rows: false } });
+  const wearOwn = (themeId: number | null, options?: ProfileThemeOptions) => {
+    void onWearOwnTheme(themeId, options).then(() => {
+      const kept = options ?? current.themeOptions;
+      if (ownThemes) setOwnThemes({ ...ownThemes, worn: themeId === null ? null : { themeId, rows: !!kept.rows, hideCover: !!kept.hideCover } });
     });
   };
+  // The switches of whichever theme is on: a built-in one saves with the pick, an own one with its wearing.
+  const setSwitches = (options: ProfileThemeOptions) => (wornOwn !== null ? wearOwn(wornOwn, options) : onThemeOptions(options));
+  const themed = current.theme !== null || wornOwn !== null;
   /* Only the theme under the pointer moves; the rest hold a still frame. Every
      live swatch is a full shader pass plus a copy off the GPU each frame, and
      twenty of them at once is what made this page crawl. */
@@ -1421,21 +1426,21 @@ function ThemeDrawer({ current, disabled, avatar, username, canUpload, onTry, on
           />
         </>
       )}
-      {current.theme !== null && (
+      {themed && (
         <ThemeSwitch
           on={!!current.themeOptions.rows}
           disabled={disabled}
-          onToggle={() => onThemeOptions({ ...current.themeOptions, rows: current.themeOptions.rows ? undefined : true })}
+          onToggle={() => setSwitches({ ...current.themeOptions, rows: current.themeOptions.rows ? undefined : true })}
           title={t`Banner in lists`}
           body={t`A strip of the theme behind your row on rankings and leaderboards.`}
-          preview={<RowBannerPreview theme={current.theme} on={!!current.themeOptions.rows} avatar={avatar} username={username} nameStyle={current.nameStyle} nameFont={current.nameFont} nameOutline={current.nameOutline} />}
+          preview={current.theme !== null ? <RowBannerPreview theme={current.theme} on={!!current.themeOptions.rows} avatar={avatar} username={username} nameStyle={current.nameStyle} nameFont={current.nameFont} nameOutline={current.nameOutline} /> : undefined}
         />
       )}
-      {current.theme !== null && (
+      {themed && (
         <ThemeSwitch
           on={!!current.themeOptions.hideCover}
           disabled={disabled}
-          onToggle={() => onThemeOptions({ ...current.themeOptions, hideCover: current.themeOptions.hideCover ? undefined : true })}
+          onToggle={() => setSwitches({ ...current.themeOptions, hideCover: current.themeOptions.hideCover ? undefined : true })}
           title={t`Hide my osu! banner`}
           body={t`Only the theme shows behind your profile header, without your osu! banner.`}
         />
