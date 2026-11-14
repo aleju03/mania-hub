@@ -4794,7 +4794,7 @@ export class ManiaReplayRenderer {
       const { x: colX, width: colWidth } = this.getColumnLayout(col, layout);
       const x = colX + 2;
       const barWidth = colWidth - 4;
-      const color = this.colors[col];
+      const color = this.getSkinTapColor(col);
       const segments = this.segments[col];
       const startSegmentIndex = this.binarySearchSegmentEndIndex(segments, visibleMinTime);
 
@@ -5141,7 +5141,9 @@ export class ManiaReplayRenderer {
         }
         continue;
       }
-      const color = this.colors[col];
+      // The note colour the player picked, so the press glow matches the
+      // column instead of the stock per-keymode palette.
+      const color = this.getSkinTapColor(col);
       if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
 
       const timeSinceFlash = this.currentTime - (this.receptorFlashTimestamps[col] || 0);
