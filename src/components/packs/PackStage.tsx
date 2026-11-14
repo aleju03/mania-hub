@@ -37,6 +37,8 @@ const BIN_COUNT = 48;
 // the tear reads as a smooth curve instead of stair steps.
 const SLICES_PER_BIN = 2;
 const TEAR_COMPLETE_COVERAGE = 0.7;
+/* How far a held finger slides sideways, in screen px, before the blade's cut sounds. */
+const CUT_SOUND_TRAVEL_PX = 10;
 /* Ember's and Frost's easter egg (burnRef): how long the blade rests on the
    pack before it catches (or starts to freeze), how long the fire or ice
    takes to cover it, and how far the pointer may drift while it still
@@ -251,6 +253,11 @@ export function PackStage({
     /* Where this stroke entered the pack decides what it cuts for its whole
        length: the seam, or the cards. */
     deep: boolean;
+    /* Where the finger came down, on screen, until the blade's cut has
+       sounded: a touch that stays put or moves up and down is silent, so
+       tapping the pack or scrolling beside it doesn't play the cut. Null
+       once it has. */
+    quietFrom: [number, number] | null;
   } | null>(null);
   const bladeHeldRef = useRef<{ pointerId: number } | null>(null);
   const rippingRef = useRef(false);
@@ -1151,9 +1158,8 @@ export function PackStage({
       const yFrac = deep
         ? clampNumber(ny, DEEP_CUT_MIN_Y, DEEP_CUT_MAX_Y)
         : clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
-      slashRef.current = { lastX: x, lastYFrac: yFrac, lastSparkX: x, deep };
+      slashRef.current = { lastX: x, lastYFrac: yFrac, lastSparkX: x, deep, quietFrom: [clientX, clientY] };
       cutOnScreenRef.current = { minX: clientX, maxX: clientX, sumY: clientY, count: 1, points: [{ x: clientX, y: clientY }] };
-      playBladeCut(bladeLook(bladeRef.current).sound);
       setCutSpan(x, yFrac, x, yFrac, deep);
       ensureLoop();
       return;
@@ -1162,6 +1168,16 @@ export function PackStage({
     const yFrac = slash.deep
       ? clampNumber(ny, DEEP_CUT_MIN_Y, DEEP_CUT_MAX_Y)
       : clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
+    if (slash.quietFrom) {
+      // sideways, along the line: a finger scrolling the page beside the pack
+      // (the stroke's horizontal slack lets it start there) moves up or down
+      const dx = Math.abs(clientX - slash.quietFrom[0]);
+      const dy = Math.abs(clientY - slash.quietFrom[1]);
+      if (dx >= CUT_SOUND_TRAVEL_PX && dx > dy) {
+        slash.quietFrom = null;
+        playBladeCut(bladeLook(bladeRef.current).sound);
+      }
+    }
     setCutSpan(slash.lastX, slash.lastYFrac, x, yFrac, slash.deep);
     slash.lastX = x;
     slash.lastYFrac = yFrac;
