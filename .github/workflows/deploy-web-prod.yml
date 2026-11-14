@@ -35,6 +35,8 @@ jobs:
       # Baked into the browser bundle at build time, so it must be the public
       # origin - never the loopback address the server itself uses.
       VITE_LIVE_BACKEND_URL: https://api.mania-tracker.com
+      # Cloudflare-cached host for song audio, set bundles and public skin files.
+      VITE_ASSETS_URL: https://assets.mania-tracker.com
     steps:
       - uses: actions/checkout@v4
 
