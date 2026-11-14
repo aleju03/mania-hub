@@ -56,7 +56,7 @@ export interface BotServer {
   iconUrl: string | null;
   botPresent: boolean;
   channels: BotChannel[];
-  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number; players?: BotFeedPlayer[]; playersMode?: "only" | "except"; countries?: string[]; minDan?: number; nearClears?: boolean }>;
+  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number; players?: BotFeedPlayer[]; playersMode?: "only" | "except"; countries?: string[]; minDan?: number; nearClears?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all" }>;
   settings: { defaultCountry: string | null; autoDanChannels: string[] };
 }
 
@@ -79,7 +79,7 @@ export interface BotServers {
 export interface BotServerChange {
   defaultCountry?: string | null;
   feed?: { channelId: string; feedType: string; on: boolean; country?: string };
-  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number; players: number[]; playersMode?: "only" | "except"; countries?: string[]; minDan?: number; nearClears?: boolean };
+  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number; players: number[]; playersMode?: "only" | "except"; countries?: string[]; minDan?: number; nearClears?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all" };
   autoDan?: { channelId: string; on: boolean };
 }
 

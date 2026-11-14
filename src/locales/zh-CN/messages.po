@@ -1540,6 +1540,14 @@ msgid "{message} ({percent}%)"
 msgstr "{message}（{percent}%）"
 
 #: src/routes/discord.tsx
+msgid "{min}★ and up"
+msgstr "{min}★ 及以上"
+
+#: src/routes/discord.tsx
+msgid "{min}★ to {max}★"
+msgstr "{min}★ 至 {max}★"
+
+#: src/routes/discord.tsx
 msgid "{minPp}pp and up"
 msgstr ""
 
@@ -2708,6 +2716,10 @@ msgstr "当长条至少占 4K 谱面物件的 45%，并且在你游玩的倍速�
 msgid "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
 msgstr "7K 谱面中至少 37.5% 的音符是长条（6K 和 8K 为 45%），或者有一个长条贯穿谱面大部分时间、其他手指在它下面继续按键时，谱面就会有 LN 数值。长条能直接点一下并及时放手的谱面没有 LN 数值。有 30 秒以上 LN 段落的谱面，会按这些段落评 LN。"
 
+#: src/routes/discord.tsx
+msgid "A chart posted for HT or DT counts at its stars with that mod."
+msgstr "以 HT 或 DT 发布的谱面按该 mod 下的星数计算。"
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "A chart where mashing carries most of its hardest parts shows as Unrateable, and plays on it don't count toward skill or dan ratings."
 msgstr "如果一张谱面最难的部分大多能靠乱拍蒙过，它会显示为无法评分，其成绩不计入技能评分和段位。"
@@ -3474,6 +3486,10 @@ msgstr "所有玩家"
 msgid "All plays"
 msgstr "全部成绩"
 
+#: src/routes/discord.tsx
+msgid "All ranked maps"
+msgstr "所有新 Ranked 谱面"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "All rows"
 msgstr "全部记录"
@@ -3665,6 +3681,7 @@ msgstr "不限"
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -3699,6 +3716,10 @@ msgstr "任意图片、GIF 或视频，来自链接或文件。"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #~ msgid "Any picture, GIF, video or web page, from a link or a file."
 #~ msgstr "任意图片、GIF、视频或网页，来自链接或文件。"
+
+#: src/routes/discord.tsx
+msgid "Any stars"
+msgstr "任意星数"
 
 #: src/routes/discord.tsx
 msgid "Any top play"
@@ -7808,6 +7829,10 @@ msgstr "下落音符"
 msgid "Farm map detail"
 msgstr "刷图谱面详情"
 
+#: src/routes/discord.tsx
+msgid "Farm maps"
+msgstr "刷分图"
+
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "farm verdict"
 msgstr "刷图评估"
@@ -9040,6 +9065,10 @@ msgstr "数值越大，判定线越靠下。"
 #: src/components/player/BestScoresControls.tsx
 msgid "Highest PP first"
 msgstr "pp 从高到低"
+
+#: src/routes/discord.tsx
+msgid "Highest stars"
+msgstr "最高星数"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Highest tier first, then pp"
@@ -11024,6 +11053,10 @@ msgstr "pp 从低到高"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Lowest rarities first. You keep at least one of every card."
 #~ msgstr "优先使用低稀有度卡片。每张卡片至少保留一份。"
+
+#: src/routes/discord.tsx
+msgid "Lowest stars"
+msgstr "最低星数"
 
 #: src/routes/__root.tsx
 msgid "made by"
@@ -18583,6 +18616,7 @@ msgstr "星级"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -20994,6 +21028,7 @@ msgstr "标题、艺术家、难度、谱师、星级和段位。"
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/team/TeamProfilePage.tsx
+#: src/routes/discord.tsx
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "至"
@@ -21672,6 +21707,10 @@ msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 个文件。"
 #: src/lib/bug-report-screenshots.ts
 #~ msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 #~ msgstr "最多 {BUG_REPORT_MAX_SCREENSHOTS} 张图片。"
+
+#: src/routes/discord.tsx
+msgid "Up to {max}★"
+msgstr "最高 {max}★"
 
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -22563,12 +22602,20 @@ msgid "Where to see it"
 msgstr "在哪里看"
 
 #: src/routes/discord.tsx
+msgid "Which maps"
+msgstr "哪些谱面"
+
+#: src/routes/discord.tsx
 msgid "Which plays"
 msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "Which plays are looked at"
 msgstr "哪些成绩会被考虑"
+
+#: src/routes/discord.tsx
+msgid "Which stars count"
+msgstr "按哪个星数计算"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "while tracked"

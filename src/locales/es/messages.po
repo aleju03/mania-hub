@@ -1528,6 +1528,14 @@ msgid "{message} ({percent}%)"
 msgstr "{message} ({percent}%)"
 
 #: src/routes/discord.tsx
+msgid "{min}★ and up"
+msgstr "{min}★ o más"
+
+#: src/routes/discord.tsx
+msgid "{min}★ to {max}★"
+msgstr "{min}★ a {max}★"
+
+#: src/routes/discord.tsx
 msgid "{minPp}pp and up"
 msgstr ""
 
@@ -2696,6 +2704,10 @@ msgstr "Un chart de 4K es LN cuando los holds son al menos el 45% de sus notas y
 msgid "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
 msgstr "Un chart tiene número LN cuando al menos el 37,5% de sus notas son holds en 7K (45% en 6K y 8K), o cuando un hold dura casi todo el chart mientras los otros dedos siguen presionando debajo. Un chart cuyos holds puedes tocar y soltar a tiempo no tiene. Un chart con 30 segundos o más de secciones LN se califica como LN en esas secciones."
 
+#: src/routes/discord.tsx
+msgid "A chart posted for HT or DT counts at its stars with that mod."
+msgstr "Un chart publicado para HT o DT cuenta con sus estrellas con ese mod."
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "A chart where mashing carries most of its hardest parts shows as Unrateable, and plays on it don't count toward skill or dan ratings."
 msgstr "Un chart donde el mash cubre la mayor parte de sus partes más difíciles se muestra como No calificable, y sus plays no cuentan para las calificaciones de skillset ni de dan."
@@ -3462,6 +3474,10 @@ msgstr "Todos los jugadores"
 msgid "All plays"
 msgstr "Todas las plays"
 
+#: src/routes/discord.tsx
+msgid "All ranked maps"
+msgstr "Todos los mapas rankeados"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "All rows"
 msgstr "Todas las filas"
@@ -3653,6 +3669,7 @@ msgstr "todos"
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -3687,6 +3704,10 @@ msgstr "Cualquier imagen, GIF o video, desde un enlace o un archivo."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #~ msgid "Any picture, GIF, video or web page, from a link or a file."
 #~ msgstr "Cualquier imagen, GIF, video o página web, desde un enlace o un archivo."
+
+#: src/routes/discord.tsx
+msgid "Any stars"
+msgstr "Cualquier estrella"
 
 #: src/routes/discord.tsx
 msgid "Any top play"
@@ -7796,6 +7817,10 @@ msgstr "Notas que caen"
 msgid "Farm map detail"
 msgstr "Detalle del mapa de farm"
 
+#: src/routes/discord.tsx
+msgid "Farm maps"
+msgstr "Mapas farm"
+
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "farm verdict"
 msgstr "veredicto de farm"
@@ -9028,6 +9053,10 @@ msgstr "Los valores más altos mueven los receptores hacia abajo."
 #: src/components/player/BestScoresControls.tsx
 msgid "Highest PP first"
 msgstr "PP más alto primero"
+
+#: src/routes/discord.tsx
+msgid "Highest stars"
+msgstr "Estrellas máximas"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Highest tier first, then pp"
@@ -11012,6 +11041,10 @@ msgstr "PP más bajo primero"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Lowest rarities first. You keep at least one of every card."
 #~ msgstr "Primero las rarezas más bajas. Conservas al menos una copia de cada carta."
+
+#: src/routes/discord.tsx
+msgid "Lowest stars"
+msgstr "Estrellas mínimas"
 
 #: src/routes/__root.tsx
 msgid "made by"
@@ -18571,6 +18604,7 @@ msgstr "estrellas"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -20982,6 +21016,7 @@ msgstr "Título, artista, dificultad, mapper, rating de estrellas y dan."
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/team/TeamProfilePage.tsx
+#: src/routes/discord.tsx
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "a"
@@ -21660,6 +21695,10 @@ msgstr "Hasta {BUG_REPORT_MAX_SCREENSHOTS} archivos."
 #: src/lib/bug-report-screenshots.ts
 #~ msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 #~ msgstr "Hasta {BUG_REPORT_MAX_SCREENSHOTS} imágenes."
+
+#: src/routes/discord.tsx
+msgid "Up to {max}★"
+msgstr "Hasta {max}★"
 
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -22551,12 +22590,20 @@ msgid "Where to see it"
 msgstr "Dónde verlo"
 
 #: src/routes/discord.tsx
+msgid "Which maps"
+msgstr "Qué mapas"
+
+#: src/routes/discord.tsx
 msgid "Which plays"
 msgstr ""
 
 #: src/routes/dan-estimates.tsx
 msgid "Which plays are looked at"
 msgstr "Qué plays se miran"
+
+#: src/routes/discord.tsx
+msgid "Which stars count"
+msgstr "Qué estrellas cuentan"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "while tracked"

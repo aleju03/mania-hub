@@ -529,22 +529,25 @@ function danLevelChoices(keys: number[], current: number): number[] {
   const top = Math.max(...DAN_LADDERS.filter((l) => keys.length === 0 || keys.includes(l.keyCount)).map((l) => l.top));
   return Array.from({ length: Math.max(top, current) + 1 }, (_, n) => n);
 }
-// Feeds of players' plays, which get a row of filters under their channel.
-const PLAYER_FEEDS = ["top_play", "dan_clear", "goal"];
+// Feeds with a row of filters under their channel: the feeds of players'
+// plays, and New farm maps (keymodes and stars).
+const FILTERED_FEEDS = ["top_play", "dan_clear", "goal", "new_map"];
 
-type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "except"; countries: string[]; minDan: number; nearClears: boolean };
+type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "except"; countries: string[]; minDan: number; nearClears: boolean; minStars: number; maxStars: number; mapsMode: "farm" | "all" };
 type SavedFeedFilters = Omit<TopPlayFilterState, "players"> & { players: number[] };
 
 function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
   return {
     minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [], playersMode: sub.playersMode ?? "only",
     countries: sub.countries ?? [], minDan: sub.minDan ?? 0, nearClears: sub.nearClears ?? true,
+    minStars: sub.minStars ?? 0, maxStars: sub.maxStars ?? 0, mapsMode: sub.mapsMode ?? "farm",
   };
 }
 
 // Which plays a channel posts. Top plays: keymodes, a cut to the player's best
 // N of that keymode, a pp floor and a player list. Dan clears: keymodes, a
-// lowest level, near clears and a player list. Changes show at once and save in
+// lowest level, near clears and a player list. New farm maps: farm maps or
+// every ranked set, keymodes and a star range. Changes show at once and save in
 // order behind the scenes, since each save waits on Discord for a few seconds.
 function TopPlayFilters({ sub, channelName, onSave }: {
   sub: BotServer["subscriptions"][number];
@@ -562,6 +565,17 @@ function TopPlayFilters({ sub, channelName, onSave }: {
   const [minPpDraft, setMinPpDraft] = useState(sub.minPp ? String(sub.minPp) : "");
   useEffect(() => setMinPpDraft(sub.minPp ? String(sub.minPp) : ""), [sub.minPp]);
   const draftPp = Math.max(0, Math.floor(Number(minPpDraft) || 0));
+  const [minStarsDraft, setMinStarsDraft] = useState(starsText(sub.minStars));
+  const [maxStarsDraft, setMaxStarsDraft] = useState(starsText(sub.maxStars));
+  useEffect(() => setMinStarsDraft(starsText(sub.minStars)), [sub.minStars]);
+  useEffect(() => setMaxStarsDraft(starsText(sub.maxStars)), [sub.maxStars]);
+  const saveStars = () => {
+    const minStars = starsValue(minStarsDraft);
+    const maxStars = starsValue(maxStarsDraft);
+    setMinStarsDraft(starsText(minStars));
+    setMaxStarsDraft(starsText(maxStars));
+    if (minStars !== filters.minStars || maxStars !== filters.maxStars) save({ minStars, maxStars });
+  };
 
   const save = (patch: Partial<TopPlayFilterState>) => {
     const next = { ...filters, ...patch };
@@ -576,10 +590,11 @@ function TopPlayFilters({ sub, channelName, onSave }: {
   };
   const chip = (active: boolean, interactive = true) =>
     `rounded-md px-2 py-0.5 text-[12px] font-semibold ${active ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"} ${interactive ? "hover:brightness-110" : "cursor-default"}`;
-  const { keys, keymodeTop, players, playersMode, countries, minDan, nearClears } = filters;
+  const { keys, keymodeTop, players, playersMode, countries, minDan, nearClears, mapsMode } = filters;
   const danClears = sub.feedType === "dan_clear";
   // A Goals feed only has its players to choose.
   const goals = sub.feedType === "goal";
+  const newMaps = sub.feedType === "new_map";
   const scope = countries.length === 0
     ? sub.country === "GLOBAL" ? t`every country` : sub.country
     : findRegionByCountries(countries)?.name ?? (countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`);
@@ -589,6 +604,18 @@ function TopPlayFilters({ sub, channelName, onSave }: {
 
   return (
     <div className="grid gap-3 rounded-lg bg-osu-b5 px-3.5 py-3 text-[12px] text-osu-f1">
+      {newMaps ? (
+        <div className={row}>
+          <span className={label}><Trans>Which maps</Trans></span>
+          <div className="flex flex-wrap items-center gap-1">
+            {(["farm", "all"] as const).map((mode) => (
+              <button key={mode} type="button" className={chip(mapsMode === mode, mapsMode !== mode)} onClick={() => { if (mapsMode !== mode) save({ mapsMode: mode }); }}>
+                {mode === "farm" ? <Trans>Farm maps</Trans> : <Trans>All ranked maps</Trans>}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {goals ? null : (
       <>
       <div className={row}>
@@ -607,7 +634,32 @@ function TopPlayFilters({ sub, channelName, onSave }: {
           ))}
         </div>
       </div>
-      {danClears ? (
+      {newMaps ? (
+        <div className={row}>
+          <span className={label}><Trans>Stars</Trans></span>
+          <div className="flex items-center gap-1.5">
+            {([[minStarsDraft, setMinStarsDraft, t`Lowest stars`], [maxStarsDraft, setMaxStarsDraft, t`Highest stars`]] as const).map(([value, setValue, name], index) => (
+              <Fragment key={index}>
+                {index ? <span><Trans>to</Trans></span> : null}
+                <input
+                  value={value}
+                  inputMode="decimal"
+                  aria-label={name}
+                  onChange={(event) => setValue(event.target.value.replace(/[^0-9.]/g, "").slice(0, 4))}
+                  onKeyDown={(event) => { if (event.key === "Enter") saveStars(); }}
+                  onBlur={saveStars}
+                  placeholder={index ? t`Any` : "0"}
+                  className="w-14 rounded-md bg-osu-b4 px-2 py-1 text-[13px] text-white outline-none focus:ring-1 focus:ring-osu-pink/60"
+                />
+              </Fragment>
+            ))}
+            <span>★</span>
+            <HintButton label={t`Which stars count`}>
+              <Trans>A chart posted for HT or DT counts at its stars with that mod.</Trans>
+            </HintButton>
+          </div>
+        </div>
+      ) : danClears ? (
         <>
           <div className={row}>
             <span className={label}><Trans>Lowest dan</Trans></span>
@@ -667,6 +719,7 @@ function TopPlayFilters({ sub, channelName, onSave }: {
       )}
       </>
       )}
+      {newMaps ? null : (
       <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
         <span className={`${label} sm:pt-1.5`}><Trans>Players</Trans></span>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -685,6 +738,7 @@ function TopPlayFilters({ sub, channelName, onSave }: {
           </button>
         </div>
       </div>
+      )}
       {picking ? (
         <FeedPlayersModal
           title={channelName ? t`Players for #${channelName}` : t`Players`}
@@ -702,6 +756,17 @@ function TopPlayFilters({ sub, channelName, onSave }: {
 }
 
 const MAX_FEED_PLAYERS = 200;
+
+// A star bound as typed: 0 is no bound, shown empty.
+function starsText(value: number | undefined): string {
+  return value ? String(value) : "";
+}
+
+// What the backend keeps: a tenth, 0 to 20.
+function starsValue(text: string): number {
+  const value = Math.round(Number(text) * 10) / 10;
+  return Number.isFinite(value) ? Math.min(20, Math.max(0, value)) : 0;
+}
 
 // The players a top-play feed is limited to, picked from players the site
 // tracks. Empty means everyone in the feed's country.
@@ -940,6 +1005,13 @@ function FeedSummary({ sub }: { sub: ServerSub }) {
   const { i18n } = useLingui();
   const keys = sub.keys ?? [];
   const parts: ReactNode[] = sub.feedType === "goal" ? [] : [keys.length ? keys.map((k) => `${k}K`).join(", ") : <Trans>All keys</Trans>];
+  if (sub.feedType === "new_map") {
+    parts.unshift(sub.mapsMode === "all" ? <Trans>All ranked maps</Trans> : <Trans>Farm maps</Trans>);
+    const min = sub.minStars ?? 0;
+    const max = sub.maxStars ?? 0;
+    parts.push(min && max ? <Trans>{min}★ to {max}★</Trans> : min ? <Trans>{min}★ and up</Trans> : max ? <Trans>Up to {max}★</Trans> : <Trans>Any stars</Trans>);
+    return <SummaryParts parts={parts} />;
+  }
   if (sub.feedType === "goal") {
     // Only its players, below.
   } else if (sub.feedType === "dan_clear") {
@@ -1074,7 +1146,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                 {feeds.map((feed) => {
                   const sub = server.subscriptions.find((s) => s.channelId === channel.id && s.feedType === feed);
                   const key = `${channel.id}:${feed}`;
-                  const hasFilters = Boolean(sub) && PLAYER_FEEDS.includes(feed);
+                  const hasFilters = Boolean(sub) && FILTERED_FEEDS.includes(feed);
                   return (
                     <div key={feed}>
                       <div className={feedRow}>
@@ -1083,7 +1155,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                             checked={Boolean(sub)}
                             onChange={(on) => {
                               keep(channel.id);
-                              setEditing(on && PLAYER_FEEDS.includes(feed) ? key : editing === key ? null : editing);
+                              setEditing(on && FILTERED_FEEDS.includes(feed) ? key : editing === key ? null : editing);
                               void send({ feed: { channelId: channel.id, feedType: feed, on, country } });
                             }}
                             label={FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed}

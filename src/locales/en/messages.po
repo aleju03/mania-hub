@@ -1551,6 +1551,14 @@ msgid "{message} ({percent}%)"
 msgstr "{message} ({percent}%)"
 
 #: src/routes/discord.tsx
+msgid "{min}★ and up"
+msgstr "{min}★ and up"
+
+#: src/routes/discord.tsx
+msgid "{min}★ to {max}★"
+msgstr "{min}★ to {max}★"
+
+#: src/routes/discord.tsx
 msgid "{minPp}pp and up"
 msgstr "{minPp}pp and up"
 
@@ -2719,6 +2727,10 @@ msgstr "A 4K chart is LN when holds make up at least 45% of its notes and those 
 msgid "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
 msgstr "A chart gets an LN number when at least 37.5% of its notes are holds on 7K (45% on 6K and 8K), or when a hold runs through most of the chart while the other fingers keep pressing under it. A chart whose holds you can tap and let go in time gets none. A chart with 30 seconds or more of LN sections is rated LN on those sections."
 
+#: src/routes/discord.tsx
+msgid "A chart posted for HT or DT counts at its stars with that mod."
+msgstr "A chart posted for HT or DT counts at its stars with that mod."
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "A chart where mashing carries most of its hardest parts shows as Unrateable, and plays on it don't count toward skill or dan ratings."
 msgstr "A chart where mashing carries most of its hardest parts shows as Unrateable, and plays on it don't count toward skill or dan ratings."
@@ -3489,6 +3501,10 @@ msgstr "All players"
 msgid "All plays"
 msgstr "All plays"
 
+#: src/routes/discord.tsx
+msgid "All ranked maps"
+msgstr "All ranked maps"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "All rows"
 msgstr "All rows"
@@ -3680,6 +3696,7 @@ msgstr "any"
 #: src/components/maps/RangePill.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/me/MyDataPanel.tsx
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/replay_.community.tsx
 #: src/routes/tracker.tsx
@@ -3714,6 +3731,10 @@ msgstr "Any picture, GIF or video, from a link or a file."
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #~ msgid "Any picture, GIF, video or web page, from a link or a file."
 #~ msgstr "Any picture, GIF, video or web page, from a link or a file."
+
+#: src/routes/discord.tsx
+msgid "Any stars"
+msgstr "Any stars"
 
 #: src/routes/discord.tsx
 msgid "Any top play"
@@ -7827,6 +7848,10 @@ msgstr "Falling notes"
 msgid "Farm map detail"
 msgstr "Farm map detail"
 
+#: src/routes/discord.tsx
+msgid "Farm maps"
+msgstr "Farm maps"
+
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "farm verdict"
 msgstr "farm verdict"
@@ -9059,6 +9084,10 @@ msgstr "Higher values move receptors lower."
 #: src/components/player/BestScoresControls.tsx
 msgid "Highest PP first"
 msgstr "Highest PP first"
+
+#: src/routes/discord.tsx
+msgid "Highest stars"
+msgstr "Highest stars"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Highest tier first, then pp"
@@ -11051,6 +11080,10 @@ msgstr "Lowest PP first"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Lowest rarities first. You keep at least one of every card."
 #~ msgstr "Lowest rarities first. You keep at least one of every card."
+
+#: src/routes/discord.tsx
+msgid "Lowest stars"
+msgstr "Lowest stars"
 
 #: src/routes/__root.tsx
 msgid "made by"
@@ -18618,6 +18651,7 @@ msgstr "stars"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ScoreRows.tsx
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 #: src/routes/top-plays.tsx
 #: src/routes/tracker.tsx
@@ -21037,6 +21071,7 @@ msgstr "Title, artist, difficulty, mapper, star rating and dan."
 #: src/components/player/maniacard3d/ManiaCard3DPanel.tsx
 #: src/components/player/maniacard3d/RatingExplainerModal.tsx
 #: src/components/team/TeamProfilePage.tsx
+#: src/routes/discord.tsx
 #: src/routes/player/$username.tsx
 msgid "to"
 msgstr "to"
@@ -21715,6 +21750,10 @@ msgstr "Up to {BUG_REPORT_MAX_SCREENSHOTS} files."
 #: src/lib/bug-report-screenshots.ts
 #~ msgid "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
 #~ msgstr "Up to {BUG_REPORT_MAX_SCREENSHOTS} images."
+
+#: src/routes/discord.tsx
+msgid "Up to {max}★"
+msgstr "Up to {max}★"
 
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -22606,12 +22645,20 @@ msgid "Where to see it"
 msgstr "Where to see it"
 
 #: src/routes/discord.tsx
+msgid "Which maps"
+msgstr "Which maps"
+
+#: src/routes/discord.tsx
 msgid "Which plays"
 msgstr "Which plays"
 
 #: src/routes/dan-estimates.tsx
 msgid "Which plays are looked at"
 msgstr "Which plays are looked at"
+
+#: src/routes/discord.tsx
+msgid "Which stars count"
+msgstr "Which stars count"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "while tracked"
