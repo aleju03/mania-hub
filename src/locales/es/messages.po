@@ -8679,8 +8679,8 @@ msgid "Goals ({0} open)"
 msgstr "Metas ({0} abiertas)"
 
 #: src/routes/discord.tsx
-msgid "Goals I complete"
-msgstr "Metas que completo"
+#~ msgid "Goals I complete"
+#~ msgstr "Metas que completo"
 
 #: src/components/packs/GoatHoldersButton.tsx
 msgid "GOAT holders"
