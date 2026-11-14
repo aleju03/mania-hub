@@ -708,6 +708,15 @@ export function getLiveBackendUrl(): string | null {
   return value.replace(/\/+$/, "");
 }
 
+/* The Cloudflare-cached host in front of the same backend, for immutable public
+   bytes (song audio, set bundles, public skin files). Falls back to the live
+   backend itself when unset. */
+export function getAssetsBaseUrl(): string | null {
+  const value = import.meta.env.VITE_ASSETS_URL;
+  if (typeof value === "string" && value.trim() !== "") return value.trim().replace(/\/+$/, "");
+  return getLiveBackendUrl();
+}
+
 export function isLiveBackendConfigured(): boolean {
   return getLiveBackendUrl() !== null;
 }
