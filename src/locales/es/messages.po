@@ -5257,6 +5257,7 @@ msgid "client"
 msgstr "cliente"
 
 #: src/components/replay/ReplayInfo.tsx
+#: src/routes/discord.tsx
 msgid "Client"
 msgstr "Cliente"
 
@@ -13474,6 +13475,10 @@ msgstr "En charts de jack de 4K el bono por encima del mínimo se reduce a la mi
 msgid "On in every channel."
 msgstr ""
 
+#: src/routes/discord.tsx
+msgid "on lazer"
+msgstr "en lazer"
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
 msgstr "En charts de OD bajo las ventanas de acierto son tan amplias que presionar todas las teclas a ritmo constante igual le pega a la mayoría de las notas. Prism ahora juzga ese mash con las ventanas del chart, y cuando una sección con mash saca 90% o más siendo mucho más fácil que leerla, la sección se califica como el mash."
@@ -13481,6 +13486,10 @@ msgstr "En charts de OD bajo las ventanas de acierto son tan amplias que presion
 #: src/components/packs/SetsView.tsx
 msgid "On Showcase"
 msgstr "En Destacados"
+
+#: src/routes/discord.tsx
+msgid "on stable"
+msgstr "en stable"
 
 #: src/components/player/LivePresence.tsx
 msgid "On the results screen"
@@ -22474,8 +22483,12 @@ msgstr "Resumen semanal"
 #~ msgstr ""
 
 #: src/routes/discord.tsx
-msgid "What a play on stable at that accuracy gives, at the speed the post names."
-msgstr "Lo que da una play en stable con ese acc, a la velocidad que dice el post."
+msgid "What a play at that accuracy on that client gives, at the speed the post names."
+msgstr "Lo que da una play con ese acc en ese cliente, a la velocidad que dice el post."
+
+#: src/routes/discord.tsx
+#~ msgid "What a play on stable at that accuracy gives, at the speed the post names."
+#~ msgstr "Lo que da una play en stable con ese acc, a la velocidad que dice el post."
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."

@@ -438,8 +438,9 @@ function NewMapsDmFilters({ alerts, disabled, onSave }: { alerts: BotAlerts; dis
           <PpFloor
             minPp={alerts.newMapsMinPp ?? 0}
             accuracy={alerts.newMapsPpAccuracy ?? DEFAULT_PP_ACCURACY}
+            client={alerts.newMapsPpClient ?? "stable"}
             disabled={disabled}
-            onChange={(newMapsMinPp, newMapsPpAccuracy) => onSave({ newMapsMinPp, newMapsPpAccuracy })}
+            onChange={(newMapsMinPp, newMapsPpAccuracy, newMapsPpClient) => onSave({ newMapsMinPp, newMapsPpAccuracy, newMapsPpClient })}
           />
         </>
       )}
@@ -600,29 +601,37 @@ function danLevelChoices(keys: number[], current: number): number[] {
 // plays, and New farm maps (keymodes and stars).
 const FILTERED_FEEDS = ["top_play", "dan_clear", "goal", "new_map"];
 
-type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "except"; countries: string[]; minDan: number; nearClears: boolean; minStars: number; maxStars: number; mapsMode: "farm" | "all"; ppAccuracy: number };
+type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "except"; countries: string[]; minDan: number; nearClears: boolean; minStars: number; maxStars: number; mapsMode: "farm" | "all"; ppAccuracy: number; ppClient: PpClient };
 type SavedFeedFilters = Omit<TopPlayFilterState, "players"> & { players: number[] };
 
 function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
   return {
     minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [], playersMode: sub.playersMode ?? "only",
     countries: sub.countries ?? [], minDan: sub.minDan ?? 0, nearClears: sub.nearClears ?? true,
-    minStars: sub.minStars ?? 0, maxStars: sub.maxStars ?? 0, mapsMode: sub.mapsMode ?? "farm", ppAccuracy: sub.ppAccuracy ?? DEFAULT_PP_ACCURACY,
+    minStars: sub.minStars ?? 0, maxStars: sub.maxStars ?? 0, mapsMode: sub.mapsMode ?? "farm", ppAccuracy: sub.ppAccuracy ?? DEFAULT_PP_ACCURACY, ppClient: sub.ppClient ?? "stable",
   };
 }
 
 // The accuracies a New farm maps pp floor can be priced at (FEED_PP_ACCURACY_CHOICES in the backend).
 const PP_ACCURACY_CHOICES = [99, 98, 97, 96, 95, 94, 93, 92, 91, 90];
 const DEFAULT_PP_ACCURACY = 95;
+type PpClient = "stable" | "lazer";
 
-// A New farm maps pp floor: the lowest pp a stable play at the chosen accuracy
-// gives, at the speed the post names. Saves on Enter or when the box loses focus.
-function PpFloor({ minPp, accuracy, disabled, onChange }: { minPp: number; accuracy: number; disabled?: boolean; onChange: (minPp: number, accuracy: number) => void }) {
+// A New farm maps pp floor: the lowest pp a play at the chosen accuracy on the
+// chosen client gives, at the speed the post names. Saves on Enter or when the
+// box loses focus.
+function PpFloor({ minPp, accuracy, client, disabled, onChange }: {
+  minPp: number;
+  accuracy: number;
+  client: PpClient;
+  disabled?: boolean;
+  onChange: (minPp: number, accuracy: number, client: PpClient) => void;
+}) {
   const { t } = useLingui();
   const [draft, setDraft] = useState(minPp ? String(minPp) : "");
   useEffect(() => setDraft(minPp ? String(minPp) : ""), [minPp]);
   const value = Math.max(0, Math.floor(Number(draft) || 0));
-  const commit = () => { if (value !== minPp) onChange(value, accuracy); };
+  const commit = () => { if (value !== minPp) onChange(value, accuracy, client); };
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <input
@@ -640,11 +649,17 @@ function PpFloor({ minPp, accuracy, disabled, onChange }: { minPp: number; accur
       <SelectMenu
         value={String(accuracy)}
         ariaLabel={t`Accuracy`}
-        onChange={(next) => { if (Number(next) !== accuracy) onChange(value, Number(next)); }}
+        onChange={(next) => { if (Number(next) !== accuracy) onChange(value, Number(next), client); }}
         options={PP_ACCURACY_CHOICES.map((choice) => ({ value: String(choice), label: `${choice}%` }))}
       />
+      <SelectMenu
+        value={client}
+        ariaLabel={t`Client`}
+        onChange={(next) => { if (next !== client) onChange(value, accuracy, next); }}
+        options={[{ value: "stable" as const, label: t`on stable` }, { value: "lazer" as const, label: t`on lazer` }]}
+      />
       <HintButton label={t`How the pp is worked out`}>
-        <Trans>What a play on stable at that accuracy gives, at the speed the post names.</Trans>
+        <Trans>What a play at that accuracy on that client gives, at the speed the post names.</Trans>
       </HintButton>
     </div>
   );
@@ -754,7 +769,8 @@ function TopPlayFilters({ sub, channelName, onSave }: {
           <PpFloor
             minPp={filters.minPp}
             accuracy={filters.ppAccuracy}
-            onChange={(minPp, ppAccuracy) => save({ minPp, ppAccuracy })}
+            client={filters.ppClient}
+            onChange={(minPp, ppAccuracy, ppClient) => save({ minPp, ppAccuracy, ppClient })}
           />
         </div>
       ) : danClears ? (

@@ -5269,6 +5269,7 @@ msgid "client"
 msgstr "客户端"
 
 #: src/components/replay/ReplayInfo.tsx
+#: src/routes/discord.tsx
 msgid "Client"
 msgstr "客户端"
 
@@ -13486,6 +13487,10 @@ msgstr "在 4K 叠键谱面上，通过线以上的加分减半，因为这类�
 msgid "On in every channel."
 msgstr ""
 
+#: src/routes/discord.tsx
+msgid "on lazer"
+msgstr "在 lazer 上"
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
 msgstr "在低 OD 谱面上，判定区间很宽，以固定节拍按下所有键也能打中大部分音符。Prism 现在会用谱面的判定区间来判定这种乱拍：如果一段乱拍能打到 90% 以上，而且比读谱打简单得多，这一段就按乱拍来评分。"
@@ -13493,6 +13498,10 @@ msgstr "在低 OD 谱面上，判定区间很宽，以固定节拍按下所有�
 #: src/components/packs/SetsView.tsx
 msgid "On Showcase"
 msgstr "已展示"
+
+#: src/routes/discord.tsx
+msgid "on stable"
+msgstr "在 stable 上"
 
 #: src/components/player/LivePresence.tsx
 msgid "On the results screen"
@@ -22486,8 +22495,12 @@ msgstr "每周回顾"
 #~ msgstr ""
 
 #: src/routes/discord.tsx
-msgid "What a play on stable at that accuracy gives, at the speed the post names."
-msgstr "在 stable 上以该准确率游玩、按帖子标注的速度能拿到的 pp。"
+msgid "What a play at that accuracy on that client gives, at the speed the post names."
+msgstr "在该客户端以该准确率游玩、按帖子标注的速度能拿到的 pp。"
+
+#: src/routes/discord.tsx
+#~ msgid "What a play on stable at that accuracy gives, at the speed the post names."
+#~ msgstr "在 stable 上以该准确率游玩、按帖子标注的速度能拿到的 pp。"
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."

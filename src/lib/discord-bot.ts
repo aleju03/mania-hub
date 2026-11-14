@@ -40,6 +40,7 @@ export interface BotAlerts {
   // Custom: the lowest pp a chart pays at newMapsPpAccuracy (0 = any).
   newMapsMinPp?: number;
   newMapsPpAccuracy?: number;
+  newMapsPpClient?: "stable" | "lazer";
   // The viewer's level: their maniacard's stars and keymode.
   newMapsLevel?: { keyCount: number; stars: number } | null;
   cardPulls: boolean;
@@ -52,7 +53,7 @@ export interface BotAlerts {
   localeChosen: boolean;
 }
 
-export type BotAlertsPatch = Partial<Pick<BotAlerts, "snipes" | "goals" | "newMaps" | "newMapsMode" | "newMapsKeys" | "newMapsMinStars" | "newMapsMaxStars" | "newMapsMinPp" | "newMapsPpAccuracy" | "cardPulls" | "weeklyRecap">> & { follows?: number[]; dmLocale?: string };
+export type BotAlertsPatch = Partial<Pick<BotAlerts, "snipes" | "goals" | "newMaps" | "newMapsMode" | "newMapsKeys" | "newMapsMinStars" | "newMapsMaxStars" | "newMapsMinPp" | "newMapsPpAccuracy" | "newMapsPpClient" | "cardPulls" | "weeklyRecap">> & { follows?: number[]; dmLocale?: string };
 
 export interface BotChannel {
   id: string;
@@ -66,7 +67,7 @@ export interface BotServer {
   iconUrl: string | null;
   botPresent: boolean;
   channels: BotChannel[];
-  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number; players?: BotFeedPlayer[]; playersMode?: "only" | "except"; countries?: string[]; minDan?: number; nearClears?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number }>;
+  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number; players?: BotFeedPlayer[]; playersMode?: "only" | "except"; countries?: string[]; minDan?: number; nearClears?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number; ppClient?: "stable" | "lazer" }>;
   settings: { defaultCountry: string | null; autoDanChannels: string[] };
 }
 
@@ -89,7 +90,7 @@ export interface BotServers {
 export interface BotServerChange {
   defaultCountry?: string | null;
   feed?: { channelId: string; feedType: string; on: boolean; country?: string };
-  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number; players: number[]; playersMode?: "only" | "except"; countries?: string[]; minDan?: number; nearClears?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number };
+  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number; players: number[]; playersMode?: "only" | "except"; countries?: string[]; minDan?: number; nearClears?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number; ppClient?: "stable" | "lazer" };
   autoDan?: { channelId: string; on: boolean };
 }
 
@@ -179,6 +180,7 @@ export const saveBotAlerts = createServerFn({ method: "POST" })
     if (typeof data?.newMapsMaxStars === "number" && Number.isFinite(data.newMapsMaxStars)) patch.newMapsMaxStars = data.newMapsMaxStars;
     if (typeof data?.newMapsMinPp === "number" && Number.isFinite(data.newMapsMinPp)) patch.newMapsMinPp = data.newMapsMinPp;
     if (typeof data?.newMapsPpAccuracy === "number" && Number.isFinite(data.newMapsPpAccuracy)) patch.newMapsPpAccuracy = data.newMapsPpAccuracy;
+    if (data?.newMapsPpClient === "stable" || data?.newMapsPpClient === "lazer") patch.newMapsPpClient = data.newMapsPpClient;
     if (typeof data?.cardPulls === "boolean") patch.cardPulls = data.cardPulls;
     if (typeof data?.weeklyRecap === "boolean") patch.weeklyRecap = data.weeklyRecap;
     if (data?.dmLocale === "en" || data?.dmLocale === "es" || data?.dmLocale === "zh-CN") patch.dmLocale = data.dmLocale;
