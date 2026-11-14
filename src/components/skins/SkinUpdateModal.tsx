@@ -108,6 +108,13 @@ export function SkinUpdateModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const keymodes = imported?.summary.keymodes ?? [];
+  // The backdrop and chart each keymode was published with. A new build keeps
+  // them for every keymode it still ships, so re-uploading a skin does not
+  // reshuffle its previews; keymodes without one are dealt fresh.
+  const publishedRecipes = useMemo(() => new Map(
+    skin.previews.flatMap((preview) => preview.recipe ? [[preview.keys, preview.recipe] as const] : []),
+  ), [skin.previews]);
+
   const publishedCoverKeymode = useMemo(
     () => skin.previews.find((preview) => preview.url === skin.previewUrl)?.keys ?? null,
     [skin.previews, skin.previewUrl],
@@ -157,6 +164,19 @@ export function SkinUpdateModal({
     (keys: number): PreviewBackdrop => backdropForKeymode({ shared: backdrop, overrides: backdropOverrides }, keys),
     [backdrop, backdropOverrides],
   );
+
+  // A kept backdrop or chart may not be in this opening's random picker pool.
+  // Put it at the front so the picker shows what the preview uses.
+  const pickerBackdropPool = useMemo(() => {
+    const selected = backdropFor(selectedKeymode);
+    if (typeof selected !== "number" || pool.candidates.some((entry) => entry.setId === selected)) return pool;
+    return { ...pool, candidates: [{ setId: selected, label: t`Current backdrop` }, ...pool.candidates] };
+  }, [pool, selectedKeymode, backdropFor, t]);
+  const pickerPatternPool = useMemo(() => {
+    const selected = patterns.get(selectedKeymode);
+    if (!selected || patternPool.candidates.some((entry) => entry.beatmapId === selected.beatmapId)) return patternPool;
+    return { ...patternPool, candidates: [selected, ...patternPool.candidates] };
+  }, [patternPool, selectedKeymode, patterns]);
 
   const pickBackdrop = useCallback((choice: PreviewBackdrop) => {
     backdropTouchedRef.current = true;
@@ -221,7 +241,12 @@ export function SkinUpdateModal({
       releaseRenders();
       setRenders(new Map());
       renderedRef.current.clear();
-      setPatterns(new Map());
+      const kept = result.summary.keymodes.flatMap((keys) => {
+        const recipe = publishedRecipes.get(keys);
+        return recipe ? [[keys, recipe] as const] : [];
+      });
+      setPatterns(new Map(kept.map(([keys, recipe]) => [keys, recipe.pattern])));
+      setBackdropOverrides(new Map(kept.map(([keys, recipe]) => [keys, recipe.backdrop])));
       setFile(picked);
       setBlockedRemoved(stripped.removed);
       setImported(result);
@@ -240,7 +265,7 @@ export function SkinUpdateModal({
       setReading(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [publishedCoverKeymode, releaseRenders]);
+  }, [publishedCoverKeymode, publishedRecipes, releaseRenders]);
 
   // One render per keymode the new archive declares, redrawn whenever its
   // backdrop moves. The keymode on screen goes first so the hero fills fast.
@@ -623,7 +648,7 @@ export function SkinUpdateModal({
                       <SkinPreviewPickers
                         disabled={rendering}
                         backdrop={{
-                          pool,
+                          pool: pickerBackdropPool,
                           selected: backdropFor(selectedKeymode),
                           onPick: pickBackdrop,
                           scope,
@@ -631,7 +656,7 @@ export function SkinUpdateModal({
                           keymodeLabel: `${selectedKeymode}K`,
                         }}
                         pattern={{
-                          pool: patternPool,
+                          pool: pickerPatternPool,
                           selected: patterns.get(selectedKeymode) ?? null,
                           onPick: pickPattern,
                         }}
