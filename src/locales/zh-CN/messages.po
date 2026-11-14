@@ -11211,6 +11211,10 @@ msgstr "四张卡片来自同一国家/地区。"
 msgid "Four Keys"
 msgstr "四键"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Four maps per row"
+msgstr "每行四张谱面"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "fps"
 msgstr "fps"
@@ -23853,6 +23857,10 @@ msgstr "显示"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "有新更新时在更新日志链接上显示一个圆点"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows four maps per row instead of three on the maps page, on wide screens"
+msgstr "在宽屏上，谱面页每行显示四张谱面而不是三张"
 
 #: src/routes/hashi.tsx
 #~ msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."

@@ -7,6 +7,7 @@ import { formatCompactCount, formatDuration } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
 import { BeatmapStatusBadge } from "../ui/BeatmapStatusBadge";
 import { Skeleton } from "../ui/LoadingSkeleton";
+import { useMapsFourPerRow } from "../../store";
 import { MapPreviewButton, type MapPreviewAudio, type MapPreviewTrack } from "./MapPreviewAudio";
 import { starRatingColor, starSpectrumGradient, starTextColor, StarRatingBadge } from "../ui/StarRating";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
@@ -263,7 +264,7 @@ function CoverImage({ src }: { src: string }) {
           alt=""
           loading="lazy"
           onError={() => setFailed(true)}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+          className="h-full w-full object-cover"
         />
       )}
     </div>
@@ -321,7 +322,7 @@ function DiffStarPill({ model }: { model: CardModel }) {
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5" title={count === 1 ? t`1 diff` : t`${count} diffs`}>
       <StarRatingBadge stars={model.starHi} range={[model.starLo, model.starHi]} large />
-      {count > 1 ? <span className="whitespace-nowrap tabular-nums"><Trans><span className="font-bold text-osu-l1">{count}</span> diffs</Trans></span> : null}
+      {count > 1 ? <span className="whitespace-nowrap tabular-nums @max-[170px]:hidden"><Trans><span className="font-bold text-osu-l1">{count}</span> diffs</Trans></span> : null}
     </span>
   );
 }
@@ -408,12 +409,15 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
       {model.mix.length > 0 || model.vibro ? <MixLine model={model} /> : null}
       <MapCardFooter>
         {preview ? <MapPreviewButton beatmapsetId={entry.beatmapsetId} preview={preview} /> : null}
-        <span className="flex min-w-0 flex-1 items-center gap-2 text-[11.5px] text-osu-l2/75">
+        {/* A narrow card (four per row) drops the plays, then the diff count, rather than run under the buttons. */}
+        <span className="@container flex min-w-0 flex-1 items-center gap-2 text-[11.5px] text-osu-l2/75">
           <DiffStarPill model={model} />
           <Hairline />
           <span className="tabular-nums">{formatDuration(entry.length)}</span>
-          <Hairline />
-          <span className="truncate tabular-nums">{t`${formatPlays(entry.playCount)} plays`}</span>
+          <span className="flex min-w-0 items-center gap-2 @max-[225px]:hidden">
+            <Hairline />
+            <span className="truncate tabular-nums">{t`${formatPlays(entry.playCount)} plays`}</span>
+          </span>
         </span>
         <OsuDirectButton beatmapsetId={entry.beatmapsetId} />
         <OszButton beatmapsetId={entry.beatmapsetId} />
@@ -502,7 +506,10 @@ export function MapCardFooter({ children }: { children: ReactNode }) {
   return <div className="mt-auto flex items-center gap-2 border-t border-white/5 pt-2.5">{children}</div>;
 }
 
-const SEARCH_CARD_GRID = "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3";
+/* Three per row, or four on wide screens with the Settings preference on. */
+export function mapCardGridClass(fourPerRow: boolean): string {
+  return `grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3${fourPerRow ? " xl:grid-cols-4" : ""}`;
+}
 
 export function SearchCardGrid({
   items,
@@ -517,8 +524,9 @@ export function SearchCardGrid({
   rate?: "ht" | "dt" | "";
   starScale?: "sunny" | "";
 }) {
+  const fourPerRow = useMapsFourPerRow();
   return (
-    <div className={SEARCH_CARD_GRID}>
+    <div className={mapCardGridClass(fourPerRow)}>
       {items.map((entry) => (
         <SearchCard key={entry.beatmapId} entry={entry} preview={preview} onOpen={onOpen} rate={rate} starScale={starScale} />
       ))}
@@ -546,8 +554,9 @@ function SearchCardSkeleton() {
 }
 
 export function SearchCardGridSkeleton({ count }: { count: number }) {
+  const fourPerRow = useMapsFourPerRow();
   return (
-    <div className={SEARCH_CARD_GRID} aria-hidden="true">
+    <div className={mapCardGridClass(fourPerRow)} aria-hidden="true">
       {Array.from({ length: count }).map((_, index) => (
         <SearchCardSkeleton key={index} />
       ))}

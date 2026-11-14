@@ -45,7 +45,7 @@ import { MapDetailModal } from "../components/maps/MapDetailModal";
 import { ChartPreviewPanel } from "../components/maps/ChartPreviewPanel";
 import { DiffTabs } from "../components/maps/MapDetailHeader";
 import { BeatmapStatusBadge, MAP_STATUS_LABELS } from "../components/ui/BeatmapStatusBadge";
-import { stripKeymodePrefix, Hairline, MapCardFooter, MapCardFrame, OszButton, OsuDirectButton, PATTERN_COLOR, SearchCardGridSkeleton, StarRatingBadge } from "../components/maps/SearchCard";
+import { stripKeymodePrefix, Hairline, MapCardFooter, MapCardFrame, OszButton, OsuDirectButton, PATTERN_COLOR, SearchCardGridSkeleton, StarRatingBadge, mapCardGridClass } from "../components/maps/SearchCard";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import type {
@@ -56,7 +56,7 @@ import type {
   MapsFavouriteBeatmapset,
   MapsPlayerEntry,
 } from "../lib/types";
-import { useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
+import { useHasHydrated, useHiddenUserIds, useMapsFourPerRow, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
 import { fetchMapSharePreview, mapCoverUrl, MAP_COVER_HEIGHT, MAP_COVER_WIDTH, type MapSharePreview } from "../lib/map-share-preview";
 import { getI18n } from "../lib/i18n";
@@ -635,6 +635,7 @@ export const Route = createFileRoute("/maps")({
 
 function MapsPage() {
   const { t, i18n } = useLingui();
+  const fourPerRow = useMapsFourPerRow();
   const navigate = useNavigate();
   const mapsSearch = Route.useSearch();
   const mapsSearchRef = useRef(mapsSearch);
@@ -1945,7 +1946,7 @@ function MapsPage() {
 
           {/* Card grid */}
           {tab !== "random" && !error && currentList.length > 0 && (
-            <div key={`${tab}-${page}`} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 cards-enter">
+            <div key={`${tab}-${page}`} className={`${mapCardGridClass(fourPerRow)} cards-enter`}>
                 {tab === "farmed"
                   ? (currentList as MapsFarmedEntry[]).map((map) => (
                       <FarmedCard

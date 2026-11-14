@@ -95,7 +95,7 @@ import {
   writeCursorSettings,
 } from "../../lib/cursor";
 import type { CursorSettings } from "../../lib/cursor";
-import { useAppStore, useChangelogNotify, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings, useWholeDans, useWholeMapDans } from "../../store";
+import { useAppStore, useChangelogNotify, useMapsFourPerRow, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings, useWholeDans, useWholeMapDans } from "../../store";
 import { markChangelogSeen } from "../../lib/changelog";
 import { Switch } from "../ui/Switch";
 import { SETTINGS_TABS as TABS, type SettingsTabId } from "./settings-tabs";
@@ -1241,6 +1241,8 @@ function PreferencesPanel() {
   const setPacksRevealAll = useAppStore((state) => state.setPacksRevealAll);
   const recentPlayRatings = useRecentPlayRatings();
   const setRecentPlayRatings = useAppStore((state) => state.setRecentPlayRatings);
+  const mapsFourPerRow = useMapsFourPerRow();
+  const setMapsFourPerRow = useAppStore((state) => state.setMapsFourPerRow);
   const changelogNotify = useChangelogNotify();
   const setChangelogNotify = useAppStore((state) => state.setChangelogNotify);
   const hiddenUsers = useAppStore((state) => state.hiddenUsers);
@@ -1338,6 +1340,15 @@ function PreferencesPanel() {
             onChange={setRecentPlayRatings}
             label={noDans ? t`Rating on recent plays` : t`Rating and dan on recent plays`}
           />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-semibold text-osu-l1"><Trans>Four maps per row</Trans></div>
+            <div className="text-[11px] text-osu-f1">
+              <Trans>Shows four maps per row instead of three on the maps page, on wide screens</Trans>
+            </div>
+          </div>
+          <Switch checked={mapsFourPerRow} onChange={setMapsFourPerRow} label={t`Four maps per row`} />
         </div>
         <div className="flex items-center justify-between gap-3">
           <div>

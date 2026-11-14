@@ -11230,6 +11230,10 @@ msgstr "Four cards from the same country."
 msgid "Four Keys"
 msgstr "Four Keys"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Four maps per row"
+msgstr "Four maps per row"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "fps"
 msgstr "fps"
@@ -23884,6 +23888,10 @@ msgstr "Shows a dot on the changelog link when there are new updates"
 #: src/routes/hashi.tsx
 #~ msgid "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!."
 #~ msgstr "Shows a map's leaderboard for the mods you have on, sends your mania plays to your profile and can show what you're doing in osu!."
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows four maps per row instead of three on the maps page, on wide screens"
+msgstr "Shows four maps per row instead of three on the maps page, on wide screens"
 
 #: src/routes/hashi.tsx
 #~ msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."

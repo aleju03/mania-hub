@@ -11199,6 +11199,10 @@ msgstr "Cuatro cartas del mismo país."
 msgid "Four Keys"
 msgstr "Cuatro teclas"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Four maps per row"
+msgstr "Cuatro mapas por fila"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "fps"
 msgstr "fps"
@@ -23841,6 +23845,10 @@ msgstr "Muestra"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Shows a dot on the changelog link when there are new updates"
 msgstr "Muestra un punto en el enlace de novedades cuando hay algo nuevo"
+
+#: src/components/settings/SettingsPanel.tsx
+msgid "Shows four maps per row instead of three on the maps page, on wide screens"
+msgstr "Muestra cuatro mapas por fila en vez de tres en la página de mapas, en pantallas anchas"
 
 #: src/routes/hashi.tsx
 #~ msgid "Shows leaderboards for the mods you have on and sends your mania plays to your profile, where it can also show what you're playing."
