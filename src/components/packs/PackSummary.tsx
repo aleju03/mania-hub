@@ -478,11 +478,13 @@ export function PackSummary({
       const dy = flight.to.top - flight.from.top;
       const sx = flight.to.width / flight.from.width;
       const sy = flight.to.height / flight.from.height;
+      // drawn at the size it lands at and shrunk to where it starts: a tray
+      // thumbnail scaled up four times would blur and swell its corners
       animations.push(
         el.animate(
           [
+            { transform: `translate(${-dx}px, ${-dy}px) scale(${1 / sx}, ${1 / sy})` },
             { transform: "translate(0px, 0px) scale(1, 1)" },
-            { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
           ],
           { duration: 420, easing: "cubic-bezier(0.3, 0.7, 0.2, 1)", fill: "forwards" },
         ),
@@ -1068,10 +1070,12 @@ export function PackSummary({
             }}
             className="pointer-events-none absolute z-40"
             style={{
-              left: flight.from.left,
-              top: flight.from.top,
-              width: flight.from.width,
-              height: flight.from.height,
+              left: flight.to.left,
+              top: flight.to.top,
+              width: flight.to.width,
+              height: flight.to.height,
+              // starts where the reveal left it, before the first frame paints
+              transform: `translate(${flight.from.left - flight.to.left}px, ${flight.from.top - flight.to.top}px) scale(${flight.from.width / flight.to.width}, ${flight.from.height / flight.to.height})`,
               transformOrigin: "top left",
               willChange: "transform",
             }}

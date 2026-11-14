@@ -315,7 +315,7 @@ function SupportPage() {
               id="bot-dms"
               title={t`DMs from the bot`}
               count={t`Optional`}
-              body={t`Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week.`}
+              body={t`Link Discord and pick which ones maniabot sends you: when someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week.`}
               more={<Trans>Turn them on from the <Link to="/discord">Discord bot page</Link>.</Trans>}
             >
               <BotDmShowcase />

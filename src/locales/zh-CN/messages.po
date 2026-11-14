@@ -2344,6 +2344,10 @@ msgstr "**186** 次游玩  **4** 个新的最佳成绩  完成 **1** 个目标"
 msgid "**ExamplePlayer** pulled your card"
 msgstr "**ExamplePlayer** 抽到了你的卡片"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "**ExamplePlayer** sniped you from #1"
+msgstr "**ExamplePlayer** 狙击了你（从第 1 名）"
+
 #: src/routes/discord.tsx
 msgid "/challenge"
 msgstr "/challenge"
@@ -3291,6 +3295,10 @@ msgstr "96%，1 段以下为 95%"
 #: src/routes/dan-estimates.tsx
 msgid "97%, on ScoreV2 accuracy"
 msgstr "97%，按 ScoreV2 准确率"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "98.42%  **312pp**  Score **948,120** vs 941,377"
+msgstr "98.42%  **312pp**  分数 **948,120** vs 941,377"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "A .glb model (up to 100,000 triangles, textures inside it), an image or a GIF, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
@@ -5321,6 +5329,10 @@ msgstr "BBCode"
 #: src/routes/bbcode.tsx
 msgid "BBCode editor"
 msgstr "BBCode 编辑器"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Beatmap"
+msgstr "谱面"
 
 #. placeholder {0}: mark.beatmapId
 #: src/routes/recommendations.tsx
@@ -10181,6 +10193,10 @@ msgstr "精确估计：{0}"
 msgid "Example numbers."
 msgstr "示例数据。"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Example Song [Insane]"
+msgstr "Example Song [Insane]"
+
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Excluded sections"
 #~ msgstr ""
@@ -11618,8 +11634,8 @@ msgid "goal cleared"
 msgstr "目标已完成"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Goal completed"
-msgstr "目标已完成"
+#~ msgid "Goal completed"
+#~ msgstr "目标已完成"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "goal tracker"
@@ -14161,8 +14177,12 @@ msgid "Link copied."
 msgstr "链接已复制。"
 
 #: src/routes/support.tsx
-msgid "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
-msgstr "绑定 Discord 后，选择 maniabot 给你发哪些私信：完成目标、有人抽到你的卡片、关注的玩家打出最佳成绩、上架了适合你水平的刷分图或你被狙击，以及每周回顾。"
+msgid "Link Discord and pick which ones maniabot sends you: when someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
+msgstr "绑定 Discord 后，选择 maniabot 给你发哪些私信：有人抽到你的卡片、关注的玩家打出最佳成绩、上架了适合你水平的刷分图或你被狙击，以及每周回顾。"
+
+#: src/routes/support.tsx
+#~ msgid "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
+#~ msgstr "绑定 Discord 后，选择 maniabot 给你发哪些私信：完成目标、有人抽到你的卡片、关注的玩家打出最佳成绩、上架了适合你水平的刷分图或你被狙击，以及每周回顾。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "link text"
@@ -18453,8 +18473,12 @@ msgid "Optional"
 msgstr "可选"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Optional Discord DMs when you finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
-msgstr "可选的 Discord 私信：完成目标或有人抽到你的卡片时通知你，还有每周回顾。默认关闭，可在 Discord 机器人页面开启。"
+#~ msgid "Optional Discord DMs when you finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
+#~ msgstr "可选的 Discord 私信：完成目标或有人抽到你的卡片时通知你，还有每周回顾。默认关闭，可在 Discord 机器人页面开启。"
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Optional Discord DMs when you get sniped, someone pulls your card or a new farm map at your level gets ranked, and a weekly recap. Off until you turn them on from the Discord bot page."
+msgstr "可选的 Discord 私信：被狙击、有人抽到你的卡片或上架了适合你水平的刷分图时通知你，还有每周回顾。默认关闭，可在 Discord 机器人页面开启。"
 
 #: src/routes/report.tsx
 #~ msgid "Optional follow-up"
@@ -19001,6 +19025,10 @@ msgstr "粘贴 {username} 的成绩链接"
 #: src/components/player/AddScoreModal.tsx
 msgid "paste a score or beatmap link for {username}"
 msgstr "为 {username} 粘贴成绩或谱面链接"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Paste an image (Ctrl+V) or drop it here to add it."
+msgstr "粘贴图片（Ctrl+V）或拖到这里即可添加。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste formatting"
@@ -20290,7 +20318,7 @@ msgstr "个人资料主题"
 
 #: src/routes/workshop.themes.spec.tsx
 msgid "Profile theme spec"
-msgstr "主页主题规范"
+msgstr "个人资料主题规范"
 
 #: src/routes/support.tsx
 msgid "Profile themes"
@@ -20302,12 +20330,12 @@ msgstr "由支持者制作的个人资料主题。"
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 msgid "Profile themes, avatar frames, name styles and card foils are all yours now."
-msgstr "个人主页主题、头像框、名字样式和卡牌闪膜现在都归你了。"
+msgstr "个人个人资料主题、头像框、名字样式和卡牌闪膜现在都归你了。"
 
 #. placeholder {0}: peek.trialDays
 #: src/routes/gift.$code.tsx
 msgid "Profile themes, avatar frames, name styles and card foils, yours for {0} days."
-msgstr "个人主页主题、头像框、名字样式和卡牌闪膜，{0} 天内都归你。"
+msgstr "个人个人资料主题、头像框、名字样式和卡牌闪膜，{0} 天内都归你。"
 
 #: src/components/maps/PlayResults.tsx
 #: src/components/player/SkillPlaysModal.tsx
@@ -20947,8 +20975,8 @@ msgid "Reach <0/> total pp"
 msgstr "总 pp 达到 <0/>"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Reach 10,000 total pp"
-msgstr "总 pp 达到 10,000"
+#~ msgid "Reach 10,000 total pp"
+#~ msgstr "总 pp 达到 10,000"
 
 #: src/lib/goal-format.ts
 msgid "Reach a {rating} {skill} rating on {keyCount}K"
@@ -23209,8 +23237,8 @@ msgid "set {span} ago"
 msgstr "{span}前打出"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Set 23 days ago"
-msgstr "23 天前设定"
+#~ msgid "Set 23 days ago"
+#~ msgstr "23 天前设定"
 
 #. placeholder {0}: formatDetailedTimeAgo(recentPlayAt, locale)
 #: src/routes/player/$username.tsx
@@ -24437,6 +24465,7 @@ msgstr "狙击者"
 msgid "snipes"
 msgstr "Snipe"
 
+#: src/components/supporter/SupportShowcase.tsx
 #: src/routes/snipes.tsx
 msgid "Snipes"
 msgstr "Snipe"
@@ -31195,8 +31224,8 @@ msgid "Your gift week was claimed. Every $4 you give brings a new code."
 msgstr "你赠送的一周已被领取。你每支持 $4 就会获得一个新兑换码。"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Your goals"
-msgstr "我的目标"
+#~ msgid "Your goals"
+#~ msgstr "我的目标"
 
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx

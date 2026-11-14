@@ -2332,6 +2332,10 @@ msgstr "**186** plays  **4** top plays nuevas  **1** meta completada"
 msgid "**ExamplePlayer** pulled your card"
 msgstr "**ExamplePlayer** sacó tu carta"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "**ExamplePlayer** sniped you from #1"
+msgstr "**ExamplePlayer** te hizo snipe desde el #1"
+
 #: src/routes/discord.tsx
 msgid "/challenge"
 msgstr "/challenge"
@@ -3279,6 +3283,10 @@ msgstr "96%, o 95% por debajo de 1er dan"
 #: src/routes/dan-estimates.tsx
 msgid "97%, on ScoreV2 accuracy"
 msgstr "97%, con acc de ScoreV2"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "98.42%  **312pp**  Score **948,120** vs 941,377"
+msgstr "98.42%  **312pp**  Score **948,120** vs 941,377"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "A .glb model (up to 100,000 triangles, textures inside it), an image or a GIF, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
@@ -5309,6 +5317,10 @@ msgstr "BBCode"
 #: src/routes/bbcode.tsx
 msgid "BBCode editor"
 msgstr "Editor de BBCode"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Beatmap"
+msgstr "Mapa"
 
 #. placeholder {0}: mark.beatmapId
 #: src/routes/recommendations.tsx
@@ -10169,6 +10181,10 @@ msgstr "Estimación exacta: {0}"
 msgid "Example numbers."
 msgstr "Números de ejemplo."
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Example Song [Insane]"
+msgstr "Example Song [Insane]"
+
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Excluded sections"
 #~ msgstr ""
@@ -11606,8 +11622,8 @@ msgid "goal cleared"
 msgstr "meta cumplida"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Goal completed"
-msgstr "Meta completada"
+#~ msgid "Goal completed"
+#~ msgstr "Meta completada"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "goal tracker"
@@ -14149,8 +14165,12 @@ msgid "Link copied."
 msgstr "Enlace copiado."
 
 #: src/routes/support.tsx
-msgid "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
-msgstr "Vincula Discord y elige cuáles te manda maniabot: cuando completas una meta, alguien saca tu carta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel o te hacen snipe, y un resumen de tu semana."
+msgid "Link Discord and pick which ones maniabot sends you: when someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
+msgstr "Vincula Discord y elige cuáles te manda maniabot: cuando alguien saca tu carta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel o te hacen snipe, y un resumen de tu semana."
+
+#: src/routes/support.tsx
+#~ msgid "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
+#~ msgstr "Vincula Discord y elige cuáles te manda maniabot: cuando completas una meta, alguien saca tu carta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel o te hacen snipe, y un resumen de tu semana."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "link text"
@@ -18441,8 +18461,12 @@ msgid "Optional"
 msgstr "Opcionales"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Optional Discord DMs when you finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
-msgstr "DMs opcionales en Discord cuando completas una meta o alguien saca tu carta, y un resumen semanal. Apagados hasta que los actives desde la página del bot de Discord."
+#~ msgid "Optional Discord DMs when you finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
+#~ msgstr "DMs opcionales en Discord cuando completas una meta o alguien saca tu carta, y un resumen semanal. Apagados hasta que los actives desde la página del bot de Discord."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Optional Discord DMs when you get sniped, someone pulls your card or a new farm map at your level gets ranked, and a weekly recap. Off until you turn them on from the Discord bot page."
+msgstr "DMs opcionales en Discord cuando te hacen snipe, alguien saca tu carta o rankean un mapa nuevo para farmear a tu nivel, y un resumen semanal. Apagados hasta que los actives desde la página del bot de Discord."
 
 #: src/routes/report.tsx
 #~ msgid "Optional follow-up"
@@ -18989,6 +19013,10 @@ msgstr "pega un enlace de score de {username}"
 #: src/components/player/AddScoreModal.tsx
 msgid "paste a score or beatmap link for {username}"
 msgstr "pega un enlace de score o de beatmap para {username}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Paste an image (Ctrl+V) or drop it here to add it."
+msgstr "Pega una imagen (Ctrl+V) o suéltala aquí para agregarla."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste formatting"
@@ -20935,8 +20963,8 @@ msgid "Reach <0/> total pp"
 msgstr "Llega a <0/> pp totales"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Reach 10,000 total pp"
-msgstr "Llega a 10,000 pp en total"
+#~ msgid "Reach 10,000 total pp"
+#~ msgstr "Llega a 10,000 pp en total"
 
 #: src/lib/goal-format.ts
 msgid "Reach a {rating} {skill} rating on {keyCount}K"
@@ -23197,8 +23225,8 @@ msgid "set {span} ago"
 msgstr "creado hace {span}"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Set 23 days ago"
-msgstr "Creada hace 23 días"
+#~ msgid "Set 23 days ago"
+#~ msgstr "Creada hace 23 días"
 
 #. placeholder {0}: formatDetailedTimeAgo(recentPlayAt, locale)
 #: src/routes/player/$username.tsx
@@ -24425,6 +24453,7 @@ msgstr "Sniper"
 msgid "snipes"
 msgstr "snipes"
 
+#: src/components/supporter/SupportShowcase.tsx
 #: src/routes/snipes.tsx
 msgid "Snipes"
 msgstr "Snipes"
@@ -31183,8 +31212,8 @@ msgid "Your gift week was claimed. Every $4 you give brings a new code."
 msgstr "Ya reclamaron tu semana de regalo. Cada $4 que das trae un código nuevo."
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Your goals"
-msgstr "Tus metas"
+#~ msgid "Your goals"
+#~ msgstr "Tus metas"
 
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx

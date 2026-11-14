@@ -2355,6 +2355,10 @@ msgstr "**186** plays  **4** new top plays  **1** goal completed"
 msgid "**ExamplePlayer** pulled your card"
 msgstr "**ExamplePlayer** pulled your card"
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "**ExamplePlayer** sniped you from #1"
+msgstr "**ExamplePlayer** sniped you from #1"
+
 #: src/routes/discord.tsx
 msgid "/challenge"
 msgstr "/challenge"
@@ -3302,6 +3306,10 @@ msgstr "96%, or 95% below 1st dan"
 #: src/routes/dan-estimates.tsx
 msgid "97%, on ScoreV2 accuracy"
 msgstr "97%, on ScoreV2 accuracy"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "98.42%  **312pp**  Score **948,120** vs 941,377"
+msgstr "98.42%  **312pp**  Score **948,120** vs 941,377"
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "A .glb model (up to 100,000 triangles, textures inside it), an image or a GIF, up to 10 MB. It goes on your profile right away. Once it's reviewed, it can be added to this list for everyone, with your name on it."
@@ -5336,6 +5344,10 @@ msgstr "BBCode"
 #: src/routes/bbcode.tsx
 msgid "BBCode editor"
 msgstr "BBCode editor"
+
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Beatmap"
+msgstr "Beatmap"
 
 #. placeholder {0}: mark.beatmapId
 #: src/routes/recommendations.tsx
@@ -10200,6 +10212,10 @@ msgstr "Exact estimate: {0}"
 msgid "Example numbers."
 msgstr "Example numbers."
 
+#: src/components/supporter/SupportShowcase.tsx
+msgid "Example Song [Insane]"
+msgstr "Example Song [Insane]"
+
 #: src/components/maps/MapDetailModal.tsx
 #~ msgid "Excluded sections"
 #~ msgstr "Excluded sections"
@@ -11637,8 +11653,8 @@ msgid "goal cleared"
 msgstr "goal cleared"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Goal completed"
-msgstr "Goal completed"
+#~ msgid "Goal completed"
+#~ msgstr "Goal completed"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "goal tracker"
@@ -14188,8 +14204,12 @@ msgid "Link copied."
 msgstr "Link copied."
 
 #: src/routes/support.tsx
-msgid "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
-msgstr "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
+msgid "Link Discord and pick which ones maniabot sends you: when someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
+msgstr "Link Discord and pick which ones maniabot sends you: when someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
+
+#: src/routes/support.tsx
+#~ msgid "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
+#~ msgstr "Link Discord and pick which ones maniabot sends you: when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "link text"
@@ -18480,8 +18500,12 @@ msgid "Optional"
 msgstr "Optional"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Optional Discord DMs when you finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
-msgstr "Optional Discord DMs when you finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
+#~ msgid "Optional Discord DMs when you finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
+#~ msgstr "Optional Discord DMs when you finish a goal or someone pulls your card, and a weekly recap. Off until you turn them on from the Discord bot page."
+
+#: src/components/supporter/SupporterExtras.tsx
+msgid "Optional Discord DMs when you get sniped, someone pulls your card or a new farm map at your level gets ranked, and a weekly recap. Off until you turn them on from the Discord bot page."
+msgstr "Optional Discord DMs when you get sniped, someone pulls your card or a new farm map at your level gets ranked, and a weekly recap. Off until you turn them on from the Discord bot page."
 
 #: src/routes/report.tsx
 #~ msgid "Optional follow-up"
@@ -19028,6 +19052,10 @@ msgstr "paste a score link for {username}"
 #: src/components/player/AddScoreModal.tsx
 msgid "paste a score or beatmap link for {username}"
 msgstr "paste a score or beatmap link for {username}"
+
+#: src/components/supporter/themes/ThemeEditor.tsx
+msgid "Paste an image (Ctrl+V) or drop it here to add it."
+msgstr "Paste an image (Ctrl+V) or drop it here to add it."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Paste formatting"
@@ -20974,8 +21002,8 @@ msgid "Reach <0/> total pp"
 msgstr "Reach <0/> total pp"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Reach 10,000 total pp"
-msgstr "Reach 10,000 total pp"
+#~ msgid "Reach 10,000 total pp"
+#~ msgstr "Reach 10,000 total pp"
 
 #: src/lib/goal-format.ts
 msgid "Reach a {rating} {skill} rating on {keyCount}K"
@@ -23236,8 +23264,8 @@ msgid "set {span} ago"
 msgstr "set {span} ago"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Set 23 days ago"
-msgstr "Set 23 days ago"
+#~ msgid "Set 23 days ago"
+#~ msgstr "Set 23 days ago"
 
 #. placeholder {0}: formatDetailedTimeAgo(recentPlayAt, locale)
 #: src/routes/player/$username.tsx
@@ -24472,6 +24500,7 @@ msgstr "Sniper"
 msgid "snipes"
 msgstr "snipes"
 
+#: src/components/supporter/SupportShowcase.tsx
 #: src/routes/snipes.tsx
 msgid "Snipes"
 msgstr "Snipes"
@@ -31238,8 +31267,8 @@ msgid "Your gift week was claimed. Every $4 you give brings a new code."
 msgstr "Your gift week was claimed. Every $4 you give brings a new code."
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Your goals"
-msgstr "Your goals"
+#~ msgid "Your goals"
+#~ msgstr "Your goals"
 
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/LoadoutSlots.tsx

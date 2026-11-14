@@ -23,6 +23,7 @@ import {
   type RowFraming,
 } from "../../../lib/custom-theme-editor-gl";
 import { customThemeSpec, CUSTOM_THEME_STARTER } from "../../../lib/custom-theme-spec";
+import type { AppLocale } from "../../../lib/locale";
 import { layerAssets, LAYER_GENERATOR_VERSION, LAYERS_MAX, layersToGlsl, emptyLayerDoc, newLayer, parseLayerDoc, type Layer, type LayerDoc } from "../../../lib/custom-theme-layers";
 import { PROFILE_THEME_MAIN, PROFILE_THEME_PRELUDE, PROFILE_THEME_SHADERS } from "../../../lib/profile-theme-shaders";
 import {
@@ -116,7 +117,7 @@ function errorText(errors: Problem[]): string {
 }
 
 export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onCreated?: (themeId: number) => void }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const navigate = useNavigate();
   const [themeId, setThemeId] = useState<number | null>(start.themeId);
   const [loading, setLoading] = useState(start.themeId !== null || start.remix !== undefined);
@@ -528,6 +529,22 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       setUploading(null);
     }
   };
+  // Pictures also come in pasted (an image on the clipboard) or dropped on their slots, into the next free ones
+  const addTextures = async (files: File[]) => {
+    const images = files.filter((file) => file.type.startsWith("image/")).slice(0, CUSTOM_THEME_TEXTURES - assets.length);
+    for (const [at, file] of images.entries()) await addTexture(assets.length + at, file);
+  };
+  useEffect(() => {
+    if (mode !== "code") return;
+    const onPaste = (event: ClipboardEvent) => {
+      const files = [...(event.clipboardData?.files ?? [])].filter((file) => file.type.startsWith("image/"));
+      if (!files.length || uploading !== null || supporter !== true || assets.length >= CUSTOM_THEME_TEXTURES) return;
+      event.preventDefault();
+      void addTextures(files);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  });
 
   /* A picture for a layer: uploaded for a supporter (a save needs its URL),
      only shown here for anyone else, who can try the editor but not save. */
@@ -855,6 +872,47 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
 
   const themeSettings = (
     <>
+      {mode === "code" ? (
+        <InspectorSection title={t`Pictures`}>
+          <p className="mb-2 text-[11px] leading-relaxed text-osu-f1">{t`Read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code).`} {t`Paste an image (Ctrl+V) or drop it here to add it.`}</p>
+          <div
+            className="grid grid-cols-4 gap-1.5"
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+            }}
+            onDrop={(event) => {
+              const files = [...event.dataTransfer.files];
+              if (!files.length) return;
+              event.preventDefault();
+              if (uploading === null && supporter === true) void addTextures(files);
+            }}
+          >
+            {Array.from({ length: CUSTOM_THEME_TEXTURES }, (_, index) => {
+              const url = assets[index];
+              return (
+                <div key={index} className="relative aspect-square overflow-hidden rounded-md bg-black/30 ring-1 ring-white/[0.06]">
+                  {url ? (
+                    <>
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                      <button type="button" aria-label={t`Remove`} onClick={() => setAssets((current) => current.filter((_, at) => at !== index))} className="absolute right-0.5 top-0.5 grid h-5 w-5 cursor-pointer place-items-center rounded bg-black/70 text-[11px] text-white hover:bg-black">x</button>
+                    </>
+                  ) : index === assets.length ? (
+                    <label className="grid h-full w-full cursor-pointer place-items-center text-osu-f1 hover:text-white" title={t`Add image`}>
+                      {uploading === index ? "..." : <Plus size={15} />}
+                      <input type="file" accept="image/*" className="hidden" disabled={uploading !== null || supporter !== true} onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) void addTexture(index, file);
+                      }} />
+                    </label>
+                  ) : null}
+                  <span className="pointer-events-none absolute bottom-0.5 left-0.5 font-mono text-[9.5px] text-white/50">{index}</span>
+                </div>
+              );
+            })}
+          </div>
+        </InspectorSection>
+      ) : null}
       <InspectorSection title={t`Site colours`}>
         <p className="mb-2 text-[11px] leading-relaxed text-osu-f1">{t`The tint the rest of the profile takes while the theme is on.`}</p>
         <InspectorRow label={t`Hue`}>
@@ -903,36 +961,6 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
           <span className="text-[12px] font-semibold text-white">{name || t`Your name`}</span>
         </div>
       </InspectorSection>
-      {mode === "code" ? (
-        <InspectorSection title={t`Pictures`}>
-          <p className="mb-2 text-[11px] leading-relaxed text-osu-f1">{t`Read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code).`}</p>
-          <div className="grid grid-cols-4 gap-1.5">
-            {Array.from({ length: CUSTOM_THEME_TEXTURES }, (_, index) => {
-              const url = assets[index];
-              return (
-                <div key={index} className="relative aspect-square overflow-hidden rounded-md bg-black/30 ring-1 ring-white/[0.06]">
-                  {url ? (
-                    <>
-                      <img src={url} alt="" className="h-full w-full object-cover" />
-                      <button type="button" aria-label={t`Remove`} onClick={() => setAssets((current) => current.filter((_, at) => at !== index))} className="absolute right-0.5 top-0.5 grid h-5 w-5 cursor-pointer place-items-center rounded bg-black/70 text-[11px] text-white hover:bg-black">x</button>
-                    </>
-                  ) : index === assets.length ? (
-                    <label className="grid h-full w-full cursor-pointer place-items-center text-osu-f1 hover:text-white" title={t`Add image`}>
-                      {uploading === index ? "..." : <Plus size={15} />}
-                      <input type="file" accept="image/*" className="hidden" disabled={uploading !== null || supporter !== true} onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        event.target.value = "";
-                        if (file) void addTexture(index, file);
-                      }} />
-                    </label>
-                  ) : null}
-                  <span className="pointer-events-none absolute bottom-0.5 left-0.5 font-mono text-[9.5px] text-white/50">{index}</span>
-                </div>
-              );
-            })}
-          </div>
-        </InspectorSection>
-      ) : null}
       <InspectorSection title={t`Sharing`}>
         <InspectorRow label={t`Who`}>
           <Choice value={visibility} onChange={setVisibility} options={[{ id: "private", label: t`Just me` }, { id: "gallery", label: t`Gallery` }]} />
@@ -987,7 +1015,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
         <MoreMenu
           items={[
             ...(narrow ? [{ label: overlay ? t`Hide the profile on top` : t`Show the profile on top`, onClick: () => setOverlay((value) => !value) }] : []),
-            ...(mode === "layers" ? [{ label: t`Open as code`, onClick: () => setToCode(true) }] : [{ label: copied === "spec" ? t`Copied` : t`Copy the theme spec`, onClick: () => copy(customThemeSpec(), "spec") }]),
+            ...(mode === "layers" ? [{ label: t`Open as code`, onClick: () => setToCode(true) }] : [{ label: copied === "spec" ? t`Copied` : t`Copy the theme spec`, onClick: () => copy(customThemeSpec(i18n.locale as AppLocale), "spec") }]),
             { label: t`Theme spec`, href: "/workshop/themes/spec" },
             { label: t`Gallery`, href: "/workshop/themes/gallery" },
             ...(themeId !== null && draftAt !== null ? [{ label: t`Discard draft`, onClick: () => setDiscarding(true) }] : []),

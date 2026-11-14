@@ -5,7 +5,7 @@ import { useLingui } from "@lingui/react/macro";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { PageHeader } from "../components/layout/PageHeader";
-import { ProfileThemeBackdrop } from "../components/supporter/ProfileThemeBackdrop";
+import { ProfileThemeBackdrop, profileThemeThumb } from "../components/supporter/ProfileThemeBackdrop";
 import { NewThemeChooser } from "../components/supporter/themes/NewThemeChooser";
 import { frameOverhangMargins, SupporterAvatarFrame } from "../components/player/SupporterAvatarFrame";
 import { avatarImageSrc } from "../components/ui/Avatar";
@@ -31,8 +31,9 @@ export const Route = createFileRoute("/workshop/")({
 
 const SLIDE_MS = 6500;
 /* Built-in theme pictures the frame tiles stand on, so a shelf isn't one flat colour. */
-const BACKDROPS = ["synthwave", "inferno", "sakura", "cosmos", "koi", "noir", "aurora", "blackhole", "vaporwave", "frost"];
-const backdrop = (index: number) => `/images/profile-themes/thumbs/${BACKDROPS[index % BACKDROPS.length]}.webp`;
+const BACKDROPS: SupporterProfileThemeId[] = ["synthwave", "inferno", "sakura", "cosmos", "koi", "noir", "aurora", "blackhole", "vaporwave", "frost"];
+// versioned like every theme thumb: the service worker keeps an unversioned one forever
+const backdrop = (index: number) => profileThemeThumb(BACKDROPS[index % BACKDROPS.length]);
 
 /* What a slide stands on: a gallery theme's still, or one of the site's themes
    played live (their thumbnails are too small to stretch across the slide). */

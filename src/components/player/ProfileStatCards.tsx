@@ -285,7 +285,7 @@ export function SkillCard({ userId, keyCount = null, sample }: { userId: number 
             <span className="truncate text-[22px] font-black leading-none" style={{ color: skill.color }}>{skill.label}</span>
             <span className="shrink-0 text-[15px] font-black tabular-nums text-white">{skill.value.toFixed(1)}</span>
           </div>
-          <div className="mt-auto truncate pt-2.5 text-[11px] tabular-nums text-osu-f1">
+          <div className="mt-auto min-w-0 text-pretty pt-2.5 text-[11px] leading-snug tabular-nums text-osu-f1">
             {skill.runnerUp
               ? <Trans>In {skill.keyCount}K, ahead of {skill.runnerUp.label} {skill.runnerUp.value.toFixed(1)}</Trans>
               : <Trans>In {skill.keyCount}K</Trans>}

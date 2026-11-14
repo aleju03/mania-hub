@@ -803,6 +803,7 @@ export function ClipShowcase() {
 
 const DM_GREEN = 0x88da20;
 const DM_PINK = 0xff66ab;
+const DM_RED = 0xff4d6d;
 
 const dmText = (content: string): DiscordComponentJson => ({ type: 10, content });
 // a link button without its url, so the preview draws it but it goes nowhere
@@ -824,8 +825,8 @@ function dmMessage(accent: number, lines: string[], image: string, rest: Discord
   };
 }
 
-/* The bot's DMs as they land in Discord: a goal done, a card pulled, the
-   weekly recap. Example numbers. */
+/* The bot's DMs as they land in Discord: a snipe, a card pulled, the weekly
+   recap. Example numbers. */
 export function BotDmShowcase() {
   const { t } = useLingui();
   const reduced = useReducedMotion();
@@ -833,8 +834,8 @@ export function BotDmShowcase() {
   // the viewer's own card, as the bot attaches it; the site logo when signed out
   const cardImage = you.id ? `/api/og?kind=maniacard&username=${encodeURIComponent(you.name)}` : you.avatar;
   const messages = [
-    dmMessage(DM_GREEN, [`-# ${t`Goal completed`}`, `### ${t`Reach 10,000 total pp`}`, `-# ${t`Set 23 days ago`}`], you.avatar, [
-      { type: 1, components: [dmLink(t`Your goals`)] },
+    dmMessage(DM_RED, [`-# ${t`**ExamplePlayer** sniped you from #1`}`, `### ${t`Example Song [Insane]`}`, t`98.42%  **312pp**  Score **948,120** vs 941,377`], "/images/supporter-perks/play-cover.webp", [
+      { type: 1, components: [dmLink(t`Beatmap`), dmLink(t`Snipes`)] },
     ]),
     dmMessage(DM_GREEN, [t`**ExamplePlayer** pulled your card`, `-# ${t`the first copy anyone has pulled`}`], cardImage, [
       { type: 1, components: [dmLink(t`Their collection`), dmLink(t`Packs`)] },

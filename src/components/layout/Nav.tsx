@@ -279,11 +279,14 @@ export function Nav() {
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
-  // When the server is off, Snipes is always shown. Otherwise show it for
-  // Global and once the tier is known to be live or snipes - while the tier is
-  // still unknown (first-ever visit) the tab stays hidden rather than flashing in.
+  // When the server is off, Snipes is always shown. Otherwise it shows for
+  // Global and for a live or snipes country, and also while the tier is still
+  // unknown: the server render and the hydration render never know it (it is
+  // cached in this browser), and most countries visited are live, so it stays
+  // put there and only leaves for a country known not to be live.
   const showSnipesLink = !liveBackendConfigured
     || isGlobalScope(selectedCountry)
+    || selectedCountryFeatureTier == null
     || selectedCountryFeatureTier === "live"
     || selectedCountryFeatureTier === "snipes";
   const navLabel = (id: NavLeafId) => (devMode && DEV_NAV_LABELS[id]) || NAV_LABELS[id];
