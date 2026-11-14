@@ -13,6 +13,7 @@ import { ReplayMapInfoControls } from "./ReplayMapInfoControls";
 import { ReplayPlayerInfoControls } from "./ReplayPlayerInfoControls";
 import { ReplayCustomMediaControls, ReplayCustomMediaPreview } from "./ReplayCustomMediaControls";
 import { ReplayLeaderboardControls } from "./ReplayLeaderboardControls";
+import { ReplayOptionChip, ReplayOptionChips } from "./ReplayOptionChip";
 import { SelectMenu } from "#/components/ui/SelectMenu";
 import { ensureReplayFontStylesheet } from "../../lib/replay-fonts";
 import {
@@ -888,6 +889,10 @@ export function ReplaySkinSettingsModal({
         ...current[id],
         ...patch,
       },
+      // Splitting always brings the right hand up, even one removed earlier.
+      ...(id === "keypresses" && patch.splitHands === true
+        ? { keypressesRight: { ...current.keypressesRight, enabled: true } }
+        : {}),
     }));
   };
 
@@ -4098,11 +4103,12 @@ function PresetTextButton({
 
 
 // Skin stage art is placed on the stage, not picked from this gallery: the
-// skin decides whether it exists at all and where it starts.
-type ReplayHudOverlayId = Exclude<ReplayOverlayId, ReplayStageArtOverlayId>;
+// skin decides whether it exists at all and where it starts. The right-hand
+// keypress strip is Keypresses split in two, switched from that card.
+type ReplayHudOverlayId = Exclude<ReplayOverlayId, ReplayStageArtOverlayId | "keypressesRight">;
 
 const REPLAY_HUD_OVERLAY_IDS = REPLAY_OVERLAY_IDS.filter(
-  (id): id is ReplayHudOverlayId => !isReplayStageArtOverlay(id),
+  (id): id is ReplayHudOverlayId => !isReplayStageArtOverlay(id) && id !== "keypressesRight",
 );
 
 const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayHudOverlayId, MessageDescriptor> = {
@@ -4533,6 +4539,15 @@ function ReplayOverlaySettingsRow({
           />
         </div>
       )}
+      {id === "keypresses" && (
+        <div className="px-3 pb-3 text-osu-l1">
+          <ReplayOptionChips>
+            <ReplayOptionChip checked={placement.splitHands === true} onChange={(splitHands) => onChange({ splitHands })}>
+              <Trans>Split hands</Trans>
+            </ReplayOptionChip>
+          </ReplayOptionChips>
+        </div>
+      )}
       {id === "columnStats" && (
         <div className="space-y-1.5 px-3 pb-3 text-xs text-osu-l1">
           <div className="flex items-center gap-2">
@@ -4557,6 +4572,11 @@ function ReplayOverlaySettingsRow({
               block
             />
           </div>
+          <ReplayOptionChips>
+            <ReplayOptionChip checked={placement.vertical === true} onChange={(vertical) => onChange({ vertical })}>
+              <Trans>Vertical</Trans>
+            </ReplayOptionChip>
+          </ReplayOptionChips>
         </div>
       )}
       {id === "replayMaster" && (

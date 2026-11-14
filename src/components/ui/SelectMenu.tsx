@@ -44,6 +44,9 @@ interface SelectMenuProps<T extends string> {
   // sentence (the goal builder) where the toolbar chip would sit too small.
   triggerClassName?: string;
   triggerStyle?: CSSProperties;
+  // Shown on the button in place of the chosen option, for a menu that adds
+  // something rather than holding a value.
+  triggerLabel?: string;
 }
 
 // The popover scrolls past this rather than growing, and flips above the button
@@ -65,6 +68,7 @@ export function SelectMenu<T extends string>({
   disabled = false,
   triggerClassName,
   triggerStyle,
+  triggerLabel,
 }: SelectMenuProps<T>) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
@@ -182,12 +186,12 @@ export function SelectMenu<T extends string>({
           block ? "w-full justify-between" : ""
         }`}
       >
-        {SelectedIcon && <SelectedIcon className={`h-3.5 w-3.5 ${selected?.colorClass ?? "text-osu-f1"}`} />}
-        {selected?.leading}
+        {!triggerLabel && SelectedIcon && <SelectedIcon className={`h-3.5 w-3.5 ${selected?.colorClass ?? "text-osu-f1"}`} />}
+        {triggerLabel ? null : selected?.leading}
         {/* flex-1 rather than letting justify-between space it: with a leading
             flag the label would otherwise float in the middle of the button. */}
         <span className={`${selected?.colorClass ?? ""} ${block ? "flex-1 truncate text-left" : ""}`}>
-          {selected?.label}
+          {triggerLabel ?? selected?.label}
         </span>
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
       </button>

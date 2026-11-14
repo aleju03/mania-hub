@@ -736,6 +736,15 @@ export function getLiveBackendUrl(): string | null {
   return value.replace(/\/+$/, "");
 }
 
+/* The Cloudflare-cached host in front of the same backend, for immutable public
+   bytes (song audio, set bundles, public skin files). Falls back to the live
+   backend itself when unset. */
+export function getAssetsBaseUrl(): string | null {
+  const value = import.meta.env.VITE_ASSETS_URL;
+  if (typeof value === "string" && value.trim() !== "") return value.trim().replace(/\/+$/, "");
+  return getLiveBackendUrl();
+}
+
 export function isLiveBackendConfigured(): boolean {
   return getLiveBackendUrl() !== null;
 }
@@ -3628,6 +3637,20 @@ export async function fetchLiveUserSearch(query: string, limit?: number, options
   if (options.tracked) params.set("tracked", "1");
   const response = await fetchLiveJson<{ users?: LiveUserSearchEntry[] }>(`/api/users/search?${params.toString()}`);
   return response?.users ?? [];
+}
+
+/** The tracked players of some countries, highest pp first, a page at a time. */
+export async function fetchLiveRosterPlayers(
+  countries: string[],
+  options: { query?: string; limit?: number; offset?: number } = {},
+): Promise<{ users: LiveUserSearchEntry[]; total: number }> {
+  if (!countries.length) return { users: [], total: 0 };
+  const params = new URLSearchParams({ countries: countries.join(",") });
+  if (options.query?.trim()) params.set("q", options.query.trim());
+  if (options.limit != null) params.set("limit", String(options.limit));
+  if (options.offset) params.set("offset", String(options.offset));
+  const response = await fetchLiveJson<{ users?: LiveUserSearchEntry[]; total?: number }>(`/api/users/roster?${params.toString()}`);
+  return { users: response?.users ?? [], total: response?.total ?? 0 };
 }
 
 /* The temporary GOAT nomination poll board (/packs). Read straight from the

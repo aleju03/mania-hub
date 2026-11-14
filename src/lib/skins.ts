@@ -3,7 +3,7 @@ import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import { getI18n } from "./i18n";
 import type { AppLocale } from "./locale";
-import { getLiveBackendUrl, getServerLiveBackendUrl } from "./live-backend";
+import { getAssetsBaseUrl, getLiveBackendUrl, getServerLiveBackendUrl } from "./live-backend";
 import type { PreviewBackdrop } from "./skin-preview-backdrops";
 import type { SkinPreviewChartSnippet } from "./skin-preview-patterns";
 import { liveBridgeToken } from "./live-backend-tokens";
@@ -1712,8 +1712,8 @@ export function pingSkinViews(refs: string[]): void {
 // the ?t= capability that unlocks the object, and it has to survive the
 // rewrite - without it the endpoint 404s, which is the whole point.
 export function skinOskFileUrl(skin: Pick<SkinSummary, "id" | "oskUrl">): string | null {
-  const base = getLiveBackendUrl();
-  if (!base || !skin.oskUrl) return null;
+  const live = getLiveBackendUrl();
+  if (!live || !skin.oskUrl) return null;
   const [path, query] = skin.oskUrl.split("?");
   // The oskUrl path segment is already percent-encoded; decode before
   // re-encoding or filenames with spaces get double-encoded into 404s.
@@ -1727,6 +1727,8 @@ export function skinOskFileUrl(skin: Pick<SkinSummary, "id" | "oskUrl">): string
   }
   const token = new URLSearchParams(query ?? "").get("t");
   const suffix = token ? `?t=${encodeURIComponent(token)}` : "";
+  // A private skin's bytes stay off the shared Cloudflare cache.
+  const base = token ? live : getAssetsBaseUrl() ?? live;
   return `${base}/api/skins/file/${encodeURIComponent(skin.id)}/${encodeURIComponent(filename)}${suffix}`;
 }
 

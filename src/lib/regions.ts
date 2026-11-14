@@ -30,6 +30,16 @@ export function getRegionDef(code?: string | null): RegionDef | null {
   return REGION_BY_CODE.get(code?.trim().toUpperCase() ?? "") ?? null;
 }
 
+/** The region whose member countries are exactly this set, regions before continents. */
+export function findRegionByCountries(countries: readonly string[]): RegionDef | null {
+  if (!countries.length) return null;
+  const wanted = new Set(countries.map((code) => code.toUpperCase()));
+  for (const region of [...REGION_OPTIONS, ...CONTINENT_OPTIONS]) {
+    if (region.countries.length === wanted.size && region.countries.every((code) => wanted.has(code))) return region;
+  }
+  return null;
+}
+
 export function getRegionShape(code?: string | null): RegionShape | null {
   return REGION_SHAPES[code?.trim().toUpperCase() ?? ""] ?? null;
 }

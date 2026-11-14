@@ -35,6 +35,8 @@ before replacing its database.
 
 The live backend is the source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is configured. Browsers fetch a snapshot on page entry, then subscribe to SSE for deltas. SSE is one-way backend-to-browser; users never connect to oSC directly.
 
+Processes (`LIVE_BACKEND_ROLE`): `worker` migrates the schema and runs ingest, jobs and schedulers; `server` serves HTTP and SSE and tails `live_event_log`; `bot` runs the Discord bot (see `discord.md`); `all` (the default, local dev) does everything in one process. The VPS deploy (`backend/deploy/deploy-live.sh`, run through `~/deploy-mania-hub-live.sh`) restarts the worker and server only when something they load changed, and the bot only when something it loads changed (`backend/deploy/restart-plan.mjs`; `DEPLOY_RESTART=full` forces both).
+
 Ingest flow:
 
 1. Scores arrive from three sources: the oSC Socket.IO feed (real-time), oSC JSON backfill (catch-up after downtime), and an osu! API recent-scores fallback poller (safety net, own rate bucket).

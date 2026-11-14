@@ -25,6 +25,7 @@ export interface DiscordComponentJson {
   divider?: boolean;
   spacing?: number;
   placeholder?: string;
+  options?: Array<{ label: string; value: string; description?: string; default?: boolean }>;
 }
 
 export interface DiscordEmbedJson {
@@ -147,6 +148,22 @@ function MediaGallery({ items }: { items: NonNullable<DiscordComponentJson["item
   );
 }
 
+// A closed menu showing its current pick. Only a picture: a preview opens no menu.
+function StringSelect({ component }: { component: DiscordComponentJson }) {
+  const picked = component.options?.find((option) => option.default);
+  return (
+    <div
+      className="flex h-10 w-full max-w-[400px] items-center justify-between rounded-lg px-3 text-[14px] select-none"
+      style={{ backgroundColor: DISCORD.deep, border: `1px solid ${DISCORD.divider}`, color: picked ? DISCORD.text : DISCORD.muted }}
+    >
+      <span className="truncate">{picked?.label ?? component.placeholder ?? "Make a selection"}</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </div>
+  );
+}
+
 function UnknownComponent({ component }: { component: DiscordComponentJson }) {
   return (
     <div className="rounded-lg px-3 py-2 text-[13px]" style={{ backgroundColor: DISCORD.deep, color: DISCORD.muted }}>
@@ -165,6 +182,8 @@ function Component({ component, handlers }: { component: DiscordComponentJson; h
       );
     case 2:
       return <DiscordButton component={component} handlers={handlers} />;
+    case 3:
+      return <StringSelect component={component} />;
     case 9:
       return (
         <div className="flex items-start gap-3">
@@ -208,7 +227,12 @@ function ClassicEmbed({ embed }: { embed: DiscordEmbedJson }) {
     <div className="grid max-w-[516px] rounded" style={{ backgroundColor: DISCORD.embed, borderLeft: `4px solid ${accent}` }}>
       <div className="flex gap-4 px-4 pb-4 pt-2">
         <div className="min-w-0 flex-1 space-y-2">
-          {embed.author ? <div className="text-[14px] font-semibold" style={{ color: DISCORD.white }}>{embed.author.name}</div> : null}
+          {embed.author ? (
+            <div className="flex items-center gap-2 text-[14px] font-semibold" style={{ color: DISCORD.white }}>
+              {embed.author.icon_url ? <img src={embed.author.icon_url} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" /> : null}
+              <span>{embed.author.name}</span>
+            </div>
+          ) : null}
           {embed.title ? <div className="font-semibold" style={{ color: embed.url ? DISCORD.link : DISCORD.white }}>{embed.title}</div> : null}
           {embed.description ? <DiscordMarkdown content={embed.description} /> : null}
           {embed.fields?.map((field, index) => (

@@ -1,5 +1,5 @@
 import { ImageResponse } from "../../lib/og-image-response";
-import { getDanImageSrc } from "../../lib/dan-images";
+import { getDanTierImageSrc } from "../../lib/dan-images";
 import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
 import type { ReactNode } from "react";
@@ -9,6 +9,7 @@ import {
   formatOgInt,
   getFont,
   getNoteSpriteDataUrl,
+  imageResponse,
   isOgFallbackError,
   loadOgFonts,
   MAX_CONCURRENT_OG_RENDERS,
@@ -23,12 +24,15 @@ import {
   getRankings,
   getScore,
 } from "../../lib/osu";
-import { fetchPublicCompanellaImport, getServerLiveBackendUrl } from "../../lib/live-backend";
+import { fetchLivePlayerSummaryDirect, fetchPublicCompanellaImport, getServerLiveBackendUrl } from "../../lib/live-backend";
 import { bridgeAuthHeaders } from "../../lib/live-backend-tokens";
 import { parsePackCardKey } from "../../lib/pack-collection";
 import { getCountryName, isGlobalScope, isSupportedCountryCode, isSupportedCountryScope } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
 import { OVERJOY_RUN_OG_LAYOUT, renderOverjoyRunOg } from "../../lib/og-overjoy-run";
+import { drawPlayBanner, fetchPlayBannerSources, type PlayBannerStats } from "../../lib/play-banner";
+import { liveBridgeToken } from "../../lib/live-backend-tokens";
+import { drawRankingsBoard, fetchRankingsBoardAvatars, fetchRankingsBoardFlags, readRankingsBoard, type RankingsBoardRow } from "../../lib/rankings-board";
 import {
   getDisplayedAccuracy,
   getDisplayedRank,
@@ -1761,44 +1765,136 @@ async function renderPulledCardOg(
 // ---------------------------------------------------------------------------
 // Dan emblem: a single rasterized dan logo, used as the /dan command thumbnail.
 // Discord cannot render the SVG emblems, so this route fetches the asset and
-// re-emits it as a PNG over a soft family-tinted tile. (webp emblems are linked
-// directly by the bot and never reach here.)
+// re-emits it as a square transparent PNG.
 // ---------------------------------------------------------------------------
 
 // The emblem a keymode's ladder uses, from the same rules as the site's badges
-// (4K Reform and 4K LN, 6K and 7K sets; no art for the other keymodes).
+// (4K Reform and 4K LN, 6K and 7K sets; no art for the other keymodes). A
+// label with a tier ("gamma++", "7-") picks the drawing with its marks.
 function danEmblemAssetPath(label: string, family: string, keyCount: number | null): string | null {
-  return getDanImageSrc(label, family === "ln" ? "ln" : family, keyCount ?? undefined);
+  return getDanTierImageSrc(label, family === "ln" ? "ln" : family, keyCount ?? undefined);
 }
 
-// Rasterizes the emblem for Discord, which shows no SVG. Transparent, sized to
-// the artwork's own proportions, so it sits on the message like the badge does
-// on the site. Raster emblems (the 4K greek tiers) are served as they are.
-async function renderDanEmblemOg(request: Request, label: string, family: string, keyCount: number | null): Promise<Response> {
+// Rasterizes the emblem for Discord, which shows no SVG. Transparent and always
+// square: Discord crops a thumbnail to a square, which cut the tier marks off
+// the wider tier drawings, so those are fitted inside the square instead.
+const DAN_EMBLEM_SIZE = 384;
+
+/** A dan badge's art, as stored: an SVG or a raster, or null when the ladder has none for the level. */
+async function fetchDanEmblemSource(request: Request, label: string, family: string, keyCount: number | null): Promise<{ source: Buffer; isSvg: boolean } | null> {
   const assetPath = danEmblemAssetPath(label, family, keyCount);
-  if (!assetPath) throw new OgFallbackError(`no dan emblem for ${keyCount ?? 4}K ${family}/${label}`);
-  const assetUrl = new URL(assetPath, getAssetOrigin(request)).toString();
-  if (!assetPath.endsWith(".svg")) {
-    return new Response(null, { status: 302, headers: { Location: assetUrl, "Cache-Control": OG_CACHE_HEADER } });
+  if (!assetPath) return null;
+  const assetResponse = await fetch(new URL(assetPath, getAssetOrigin(request)).toString());
+  if (!assetResponse.ok) return null;
+  return { source: Buffer.from(await assetResponse.arrayBuffer()), isSvg: assetPath.split("?")[0]!.endsWith(".svg") };
+}
+
+async function renderDanEmblemOg(request: Request, label: string, family: string, keyCount: number | null): Promise<Response> {
+  const art = await fetchDanEmblemSource(request, label, family, keyCount);
+  if (!art) throw new OgFallbackError(`no dan emblem for ${keyCount ?? 4}K ${family}/${label}`);
+  const { source, isSvg } = art;
+  const { default: sharp } = await import("sharp");
+  const png = await sharp(source, isSvg ? { density: 300 } : undefined)
+    .resize(DAN_EMBLEM_SIZE, DAN_EMBLEM_SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+  return new Response(new Uint8Array(png), { headers: { "Content-Type": "image/png", "Cache-Control": OG_CACHE_HEADER } });
+}
+
+// The strip on the Discord bot's top play post (lib/play-banner.ts). Only
+// numbers come from the request: the name is read from the stored player, so a
+// URL cannot put its own text on a banner. Not kept in R2: Discord fetches a
+// post's banner once and holds its own copy.
+const inFlightPlayBanners = new Map<string, Promise<Buffer | null>>();
+
+function bannerNumber(value: string | null, max: number): number | null {
+  if (value == null || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 && number <= max ? number : null;
+}
+
+/** The play's pp, accuracy and gain from the query, or null when the banner carries none. */
+function playBannerStats(params: URLSearchParams): PlayBannerStats | null {
+  const pp = bannerNumber(params.get("pp"), 100_000);
+  if (pp == null) return null;
+  return { pp, accuracy: bannerNumber(params.get("acc"), 100), gain: bannerNumber(params.get("gain"), 100_000) };
+}
+
+/** A dan badge for the banner's right end (a Dan clears post), from the query. */
+function playBannerDan(params: URLSearchParams): { label: string; family: string; keyCount: number } | null {
+  const label = (params.get("dan") ?? "").trim().toLowerCase().slice(0, 14);
+  if (!/^[a-z0-9]+$/.test(label)) return null;
+  const keyCount = Number(params.get("dk"));
+  return { label, family: params.get("df") === "ln" ? "ln" : "dan", keyCount: Number.isInteger(keyCount) && keyCount > 0 && keyCount <= 18 ? keyCount : 4 };
+}
+
+async function renderPlayBannerOg(
+  request: Request,
+  beatmapsetId: number,
+  userId: number,
+  stats: PlayBannerStats | null,
+  dan: { label: string; family: string; keyCount: number } | null = null,
+): Promise<Response> {
+  const key = `${beatmapsetId}:${userId}:${stats ? `${stats.pp}:${stats.accuracy}:${stats.gain}` : ""}:${dan ? `${dan.keyCount}${dan.family}${dan.label}` : ""}`;
+  let pending = inFlightPlayBanners.get(key);
+  if (!pending) {
+    pending = (async () => {
+      const [player, fonts, [cover, avatar], emblem] = await Promise.all([
+        fetchLivePlayerSummaryDirect(String(userId), { lookup: "id" }).catch(() => null),
+        loadOgFonts(request),
+        fetchPlayBannerSources(beatmapsetId, userId),
+        dan ? fetchDanEmblemSource(request, dan.label, dan.family, dan.keyCount).catch(() => null) : null,
+      ]);
+      if (!player && !cover) return null;
+      // Only the drawing holds a render slot, not the waits on osu!'s image hosts.
+      return ogRenderGate.run(() => drawPlayBanner({
+        cover,
+        avatar: player ? avatar : null,
+        username: player?.user.username ?? null,
+        stats: player && !emblem ? stats : null,
+        emblem: player ? emblem : null,
+        fonts,
+      }));
+    })().finally(() => {
+      inFlightPlayBanners.delete(key);
+    });
+    inFlightPlayBanners.set(key, pending);
   }
-  const assetResponse = await fetch(assetUrl);
-  if (!assetResponse.ok) throw new OgFallbackError(`dan emblem ${assetResponse.status}`);
-  const svg = await assetResponse.text();
-  const viewBox = /viewBox\s*=\s*"[\d.\-]+[\s,]+[\d.\-]+[\s,]+([\d.]+)[\s,]+([\d.]+)"/.exec(svg);
-  const aspect = viewBox && Number(viewBox[2]) > 0 ? Math.min(3, Math.max(0.33, Number(viewBox[1]) / Number(viewBox[2]))) : 1;
-  const height = 256;
-  const width = Math.round(height * aspect);
-  const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
-  const response = new ImageResponse(
-    h(
-      "div",
-      { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" } },
-      [h("img", { key: "emblem", src: dataUrl, style: { width: `${width}px`, height: `${height}px`, objectFit: "contain" } })],
-    ),
-    { width, height },
-  );
-  response.headers.set("Cache-Control", OG_CACHE_HEADER);
-  return response;
+  const buffer = await pending;
+  if (!buffer) return new Response(null, { status: 404, headers: { "Cache-Control": "public, max-age=300" } });
+  return imageResponse(buffer, "image/jpeg", OG_CACHE_HEADER);
+}
+
+// The picture in the Discord bot's /rankings reply (lib/rankings-board.ts).
+// Not kept in R2: the URL is the board's contents, and Discord and the CDN
+// hold their copies by URL.
+const inFlightRankingsBoards = new Map<string, Promise<Buffer>>();
+
+async function renderRankingsBoardOg(request: Request, key: string, rows: RankingsBoardRow[]): Promise<Response> {
+  let pending = inFlightRankingsBoards.get(key);
+  if (!pending) {
+    pending = (async () => {
+      // One fetch per badge, however many rows wear it.
+      const badges = new Map<string, ReturnType<typeof fetchDanEmblemSource>>();
+      const badgeFor = (row: RankingsBoardRow) => {
+        if (!row.emblem) return null;
+        const id = `${row.emblem.keyCount}:${row.emblem.family}:${row.emblem.label}`;
+        let art = badges.get(id);
+        if (!art) {
+          art = fetchDanEmblemSource(request, row.emblem.label, row.emblem.family, row.emblem.keyCount).catch(() => null);
+          badges.set(id, art);
+        }
+        return art;
+      };
+      const [fonts, avatars, emblems, flags] = await Promise.all([loadOgFonts(request), fetchRankingsBoardAvatars(rows), Promise.all(rows.map(badgeFor)), fetchRankingsBoardFlags(rows)]);
+      // Only the drawing holds a render slot, not the waits on osu!'s image host.
+      return ogRenderGate.run(() => drawRankingsBoard(rows, avatars, fonts, emblems, flags));
+    })().finally(() => {
+      inFlightRankingsBoards.delete(key);
+    });
+    inFlightRankingsBoards.set(key, pending);
+  }
+  return imageResponse(await pending, "image/png", OG_CACHE_HEADER);
 }
 
 /* Polaroid card primitive used by both home and rankings OGs. Renders an
@@ -5299,7 +5395,7 @@ export const Route = createFileRoute("/api/og")({
 
         // Dan emblem thumbnail for the /dan command (rasterizes an svg emblem).
         if (kind === "dan-emblem") {
-          const label = (url.searchParams.get("label") ?? "").trim().toLowerCase().replace(/[+-]+$/, "").slice(0, 12);
+          const label = (url.searchParams.get("label") ?? "").trim().toLowerCase().slice(0, 14);
           const family = (url.searchParams.get("family") ?? "").trim().toLowerCase().slice(0, 16);
           const rawKeys = Number(url.searchParams.get("keys"));
           const keyCount = Number.isInteger(rawKeys) && rawKeys > 0 && rawKeys <= 18 ? rawKeys : null;
@@ -5307,12 +5403,37 @@ export const Route = createFileRoute("/api/og")({
             try {
               return await serveOg(
                 request,
-                `dan-emblem:${keyCount ?? 4}k:${family}:${label}:clear:v${version}`,
+                `dan-emblem:${keyCount ?? 4}k:${family}:${label}:square:v${version}`,
                 () => renderDanEmblemOg(request, label, family, keyCount),
               );
             } catch (err) {
               if (!isOgFallbackError(err)) console.warn("[og] dan-emblem render failed, falling back", err);
             }
+          }
+        }
+
+        if (kind === "rankings-board") {
+          const rows = readRankingsBoard(url.searchParams.get("d"), url.searchParams.get("s"), liveBridgeToken());
+          if (!rows || rows.length === 0) return new Response(null, { status: 400 });
+          try {
+            return await renderRankingsBoardOg(request, url.searchParams.get("d") ?? "", rows);
+          } catch (err) {
+            console.warn("[og] rankings board render failed", err);
+            return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
+          }
+        }
+
+        if (kind === "play-banner") {
+          const beatmapsetId = Number(url.searchParams.get("set"));
+          const userId = Number(url.searchParams.get("user"));
+          if (!Number.isInteger(beatmapsetId) || beatmapsetId <= 0 || !Number.isInteger(userId) || userId <= 0) {
+            return new Response(null, { status: 400 });
+          }
+          try {
+            return await renderPlayBannerOg(request, beatmapsetId, userId, playBannerStats(url.searchParams), playBannerDan(url.searchParams));
+          } catch (err) {
+            console.warn("[og] play banner render failed", err);
+            return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
           }
         }
 

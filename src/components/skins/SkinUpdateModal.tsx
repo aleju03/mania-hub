@@ -11,6 +11,7 @@ import { SkinPreviewPickers } from "./SkinPreviewPickers";
 import { track } from "../../lib/analytics";
 import { skinEventProperties } from "../../lib/analytics-skins";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
+import { stripBlockedSkinFiles } from "../../lib/skin-dead-weight";
 import {
   applyBackdropPick,
   backdropForKeymode,
@@ -76,6 +77,7 @@ export function SkinUpdateModal({
   const [dragActive, setDragActive] = useState(false);
   const [reading, setReading] = useState<{ name: string; percent: number | null } | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [blockedRemoved, setBlockedRemoved] = useState<string[]>([]);
   const [imported, setImported] = useState<ReplaySkinImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Set when the picked .osk already belongs to another published skin.
@@ -106,6 +108,13 @@ export function SkinUpdateModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const keymodes = imported?.summary.keymodes ?? [];
+  // The backdrop and chart each keymode was published with. A new build keeps
+  // them for every keymode it still ships, so re-uploading a skin does not
+  // reshuffle its previews; keymodes without one are dealt fresh.
+  const publishedRecipes = useMemo(() => new Map(
+    skin.previews.flatMap((preview) => preview.recipe ? [[preview.keys, preview.recipe] as const] : []),
+  ), [skin.previews]);
+
   const publishedCoverKeymode = useMemo(
     () => skin.previews.find((preview) => preview.url === skin.previewUrl)?.keys ?? null,
     [skin.previews, skin.previewUrl],
@@ -124,6 +133,7 @@ export function SkinUpdateModal({
     setDragActive(false);
     setReading(null);
     setFile(null);
+    setBlockedRemoved([]);
     setImported(null);
     setError(null);
     setDuplicate(null);
@@ -154,6 +164,19 @@ export function SkinUpdateModal({
     (keys: number): PreviewBackdrop => backdropForKeymode({ shared: backdrop, overrides: backdropOverrides }, keys),
     [backdrop, backdropOverrides],
   );
+
+  // A kept backdrop or chart may not be in this opening's random picker pool.
+  // Put it at the front so the picker shows what the preview uses.
+  const pickerBackdropPool = useMemo(() => {
+    const selected = backdropFor(selectedKeymode);
+    if (typeof selected !== "number" || pool.candidates.some((entry) => entry.setId === selected)) return pool;
+    return { ...pool, candidates: [{ setId: selected, label: t`Current backdrop` }, ...pool.candidates] };
+  }, [pool, selectedKeymode, backdropFor, t]);
+  const pickerPatternPool = useMemo(() => {
+    const selected = patterns.get(selectedKeymode);
+    if (!selected || patternPool.candidates.some((entry) => entry.beatmapId === selected.beatmapId)) return patternPool;
+    return { ...patternPool, candidates: [selected, ...patternPool.candidates] };
+  }, [patternPool, selectedKeymode, patterns]);
 
   const pickBackdrop = useCallback((choice: PreviewBackdrop) => {
     backdropTouchedRef.current = true;
@@ -190,16 +213,20 @@ export function SkinUpdateModal({
   }, [open, imported, patternEnsure]);
 
   const handleFiles = useCallback(async (files: FileList | null) => {
-    const picked = files?.[0];
-    if (!picked) return;
+    const original = files?.[0];
+    if (!original) return;
     setError(null);
     setDuplicate(null);
-    if (picked.size > SKIN_OSK_MAX_BYTES) {
-      setError(t`This file is ${formatSkinFileSize(picked.size)}. The limit is 50 MB.`);
+    if (original.size > SKIN_OSK_MAX_BYTES) {
+      setError(t`This file is ${formatSkinFileSize(original.size)}. The limit is 50 MB.`);
       return;
     }
-    setReading({ name: picked.name, percent: null });
+    setReading({ name: original.name, percent: null });
     try {
+      // Same as a first upload: programs and nested archives come out before
+      // anything reads the file, since the backend refuses an .osk with them.
+      const stripped = await stripBlockedSkinFiles(original).catch(() => ({ file: original, removed: [] as string[] }));
+      const picked = stripped.file;
       let lastPercent = -1;
       const result = await importReplaySkinFromOsk(picked, {
         targetKeyCount: 4,
@@ -214,8 +241,14 @@ export function SkinUpdateModal({
       releaseRenders();
       setRenders(new Map());
       renderedRef.current.clear();
-      setPatterns(new Map());
+      const kept = result.summary.keymodes.flatMap((keys) => {
+        const recipe = publishedRecipes.get(keys);
+        return recipe ? [[keys, recipe] as const] : [];
+      });
+      setPatterns(new Map(kept.map(([keys, recipe]) => [keys, recipe.pattern])));
+      setBackdropOverrides(new Map(kept.map(([keys, recipe]) => [keys, recipe.backdrop])));
       setFile(picked);
+      setBlockedRemoved(stripped.removed);
       setImported(result);
       // The card keeps fronting the keymode it already did, as long as the new
       // build still ships it.
@@ -232,7 +265,7 @@ export function SkinUpdateModal({
       setReading(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [publishedCoverKeymode, releaseRenders]);
+  }, [publishedCoverKeymode, publishedRecipes, releaseRenders]);
 
   // One render per keymode the new archive declares, redrawn whenever its
   // backdrop moves. The keymode on screen goes first so the hero fills fast.
@@ -413,6 +446,9 @@ export function SkinUpdateModal({
   const shippedKeymodes = [...skin.keymodes, ...(skin.hiddenKeymodes ?? [])];
   const addedKeymodes = keymodes.filter((keys) => !shippedKeymodes.includes(keys));
   const droppedKeymodes = shippedKeymodes.filter((keys) => !keymodes.includes(keys));
+  const firstRemoved = blockedRemoved.slice(0, 3).join(", ");
+  const moreRemoved = blockedRemoved.length - 3;
+  const removedNames = moreRemoved > 0 ? t`${firstRemoved} and ${moreRemoved} more` : firstRemoved;
 
   if (typeof document === "undefined") return null;
 
@@ -612,7 +648,7 @@ export function SkinUpdateModal({
                       <SkinPreviewPickers
                         disabled={rendering}
                         backdrop={{
-                          pool,
+                          pool: pickerBackdropPool,
                           selected: backdropFor(selectedKeymode),
                           onPick: pickBackdrop,
                           scope,
@@ -620,7 +656,7 @@ export function SkinUpdateModal({
                           keymodeLabel: `${selectedKeymode}K`,
                         }}
                         pattern={{
-                          pool: patternPool,
+                          pool: pickerPatternPool,
                           selected: patterns.get(selectedKeymode) ?? null,
                           onPick: pickPattern,
                         }}
@@ -657,6 +693,11 @@ export function SkinUpdateModal({
                       </p>
                     )}
 
+                    {blockedRemoved.length > 0 && (
+                      <p className="mt-2 text-[11.5px] text-osu-f1">
+                        <Trans>Left out {removedNames} because skins can't include programs, shortcuts or other archives.</Trans>
+                      </p>
+                    )}
                     {error && (
                       <p className="mt-3 text-[12px] font-semibold text-osu-red-light">
                         {error}

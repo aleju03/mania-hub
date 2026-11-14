@@ -1,10 +1,10 @@
-import { getLiveBackendUrl } from "./live-backend";
+import { getAssetsBaseUrl } from "./live-backend";
 
 /** The song's precomputed spectrum for the replay map card's audio wave. */
 export function getBeatmapAudioWaveUrl(beatmapsetId: number | string, filename: string): string {
   const path = `/api/audio-wave?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}&filename=${encodeURIComponent(filename)}`;
-  const liveBackendUrl = getLiveBackendUrl();
-  return liveBackendUrl ? `${liveBackendUrl}${path}` : path;
+  const assetsUrl = getAssetsBaseUrl();
+  return assetsUrl ? `${assetsUrl}${path}` : path;
 }
 
 let mp3InMp4Playable: boolean | null = null;
@@ -30,8 +30,8 @@ export function getBeatmapAudioUrl(beatmapsetId: number | string, filename: stri
     ? "&v=ogg-seek-v1"
     : lower.endsWith(".mp3") && !canPlayMp3InMp4() ? "&format=mp3" : "";
   const path = `/api/audio?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}&filename=${encodeURIComponent(filename)}${variant}`;
-  const liveBackendUrl = getLiveBackendUrl();
-  return liveBackendUrl ? `${liveBackendUrl}${path}` : path;
+  const assetsUrl = getAssetsBaseUrl();
+  return assetsUrl ? `${assetsUrl}${path}` : path;
 }
 
 // Same clip as the public b.ppy.sh set preview, but served through the live
@@ -39,18 +39,18 @@ export function getBeatmapAudioUrl(beatmapsetId: number | string, filename: stri
 // sends no CORS headers, and a tainted element in an audio graph plays
 // silence). Null when no live backend is configured.
 export function getPreviewAudioProxyUrl(beatmapsetId: number | string): string | null {
-  const liveBackendUrl = getLiveBackendUrl();
-  if (!liveBackendUrl) return null;
-  return `${liveBackendUrl}/api/preview-audio?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}`;
+  const assetsUrl = getAssetsBaseUrl();
+  if (!assetsUrl) return null;
+  return `${assetsUrl}/api/preview-audio?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}`;
 }
 
 // Zip bundle of the beatmapset's hitsound files; `exclude` keeps the music
 // track out of the bundle. Only served by the live backend.
 export function getBeatmapHitsoundsUrl(beatmapsetId: number | string, excludeFilename?: string | null): string | null {
-  const liveBackendUrl = getLiveBackendUrl();
-  if (!liveBackendUrl) return null;
+  const assetsUrl = getAssetsBaseUrl();
+  if (!assetsUrl) return null;
   const exclude = excludeFilename ? `&exclude=${encodeURIComponent(excludeFilename)}` : "";
-  return `${liveBackendUrl}/api/hitsounds?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}${exclude}`;
+  return `${assetsUrl}/api/hitsounds?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}${exclude}`;
 }
 
 // The same-origin, inline variant of an /api/background URL (or a community
@@ -77,7 +77,7 @@ export function getInlineBackgroundUrl(src: string | null): string | null {
 // Zip bundle of the beatmapset's storyboard (root .osb plus referenced
 // images). Only served by the live backend; an empty zip means no storyboard.
 export function getStoryboardBundleUrl(beatmapsetId: number | string): string | null {
-  const liveBackendUrl = getLiveBackendUrl();
-  if (!liveBackendUrl) return null;
-  return `${liveBackendUrl}/api/storyboard?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}`;
+  const assetsUrl = getAssetsBaseUrl();
+  if (!assetsUrl) return null;
+  return `${assetsUrl}/api/storyboard?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}`;
 }

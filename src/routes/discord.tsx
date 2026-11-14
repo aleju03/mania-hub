@@ -1,8 +1,9 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown, CircleHelp, Globe, Plus, X } from "lucide-react";
 import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DiscordTabs } from "../components/discord/DiscordTabs";
@@ -27,9 +28,17 @@ import {
   type BotServers,
 } from "../lib/discord-bot";
 import { DiscordLogo, DISCORD_BLURPLE } from "../components/ui/DiscordLogo";
+import { FeedPlayersModal } from "../components/discord/FeedPlayersModal";
+import { findRegionByCountries } from "../lib/regions";
+import { COUNTRY_OPTIONS, displayCountryName, getCountryFlagUrl } from "../lib/country";
+import type { AppLocale } from "../lib/locale";
+import { useNoDans } from "../store";
 import { Panel } from "../components/companella/primitives";
 import { DiscordMessageBodyView, type DiscordMessageJson } from "../components/discord/message/DiscordMessageView";
 import { DISCORD } from "../components/discord/message/discord-markdown";
+import { StarRangePill } from "../components/maps/StarRangePill";
+import { SelectMenu } from "../components/ui/SelectMenu";
+import { danScaleImage, danScaleLabel, type DanScaleContext } from "../lib/dan-images";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/discord")({
@@ -351,18 +360,18 @@ function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; a
         // step left, which Your account above has the button for.
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           <p className="min-w-0 max-w-[620px] flex-1 text-[13px] leading-relaxed text-osu-l2">
-            <Trans>The bot can DM you when you finish a goal, someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, plus a weekly recap. Confirm your Discord account above first, so it knows the account is yours.</Trans>
+            <Trans>The bot can DM you when someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, plus a weekly recap. Confirm your Discord account above first, so it knows the account is yours.</Trans>
           </p>
         </div>
       )}
       {usable ? <>
       <div className="flex flex-wrap gap-x-6 gap-y-2">
-        <Toggle checked={alerts.goals} disabled={busy} onChange={(on) => void save({ goals: on })} label={<Trans>Goals I complete</Trans>} />
+        <Toggle checked={alerts.snipes} disabled={busy} onChange={(on) => void save({ snipes: on })} label={<Trans>When I get sniped</Trans>} />
         <Toggle checked={alerts.newMaps} disabled={busy} onChange={(on) => void save({ newMaps: on })} label={<Trans>New farm maps at my level</Trans>} />
         <Toggle checked={alerts.cardPulls} disabled={busy} onChange={(on) => void save({ cardPulls: on })} label={<Trans>When someone pulls my card</Trans>} />
-        <Toggle checked={alerts.snipes} disabled={busy} onChange={(on) => void save({ snipes: on })} label={<Trans>When I get sniped</Trans>} />
         <Toggle checked={alerts.weeklyRecap} disabled={busy} onChange={(on) => void save({ weeklyRecap: on })} label={<Trans>Weekly recap</Trans>} />
       </div>
+      {alerts.newMaps ? <NewMapsDmFilters alerts={alerts} disabled={busy} onSave={(patch) => void save(patch)} /> : null}
       <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-osu-f1">
         <span className="mr-1"><Trans>Language</Trans></span>
         <Segmented
@@ -393,6 +402,66 @@ function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; a
     </div>
   );
 }
+
+// Which new farm maps the DM takes: the ones near the viewer's level (their
+// maniacard's stars, in its keymode), or the keys and star range they set.
+function NewMapsDmFilters({ alerts, disabled, onSave }: { alerts: BotAlerts; disabled: boolean; onSave: (patch: BotAlertsPatch) => void }) {
+  const { t } = useLingui();
+  const mode = alerts.newMapsMode ?? "level";
+  const keys = alerts.newMapsKeys ?? [];
+  const level = alerts.newMapsLevel ?? null;
+  const low = level ? Math.max(0, level.stars - NEW_MAPS_LEVEL_STARS).toFixed(1) : "";
+  const high = level ? (level.stars + NEW_MAPS_LEVEL_STARS).toFixed(1) : "";
+  const levelKeys = level?.keyCount ?? 0;
+  const chip = (active: boolean) =>
+    `rounded-md px-2 py-0.5 text-[12px] font-semibold disabled:opacity-60 ${active ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2 hover:brightness-110"}`;
+  return (
+    <div className={`mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px] text-osu-f1 ${disabled ? "opacity-50" : ""}`}>
+      <span><Trans>New farm maps</Trans></span>
+      <Segmented
+        value={mode}
+        disabled={disabled}
+        options={[{ value: "level", label: <Trans>My level</Trans> }, { value: "custom", label: <Trans>Custom</Trans> }]}
+        onChange={(value) => onSave({ newMapsMode: value })}
+      />
+      {mode === "level" ? (
+        <span className="text-[13px] text-osu-l2">
+          {level ? <Trans>{levelKeys}K maps from {low}★ to {high}★</Trans> : <Trans>No level yet. It comes from your top plays.</Trans>}
+        </span>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-1">
+            <button type="button" disabled={disabled} className={chip(keys.length === 0)} onClick={() => { if (keys.length) onSave({ newMapsKeys: [] }); }}><Trans>All</Trans></button>
+            {FILTER_KEYS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                disabled={disabled}
+                className={chip(keys.includes(k))}
+                onClick={() => onSave({ newMapsKeys: keys.includes(k) ? keys.filter((v) => v !== k) : [...keys, k].sort((x, y) => x - y) })}
+              >
+                {k}K
+              </button>
+            ))}
+          </div>
+          <StarRangePill
+            lo={0}
+            hi={15}
+            min={alerts.newMapsMinStars ?? 0}
+            max={alerts.newMapsMaxStars ?? 0}
+            step={0.1}
+            ariaLabel={t`Star rating`}
+            onChange={(newMapsMinStars, newMapsMaxStars) => onSave({ newMapsMinStars, newMapsMaxStars })}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+// How far from the card's stars a farm map still counts as the viewer's level
+// (NEW_MAP_LEVEL_STARS in the backend's dm-alerts.ts).
+const NEW_MAPS_LEVEL_STARS = 1;
 
 function Segmented<T extends string>({ value, options, onChange, disabled }: { value: T; options: Array<{ value: T; label: ReactNode }>; onChange: (value: T) => void; disabled?: boolean }) {
   return (
@@ -430,22 +499,142 @@ function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onCh
   );
 }
 
+// A "?" with a bubble above it, shown on hover and toggled by a tap. The bubble
+// is drawn over the page at the icon's spot, so opening it moves nothing and a
+// scrolling table cannot clip it.
+function HintButton({ label, children }: { label: string; children: ReactNode }) {
+  const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [spot, setSpot] = useState<{ x: number; y: number } | null>(null);
+  const ref = useRef<HTMLButtonElement>(null);
+  const open = pinned || hovered;
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = ref.current?.getBoundingClientRect();
+      if (rect) setSpot({ x: Math.min(Math.max(rect.left + rect.width / 2, 128), window.innerWidth - 128), y: rect.top });
+    };
+    place();
+    const close = (event: PointerEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setPinned(false);
+    };
+    document.addEventListener("pointerdown", close);
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        onClick={() => setPinned((v) => !v)}
+        onPointerEnter={(event) => { if (event.pointerType === "mouse") setHovered(true); }}
+        onPointerLeave={() => setHovered(false)}
+        className={`inline-flex shrink-0 align-middle transition-colors hover:text-white ${open ? "text-white" : "text-osu-f1/60"}`}
+      >
+        <CircleHelp size={13} />
+      </button>
+      {open && spot ? createPortal(
+        <span
+          role="tooltip"
+          style={{ left: spot.x, top: spot.y }}
+          className="pointer-events-none fixed z-[400] mt-[-8px] w-60 -translate-x-1/2 -translate-y-full rounded-md bg-osu-b6 px-2.5 py-1.5 text-left text-[12px] font-medium leading-snug text-osu-l1 shadow-[0_8px_20px_rgba(0,0,0,0.5)]"
+        >
+          {children}
+        </span>,
+        document.body,
+      ) : null}
+    </>
+  );
+}
+
 const FILTER_KEYS = [4, 5, 6, 7, 8, 9, 10];
 const KEYMODE_TOP_CHOICES = [0, 100, 50];
 
-type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[] };
+// The keymodes with dan courses, and the lowest level a Dan clears feed can
+// ask for. A level is each ladder's own number: 11 is the first past 10th dan.
+const DAN_FILTER_KEYS = [4, 6, 7];
+// Each ladder with courses and its top level (danCourseLevelFor in the
+// backend's dan-courses.ts); the badge art and level names come from its scale.
+const DAN_LADDERS: Array<{ keyCount: number; context: DanScaleContext; top: number }> = [
+  { keyCount: 4, context: "reform", top: 17 },
+  { keyCount: 4, context: "ln", top: 17 },
+  { keyCount: 6, context: "6k", top: 9 },
+  { keyCount: 6, context: "6k-ln", top: 14 },
+  { keyCount: 7, context: "7k", top: 14 },
+  { keyCount: 7, context: "7k-ln", top: 14 },
+];
 
-function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
-  return { minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [] };
+function danLaddersAt(level: number, keys: number[]) {
+  return DAN_LADDERS.filter((l) => (keys.length === 0 || keys.includes(l.keyCount)) && level <= l.top);
 }
 
-// Which top plays a channel posts: keymodes, a cut to the player's best N of
-// that keymode, a pp floor and a player list. Changes show at once and save in
+function ordinal(n: number): string {
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
+/** What a level is called on the chosen keymodes' ladders: "5th dan", or past 10th "11th, Alpha, Gamma". */
+function danLevelName(level: number, keys: number[]): string {
+  if (level <= 10) return `${ordinal(level)} dan`;
+  const names: string[] = [];
+  for (const l of danLaddersAt(level, keys)) {
+    const name = danScaleLabel(level, l.context);
+    const part = /^\d+$/.test(name) ? ordinal(level) : name;
+    if (!names.includes(part)) names.push(part);
+  }
+  return names.length ? names.join(", ") : ordinal(level);
+}
+
+/** The level's badge on each chosen ladder, side by side. */
+function DanLevelBadges({ level, keys }: { level: number; keys: number[] }) {
+  const srcs = [...new Set(danLaddersAt(level, keys).map((l) => danScaleImage(level, l.context)).filter((src): src is string => src != null))];
+  if (!srcs.length) return null;
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      {srcs.map((src) => <img key={src} src={src} alt="" className="h-4 w-auto" />)}
+    </span>
+  );
+}
+
+function danLevelChoices(keys: number[], current: number): number[] {
+  const top = Math.max(...DAN_LADDERS.filter((l) => keys.length === 0 || keys.includes(l.keyCount)).map((l) => l.top));
+  return Array.from({ length: Math.max(top, current) + 1 }, (_, n) => n);
+}
+// Feeds with a row of filters under their channel: the feeds of players'
+// plays, and New farm maps (keymodes and stars).
+const FILTERED_FEEDS = ["top_play", "dan_clear", "goal", "new_map"];
+
+type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "except"; countries: string[]; minDan: number; nearClears: boolean; minStars: number; maxStars: number; mapsMode: "farm" | "all" };
+type SavedFeedFilters = Omit<TopPlayFilterState, "players"> & { players: number[] };
+
+function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
+  return {
+    minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [], playersMode: sub.playersMode ?? "only",
+    countries: sub.countries ?? [], minDan: sub.minDan ?? 0, nearClears: sub.nearClears ?? true,
+    minStars: sub.minStars ?? 0, maxStars: sub.maxStars ?? 0, mapsMode: sub.mapsMode ?? "farm",
+  };
+}
+
+// Which plays a channel posts. Top plays: keymodes, a cut to the player's best
+// N of that keymode, a pp floor and a player list. Dan clears: keymodes, a
+// lowest level, near clears and a player list. New farm maps: farm maps or
+// every ranked set, keymodes and a star range. Changes show at once and save in
 // order behind the scenes, since each save waits on Discord for a few seconds.
-function TopPlayFilters({ sub, onSave }: {
+function TopPlayFilters({ sub, channelName, onSave }: {
   sub: BotServer["subscriptions"][number];
-  onSave: (filters: { minPp: number; keys: number[]; keymodeTop: number; players: number[] }) => Promise<boolean>;
+  channelName?: string;
+  onSave: (filters: SavedFeedFilters) => Promise<boolean>;
 }) {
+  const { t } = useLingui();
+  const [picking, setPicking] = useState(false);
   const [filters, setFilters] = useState(() => filtersOf(sub));
   const pending = useRef(0);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -461,65 +650,173 @@ function TopPlayFilters({ sub, onSave }: {
     setFilters(next);
     pending.current++;
     queue.current = queue.current
-      .then(() => onSave({ minPp: next.minPp, keys: next.keys, keymodeTop: next.keymodeTop, players: next.players.map((p) => p.id) }))
+      .then(() => onSave({ ...next, players: next.players.map((p) => p.id) }))
       .then((ok) => {
         pending.current--;
         if (!ok && pending.current === 0) setFilters(filtersOf(sub));
       });
   };
   const chip = (active: boolean, interactive = true) =>
-    `rounded-md px-2 py-0.5 text-[12px] font-semibold ${active ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2"} ${interactive ? "hover:brightness-110" : "cursor-default"}`;
-  const { keys, keymodeTop, players } = filters;
+    `rounded-md px-2 py-0.5 text-[12px] font-semibold ${active ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"} ${interactive ? "hover:brightness-110" : "cursor-default"}`;
+  const { keys, keymodeTop, players, playersMode, countries, minDan, nearClears, mapsMode } = filters;
+  const danClears = sub.feedType === "dan_clear";
+  // A Goals feed only has its players to choose.
+  const goals = sub.feedType === "goal";
+  const newMaps = sub.feedType === "new_map";
+  const scope = countries.length === 0
+    ? sub.country === "GLOBAL" ? t`every country` : sub.country
+    : findRegionByCountries(countries)?.name ?? (countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`);
+
+  const row = "flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3";
+  const label = "shrink-0 text-[12px] text-osu-f1 sm:w-24";
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-3 text-[12px] text-osu-f1">
-      <div className="flex flex-wrap items-center gap-1">
-        <span className="mr-1"><Trans>Top plays in</Trans></span>
-        <button type="button" className={chip(keys.length === 0, keys.length > 0)} onClick={() => { if (keys.length) save({ keys: [] }); }}><Trans>All keys</Trans></button>
-        {FILTER_KEYS.map((k) => (
-          <button
-            key={k}
-            type="button"
-            className={chip(keys.includes(k))}
-            onClick={() => save({ keys: keys.includes(k) ? keys.filter((v) => v !== k) : [...keys, k].sort((a, b) => a - b) })}
-          >
-            {k}K
-          </button>
-        ))}
+    <div className="grid gap-3 rounded-lg bg-osu-b5 px-3.5 py-3 text-[12px] text-osu-f1">
+      {newMaps ? (
+        <div className={row}>
+          <span className={label}><Trans>Which maps</Trans></span>
+          <div className="flex flex-wrap items-center gap-1">
+            {(["farm", "all"] as const).map((mode) => (
+              <button key={mode} type="button" className={chip(mapsMode === mode, mapsMode !== mode)} onClick={() => { if (mapsMode !== mode) save({ mapsMode: mode }); }}>
+                {mode === "farm" ? <Trans>Farm maps</Trans> : <Trans>All ranked maps</Trans>}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {goals ? null : (
+      <>
+      <div className={row}>
+        <span className={label}><Trans>Keys</Trans></span>
+        <div className="flex flex-wrap items-center gap-1">
+          <button type="button" className={chip(keys.length === 0, keys.length > 0)} onClick={() => { if (keys.length) save({ keys: [] }); }}><Trans>All</Trans></button>
+          {(danClears ? DAN_FILTER_KEYS : FILTER_KEYS).map((k) => (
+            <button
+              key={k}
+              type="button"
+              className={chip(keys.includes(k))}
+              onClick={() => save({ keys: keys.includes(k) ? keys.filter((v) => v !== k) : [...keys, k].sort((a, b) => a - b) })}
+            >
+              {k}K
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-1">
-        {KEYMODE_TOP_CHOICES.map((n) => (
-          <button key={n} type="button" className={chip(keymodeTop === n, keymodeTop !== n)} onClick={() => { if (keymodeTop !== n) save({ keymodeTop: n }); }}>
-            {n === 0 ? <Trans>Any top play</Trans> : <Trans>Top {n} of the keymode</Trans>}
+      {newMaps ? (
+        <div className={row}>
+          <span className={label}><Trans>Stars</Trans></span>
+          <div className="flex items-center gap-1.5">
+            <StarRangePill
+              lo={0}
+              hi={15}
+              min={filters.minStars}
+              max={filters.maxStars}
+              step={0.1}
+              ariaLabel={t`Star rating`}
+              onChange={(minStars, maxStars) => { if (minStars !== filters.minStars || maxStars !== filters.maxStars) save({ minStars, maxStars }); }}
+            />
+            <HintButton label={t`Which stars count`}>
+              <Trans>A chart posted for HT or DT counts at its stars with that mod.</Trans>
+            </HintButton>
+          </div>
+        </div>
+      ) : danClears ? (
+        <>
+          <div className={row}>
+            <span className={label}><Trans>Lowest dan</Trans></span>
+            <SelectMenu
+              value={String(minDan)}
+              ariaLabel={t`Lowest dan`}
+              onChange={(value) => save({ minDan: Number(value) })}
+              options={danLevelChoices(keys, minDan).map((n) => {
+                const name = danLevelName(n, keys);
+                return {
+                  value: String(n),
+                  label: n === 0 ? t`Any dan` : t`${name} and up`,
+                  leading: n === 0 ? undefined : <DanLevelBadges level={n} keys={keys} />,
+                };
+              })}
+            />
+          </div>
+          <div className={row}>
+            <span className={label}><Trans>Near clears</Trans></span>
+            <div className="flex items-center gap-1.5">
+              <Toggle checked={nearClears} onChange={(on) => save({ nearClears: on })} />
+              <HintButton label={t`What near clears are`}>
+                <Trans>Runs up to one accuracy point under the pass bar. 4K LN courses have none.</Trans>
+              </HintButton>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className={row}>
+            <span className={label}><Trans>Which plays</Trans></span>
+            <div className="flex flex-wrap items-center gap-1">
+              {KEYMODE_TOP_CHOICES.map((n) => (
+                <button key={n} type="button" className={chip(keymodeTop === n, keymodeTop !== n)} onClick={() => { if (keymodeTop !== n) save({ keymodeTop: n }); }}>
+                  {n === 0 ? <Trans>Any top play</Trans> : <Trans>Top {n} of the keymode</Trans>}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className={row}>
+            <span className={label}><Trans>Lowest pp</Trans></span>
+            <div className="flex items-center gap-1.5">
+              <input
+                value={minPpDraft}
+                inputMode="numeric"
+                aria-label={t`Lowest pp`}
+                onChange={(event) => setMinPpDraft(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+                onKeyDown={(event) => { if (event.key === "Enter" && draftPp !== filters.minPp) save({ minPp: draftPp }); }}
+                onBlur={() => { if (draftPp !== filters.minPp) save({ minPp: draftPp }); }}
+                placeholder="0"
+                className="w-16 rounded-md bg-osu-b4 px-2 py-1 text-[13px] text-white outline-none focus:ring-1 focus:ring-osu-pink/60"
+              />
+              <span>pp</span>
+            </div>
+          </div>
+        </>
+      )}
+      </>
+      )}
+      {newMaps ? null : (
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
+        <span className={`${label} sm:pt-1.5`}><Trans>Players</Trans></span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {players.length === 0
+            ? <span className="text-[13px] text-osu-l2"><Trans>Everyone in {scope}</Trans></span>
+            : playersMode === "except" ? <span className="text-[13px] text-osu-l2"><Trans>Everyone in {scope} except</Trans></span> : null}
+          {players.slice(0, 8).map((player) => (
+            <span key={player.id} className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.07] py-1 pl-1.5 pr-2 text-[13px] font-semibold text-white">
+              {player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-4 w-4 rounded-full" /> : null}
+              {player.username}
+            </span>
+          ))}
+          {players.length > 8 ? <span className="text-[12px] text-osu-l2">+{players.length - 8}</span> : null}
+          <button type="button" onClick={() => setPicking(true)} className="rounded-md bg-osu-pink px-2.5 py-1 text-[13px] font-semibold text-white hover:brightness-110">
+            <Trans>Choose players</Trans>
           </button>
-        ))}
+        </div>
       </div>
-      <div className="flex items-center gap-1.5">
-        <span><Trans>From</Trans></span>
-        <input
-          value={minPpDraft}
-          inputMode="numeric"
-          onChange={(event) => setMinPpDraft(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
-          onKeyDown={(event) => { if (event.key === "Enter" && draftPp !== filters.minPp) save({ minPp: draftPp }); }}
-          placeholder="0"
-          className="w-14 rounded-md bg-osu-b5 px-2 py-0.5 text-[12px] text-white outline-none focus:ring-1 focus:ring-osu-pink/60"
+      )}
+      {picking ? (
+        <FeedPlayersModal
+          title={channelName ? t`Players for #${channelName}` : t`Players`}
+          players={players}
+          max={MAX_FEED_PLAYERS}
+          mode={playersMode}
+          countries={countries}
+          feedCountry={sub.country === "GLOBAL" ? null : sub.country}
+          onSave={(next) => save({ players: next.players, playersMode: next.mode, countries: next.countries })}
+          onClose={() => setPicking(false)}
         />
-        <span>pp</span>
-        {draftPp !== filters.minPp ? (
-          <button type="button" onClick={() => save({ minPp: draftPp })} className="rounded-md bg-osu-b3 px-2 py-0.5 text-[12px] font-semibold text-white hover:brightness-110">
-            <Trans>Save</Trans>
-          </button>
-        ) : null}
-      </div>
-      <FeedPlayerPicker
-        players={players}
-        onChange={(next) => save({ players: next })}
-      />
+      ) : null}
     </div>
   );
 }
 
-const MAX_FEED_PLAYERS = 50;
+const MAX_FEED_PLAYERS = 200;
 
 // The players a top-play feed is limited to, picked from players the site
 // tracks. Empty means everyone in the feed's country.
@@ -563,7 +860,7 @@ function FeedPlayerPicker({ players, onChange, label, emptyLabel, disabled = fal
       <span className="mr-1">{label ?? <Trans>Players</Trans>}</span>
       {players.length === 0 ? <span className="text-osu-l2">{emptyLabel ?? <Trans>Everyone</Trans>}</span> : null}
       {players.map((player) => (
-        <span key={player.id} className="inline-flex items-center gap-1.5 rounded-md bg-osu-b5 py-0.5 pl-1 pr-1.5 text-[12px] font-semibold text-white">
+        <span key={player.id} className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.07] py-1 pl-1.5 pr-2 text-[13px] font-semibold text-white">
           {player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-4 w-4 rounded-full" /> : null}
           {player.username}
           <button
@@ -579,6 +876,7 @@ function FeedPlayerPicker({ players, onChange, label, emptyLabel, disabled = fal
       ))}
       {players.length < MAX_FEED_PLAYERS && !disabled ? (
         <div className="relative">
+          <Plus className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-l2" />
           <input
             value={query}
             onChange={(event) => { setQuery(event.target.value.slice(0, 30)); setOpen(true); }}
@@ -586,7 +884,7 @@ function FeedPlayerPicker({ players, onChange, label, emptyLabel, disabled = fal
             onBlur={() => setTimeout(() => setOpen(false), 150)}
             onKeyDown={(event) => { if (event.key === "Enter" && options[0]) add(options[0]); }}
             placeholder={t`Add a player`}
-            className="w-36 rounded-md bg-osu-b5 px-2 py-0.5 text-[12px] text-white outline-none placeholder:text-osu-f1 focus:ring-1 focus:ring-osu-pink/60"
+            className="w-40 rounded-md bg-white/[0.07] py-1 pl-7 pr-2 text-[13px] text-white outline-none transition-colors placeholder:font-semibold placeholder:text-osu-l2 hover:bg-white/[0.1] focus:bg-white/[0.1] focus:ring-1 focus:ring-osu-pink/60"
           />
           {open && options.length ? (
             <div className="absolute left-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-lg bg-osu-b3 py-1 shadow-lg">
@@ -710,9 +1008,86 @@ function ServerSkeleton() {
 
 const FEED_NAMES: Record<string, ReturnType<typeof msg>> = {
   top_play: msg`Top plays`,
+  dan_clear: msg`Dan clears`,
+  goal: msg`Goals`,
   new_map: msg`New farm maps`,
   changelog: msg`Website changelog`,
 };
+
+const FEED_HINTS: Record<string, ReturnType<typeof msg>> = {
+  top_play: msg`Posts a player's new top play, a play that enters their best 200.`,
+  dan_clear: msg`Posts a player's near clear, clear or overclear of a dan course or practice chart.`,
+  goal: msg`Posts a goal when its player completes it.`,
+  new_map: msg`Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty.`,
+  changelog: msg`Posts each new line of the website's changelog.`,
+};
+
+type ServerSub = BotServer["subscriptions"][number];
+
+// What a change will leave the server looking like, drawn at once while the
+// save is on its way. The saved server replaces it when the answer comes back.
+function withChange(server: BotServer, change: BotServerChange, fallbackCountry: string): BotServer {
+  let { subscriptions, settings } = server;
+  if (change.defaultCountry !== undefined) settings = { ...settings, defaultCountry: change.defaultCountry };
+  if (change.feed) {
+    const { channelId, feedType, on, country } = change.feed;
+    subscriptions = subscriptions.filter((sub) => sub.channelId !== channelId || sub.feedType !== feedType);
+    if (on) subscriptions = [...subscriptions, { channelId, feedType, country: country ?? settings.defaultCountry ?? fallbackCountry, minPp: 0 }];
+  }
+  if (change.autoDan) {
+    const { channelId, on } = change.autoDan;
+    const rest = channelId === "*" ? [] : settings.autoDanChannels.filter((id) => id !== channelId);
+    settings = { ...settings, autoDanChannels: on ? [...rest, channelId] : rest };
+  }
+  return { ...server, subscriptions, settings };
+}
+
+function SummaryParts({ parts }: { parts: ReactNode[] }) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-y-1 text-[12px] font-semibold text-white">
+      {parts.map((part, index) => (
+        <Fragment key={index}>
+          {index ? <span className="mx-2 h-3 w-px bg-white/20" /> : null}
+          <span>{part}</span>
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+// A feed's filters in one line, read from what is saved.
+function FeedSummary({ sub }: { sub: ServerSub }) {
+  const { i18n } = useLingui();
+  const keys = sub.keys ?? [];
+  const parts: ReactNode[] = sub.feedType === "goal" ? [] : [keys.length ? keys.map((k) => `${k}K`).join(", ") : <Trans>All keys</Trans>];
+  if (sub.feedType === "new_map") {
+    parts.unshift(sub.mapsMode === "all" ? <Trans>All ranked maps</Trans> : <Trans>Farm maps</Trans>);
+    const min = sub.minStars ?? 0;
+    const max = sub.maxStars ?? 0;
+    parts.push(min && max ? <Trans>{min}★ to {max}★</Trans> : min ? <Trans>{min}★ and up</Trans> : max ? <Trans>Up to {max}★</Trans> : <Trans>Any stars</Trans>);
+    return <SummaryParts parts={parts} />;
+  }
+  if (sub.feedType === "goal") {
+    // Only its players, below.
+  } else if (sub.feedType === "dan_clear") {
+    const name = danLevelName(sub.minDan ?? 0, keys);
+    parts.push(sub.minDan ? <Trans>{name} and up</Trans> : <Trans>Any dan</Trans>);
+    if (sub.nearClears ?? true) parts.push(<Trans>Near clears</Trans>);
+  } else {
+    const top = sub.keymodeTop ?? 0;
+    parts.push(top ? <Trans>Top {top} of the keymode</Trans> : <Trans>Any top play</Trans>);
+    const minPp = sub.minPp;
+    if (minPp) parts.push(<Trans>{minPp}pp and up</Trans>);
+  }
+  parts.push(
+    sub.players?.length && sub.playersMode !== "except"
+      ? <Plural value={sub.players.length} one="# player" other="# players" />
+      : sub.countries?.length
+        ? findRegionByCountries(sub.countries)?.name ?? (sub.countries.length <= 3 ? sub.countries.join(", ") : <Plural value={sub.countries.length} one="# country" other="# countries" />)
+        : sub.country === "GLOBAL" ? i18n._(msg`Global`) : sub.country,
+  );
+  return <SummaryParts parts={parts} />;
+}
 
 function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, inviteUrl, onServer }: {
   server: BotServer;
@@ -722,44 +1097,63 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
   inviteUrl: string | null;
   onServer: (server: BotServer) => void;
 }) {
-  const { i18n } = useLingui();
+  const { i18n, t } = useLingui();
+  const noDans = useNoDans();
   const [open, setOpen] = useState(false);
-  const [showAll, setShowAll] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  // The feed whose filters are open, as "channel:feed".
+  const [editing, setEditing] = useState<string | null>(null);
+  // Channels that stay listed after their last feed is turned off, and ones just added.
+  const [kept, setKept] = useState<string[]>([]);
   const country = server.settings.defaultCountry ?? fallbackCountry;
-  const [countryDraft, setCountryDraft] = useState(country);
 
-  const apply = useCallback(async (change: BotServerChange) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await updateBotServer({ data: { guildId: server.id, change } });
-      if (result.ok && result.server) onServer(result.server);
-      else setError(result.error ?? "failed");
-    } finally {
-      setBusy(false);
+  // Changes draw at once and save one after another, since each save waits on
+  // Discord for a few seconds. `shown` is the server as drawn, `saved` the last
+  // one the backend confirmed, which a failed save falls back to.
+  const shown = useRef(server);
+  shown.current = server;
+  const saved = useRef(server);
+  const pending = useRef(0);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const send = useCallback((change: BotServerChange, draw = true): Promise<boolean> => {
+    setError(false);
+    if (draw) {
+      shown.current = withChange(shown.current, change, fallbackCountry);
+      onServer(shown.current);
     }
-  }, [onServer, server.id]);
+    pending.current++;
+    const done = queue.current.then(async () => {
+      const result = await updateBotServer({ data: { guildId: server.id, change } }).catch(() => null);
+      pending.current--;
+      const ok = Boolean(result?.ok && result.server);
+      if (ok) saved.current = result!.server!;
+      else setError(true);
+      // Later changes are still drawn over this answer until the last one lands.
+      if (pending.current === 0) onServer(saved.current);
+      return ok;
+    });
+    queue.current = done;
+    return done;
+  }, [fallbackCountry, onServer, server.id]);
 
-  // Filter saves don't lock the panel: the filter row shows its change at once.
-  const saveFilters = useCallback(async (change: BotServerChange) => {
-    setError(null);
-    const result = await updateBotServer({ data: { guildId: server.id, change } }).catch(() => null);
-    if (result?.ok && result.server) {
-      onServer(result.server);
-      return true;
-    }
-    setError(result?.error ?? "failed");
-    return false;
-  }, [onServer, server.id]);
-
-  const activeChannels = useMemo(() => new Set([
-    ...server.subscriptions.map((sub) => sub.channelId),
-    ...server.settings.autoDanChannels,
-  ]), [server]);
-  const channels = showAll ? server.channels : server.channels.filter((channel) => activeChannels.has(channel.id));
+  const feeds = noDans ? feedTypes.filter((feed) => feed !== "dan_clear") : feedTypes;
+  const autoDan = autoDanAvailable && !noDans;
+  const autoDanAll = server.settings.autoDanChannels.includes("*");
+  const channels = server.channels.filter((channel) =>
+    kept.includes(channel.id)
+    || server.settings.autoDanChannels.includes(channel.id)
+    || server.subscriptions.some((sub) => sub.channelId === channel.id));
+  const addable = server.channels.filter((channel) => !channels.includes(channel));
+  const keep = (channelId: string) => setKept((current) => current.includes(channelId) ? current : [...current, channelId]);
   const feedCount = server.subscriptions.length;
+  const countryOptions = useMemo(() => {
+    const flag = (code: string) => <img src={getCountryFlagUrl(code)} alt="" className="h-3 w-[18px] rounded-[2px] object-cover" />;
+    const options = [
+      { value: "GLOBAL", label: displayCountryName("GLOBAL", i18n.locale as AppLocale), leading: <Globe className="h-3.5 w-[18px] text-osu-l2" /> },
+      ...COUNTRY_OPTIONS.map(({ code }) => ({ value: code as string, label: displayCountryName(code, i18n.locale as AppLocale), leading: flag(code) })),
+    ];
+    return options.some((option) => option.value === country) ? options : [{ value: country, label: country, leading: flag(country) }, ...options];
+  }, [country, i18n.locale]);
 
   const header = (
     <div className="flex items-center gap-3">
@@ -784,106 +1178,116 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
     </div>
   );
 
+  // One feed of one channel: its switch and name, then what it posts.
+  const feedRow = "flex flex-wrap items-center gap-x-3 gap-y-1";
+  const feedName = "flex w-52 shrink-0 items-center";
+  const feedNote = "order-last w-full pl-11 text-[12px] text-osu-f1 sm:order-none sm:w-auto sm:flex-1 sm:pl-0";
+
   return (
     <div className="rounded-xl bg-osu-b4 p-3">
       {header}
       {open && server.botPresent ? (
-        <div className="mt-3 space-y-3 border-t border-white/[0.07] pt-3">
-          <div className="flex flex-wrap items-center gap-2 text-[13px] text-osu-l2">
-            <span className="font-semibold text-white"><Trans>Country for top plays</Trans></span>
-            <input
-              value={countryDraft}
-              onChange={(event) => setCountryDraft(event.target.value.toUpperCase().slice(0, 6))}
-              className="w-20 rounded-md bg-osu-b5 px-2 py-1 text-[13px] text-white outline-none focus:ring-1 focus:ring-osu-pink/60"
-              placeholder="CR"
-            />
-            <button
-              type="button"
-              disabled={busy || countryDraft === country || !countryDraft}
-              onClick={() => void apply({ defaultCountry: countryDraft })}
-              className="rounded-md bg-osu-b3 px-2.5 py-1 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-40"
-            >
-              <Trans>Save</Trans>
-            </button>
-            <span className="text-[12px] text-osu-f1"><Trans>A 2-letter code, or GLOBAL for every country.</Trans></span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="text-left text-[12px] text-osu-f1">
-                  <th className="py-1.5 pr-3 font-semibold"><Trans>Channel</Trans></th>
-                  {feedTypes.map((feed) => <th key={feed} className="px-2 py-1.5 text-center font-semibold">{FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed}</th>)}
-                  {autoDanAvailable ? <th className="px-2 py-1.5 text-center font-semibold"><Trans>Dan on score posts</Trans></th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {channels.map((channel) => {
-                  const topPlays = server.subscriptions.find((s) => s.channelId === channel.id && s.feedType === "top_play");
+        <div className="mt-3 border-t border-white/[0.07]">
+          {channels.length === 0 ? (
+            <p className="pt-3 text-[13px] text-osu-l2"><Trans>Add a channel, then turn on what it posts.</Trans></p>
+          ) : null}
+          {channels.map((channel) => (
+            <div key={channel.id} className="border-b border-white/[0.07] py-3.5">
+              <div className="text-[15px] font-semibold text-white">
+                <span className="text-osu-f1">#</span>{channel.name}
+                {channel.category ? <span className="ml-2 text-[11px] font-normal text-osu-f1">{channel.category}</span> : null}
+              </div>
+              <div className="mt-3 space-y-2.5">
+                {feeds.map((feed) => {
+                  const sub = server.subscriptions.find((s) => s.channelId === channel.id && s.feedType === feed);
+                  const key = `${channel.id}:${feed}`;
+                  const hasFilters = Boolean(sub) && FILTERED_FEEDS.includes(feed);
                   return (
-                  <Fragment key={channel.id}>
-                  <tr className="border-t border-white/[0.05]">
-                    <td className="py-1.5 pr-3 text-white">
-                      <span className="text-osu-f1">#</span>{channel.name}
-                      {channel.category ? <span className="ml-2 text-[11px] text-osu-f1">{channel.category}</span> : null}
-                    </td>
-                    {feedTypes.map((feed) => {
-                      const sub = server.subscriptions.find((s) => s.channelId === channel.id && s.feedType === feed);
-                      return (
-                        <td key={feed} className="px-2 py-1.5 text-center">
-                          <div className="inline-flex items-center gap-1.5">
-                            <Toggle checked={Boolean(sub)} disabled={busy} onChange={(on) => void apply({ feed: { channelId: channel.id, feedType: feed, on, country } })} />
-                            {sub && feed === "top_play" ? (
-                              <span className="text-[11px] text-osu-f1">
-                                {sub.players?.length ? <Plural value={sub.players.length} one="# player" other="# players" /> : sub.country === "GLOBAL" ? i18n._(msg`Global`) : sub.country}
-                              </span>
-                            ) : null}
-                          </div>
-                        </td>
-                      );
-                    })}
-                    {autoDanAvailable ? (
-                      <td className="px-2 py-1.5 text-center">
-                        <Toggle
-                          checked={server.settings.autoDanChannels.includes("*") || server.settings.autoDanChannels.includes(channel.id)}
-                          disabled={busy || server.settings.autoDanChannels.includes("*")}
-                          onChange={(on) => void apply({ autoDan: { channelId: channel.id, on } })}
-                        />
-                      </td>
-                    ) : null}
-                  </tr>
-                  {topPlays ? (
-                    <tr>
-                      <td colSpan={1 + feedTypes.length + (autoDanAvailable ? 1 : 0)} className="pb-2.5 pt-0.5">
-                        <TopPlayFilters
-                          sub={topPlays}
-                          onSave={(filters) => saveFilters({ feedFilters: { channelId: channel.id, feedType: "top_play", ...filters } })}
-                        />
-                      </td>
-                    </tr>
-                  ) : null}
-                  </Fragment>
+                    <div key={feed}>
+                      <div className={feedRow}>
+                        <div className={feedName}>
+                          <Toggle
+                            checked={Boolean(sub)}
+                            onChange={(on) => {
+                              keep(channel.id);
+                              setEditing(on && FILTERED_FEEDS.includes(feed) ? key : editing === key ? null : editing);
+                              void send({ feed: { channelId: channel.id, feedType: feed, on, country } });
+                            }}
+                            label={FEED_NAMES[feed] ? i18n._(FEED_NAMES[feed]) : feed}
+                          />
+                        </div>
+                        <div className={feedNote}>
+                          {sub && hasFilters ? <FeedSummary sub={sub} /> : FEED_HINTS[feed] ? i18n._(FEED_HINTS[feed]) : null}
+                        </div>
+                        {hasFilters ? (
+                          <button type="button" onClick={() => setEditing(editing === key ? null : key)} className="ml-auto text-[12px] font-semibold text-osu-pink-light hover:text-white">
+                            {editing === key ? <Trans>Done</Trans> : <Trans>Edit</Trans>}
+                          </button>
+                        ) : null}
+                      </div>
+                      {sub && hasFilters && editing === key ? (
+                        <div className="mt-2 sm:ml-11">
+                          <TopPlayFilters
+                            sub={sub}
+                            channelName={channel.name}
+                            onSave={(filters) => send({ feedFilters: { channelId: channel.id, feedType: feed, ...filters } }, false)}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-            {channels.length === 0 ? <p className="py-2 text-[13px] text-osu-f1"><Trans>No channel has a feed yet.</Trans></p> : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {server.channels.length > channels.length || showAll ? (
-              <button type="button" onClick={() => setShowAll((value) => !value)} className="text-[12px] font-semibold text-osu-pink-light hover:text-white">
-                {showAll ? <Trans>Only channels with something on</Trans> : <Trans>All {server.channels.length} channels</Trans>}
-              </button>
-            ) : null}
-            {autoDanAvailable ? (
-              <Toggle
-                checked={server.settings.autoDanChannels.includes("*")}
-                disabled={busy}
-                onChange={(on) => void apply({ autoDan: { channelId: "*", on } })}
-                label={<Trans>Dan on score posts in every channel</Trans>}
+                {autoDan ? (
+                  <div className={feedRow}>
+                    <div className={feedName}>
+                      <Toggle
+                        checked={autoDanAll || server.settings.autoDanChannels.includes(channel.id)}
+                        disabled={autoDanAll}
+                        onChange={(on) => { keep(channel.id); void send({ autoDan: { channelId: channel.id, on } }); }}
+                        label={<Trans>Dan on score posts</Trans>}
+                      />
+                    </div>
+                    <div className={feedNote}>
+                      {autoDanAll ? <Trans>On in every channel.</Trans> : <Trans>Replies to score posts and beatmap links in the channel with the chart's dan.</Trans>}
+                    </div>
+                    {autoDanAll || server.settings.autoDanChannels.includes(channel.id) ? (
+                      <button type="button" onClick={() => void send({ autoDan: { channelId: "*", on: !autoDanAll } })} className="ml-auto text-[12px] font-semibold text-osu-pink-light hover:text-white">
+                        {autoDanAll ? <Trans>Turn off everywhere</Trans> : <Trans>Turn on in every channel</Trans>}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 pt-3">
+            {addable.length ? (
+              <SelectMenu
+                value=""
+                triggerLabel={t`Add a channel`}
+                ariaLabel={t`Add a channel`}
+                searchable
+                onChange={(channelId) => keep(channelId)}
+                options={addable.map((channel) => ({ value: channel.id, label: `#${channel.name}`, group: channel.category ?? undefined }))}
               />
             ) : null}
             {error ? <span className="text-[12px] text-rose-300"><Trans>That didn't save. Try again.</Trans></span> : null}
+            <div className="flex items-center gap-2 sm:ml-auto">
+              <span className="text-[12px] text-osu-f1"><Trans>Default country</Trans></span>
+              <SelectMenu
+                value={country}
+                ariaLabel={t`Default country`}
+                align="right"
+                searchable
+                onChange={(code) => { if (code !== country) void send({ defaultCountry: code }); }}
+                options={countryOptions}
+              />
+              <HintButton label={t`What the default country does`}>
+                {noDans
+                  ? <Trans>/rankings shows this country here when none is given, and a Top plays feed you turn on posts its players until you choose others.</Trans>
+                  : <Trans>/rankings shows this country here when none is given, and a Top plays or Dan clears feed you turn on posts its players until you choose others.</Trans>}
+              </HintButton>
+            </div>
           </div>
         </div>
       ) : null}
@@ -908,12 +1312,26 @@ function PreviewSkeleton() {
   );
 }
 
+// Commands that answer the same for anyone, then a post from each feed.
 const PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
   { id: "profile", label: msg`/profile` },
   { id: "skills", label: msg`/skills` },
+  { id: "top", label: msg`/top` },
+  { id: "recent", label: msg`/recent` },
+  { id: "maniacard", label: msg`/maniacard` },
   { id: "map", label: msg`/map` },
+  { id: "farm", label: msg`/farm` },
   { id: "challenge", label: msg`/challenge` },
+  { id: "rankings", label: msg`/rankings` },
   { id: "help", label: msg`/help` },
+];
+
+const FEED_PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
+  { id: "feed-top-plays", label: FEED_NAMES.top_play },
+  { id: "feed-dan-clears", label: FEED_NAMES.dan_clear },
+  { id: "feed-goals", label: FEED_NAMES.goal },
+  { id: "feed-new-maps", label: FEED_NAMES.new_map },
+  { id: "feed-changelog", label: FEED_NAMES.changelog },
 ];
 
 function PreviewPanel({ initialProfile }: { initialProfile: DiscordMessageJson | null }) {
@@ -937,18 +1355,20 @@ function PreviewPanel({ initialProfile }: { initialProfile: DiscordMessageJson |
   const message = messages[view];
   return (
     <Panel title={<Trans>Previews</Trans>}>
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {PREVIEWS.map((preview) => (
-          <button
-            key={preview.id}
-            type="button"
-            onClick={() => setView(preview.id)}
-            className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${preview.id === view ? "bg-osu-pink/15 text-osu-pink-light" : "bg-osu-b4 text-osu-f1 hover:text-white"}`}
-          >
-            {i18n._(preview.label)}
-          </button>
-        ))}
-      </div>
+      {[PREVIEWS, FEED_PREVIEWS].map((group, index) => (
+        <div key={index} className={`flex flex-wrap gap-1.5 ${index === 0 ? "mb-1.5" : "mb-3"}`}>
+          {group.map((preview) => (
+            <button
+              key={preview.id}
+              type="button"
+              onClick={() => setView(preview.id)}
+              className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${preview.id === view ? "bg-osu-pink/15 text-osu-pink-light" : "bg-osu-b4 text-osu-f1 hover:text-white"}`}
+            >
+              {i18n._(preview.label)}
+            </button>
+          ))}
+        </div>
+      ))}
       <div className="overflow-hidden rounded-xl p-4" style={{ backgroundColor: DISCORD.msg, fontFamily: DISCORD.font }}>
         <div className="flex gap-4">
           <img src="/images/discord/bot-avatar.png" alt="" className="h-10 w-10 shrink-0 rounded-full" />
@@ -999,7 +1419,12 @@ function CommandsPanel({ commands }: { commands: DiscordPublicInfo["commands"] }
       ) : null}
       <p className="mt-2 text-[13px] text-osu-f1">
         <Trans>
-          Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">New farm maps</span> and <span className="font-semibold text-osu-l2">Website changelog</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
+          In servers you can also type <code className="font-semibold text-osu-pink-light">m!r</code>, <code className="font-semibold text-osu-pink-light">m!t</code>, <code className="font-semibold text-osu-pink-light">m!p</code>, <code className="font-semibold text-osu-pink-light">m!s</code>, <code className="font-semibold text-osu-pink-light">m!c</code>, <code className="font-semibold text-osu-pink-light">m!card</code> or <code className="font-semibold text-osu-pink-light">m!f</code> with a player's name after it, for recent, top, profile, skills, compare, maniacard and farm, <code className="font-semibold text-osu-pink-light">m!m</code> with a map, <code className="font-semibold text-osu-pink-light">m!ch</code> for a challenge and <code className="font-semibold text-osu-pink-light">m!rank</code> with a country.
+        </Trans>
+      </p>
+      <p className="mt-2 text-[13px] text-osu-f1">
+        <Trans>
+          Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">Dan clears</span>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <span className="font-semibold text-osu-l2">New farm maps</span> and <span className="font-semibold text-osu-l2">Website changelog</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
         </Trans>
       </p>
     </Panel>

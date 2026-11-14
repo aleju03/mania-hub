@@ -1,5 +1,6 @@
+import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
-import { findSkinDeadWeight } from "./skin-dead-weight";
+import { findSkinDeadWeight, stripBlockedSkinFiles } from "./skin-dead-weight";
 
 const INI = [
   "[General]",
@@ -109,5 +110,26 @@ describe("findSkinDeadWeight", () => {
       { "skin.ini": INI, "skininfo.json": "{\"Lookup\": \"custom/sprite\"}" },
     )).toEqual([]);
     expect(flagged([["assets/a.png", 4], ["x.osk", 9]], {})).toEqual([]);
+  });
+});
+
+describe("stripBlockedSkinFiles", () => {
+  async function osk(files: Record<string, string>): Promise<File> {
+    const zip = new JSZip();
+    for (const [path, text] of Object.entries(files)) zip.file(path, text);
+    return new File([await zip.generateAsync({ type: "blob" })], "skin.osk");
+  }
+
+  it("removes programs, shortcuts and nested archives and names them", async () => {
+    const file = await osk({ "skin.ini": INI, "mania/arrows/setup.exe": "x", "Skins - Shortcut.lnk": "x", "extra.rar": "x", "4K/note.png": "x" });
+    const result = await stripBlockedSkinFiles(file);
+    expect(result.removed.sort()).toEqual(["Skins - Shortcut.lnk", "extra.rar", "setup.exe"]);
+    const kept = Object.values((await JSZip.loadAsync(await result.file.arrayBuffer())).files).filter((entry) => !entry.dir).map((entry) => entry.name).sort();
+    expect(kept).toEqual(["4K/note.png", "skin.ini"]);
+  });
+
+  it("hands back the same file when nothing is blocked", async () => {
+    const file = await osk({ "skin.ini": INI, "exe.png": "x" });
+    expect(await stripBlockedSkinFiles(file)).toEqual({ file, removed: [] });
   });
 });

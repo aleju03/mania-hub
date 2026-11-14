@@ -10,7 +10,7 @@ import { skinEventProperties } from "../../lib/analytics-skins";
 import { track } from "../../lib/analytics";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
 import { buildSkinAssetGroups, type SkinAssetGroup } from "../../lib/skin-asset-explorer";
-import { findSkinDeadWeightInZip, trimSkinArchive, type SkinDeadWeight } from "../../lib/skin-dead-weight";
+import { findSkinDeadWeightInZip, stripBlockedSkinFiles, trimSkinArchive, type SkinDeadWeight } from "../../lib/skin-dead-weight";
 import { SkinAssetTiles } from "./SkinAssetExplorer";
 import { DriftTriangles } from "../ui/DriftTriangles";
 import { SkinCard } from "./SkinCard";
@@ -156,6 +156,7 @@ export function SkinUploadModal({
   const [deadWeight, setDeadWeight] = useState<SkinDeadWeight | null>(null);
   const [trimming, setTrimming] = useState(false);
   const [trimmedBytes, setTrimmedBytes] = useState<number | null>(null);
+  const [blockedRemoved, setBlockedRemoved] = useState<string[]>([]);
   const assetUrlsRef = useRef<Map<string, string>>(new Map());
 
   const revokeAssetUrls = useCallback(() => {
@@ -408,6 +409,7 @@ export function SkinUploadModal({
     setAssetGroups(null);
     setDeadWeight(null);
     setTrimmedBytes(null);
+    setBlockedRemoved([]);
     // Emptying the pool makes the next open draw a fresh one.
     setBackdropPool([]);
     backdropPoolRef.current = [];
@@ -454,17 +456,23 @@ export function SkinUploadModal({
   useBodyScrollLock(bodyLockActive);
 
   const handleOskFiles = useCallback(async (files: FileList | null) => {
-    const picked = files?.[0];
-    if (!picked) return;
+    const original = files?.[0];
+    if (!original) return;
     setError(null);
     setDuplicate(null);
-    if (picked.size > SKIN_OSK_MAX_BYTES) {
-      const size = formatSkinFileSize(picked.size);
+    if (original.size > SKIN_OSK_MAX_BYTES) {
+      const size = formatSkinFileSize(original.size);
       setError(t`This file is ${size}. The limit is 50 MB.`);
       return;
     }
-    setReading({ name: picked.name, percent: null });
+    setReading({ name: original.name, percent: null });
     try {
+      // Programs and nested archives come out before anything reads the
+      // file; the backend refuses an .osk that still has them. An unreadable
+      // zip falls through to the import below, which reports it.
+      const stripped = await stripBlockedSkinFiles(original).catch(() => ({ file: original, removed: [] as string[] }));
+      const picked = stripped.file;
+      setBlockedRemoved(stripped.removed);
       let lastPercent = -1;
       const result = await importReplaySkinFromOsk(picked, {
         targetKeyCount: 4,
@@ -934,6 +942,7 @@ export function SkinUploadModal({
                     deadWeight={deadWeight}
                     trimming={trimming}
                     trimmedBytes={trimmedBytes}
+                    blockedRemoved={blockedRemoved}
                     onTrim={() => void trimDeadWeight()}
                     onDismiss={handleDismiss}
                   />
@@ -1198,6 +1207,7 @@ function FormStep({
   deadWeight,
   trimming,
   trimmedBytes,
+  blockedRemoved,
   onTrim,
 }: {
   imported: ReplaySkinImportResult | null;
@@ -1255,6 +1265,7 @@ function FormStep({
   deadWeight: SkinDeadWeight | null;
   trimming: boolean;
   trimmedBytes: number | null;
+  blockedRemoved: string[];
   onTrim: () => void;
 }) {
   const { t, i18n } = useLingui();
@@ -1263,6 +1274,9 @@ function FormStep({
   const heroPreview = previews.get(selectedKeymode);
   const selectedHidden = hiddenKeymodes.has(selectedKeymode);
   const removedSize = trimmedBytes != null ? formatSkinFileSize(trimmedBytes) : "";
+  const firstRemoved = blockedRemoved.slice(0, 3).join(", ");
+  const moreRemoved = blockedRemoved.length - 3;
+  const removedNames = moreRemoved > 0 ? t`${firstRemoved} and ${moreRemoved} more` : firstRemoved;
   // Publishing needs the cover's render, which is not always the one on screen.
   const coverPreview = previews.get(coverKeymode);
   // Keymodes whose [Mania] block resolved no note images render with flat
@@ -1524,6 +1538,11 @@ function FormStep({
         <div className="mt-auto flex flex-col gap-2.5 pt-1">
           {deadWeight && !uploading && (
             <SkinDeadWeightNotice deadWeight={deadWeight} trimming={trimming} onTrim={onTrim} />
+          )}
+          {blockedRemoved.length > 0 && (
+            <p className="text-[11.5px] text-osu-f1">
+              <Trans>Left out {removedNames} because skins can't include programs, shortcuts or other archives.</Trans>
+            </p>
           )}
           {removedSize && !deadWeight && (
             <p className="text-[11.5px] text-osu-f1">

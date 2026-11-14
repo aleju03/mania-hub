@@ -23,7 +23,7 @@ export function normalizeReplayMasterScrollSpeed(value: unknown): number {
   return Math.max(REPLAY_MASTER_MIN_SCROLL_SPEED, Math.min(REPLAY_MASTER_MAX_SCROLL_SPEED, value));
 }
 
-export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "pp", "judgements", "hitError", "progress", "leaderboard", "replayMaster", "mapInfo", "playerInfo", "media", "stageLeft", "stageRight", "stageBottom", "healthBar"] as const;
+export const REPLAY_OVERLAY_IDS = ["keypresses", "keypressesRight", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "pp", "judgements", "hitError", "progress", "leaderboard", "replayMaster", "mapInfo", "playerInfo", "media", "stageLeft", "stageRight", "stageBottom", "healthBar"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
@@ -42,6 +42,7 @@ export function isReplayStageArtOverlay(id: ReplayOverlayId): id is ReplayStageA
 // Shared by the settings modal and the stage's right-click overlay menu.
 export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, MessageDescriptor> = {
   keypresses: msg`Keypresses`,
+  keypressesRight: msg`Keypresses (right hand)`,
   kps: msg`KPS counter`,
   misses: msg`L/R miss counter`,
   accuracy: msg`Accuracy`,
@@ -311,6 +312,10 @@ export interface ReplayOverlayPlacement {
   style?: ReplayHandAccuracyStyle | ReplayMissStyle | ReplayColumnStatStyle | ReplayHitErrorStyle | ReplayJudgementLayout;
   /** Which number the per-finger strip puts in its cells. */
   metric?: ReplayColumnStatMetric;
+  /** Per-finger strip: stack the cells top to bottom. */
+  vertical?: boolean;
+  /** Keypresses: draw the left hand here and the right hand as keypressesRight. */
+  splitHands?: boolean;
   /** Mania Replay Master scroll multiplier; independent of replay playback. */
   scrollSpeed?: number;
   /** Show Replay Master's marks directly over the stage. */
@@ -393,7 +398,7 @@ export function isReplayOverlayStackable(id: ReplayOverlayId): boolean {
 // the live element over the canvas first put it.
 export const REPLAY_OVERLAY_DEFAULT_STACK: readonly ReplayOverlayId[] = [
   "leaderboard", "replayMaster", "mapInfo", "playerInfo",
-  "keypresses", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "pp", "judgements", "progress", "hitError",
+  "keypresses", "keypressesRight", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "pp", "judgements", "progress", "hitError",
   "media", "stageLeft", "stageRight", "stageBottom", "healthBar",
 ];
 
@@ -419,6 +424,10 @@ export const REPLAY_OVERLAY_MAX_SCALE = 2.5;
 export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   replayMaster: { enabled: false, x: 0.72, y: 0.25, scale: 0.75, scrollSpeed: DEFAULT_REPLAY_MASTER_SCROLL_SPEED, transparentBackground: false, followSv: false },
   keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
+  // The right hand's half once Keypresses is split. Shown only while the
+  // split is on, so it starts enabled: splitting brings it up at once, and
+  // removing it leaves the left hand alone.
+  keypressesRight: { enabled: true, x: 0.14, y: 0.68, scale: 0.75 },
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1, style: DEFAULT_REPLAY_MISS_STYLE },
   accuracy: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
@@ -633,6 +642,13 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
       || (id === "accuracy" && PREVIOUS_ACCURACY_OVERLAY_DEFAULTS.some((previous) => placementMatches(placement, previous)))
       ? { ...DEFAULT_REPLAY_OVERLAY_SETTINGS[id], ...(placement.style ? { style: placement.style } : {}), ...(placement.layer ? { layer: placement.layer } : {}) }
       : placement;
+    // After the legacy-default reset above, which rebuilds the placement.
+    if (id === "keypresses" && (raw[id] as { splitHands?: unknown } | undefined)?.splitHands === true) {
+      settings.keypresses.splitHands = true;
+    }
+    if (id === "columnStats" && (raw[id] as { vertical?: unknown } | undefined)?.vertical === true) {
+      settings.columnStats.vertical = true;
+    }
     if (id === "leaderboard") {
       settings.leaderboard.collapseDuringPlay = (raw[id] as { collapseDuringPlay?: unknown } | undefined)?.collapseDuringPlay === true;
       // Old settings had one placement for both modes. Seed lazer from it
