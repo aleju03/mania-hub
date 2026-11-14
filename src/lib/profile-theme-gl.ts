@@ -834,6 +834,9 @@ export function mountProfileBackdrop(
     if (disposed) return;
     if (drewAt) governor.frame(now - drewAt);
     drewAt = 0;
+    // off screen (or display:none) it stops asking for frames, so the device
+    // can idle; the watcher starts it again when it comes back
+    if (!visible) return;
     // a stranger's theme that can't hold its frames even at the floor stops
     if (governor.starved && typeof theme !== "string") {
       giveUp(theme, true);
@@ -864,6 +867,7 @@ export function mountProfileBackdrop(
   resizer.observe(host);
   const watcher = new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
+    if (visible && !still && !frame && !disposed && !gaveUp) frame = requestAnimationFrame(loop);
   });
   watcher.observe(host);
   const onLost = (event: Event) => {
@@ -1040,7 +1044,10 @@ function swatchLoop(now: number) {
       }
     }
   }
-  swatchFrame = swatches.size > 0 ? requestAnimationFrame(swatchLoop) : 0;
+  // with none on screen the loop stops; a swatch coming into view starts it again
+  let anyVisible = false;
+  for (const swatch of swatches) if (swatch.visible) anyVisible = true;
+  swatchFrame = anyVisible ? requestAnimationFrame(swatchLoop) : 0;
 }
 
 /* Draws the theme into `canvas` (sized by the caller), live while on screen
@@ -1054,6 +1061,7 @@ export function mountThemeSwatch(canvas: HTMLCanvasElement, theme: SupporterProf
   swatches.add(swatch);
   const watcher = new IntersectionObserver(([entry]) => {
     swatch.visible = entry.isIntersecting;
+    if (swatch.visible && !swatchFrame && swatches.has(swatch)) swatchFrame = requestAnimationFrame(swatchLoop);
   });
   watcher.observe(canvas);
   if (!swatchFrame) swatchFrame = requestAnimationFrame(swatchLoop);

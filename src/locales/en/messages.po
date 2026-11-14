@@ -16299,8 +16299,8 @@ msgid "New link"
 msgstr "New link"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "new pb"
-msgstr "new pb"
+#~ msgid "new pb"
+#~ msgstr "new pb"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "New plays aren't recorded."

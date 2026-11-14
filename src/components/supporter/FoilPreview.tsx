@@ -176,7 +176,10 @@ function loop(now: number) {
     }
     draw(now);
   }
-  frame = swatches.size > 0 ? requestAnimationFrame(loop) : 0;
+  // with none on screen the loop stops; a swatch coming into view starts it again
+  let anyVisible = false;
+  for (const swatch of swatches) if (swatch.visible) anyVisible = true;
+  frame = anyVisible ? requestAnimationFrame(loop) : 0;
 }
 
 export function FoilPreview({ foil, className, still = false }: { foil: SupporterFoilId; className?: string; still?: boolean }) {
@@ -195,6 +198,7 @@ export function FoilPreview({ foil, className, still = false }: { foil: Supporte
       swatches.add(swatch);
       const watcher = new IntersectionObserver(([entry]) => {
         swatch.visible = entry.isIntersecting;
+        if (swatch.visible && !frame && swatches.has(swatch)) frame = requestAnimationFrame(loop);
       });
       watcher.observe(canvas);
       if (!frame) frame = requestAnimationFrame(loop);
@@ -207,6 +211,7 @@ export function FoilPreview({ foil, className, still = false }: { foil: Supporte
     swatches.add(swatch);
     const observer = new IntersectionObserver(([entry]) => {
       swatch.visible = entry.isIntersecting;
+      if (swatch.visible && !frame && swatches.has(swatch)) frame = requestAnimationFrame(loop);
     });
     observer.observe(canvas);
     if (!frame) frame = requestAnimationFrame(loop);

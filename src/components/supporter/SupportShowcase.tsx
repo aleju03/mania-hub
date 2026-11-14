@@ -13,7 +13,7 @@ import { FoilPreview } from "./FoilPreview";
 import { GiftTicket3D } from "./GiftTicket3D";
 import { CompanionFigure, CompanionThumb } from "./Companion";
 import { BinderBook, FoilCard, FrameThumb, SleeveCard, wrapperThumb } from "./LoadoutSlots";
-import { useWrapperArtVersion } from "../packs/wrapperArt";
+import { useWrapperArtVersion, wrapperArt, wrapperArtPending } from "../packs/wrapperArt";
 import { BladeSwatch } from "../packs/BladeSwatch";
 import { playBladeRip, warmBladeSounds } from "../packs/packSfx";
 import { bladeLook } from "../packs/packBlades";
@@ -625,12 +625,17 @@ function CardHand({ foil }: { foil: SupporterFoilId }) {
    the service worker leaves alone (Safari plays video only with ranges). */
 function BladeLoop({ blade, className }: { blade: SupporterBladeId; className: string }) {
   const [moving, setMoving] = useState<boolean | null>(null);
+  // a phone holds an off-screen video back until it scrolls in, so the still
+  // shows until its loop is actually playing rather than an empty tile
+  const [playing, setPlaying] = useState(false);
   useEffect(() => setMoving(!window.matchMedia("(prefers-reduced-motion: reduce)").matches), []);
   if (moving === false) return <BladeSwatch blade={blade} className={className} />;
   return (
     <span className={`relative isolate block overflow-hidden ${className}`}>
+      {!playing && <BladeSwatch blade={blade} className="absolute inset-0 h-full w-full" />}
       {moving && (
         <video
+          onPlaying={() => setPlaying(true)}
           src={`/videos/blades/${blade}-v3.mp4`}
           autoPlay
           loop
@@ -647,21 +652,30 @@ function BladeLoop({ blade, className }: { blade: SupporterBladeId; className: s
 
 export function PacksShowcase() {
   const { t, i18n } = useLingui();
-  const [ref, near] = useNearView<HTMLDivElement>();
   const [wrappers, setWrappers] = useState<Partial<Record<string, string>>>({});
   const wrapperArtVersion = useWrapperArtVersion();
-  // Each is a whole pack drawn on a canvas, so they wait until the section is
-  // near and then come in one per quiet moment.
+  /* Thumbs drawn with their renders in: final, so a later render arriving doesn't queue them again. */
+  const finished = useRef(new Set<string>());
+  // Each is a whole pack drawn on a canvas, one per quiet moment (gpu-queue.ts),
+  // and none while the page scrolls. Waiting for the section to come near
+  // left them blank for seconds on a phone, where a reader keeps nudging the
+  // page; started with the page, they are in long before anyone scrolls this
+  // far (six draws, ~50ms each on a slow phone). Every wrapper's renders
+  // start loading at once, so most thumbs are drawn once, already with them.
   useEffect(() => {
-    if (!near) return;
-    const cancels = SUPPORTER_WRAPPERS.map((id) => queueGpuWork(() => setWrappers((current) => ({ ...current, [id]: wrapperThumb(id) }))));
+    for (const id of SUPPORTER_WRAPPERS) wrapperArt(id);
+    const cancels = SUPPORTER_WRAPPERS.filter((id) => !finished.current.has(id)).map((id) => queueGpuWork(() => {
+      const thumb = wrapperThumb(id);
+      if (!wrapperArtPending(id)) finished.current.add(id);
+      setWrappers((current) => ({ ...current, [id]: thumb }));
+    }));
     return () => cancels.forEach((cancel) => cancel());
-  }, [near, wrapperArtVersion]);
+  }, [wrapperArtVersion]);
   const group = "min-w-0";
   const heading = "mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-osu-f1";
   const label = "mt-1.5 truncate text-center text-[11px] text-osu-l2";
   return (
-    <div ref={ref} className="grid gap-6 md:grid-cols-2">
+    <div className="grid gap-6 md:grid-cols-2">
       <div className={group}>
         <div className={heading}>{t`Cases`}</div>
         <Stagger className="grid grid-cols-4 gap-2">
@@ -781,7 +795,6 @@ export function ClipShowcase() {
             <span className="text-[15px] font-semibold text-white">{you.name}</span>
             <span className="text-[12px] text-[#949ba4]">{t`Today at 21:14`}</span>
           </div>
-          <div className="text-[15px] text-[#dbdee1]">{t`new pb`}</div>
           <div className="text-[15px] text-[#00a8fc]">mania-tracker.com/c/k3f9a2qd</div>
           <video
             src="/images/support/share-clip.mp4"

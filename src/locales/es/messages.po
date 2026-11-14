@@ -16260,8 +16260,8 @@ msgid "New link"
 msgstr "Nuevo enlace"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "new pb"
-msgstr "nuevo pb"
+#~ msgid "new pb"
+#~ msgstr "nuevo pb"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "New plays aren't recorded."
@@ -25435,11 +25435,11 @@ msgstr "Super Rare"
 #: src/routes/__root.tsx
 #: src/routes/support.tsx
 msgid "support"
-msgstr "apoyar"
+msgstr "supporter"
 
 #: src/routes/support.tsx
 msgid "Support"
-msgstr "Apoyar"
+msgstr "Supporter"
 
 #: src/routes/__root.tsx
 #~ msgid "Support Mania Tracker on Ko-fi"
