@@ -158,9 +158,11 @@ interface SampleDmResult {
 }
 
 const SAMPLE_DM_LABELS: Record<string, string> = {
+  test: "Test DM",
   snipe: "Snipe",
   follow_top_play: "Followed top play",
-  new_map: "New farm map",
+  new_map: "New farm map (farmed)",
+  new_map_inflated: "New farm map (inflated)",
   card_pull: "Card pulled",
   weekly_recap: "Weekly recap",
 };
