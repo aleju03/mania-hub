@@ -871,8 +871,13 @@ function CollectedCardFace({
           onLoad={(event) => noteCardThumbnailStored(card, event.currentTarget.src)}
           onError={(event) => {
             /* Only a remote pool URL can 404 (skeletons and local renders
-               are data/blob URLs); fall back to rendering this card. */
-            if (/^https?:/.test(event.currentTarget.src)) onThumbnailError(card);
+               are data/blob URLs); fall back to rendering this card, with
+               the tier skeleton in the slot until it arrives rather than a
+               broken image and its alt text. */
+            if (!/^https?:/.test(event.currentTarget.src)) return;
+            onThumbnailError(card);
+            const fallback = tierSkeletonThumb(cardTier(card));
+            if (fallback) event.currentTarget.src = fallback;
           }}
         />
       ) : (

@@ -2875,8 +2875,8 @@ msgid "$4 buys a month of supporter, and every payment adds more time."
 msgstr "$4 compran un mes de supporter, y cada pago suma más tiempo."
 
 #: src/routes/support.tsx
-msgid "$4 is a month"
-msgstr "$4 son un mes"
+#~ msgid "$4 is a month"
+#~ msgstr "$4 son un mes"
 
 #: src/lib/format.ts
 msgid "0h"
@@ -4647,8 +4647,8 @@ msgid "Any amount counts, to the day, and adds to the time you have left: $4 is 
 msgstr "Cualquier monto cuenta, calculado al día, y se suma al tiempo que te queda: $4 son 30 días. Si pagas $40 o más de una vez, cada $40 te da un año completo."
 
 #: src/routes/support.tsx
-msgid "Any amount works and is counted to the day. Every payment adds to the time you have left."
-msgstr "Cualquier monto sirve y se cuenta por días. Cada pago se suma al tiempo que te queda."
+#~ msgid "Any amount works and is counted to the day. Every payment adds to the time you have left."
+#~ msgstr "Cualquier monto sirve y se cuenta por días. Cada pago se suma al tiempo que te queda."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Any card"
@@ -12513,8 +12513,8 @@ msgid "How it will look"
 msgstr "Cómo se verá"
 
 #: src/routes/support.tsx
-msgid "How it works"
-msgstr "Cómo funciona"
+#~ msgid "How it works"
+#~ msgstr "Cómo funciona"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "How Mania Tracker gives every osu!mania chart a dan level, and how it reads a player's dan off the charts they have passed."
@@ -13653,8 +13653,8 @@ msgstr "Láseres de perilla"
 #~ msgstr "página de Ko-fi"
 
 #: src/routes/support.tsx
-msgid "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
-msgstr "Ko-fi acepta PayPal, lava.top acepta tarjetas y PayPal. El paso junto al pago asegura que el tiempo llegue a tu cuenta."
+#~ msgid "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+#~ msgstr "Ko-fi acepta PayPal, lava.top acepta tarjetas y PayPal. El paso junto al pago asegura que el tiempo llegue a tu cuenta."
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
@@ -19330,8 +19330,8 @@ msgstr "Elige un .osr y el .osu en el que se jugó."
 #~ msgstr "Elige cinco cartas de la misma rareza. Salen de tu colección y recibes una carta de la rareza superior."
 
 #: src/routes/support.tsx
-msgid "Pick how to pay"
-msgstr "Elige cómo pagar"
+#~ msgid "Pick how to pay"
+#~ msgstr "Elige cómo pagar"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Pick it back up"
@@ -23258,8 +23258,8 @@ msgid "Set goal"
 msgstr "Fijar meta"
 
 #: src/routes/support.tsx
-msgid "Set it up"
-msgstr "Configúralo"
+#~ msgid "Set it up"
+#~ msgstr "Configúralo"
 
 #: src/lib/goal-format.ts
 msgid "set just now"

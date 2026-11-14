@@ -2898,8 +2898,8 @@ msgid "$4 buys a month of supporter, and every payment adds more time."
 msgstr "$4 buys a month of supporter, and every payment adds more time."
 
 #: src/routes/support.tsx
-msgid "$4 is a month"
-msgstr "$4 is a month"
+#~ msgid "$4 is a month"
+#~ msgstr "$4 is a month"
 
 #: src/lib/format.ts
 msgid "0h"
@@ -4674,8 +4674,8 @@ msgid "Any amount counts, to the day, and adds to the time you have left: $4 is 
 msgstr "Any amount counts, to the day, and adds to the time you have left: $4 is 30 days. Paying $40 or more at once buys a full year for every $40."
 
 #: src/routes/support.tsx
-msgid "Any amount works and is counted to the day. Every payment adds to the time you have left."
-msgstr "Any amount works and is counted to the day. Every payment adds to the time you have left."
+#~ msgid "Any amount works and is counted to the day. Every payment adds to the time you have left."
+#~ msgstr "Any amount works and is counted to the day. Every payment adds to the time you have left."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Any card"
@@ -12544,8 +12544,8 @@ msgid "How it will look"
 msgstr "How it will look"
 
 #: src/routes/support.tsx
-msgid "How it works"
-msgstr "How it works"
+#~ msgid "How it works"
+#~ msgstr "How it works"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "How Mania Tracker gives every osu!mania chart a dan level, and how it reads a player's dan off the charts they have passed."
@@ -13692,8 +13692,8 @@ msgstr "Knob lasers"
 #~ msgstr "Ko-fi page"
 
 #: src/routes/support.tsx
-msgid "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
-msgstr "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+#~ msgid "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+#~ msgstr "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
@@ -19369,8 +19369,8 @@ msgstr "Pick both a .osr and the .osu it was played on."
 #~ msgstr "Pick five cards of the same rarity. They leave your collection and you get one card of the rarity above."
 
 #: src/routes/support.tsx
-msgid "Pick how to pay"
-msgstr "Pick how to pay"
+#~ msgid "Pick how to pay"
+#~ msgstr "Pick how to pay"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Pick it back up"
@@ -23297,8 +23297,8 @@ msgid "Set goal"
 msgstr "Set goal"
 
 #: src/routes/support.tsx
-msgid "Set it up"
-msgstr "Set it up"
+#~ msgid "Set it up"
+#~ msgstr "Set it up"
 
 #: src/lib/goal-format.ts
 msgid "set just now"

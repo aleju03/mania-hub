@@ -64,7 +64,6 @@ const SECTIONS: { id: string; label: MessageDescriptor }[] = [
   { id: "bot-dms", label: msg`Bot DMs` },
   { id: "gift", label: msg`A week for a friend` },
   { id: "ranks", label: msg`Supporter ranks` },
-  { id: "how", label: msg`How it works` },
   { id: "checkout", label: msg`Support` },
 ];
 
@@ -194,11 +193,6 @@ function SupportPage() {
   const payMethod = pickedMethod && payMethods.includes(pickedMethod) ? pickedMethod : initialPayMethod;
   const reduced = useReducedMotion();
   const heroRef = useRef<HTMLDivElement>(null);
-  const steps = [
-    { title: t`Pick how to pay`, body: t`Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account.` },
-    { title: t`$4 is a month`, body: t`Any amount works and is counted to the day. Every payment adds to the time you have left.` },
-    { title: t`Set it up`, body: t`Pick your look on the supporter page. It saves as you go.` },
-  ];
 
   return (
     <div className="flex-1">
@@ -339,37 +333,16 @@ function SupportPage() {
               <SupporterRankShowcase />
             </Perk>
 
-            <section id="how" className="scroll-mt-[76px] border-t border-white/[0.07] pt-8">
-              <Reveal>
-              <h2 className="text-[22px] font-bold text-white">{t`How it works`}</h2>
-              <ol className="mt-5 grid gap-6 sm:grid-cols-3">
-                {steps.map((step, index) => (
-                  <Reveal key={step.title} delay={0.1 + index * 0.12}>
-                  <li>
-                    <div className="text-[30px] font-black leading-none tabular-nums text-osu-pink-light">{index + 1}</div>
-                    <div className="mt-2 text-[15px] font-semibold text-white">{step.title}</div>
-                    <p className="mt-1 text-[13px] leading-relaxed text-osu-l2">
-                      {step.body}
-                      {index === 2 ? (
-                        <>
-                          {" "}
-                          <Link to="/supporter" className="font-semibold text-osu-pink-light hover:underline">{t`Open the supporter page`}</Link>
-                        </>
-                      ) : null}
-                    </p>
-                  </li>
-                  </Reveal>
-                ))}
-              </ol>
-              </Reveal>
-            </section>
-
             <section id="checkout" className="scroll-mt-[76px] border-t border-white/[0.07] pt-8">
               <Reveal className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
                 <div>
                   <h2 className="text-[22px] font-bold text-white">{t`Support`}</h2>
                   {payMethod ? <SupportMethodSteps method={payMethod} /> : <KofiNameSteps />}
                   <SupportPlans />
+                  <p className="mt-4 text-[13px] leading-relaxed text-osu-l2">
+                    {t`Pick your look on the supporter page. It saves as you go.`}{" "}
+                    <Link to="/supporter" className="font-semibold text-osu-pink-light hover:underline">{t`Open the supporter page`}</Link>
+                  </p>
                 </div>
                 <SupportCheckout methods={payMethods} method={payMethod} onMethod={setPickedMethod} />
               </Reveal>

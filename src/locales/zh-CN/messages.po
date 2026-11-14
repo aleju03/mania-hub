@@ -2887,8 +2887,8 @@ msgid "$4 buys a month of supporter, and every payment adds more time."
 msgstr "$4 可购买一个月的支持者时长，每次付款都会累加时间。"
 
 #: src/routes/support.tsx
-msgid "$4 is a month"
-msgstr "$4 即一个月"
+#~ msgid "$4 is a month"
+#~ msgstr "$4 即一个月"
 
 #: src/lib/format.ts
 msgid "0h"
@@ -4659,8 +4659,8 @@ msgid "Any amount counts, to the day, and adds to the time you have left: $4 is 
 msgstr "任意金额都按天折算，并累加到你剩余的时长上：$4 等于 30 天。一次支付 $40 或以上，每 $40 可获得整整一年。"
 
 #: src/routes/support.tsx
-msgid "Any amount works and is counted to the day. Every payment adds to the time you have left."
-msgstr "任何金额都可以，按天折算。每次付款都会加到你剩余的时长上。"
+#~ msgid "Any amount works and is counted to the day. Every payment adds to the time you have left."
+#~ msgstr "任何金额都可以，按天折算。每次付款都会加到你剩余的时长上。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Any card"
@@ -12525,8 +12525,8 @@ msgid "How it will look"
 msgstr "实际效果"
 
 #: src/routes/support.tsx
-msgid "How it works"
-msgstr "运作方式"
+#~ msgid "How it works"
+#~ msgstr "运作方式"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "How Mania Tracker gives every osu!mania chart a dan level, and how it reads a player's dan off the charts they have passed."
@@ -13665,8 +13665,8 @@ msgstr "旋钮激光"
 #~ msgstr "Ko-fi 主页"
 
 #: src/routes/support.tsx
-msgid "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
-msgstr "Ko-fi 支持 PayPal，lava.top 支持银行卡和 PayPal。按照支付旁边的步骤操作，时长就会记到你的账号上。"
+#~ msgid "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+#~ msgstr "Ko-fi 支持 PayPal，lava.top 支持银行卡和 PayPal。按照支付旁边的步骤操作，时长就会记到你的账号上。"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
@@ -19342,8 +19342,8 @@ msgstr "请同时选择 .osr 和它所游玩的 .osu。"
 #~ msgstr "选择五张同一稀有度的卡。它们会离开你的收藏册，换来一张高一级稀有度的卡。"
 
 #: src/routes/support.tsx
-msgid "Pick how to pay"
-msgstr "选择支付方式"
+#~ msgid "Pick how to pay"
+#~ msgstr "选择支付方式"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Pick it back up"
@@ -23270,8 +23270,8 @@ msgid "Set goal"
 msgstr "设定目标"
 
 #: src/routes/support.tsx
-msgid "Set it up"
-msgstr "设置外观"
+#~ msgid "Set it up"
+#~ msgstr "设置外观"
 
 #: src/lib/goal-format.ts
 msgid "set just now"
