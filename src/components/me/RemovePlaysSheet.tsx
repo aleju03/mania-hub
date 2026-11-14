@@ -10,7 +10,7 @@ import type { MyDataTrackedPlay } from "../../lib/my-data";
 
 const HOLD_MS = 1200;
 
-export type RemovePlaysSheetKind = "some" | "all" | "stop";
+export type RemovePlaysSheetKind = "all" | "stop";
 
 type LeaveChoice = "stop" | "profile" | "account";
 
@@ -27,11 +27,13 @@ function coverOf(play: MyDataTrackedPlay): string | null {
  * the button is pressed and drains when it is let go, so nothing is removed by
  * a stray click or a double tap through the sheet. Space and Enter hold too.
  */
-export function HoldToConfirm({ label, busyLabel, busy, onConfirm }: {
+export function HoldToConfirm({ label, busyLabel, busy, onConfirm, compact = false }: {
   label: string;
   busyLabel: string;
   busy: boolean;
   onConfirm: () => void;
+  /** The pill's size, for holding right where the plays were picked. */
+  compact?: boolean;
 }) {
   const [holding, setHolding] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -87,7 +89,9 @@ export function HoldToConfirm({ label, busyLabel, busy, onConfirm }: {
         if (event.key === " " || event.key === "Enter") stop();
       }}
       onBlur={stop}
-      className="relative h-12 w-full touch-none select-none overflow-hidden rounded-xl bg-osu-red-light/15 text-[13px] font-bold text-osu-red-light cursor-pointer hover:brightness-110 disabled:cursor-default"
+      className={`relative touch-none select-none overflow-hidden bg-osu-red-light/15 font-bold text-osu-red-light cursor-pointer hover:brightness-110 disabled:cursor-default ${
+        compact ? "rounded-full px-3.5 py-1.5 text-[12.5px]" : "h-12 w-full rounded-xl text-[13px]"
+      }`}
     >
       <span
         aria-hidden
@@ -98,15 +102,25 @@ export function HoldToConfirm({ label, busyLabel, busy, onConfirm }: {
         }}
       />
       <span className={`relative inline-flex items-center gap-2 ${holding || busy ? "text-white" : ""}`}>
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+        {busy ? <Loader2 className={compact ? "h-3.5 w-3.5 animate-spin" : "h-4 w-4 animate-spin"} /> : null}
         {busy ? busyLabel : label}
       </span>
     </button>
   );
 }
 
-/** Floats over the feed while plays are picked; hidden when nothing is. */
-export function RemovalPill({ count, onRemove, onClear }: { count: number; onRemove: () => void; onClear: () => void }) {
+/*
+ * Floats over the feed while plays are picked; hidden when nothing is. Its
+ * button is the confirmation itself, held in place, so pressing it never
+ * opens a second step the player did not expect.
+ */
+export function RemovalPill({ count, busy, error, onConfirm, onClear }: {
+  count: number;
+  busy: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onClear: () => void;
+}) {
   const { t } = useLingui();
   return (
     <AnimatePresence>
@@ -116,24 +130,20 @@ export function RemovalPill({ count, onRemove, onClear }: { count: number; onRem
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
           transition={{ duration: 0.16, ease: "easeOut" }}
-          className="fixed inset-x-0 bottom-5 z-40 flex justify-center px-3 pointer-events-none"
+          className="fixed inset-x-0 bottom-5 z-40 flex flex-col items-center gap-2 px-3 pointer-events-none"
         >
+          {error ? <div className="rounded-full bg-osu-b3 px-3.5 py-1.5 text-center text-[12px] text-osu-red-light shadow-lg shadow-black/40">{error}</div> : null}
           <div translate="no" className="pointer-events-auto flex items-center gap-1 rounded-full bg-osu-b3 py-1.5 pl-4 pr-1.5 shadow-lg shadow-black/40">
             <span className="pr-2 text-[13px] font-semibold tabular-nums text-white">
               {t`${plural(count, { one: "# play", other: "# plays" })}`}
             </span>
-            <button
-              type="button"
-              onClick={onRemove}
-              className="rounded-full bg-osu-red-light/20 px-3.5 py-1.5 text-[12.5px] font-bold text-osu-red-light cursor-pointer hover:brightness-110"
-            >
-              {t`Remove`}
-            </button>
+            <HoldToConfirm compact label={t`Hold to delete`} busyLabel={t`Deleting…`} busy={busy} onConfirm={onConfirm} />
             <button
               type="button"
               onClick={onClear}
+              disabled={busy}
               aria-label={t`Clear selection`}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-osu-l2 cursor-pointer hover:bg-osu-b4 hover:text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-osu-l2 cursor-pointer hover:bg-osu-b4 hover:text-white disabled:opacity-40"
             >
               <X className="h-4 w-4" />
             </button>
@@ -164,7 +174,7 @@ export function RemovePlaysSheet({
   onClose,
 }: {
   kind: RemovePlaysSheetKind;
-  /** The picked plays, or a few from the feed to show for "all" and "stop". */
+  /** A few plays from the feed, for their covers. */
   plays: MyDataTrackedPlay[];
   count: number;
   busy: boolean;
@@ -199,10 +209,6 @@ export function RemovePlaysSheet({
   }, [busy, onClose]);
 
   const covers = plays.map(coverOf).filter((cover): cover is string => !!cover).slice(0, 3);
-  const titles = plays.map((play) => play.beatmapset?.title).filter((title): title is string => !!title);
-  const namesLine = kind === "some"
-    ? titles.length > 2 ? `${titles.slice(0, 2).join(" · ")} · +${count - 2}` : titles.join(" · ")
-    : null;
   const leaving = kind === "stop";
   const deletingScope = leaving && choice !== "stop" ? choice : null;
   const deleting = deletingScope != null;
@@ -213,9 +219,7 @@ export function RemovePlaysSheet({
     ? t`Delete my profile`
     : stopping
     ? t`Stop tracking`
-    : kind === "all"
-      ? t`${plural(count, { one: "# tracked play", other: "# tracked plays" })}`
-      : t`${plural(count, { one: "# play", other: "# plays" })}`;
+    : t`${plural(count, { one: "# tracked play", other: "# tracked plays" })}`;
 
   return (
     <div
@@ -259,7 +263,6 @@ export function RemovePlaysSheet({
           ) : null}
           <div className="min-w-0">
             <div className="text-[22px] font-bold leading-tight tabular-nums text-white">{heading}</div>
-            {namesLine ? <div className="mt-0.5 truncate text-[12px] text-osu-f1">{namesLine}</div> : null}
           </div>
         </div>
 
@@ -298,7 +301,7 @@ export function RemovePlaysSheet({
             ? t`Your profile, plays and stats on this site are deleted. Your packs, skins, uploaded replays and map collections stay.`
             : stopping
             ? t`New plays stop being recorded.`
-            : t`They're removed from your tracked plays, recent plays and activity on this site.`}
+            : t`They're deleted for good from your tracked plays, recent plays and activity on this site.`}
         </p>
         {deleting ? (
           <p className="mt-2 text-[12.5px] leading-5 text-osu-f1">
@@ -337,8 +340,8 @@ export function RemovePlaysSheet({
 
         <div className="mt-4">
           <HoldToConfirm
-            label={deletingScope === "account" ? t`Hold to delete everything` : deleting ? t`Hold to delete my profile` : stopping ? t`Hold to stop tracking` : t`Hold to remove`}
-            busyLabel={deleting ? t`Deleting…` : stopping ? t`Stopping…` : t`Removing…`}
+            label={deletingScope === "account" ? t`Hold to delete everything` : deleting ? t`Hold to delete my profile` : stopping ? t`Hold to stop tracking` : t`Hold to delete`}
+            busyLabel={stopping ? t`Stopping…` : t`Deleting…`}
             busy={busy}
             onConfirm={() => (deletingScope ? onDelete?.(deletingScope) : stopping ? onStopTracking(removeOnStop) : onRemove())}
           />

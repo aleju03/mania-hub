@@ -181,9 +181,9 @@ it("keeps the signed-out and untracked entry states unchanged", async () => {
   expect(mocks.explorer).not.toHaveBeenCalled();
 });
 
-const trackedPlay = (identity: string) => ({
+const trackedPlay = (identity: string, removable = true) => ({
   id: 1, user_id: 123, accuracy: 0.9, beatmap_id: 1, mods: [], score: 0, max_combo: 0, passed: true, rank: "A",
-  statistics: {}, pp: null, ended_at: "2026-09-20T00:00:00Z", scoreIdentity: identity,
+  statistics: {}, pp: null, ended_at: "2026-09-20T00:00:00Z", scoreIdentity: identity, removable,
   beatmap: { id: Number(identity.split(":")[1]) }, beatmapset: { id: 1, title: "Map" },
 });
 
@@ -203,13 +203,14 @@ it("removes picked plays only after a completed hold", async () => {
   mocks.remove.mockResolvedValue({ ok: true, removed: 1 });
   render(panel());
   fireEvent.click(await screen.findByRole("button", { name: "select official:2" }));
-  fireEvent.click(screen.getByRole("button", { name: "Remove" }));
-  const button = screen.getByRole("button", { name: "Hold to remove" });
+  // The pill's own button is the hold; no sheet opens.
+  expect(screen.queryByRole("dialog")).toBeNull();
+  const button = screen.getByRole("button", { name: "Hold to delete" });
   fireEvent.pointerDown(button);
   fireEvent.pointerUp(button);
   await new Promise((resolve) => setTimeout(resolve, 1300));
   expect(mocks.remove).not.toHaveBeenCalled();
-  await hold("Hold to remove");
+  await hold("Hold to delete");
   await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith({ data: { scoreIdentities: ["official:2"] } }));
   await waitFor(() => expect(mocks.dashboard).toHaveBeenCalledTimes(2));
 });
@@ -245,16 +246,18 @@ it("keeps the recorded plays by default when a player stops tracking", async () 
   expect(mocks.remove).not.toHaveBeenCalled();
 });
 
-it("lets a top-100 player stop tracking but not pick plays to remove while tracked", async () => {
+it("lets a top-100 player pick plays to remove and stop tracking", async () => {
   mocks.dashboard.mockResolvedValue({
     ...dashboard,
     summary: { ...summary, rankedMember: true, totalScores: 1 },
-    trackedPage: { items: [trackedPlay("official:1")], total: 1, limit: 50, offset: 0 },
+    trackedPage: { items: [trackedPlay("official:1"), trackedPlay("official:2", false)], total: 2, limit: 50, offset: 0 },
   });
   render(panel());
   await screen.findByRole("button", { name: "MSD plays" });
-  expect(screen.queryByRole("button", { name: "select official:1" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Remove all" })).toBeNull();
+  expect(screen.getByRole("button", { name: "select official:1" })).toBeTruthy();
+  // Ranked plays have no remove button; only "Remove all" reaches them.
+  expect(screen.queryByRole("button", { name: "select official:2" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Remove all" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Stop tracking or delete" })).toBeTruthy();
 });
 

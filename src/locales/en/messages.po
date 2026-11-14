@@ -9205,6 +9205,10 @@ msgid "hold to delete"
 msgstr "hold to delete"
 
 #: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to delete"
+msgstr "Hold to delete"
+
+#: src/components/me/RemovePlaysSheet.tsx
 msgid "Hold to delete everything"
 msgstr "Hold to delete everything"
 
@@ -9225,8 +9229,8 @@ msgid "Hold to recycle every duplicate, worth {recyclable} shards"
 msgstr "Hold to recycle every duplicate, worth {recyclable} shards"
 
 #: src/components/me/RemovePlaysSheet.tsx
-msgid "Hold to remove"
-msgstr "Hold to remove"
+#~ msgid "Hold to remove"
+#~ msgstr "Hold to remove"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Hold to stop tracking"
@@ -15969,7 +15973,6 @@ msgstr "Removal failed."
 msgid "remove"
 msgstr "remove"
 
-#: src/components/me/RemovePlaysSheet.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/skins/SkinSettingsModal.tsx
@@ -16130,8 +16133,8 @@ msgid "Removing..."
 msgstr "Removing..."
 
 #: src/components/me/RemovePlaysSheet.tsx
-msgid "Removing…"
-msgstr "Removing…"
+#~ msgid "Removing…"
+#~ msgstr "Removing…"
 
 #: src/components/companella/InstallationList.tsx
 #: src/components/packs/SetsView.tsx
@@ -20604,12 +20607,16 @@ msgid "They're already a GOAT."
 msgstr "They're already a GOAT."
 
 #: src/components/me/RemovePlaysSheet.tsx
+msgid "They're deleted for good from your tracked plays, recent plays and activity on this site."
+msgstr "They're deleted for good from your tracked plays, recent plays and activity on this site."
+
+#: src/components/me/RemovePlaysSheet.tsx
 msgid "They're deleted on {deleteOn}. You can cancel from this page until then."
 msgstr "They're deleted on {deleteOn}. You can cancel from this page until then."
 
 #: src/components/me/RemovePlaysSheet.tsx
-msgid "They're removed from your tracked plays, recent plays and activity on this site."
-msgstr "They're removed from your tracked plays, recent plays and activity on this site."
+#~ msgid "They're removed from your tracked plays, recent plays and activity on this site."
+#~ msgstr "They're removed from your tracked plays, recent plays and activity on this site."
 
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Third pull"

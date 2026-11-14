@@ -9186,6 +9186,10 @@ msgid "hold to delete"
 msgstr "长按删除"
 
 #: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to delete"
+msgstr "按住以删除"
+
+#: src/components/me/RemovePlaysSheet.tsx
 msgid "Hold to delete everything"
 msgstr "按住以删除全部"
 
@@ -9206,8 +9210,8 @@ msgid "Hold to recycle every duplicate, worth {recyclable} shards"
 msgstr "长按回收所有重复卡，价值 {recyclable} 碎片"
 
 #: src/components/me/RemovePlaysSheet.tsx
-msgid "Hold to remove"
-msgstr "按住以移除"
+#~ msgid "Hold to remove"
+#~ msgstr "按住以移除"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Hold to stop tracking"
@@ -15942,7 +15946,6 @@ msgstr "移除失败。"
 msgid "remove"
 msgstr "移除"
 
-#: src/components/me/RemovePlaysSheet.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/skins/SkinSettingsModal.tsx
@@ -16103,8 +16106,8 @@ msgid "Removing..."
 msgstr "正在移除..."
 
 #: src/components/me/RemovePlaysSheet.tsx
-msgid "Removing…"
-msgstr "正在移除…"
+#~ msgid "Removing…"
+#~ msgstr "正在移除…"
 
 #: src/components/companella/InstallationList.tsx
 #: src/components/packs/SetsView.tsx
@@ -20561,12 +20564,16 @@ msgid "They're already a GOAT."
 msgstr "他们已经是 GOAT 了。"
 
 #: src/components/me/RemovePlaysSheet.tsx
+msgid "They're deleted for good from your tracked plays, recent plays and activity on this site."
+msgstr "它们会从本站你的追踪成绩、最近成绩和活动中永久删除。"
+
+#: src/components/me/RemovePlaysSheet.tsx
 msgid "They're deleted on {deleteOn}. You can cancel from this page until then."
 msgstr "将于 {deleteOn} 删除。在此之前可以在本页取消。"
 
 #: src/components/me/RemovePlaysSheet.tsx
-msgid "They're removed from your tracked plays, recent plays and activity on this site."
-msgstr "它们会从本站你的追踪成绩、最近成绩和活动中移除。"
+#~ msgid "They're removed from your tracked plays, recent plays and activity on this site."
+#~ msgstr "它们会从本站你的追踪成绩、最近成绩和活动中移除。"
 
 #: src/components/packs/collections/MarkFilters.tsx
 msgid "Third pull"

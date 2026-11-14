@@ -356,6 +356,7 @@ export function MyDataPanel() {
   }, [viewer?.id]);
 
   const toggleSelectedPlay = useCallback((identity: string, play: MyDataTrackedPlay) => {
+    setRemovalError(null);
     setSelectedPlays((current) => {
       const next = new Map(current);
       if (next.has(identity)) next.delete(identity);
@@ -390,9 +391,8 @@ export function MyDataPanel() {
 
   // "Remove all" ignores the feed filters, so it counts every tracked play.
   const allTrackedCount = Math.max(summary?.totalScores ?? 0, trackedTotal);
-  // Only self-added players: the top 100 is tracked whether it asked or not,
-  // until it stops tracking itself, after which its plays feed nothing.
-  const canRemovePlays = summary?.tracked === true && summary.rankedMember === false;
+  // Once tracking stops, its own card offers removing every play instead.
+  const canRemovePlays = summary?.tracked === true;
   const selfDeletion = summary?.selfDeletion ?? null;
   // Shown in the sheet before anything runs; the backend's own deadline is what the banner shows after.
   // A pending profile deletion that turns into "everything" keeps its deadline;
@@ -793,7 +793,7 @@ export function MyDataPanel() {
                   <div translate="no" className="space-y-1.5">
                     {feed.map((score) => {
                       const key = `${score.beatmap?.id}-${getScoreTimestamp(score)}-${score.pp}`;
-                      const identity = score.scoreIdentity;
+                      const identity = score.removable ? score.scoreIdentity : undefined;
                       return (
                         <MeScoreRow
                           key={key}
@@ -907,16 +907,25 @@ export function MyDataPanel() {
       )}
       {mapDetail ? <MapDetailModal entry={mapDetail.entry} play={mapDetail.play} onClose={() => setMapDetail(null)} /> : null}
       {canRemovePlays && !removalSheet ? (
-        <RemovalPill count={selectedPlays.size} onRemove={() => openRemovalSheet("some")} onClear={() => setSelectedPlays(new Map())} />
+        <RemovalPill
+          count={selectedPlays.size}
+          busy={removalBusy}
+          error={removalError}
+          onConfirm={() => void runRemoval(false)}
+          onClear={() => {
+            setRemovalError(null);
+            setSelectedPlays(new Map());
+          }}
+        />
       ) : null}
       {removalSheet ? (
         <RemovePlaysSheet
           kind={removalSheet}
-          plays={removalSheet === "some" ? [...selectedPlays.values()] : feed.slice(0, 3)}
-          count={removalSheet === "some" ? selectedPlays.size : allTrackedCount}
+          plays={feed.slice(0, 3)}
+          count={allTrackedCount}
           busy={removalBusy}
           error={removalError}
-          onRemove={() => void runRemoval(removalSheet === "all")}
+          onRemove={() => void runRemoval(true)}
           onStopTracking={(removePlays) => void runStopTracking(removePlays)}
           canStopTracking={tracked && !selfDeletion}
           canDeleteProfile={!selfDeletion}
