@@ -34,7 +34,7 @@ import { CountryFlag } from "../ui/CountryFlag";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import { CollectionCardPlaceholder, CollectionCardTile, type CardMint } from "./CardTile";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "./cardThumbnailCache";
-import { useCardThumbnails, warmCardThumbnails } from "./useCardThumbnails";
+import { useCardThumbnails } from "./useCardThumbnails";
 import { playRecycleClink } from "./packSfx";
 import { MarkFilters } from "./collections/MarkFilters";
 import { teamImageProxyUrl } from "#/lib/team-image";
@@ -515,7 +515,7 @@ export function CollectionPanel({
   // placements that come off when only `keep` copies stay
   const offBoard = (cardKey: string, keep: number) => Math.max(0, (onBoard.get(cardKey) ?? 0) - keep);
   // A supporter's own collection reads as their binder: two 3x3 pages a spread.
-  const binder = useSupporterPackStyle(viewer?.id).binder;
+  const binder = useSupporterPackStyle(viewer?.id, { own: true }).binder;
   const collectionPageSize = binder ? BINDER_PAGE_SIZE : COLLECTION_PAGE_SIZE;
   const [editions, setEditions] = useState<Record<string, string[]>>({});
   useEffect(() => {
@@ -1029,6 +1029,11 @@ export function CollectionPanel({
   const pageCards = useServerCollection ? cards : visibleCards.slice(pageStart, pageEnd);
   // Faces for the page, filled in cheapest-source-first.
   const { onThumbnailError: handleThumbnailError } = useCardThumbnails(pageCards);
+  /* The binder's next and previous spreads, their faces made while this one
+     is being read, the ones no store has too: left for the turn, those held
+     it back most of a second on a phone. */
+  const [readAhead, setReadAhead] = useState<CollectedCard[]>([]);
+  useCardThumbnails(readAhead);
   /* The missing list pages on its own index and shares the search box. Its
      last known total keeps the pager on screen while the next page loads,
      the same way the collection's counts do. */
@@ -1216,16 +1221,23 @@ export function CollectionPanel({
      ahead, faces and all: by the time the reader turns, the next page is a
      cache hit and the leaf lands on cards rather than on loading slots. */
   useEffect(() => {
+    // Whatever was read ahead sat next to a page that is no longer on screen.
+    setReadAhead((current) => (current.length ? [] : current));
     if (!binder || !useServerCollection || missingOpen || !activeServerPage) return;
     let cancelled = false;
+    // The next spread first: it is the likelier turn.
     const neighbours = [collectionPage + 1, collectionPage - 1].filter((index) => index >= 0 && index < totalPages);
+    const found = new Map<number, CollectedCard[]>();
+    const publish = () => {
+      if (!cancelled) setReadAhead(neighbours.flatMap((index) => found.get(index) ?? []));
+    };
     const timer = window.setTimeout(() => {
       for (const index of neighbours) {
         const request = { ...serverRequest, page: index };
         const key = serverCollectionCacheKey(request);
         const cached = serverCollectionPageCache.get(key);
         if (cached) {
-          void warmCardThumbnails(cached.cards as CollectedCard[]);
+          found.set(index, cached.cards as CollectedCard[]);
           continue;
         }
         void fetchServerPackCollectionPage({
@@ -1245,10 +1257,12 @@ export function CollectionPanel({
           .then((page) => {
             if (cancelled || !page) return;
             serverCollectionPageCache.set(key, page);
-            void warmCardThumbnails(page.cards as CollectedCard[]);
+            found.set(index, page.cards as CollectedCard[]);
+            publish();
           })
           .catch(() => {});
       }
+      if (found.size > 0) publish();
     }, 250);
     return () => {
       cancelled = true;
@@ -1374,6 +1388,14 @@ export function CollectionPanel({
             <Trans>shards</Trans>
           </span>
           {recyclable > 0 && !selecting && !missingOpen && (
+            <span className="relative inline-flex">
+            {/* How many leave the board, as a note over the button: inside it,
+                the longer text widened the button and re-wrapped the row. */}
+            {recycleAllHint && duplicatesOffBoard > 0 && (
+              <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-1.5 whitespace-nowrap rounded-md border border-osu-b3/60 bg-osu-b5 px-2 py-1 text-[11px] font-semibold text-osu-l2 shadow-lg">
+                {plural(duplicatesOffBoard, { one: "# comes off the board", other: "# come off the board" })}
+              </span>
+            )}
             <button
               ref={recycleAllButtonRef}
               type="button"
@@ -1427,14 +1449,11 @@ export function CollectionPanel({
                   <Trans>Recycle duplicates +{recyclable}</Trans>
                 </span>
                 <span className="col-start-1 row-start-1">
-                  {recycleAllHint
-                    ? duplicatesOffBoard > 0
-                      ? t`hold to recycle (${plural(duplicatesOffBoard, { one: "# comes off the board", other: "# come off the board" })})`
-                      : t`hold to recycle`
-                    : t`Recycle duplicates +${recyclable}`}
+                  {recycleAllHint ? t`hold to recycle` : t`Recycle duplicates +${recyclable}`}
                 </span>
               </span>
             </button>
+            </span>
           )}
           {/* Selecting and recycling act on held cards; the missing list has
               none, so both controls step aside while it is open. */}

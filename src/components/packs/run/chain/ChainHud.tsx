@@ -143,19 +143,18 @@ function Objective({
   banked: boolean;
   reducedMotion: boolean;
   stamp: (on: ChainWysiField) => React.ReactNode;
-  lineWidth: number;
+  /* Null on a phone: the line is drawn under the bar's first row at the
+     screen's full width, and the numbers sit at the left of that row. */
+  lineWidth: number | null;
 }) {
-  const end = star ?? target;
-  const share = end > 0 ? Math.min(1, meterScore / end) : 0;
-  const ghostShare = end > 0 ? Math.min(1, Math.max(meterScore, ghost) / end) : 0;
-  const adds = Math.max(0, ghost - meterScore);
+  const split = lineWidth === null;
   return (
-    <div className="flex flex-col items-center">
+    <div className={`flex flex-col ${split ? "items-start" : "items-center"}`}>
       <div className="relative font-black uppercase leading-none text-[#f3e9d8]/60" style={{ fontSize: narrow ? 10 : 12, letterSpacing: "0.3em" }}>
         {chainIsEndless(round) ? <Trans>Endless round {round}</Trans> : <Trans>Round {round}</Trans>}
         {stamp("round")}
       </div>
-      <div className={`flex items-baseline justify-center ${narrow ? "mt-1 gap-2" : "mt-1 gap-3"}`}>
+      <div className={`flex items-baseline ${split ? "justify-start" : "justify-center"} ${narrow ? "mt-1 gap-2" : "mt-1 gap-3"}`}>
         <div className="relative">
           <ScoreBox score={score} room={narrow ? 150 : 320} max={narrow ? 34 : 72} reducedMotion={reducedMotion} banked={banked} />
           {stamp("roundScore")}
@@ -168,20 +167,33 @@ function Objective({
           {stamp("target")}
         </div>
       </div>
-      <div className={narrow ? "mt-2" : "mt-3"}>
-        <ObjectiveLine
-          width={lineWidth}
-          share={share}
-          ghostShare={ghostShare}
-          passed={meterScore >= target && target > 0}
-          ghostLabel={adds > 0 ? `+${formatChainScore(adds)}` : null}
-          targetAt={end > 0 ? target / end : 1}
-          star={star !== null ? { ink: CHAIN_SCENE_INK.forgotten, lit: meterScore <= star } : null}
-          flash={flash}
-          meterProps={{ "data-chain-meter": "" }}
-        />
-      </div>
+      {lineWidth !== null && (
+        <div className={narrow ? "mt-2" : "mt-3"}>
+          <ObjectiveMeter width={lineWidth} meterScore={meterScore} ghost={ghost} target={target} star={star} flash={flash} />
+        </div>
+      )}
     </div>
+  );
+}
+
+/* The line from nothing to the target, filled to the score. */
+function ObjectiveMeter({ width, meterScore, ghost, target, star, flash }: { width: number; meterScore: number; ghost: number; target: number; star: number | null; flash: number }) {
+  const end = star ?? target;
+  const share = end > 0 ? Math.min(1, meterScore / end) : 0;
+  const ghostShare = end > 0 ? Math.min(1, Math.max(meterScore, ghost) / end) : 0;
+  const adds = Math.max(0, ghost - meterScore);
+  return (
+    <ObjectiveLine
+      width={width}
+      share={share}
+      ghostShare={ghostShare}
+      passed={meterScore >= target && target > 0}
+      ghostLabel={adds > 0 ? `+${formatChainScore(adds)}` : null}
+      targetAt={end > 0 ? target / end : 1}
+      star={star !== null ? { ink: CHAIN_SCENE_INK.forgotten, lit: meterScore <= star } : null}
+      flash={flash}
+      meterProps={{ "data-chain-meter": "" }}
+    />
   );
 }
 
@@ -219,6 +231,8 @@ export interface ChainTopBarProps {
   roundChart?: ChainCard | null;
   /* The daily run: a tag says so. */
   daily?: boolean;
+  /* A phone's shop: its title, carried in the bar beside the music button. */
+  title?: string | null;
   /* Opens how to play. */
   onHelp?: () => void;
   /* Signed in: switches between the player's own run and the daily run
@@ -322,7 +336,7 @@ function MusicToggle() {
    rings), the score bridge to the target (the flame lives under it), and
    the run's shards. */
 export function ChainTopBar(props: ChainTopBarProps) {
-  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false, roundChart = null, daily = false, onHelp, onSwitchMode, inDaily = false, onEndRun } = props;
+  const { deck, narrow, round, target, roundScore, meterScore, ghostScore, crossFlash, star, shards, showRound, showMeter, reducedMotion, onExit, scenes, wysi, scoreBanked = false, roundChart = null, daily = false, title = null, onHelp, onSwitchMode, inDaily = false, onEndRun } = props;
   const { t } = useLingui();
   const shownShards = useTicker(shards, reducedMotion);
   const stamp = (on: ChainWysiField) => (wysi?.on.includes(on) ? <WysiStamp key={`wysi-${wysi.id}-${on}`} reducedMotion={reducedMotion} /> : null);
@@ -370,7 +384,7 @@ export function ChainTopBar(props: ChainTopBarProps) {
       {stamp("shards")}
     </div>
   );
-  const objective = (lineWidth: number) => (
+  const objective = (lineWidth: number | null) => (
     <Objective
       narrow={narrow}
       round={round}
@@ -406,7 +420,7 @@ export function ChainTopBar(props: ChainTopBarProps) {
     return (
       <div className="relative z-[3] flex flex-col gap-1 px-3 pb-1 pt-3">
         <div className="flex items-start gap-2">
-          {showMeter ? <div className="min-w-0 flex-1">{objective(Math.max(160, window.innerWidth - 24 - 120))}</div> : where}
+          {showMeter ? <div className="min-w-0 flex-1">{objective(null)}</div> : where}
           <span className="ml-auto" />
           {shardsBox}
           {switchMode}
@@ -414,8 +428,21 @@ export function ChainTopBar(props: ChainTopBarProps) {
           {endRun}
           {exit}
         </div>
+        {/* The line has the screen's width to itself: beside the buttons it
+            was wider than the room left for it and ran off the left edge.
+            The room under it is for the gain it hangs there. */}
+        {showMeter && (
+          <div className="mt-1 pb-4">
+            <ObjectiveMeter width={Math.max(160, window.innerWidth - 40)} meterScore={meterScore} ghost={ghostScore} target={target} star={star} flash={crossFlash} />
+          </div>
+        )}
         <div className="flex items-center gap-3">
           {music}
+          {title && (
+            <div className="whitespace-nowrap leading-none text-[#f3e9d8]" style={{ fontFamily: MARKER, fontSize: 24 }}>
+              {title}
+            </div>
+          )}
           {daily && dailyTag}
           {roundChart && showMeter && <RoundChartTag chart={roundChart} compact />}
           <span className="ml-auto" />
@@ -547,18 +574,17 @@ function SceneItem({
           )}
         </div>
       )}
+      {/* A phone's bar keeps the medallion and its Sell, the rule a tap away:
+          two cut-off lines of it under each one pushed the shop down the screen. */}
       {compact && onSell && (
-        <>
-          <div className="line-clamp-2 w-[92px] text-center text-[11px] leading-tight text-osu-f1">{i18n._(CHAIN_SCENE_COPY[scene.id].short)}</div>
-          <button
-            type="button"
-            disabled={sellDisabled}
-            onClick={() => onSell(scene.id)}
-            className="rounded-full bg-white/10 px-1.5 py-0.5 text-[11px] font-bold text-white disabled:opacity-40"
-          >
-            <Trans>Sell</Trans> <Shards value={CHAIN_RULES.sceneSell} sign />
-          </button>
-        </>
+        <button
+          type="button"
+          disabled={sellDisabled}
+          onClick={() => onSell(scene.id)}
+          className="whitespace-nowrap rounded-full bg-white/10 px-1.5 py-0.5 text-[11px] font-bold text-white disabled:opacity-40"
+        >
+          <Trans>Sell</Trans> <Shards value={CHAIN_RULES.sceneSell} sign />
+        </button>
       )}
     </motion.div>
   );

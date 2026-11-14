@@ -250,6 +250,8 @@ export interface ChainShopProps {
   reducedMotion: boolean;
   act: (action: ChainAction) => Promise<ShopActResult>;
   shake: (amount: number) => void;
+  /* Whether the table's title sits over the stock (a phone carries it in the bar when it fits). */
+  titled?: boolean;
 }
 
 /* The shop between rounds, shaped around buying: the three packs and the
@@ -257,7 +259,7 @@ export interface ChainShopProps {
    removing a card and a reroll beside them; Play round N to leave. A buy that
    goes through thumps the table and the price rises off the shard count; a
    refused one shakes the button and says why. */
-export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, shake, enterDelayMs = 0 }: ChainShopProps) {
+export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, shake, enterDelayMs = 0, titled = true }: ChainShopProps) {
   const lead = enterDelayMs / 1000;
   const { i18n, t } = useLingui();
   /* The charms and mods in the table's bottom-left corner sit over the
@@ -377,7 +379,7 @@ export function ChainShop({ view, layout, busy, packThumbs, reducedMotion, act, 
           it. */}
       <div
         className="absolute inset-x-0 bottom-0 overflow-y-auto overscroll-contain [mask-image:linear-gradient(to_bottom,transparent,black_14px)]"
-        style={{ top: narrow ? 40 : SHOP_TOP }}
+        style={{ top: narrow ? (titled ? 40 : 0) : SHOP_TOP }}
       >
         <motion.div
           className="absolute inset-x-0 flex flex-col items-center"

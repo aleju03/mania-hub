@@ -130,7 +130,9 @@ function Rail() {
   const item = "flex items-center rounded-lg px-2.5 py-2 text-[13.5px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4/60 hover:text-white";
   const heading = "px-2.5 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-osu-f1";
   return (
-    <nav className="scrollbar-hide max-md:-mx-1 max-md:flex max-md:gap-1 max-md:overflow-x-auto md:sticky md:top-[76px] md:self-start">
+    // On a phone it is one scrolling row: nothing shrinks or wraps, or one
+    // squeezed label goes to three lines and every tab stretches to its height.
+    <nav className="scrollbar-hide max-md:-mx-1 max-md:flex max-md:items-center max-md:gap-1 max-md:overflow-x-auto max-md:whitespace-nowrap max-md:[&>*]:shrink-0 md:sticky md:top-[76px] md:self-start">
       <Link to="/workshop" className={`${item} bg-osu-b4 text-white`}>{t`Featured`}</Link>
       <Link to="/workshop/frames" hash="shared" className={item}>{t`Frames`}</Link>
       <Link to="/workshop/themes/gallery" className={item}>{t`Themes`}</Link>

@@ -77,7 +77,10 @@ export const Route = createFileRoute("/packs_/collections")({
     /* An osu! username or id. Trimmed and length-capped here so the value that
        reaches the backend (which looks it up in two tables) is already the
        shape a name has; anything longer was not a name. */
-    const collector = typeof search.collector === "string" ? search.collector.trim().slice(0, 60) : "";
+    // A bare id in a typed URL is read as a number: taken as its text, or the
+    // page gets the number itself and breaks on it.
+    const rawCollector = typeof search.collector === "number" && Number.isFinite(search.collector) ? String(search.collector) : search.collector;
+    const collector = typeof rawCollector === "string" ? rawCollector.trim().slice(0, 60) : "";
     const tab = TABS.find((item) => item.id === search.tab)?.id;
     /* A spot on the card board, "x,y" in card widths and an optional zoom in
        percent, from a shared link. */

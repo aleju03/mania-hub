@@ -1575,6 +1575,10 @@ msgstr "{dtBadges} scores have their own board, and so do {htBadges}. Every othe
 msgid "{dupeCount, plural, one {duplicate} other {duplicates}}"
 msgstr "{dupeCount, plural, one {duplicate} other {duplicates}}"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "{duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}}"
+msgstr "{duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}}"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{error}. Press Enter or click to try replay #{scoreId}."
 msgstr "{error}. Press Enter or click to try replay #{scoreId}."
@@ -12448,8 +12452,8 @@ msgid "hold to recycle"
 msgstr "hold to recycle"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "hold to recycle ({duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}})"
-msgstr "hold to recycle ({duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}})"
+#~ msgid "hold to recycle ({duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}})"
+#~ msgstr "hold to recycle ({duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}})"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Hold to recycle every duplicate, worth {recyclable} shards"

@@ -1142,6 +1142,7 @@ export function ChainTable(props: ChainTableProps) {
   }, [play, shown, signal]);
 
   const stagePack = stageView?.phase === "pack" && pack ? pack : null;
+  const shopTitled = !(stagePack && shown) && !(needsRoundPack && shown) && view?.phase === "shop" && !play && !overNow;
   const surfaceTitle =
     stagePack && shown
       ? stagePack.reason === "round"
@@ -1149,9 +1150,14 @@ export function ChainTable(props: ChainTableProps) {
         : chainPackName(stagePack, shown.round, i18n)
       : needsRoundPack && shown
         ? chainPackName({ reason: "round" }, shown.round, i18n)
-        : view?.phase === "shop" && !play && !overNow
+        : shopTitled
           ? t`Shop`
           : null;
+  /* On a phone the shop's title rides in the bar, beside the music button,
+     and the stock starts right under the bar. That row also holds the scene
+     cards and the daily tag: with three cards, or two and the tag, it has no
+     room left, and the title goes back over the stock. */
+  const shopTitleInBar = Boolean(narrow && shopTitled && (shown?.scenes.length ?? 0) <= (daily ? 1 : 2));
   const showBoard = Boolean(shown && (shown.phase === "play" || play));
   const actionsVisible = Boolean(showBoard && !play && !needsRoundPack && !aftermath && !leaving && !failedRow && layout);
 
@@ -1225,6 +1231,7 @@ export function ChainTable(props: ChainTableProps) {
             onEndRun={shown && shown.phase !== "over" && !play && !overNow ? () => void doAct({ kind: "abandon" }) : undefined}
             onSwitchMode={onMode && !guest && !play ? () => onMode(daily ? "normal" : "daily") : undefined}
             inDaily={daily}
+            title={shopTitleInBar ? surfaceTitle : null}
             deck={
               narrow && shown && !overNow ? (
                 <HudDeck count={shown.phase === "play" ? shown.drawPileCount : shown.deck.length} backUrl={backUrl} />
@@ -1360,7 +1367,7 @@ export function ChainTable(props: ChainTableProps) {
             {/* One title at a time across the table's surfaces: the old one
                 leaves before the next comes in. */}
             <AnimatePresence mode="wait">
-              {layout && surfaceTitle && (
+              {layout && surfaceTitle && !shopTitleInBar && (
                 <motion.div
                   key={surfaceTitle}
                   className="pointer-events-none absolute inset-x-0 z-[30] text-center"
@@ -1390,6 +1397,7 @@ export function ChainTable(props: ChainTableProps) {
                 act={shopAct}
                 shake={shake}
                 enterDelayMs={stagePack ? 300 : 0}
+                titled={!shopTitleInBar}
               />
             )}
 

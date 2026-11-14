@@ -115,21 +115,3 @@ export function useCardThumbnails(cards: CollectedCard[]): {
 
   return { onThumbnailError };
 }
-
-/* Readies the faces of a page nobody is looking at yet (the binder's next
-   and previous spreads), from the stores that cost nothing to read: this
-   browser's persisted faces, then the shared R2 renders, pulled into the
-   browser's cache. A card no store has is left for its tile to mint. */
-export async function warmCardThumbnails(cards: CollectedCard[]): Promise<void> {
-  const missing = cards
-    .map((card) => (card.skills ? cardThumbnailKeyForCollectionCard(card) : null))
-    .filter((key): key is string => Boolean(key && !getMemoryCardThumbnail(key)));
-  if (missing.length === 0) return;
-  const remote: string[] = [];
-  await Promise.all(missing.map(async (key) => {
-    if (!(await loadPersistedCardThumbnail(key))) remote.push(key);
-  }));
-  if (remote.length === 0) return;
-  const urls = await loadR2CardThumbnails(remote);
-  for (const url of Object.values(urls)) preloadRemoteCardThumbnail(url);
-}

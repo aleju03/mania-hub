@@ -577,7 +577,7 @@ function PacksPage() {
      another, and the pack keeps the tear people came for. */
   const auth = useAuth();
   // The viewer's own packs cosmetics: the case their cards land in and their pack wrapper.
-  const viewerPackStyle = useSupporterPackStyle(auth.viewer?.id);
+  const viewerPackStyle = useSupporterPackStyle(auth.viewer?.id, { own: true });
   const { view, album: openAlbumCode } = Route.useSearch();
   /* Local first, URL second: mounting the game must land in the click's own
      render. Waiting for the router to rematch the whole packs route let idle

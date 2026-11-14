@@ -1564,6 +1564,10 @@ msgstr "{dtBadges} 的成绩单独排榜，{htBadges} 也是。其他所有模�
 msgid "{dupeCount, plural, one {duplicate} other {duplicates}}"
 msgstr "{dupeCount, plural, other {重复}}"
 
+#: src/components/packs/CollectionPanel.tsx
+msgid "{duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}}"
+msgstr "{duplicatesOffBoard, plural, other {# 张离开展板}}"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{error}. Press Enter or click to try replay #{scoreId}."
 msgstr "{error}。按回车或点击重试回放 #{scoreId}。"
@@ -12429,8 +12433,8 @@ msgid "hold to recycle"
 msgstr "长按回收"
 
 #: src/components/packs/CollectionPanel.tsx
-msgid "hold to recycle ({duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}})"
-msgstr "按住回收（{duplicatesOffBoard, plural, other {# 张离开展板}}）"
+#~ msgid "hold to recycle ({duplicatesOffBoard, plural, one {# comes off the board} other {# come off the board}})"
+#~ msgstr "按住回收（{duplicatesOffBoard, plural, other {# 张离开展板}}）"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Hold to recycle every duplicate, worth {recyclable} shards"
