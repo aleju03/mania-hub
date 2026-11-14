@@ -16,7 +16,8 @@ import { BinderBook, FoilCard, FrameThumb, SleeveCard, wrapperThumb } from "./Lo
 import { BladeSwatch } from "../packs/BladeSwatch";
 import { playBladeRip, warmBladeSounds } from "../packs/packSfx";
 import { bladeLook } from "../packs/packBlades";
-import { FRAME_NAMES } from "./loadout";
+import type { MessageDescriptor } from "@lingui/core";
+import { FRAME_GROUPS, FRAME_NAMES, type FrameEntry } from "./loadout";
 import { formatGiftCode } from "./GiftCodePanel";
 import { Stagger, StaggerItem, useLowEndDevice, useNearView } from "./SupportMotion";
 import { useAuth } from "../../lib/auth-context";
@@ -297,14 +298,45 @@ export function ThemesShowcase() {
 
 /* --- Avatar frames ------------------------------------------------------------ */
 
-/* Hand-picked, a page of eight at a time, the strongest first. One of each
-   set (wings, LN holds, dan skips), so a page never shows the same idea twice. */
-const SHOWN_FRAME_PAGES: SupporterAvatarFrameId[][] = [
+/* Every frame, a page of eight at a time. A set (wings in three layers, LN
+   holds, dan skips) is one tile with its variants as chips under it, as in the
+   picker. The first pages are hand-picked, the strongest first and never the
+   same idea twice; the rest follow in the picker's order. */
+const PICKED_FRAME_PAGES: SupporterAvatarFrameId[][] = [
   ["crown", "spell-card", "crt-monitor", "wings-pink-3", "sakura", "ssr-card", "paint-canvas", "hakurei-torii"],
   ["term-window", "wash-ring", "step-pad", "light-wings-3", "autumn-maple", "ln-hold-9", "reimu-ribbon", "old-photo"],
   ["scratch-deck", "zenith-orbit", "time-stop-knives", "rail-pass", "wings-gold-3", "knob-lasers", "margin-doodles", "scarlet-moon"],
   ["winter-pine", "five-star-pull", "dan-skip-5-gamma", "delta-crest", "wings-feather-3", "ice-fairy", "aero-window", "witch-hat"],
 ];
+
+interface FrameTile {
+  key: string;
+  label: MessageDescriptor;
+  variants: { id: SupporterAvatarFrameId; label: string }[];
+  /* The variant the tile opens on. */
+  start: number;
+}
+
+const SHOWN_FRAME_PAGES: FrameTile[][] = (() => {
+  const entries = FRAME_GROUPS.flatMap((group) => group.entries);
+  const ids = (entry: FrameEntry) => ("id" in entry ? [entry.id] : entry.variants.map((variant) => variant.id));
+  const used = new Set<FrameEntry>();
+  const tile = (entry: FrameEntry, picked?: SupporterAvatarFrameId): FrameTile =>
+    "id" in entry
+      ? { key: entry.id, label: entry.label, variants: [{ id: entry.id, label: "" }], start: 0 }
+      : { key: entry.set, label: entry.label, variants: entry.variants, start: Math.max(0, picked ? ids(entry).indexOf(picked) : entry.shown) };
+  const pages = PICKED_FRAME_PAGES.map((page) =>
+    page.flatMap((frame) => {
+      const entry = entries.find((candidate) => ids(candidate).includes(frame));
+      if (!entry || used.has(entry)) return [];
+      used.add(entry);
+      return [tile(entry, frame)];
+    }),
+  );
+  const rest = entries.filter((entry) => !used.has(entry)).map((entry) => tile(entry));
+  for (let at = 0; at < rest.length; at += 8) pages.push(rest.slice(at, at + 8));
+  return pages;
+})();
 
 /* Eight frame videos at once are a lot for a weak machine: there only the one
    under the pointer plays. */
@@ -313,8 +345,10 @@ export function FramesShowcase() {
   const you = useShowcaseViewer();
   const [ref, near] = useNearView<HTMLDivElement>();
   const lowEnd = useLowEndDevice();
-  const [hovered, setHovered] = useState<SupporterAvatarFrameId | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  /* The variant picked on a set's tile, by tile key. */
+  const [variant, setVariant] = useState<Record<string, number>>({});
   const pages = SHOWN_FRAME_PAGES.length;
   const turn = (by: number) => {
     setHovered(null);
@@ -322,15 +356,32 @@ export function FramesShowcase() {
   };
   return (
     <div ref={ref}>
-      <Stagger key={page} className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-4">
-        {SHOWN_FRAME_PAGES[page].map((frame) => {
-          const name = FRAME_NAMES.get(frame);
+      {/* Every tile and the grid itself keep one height (room for two rows of
+          chips, and for eight tiles on a short last page), so the page buttons
+          never move under the pointer. */}
+      <Stagger key={page} className="grid min-h-[776px] grid-cols-2 content-start gap-x-3 gap-y-4 sm:min-h-[380px] sm:grid-cols-4">
+        {SHOWN_FRAME_PAGES[page].map((entry) => {
+          const at = variant[entry.key] ?? entry.start;
+          const frame = entry.variants[at].id;
           return (
-            <StaggerItem key={frame} className="flex flex-col items-center" onPointerEnter={() => setHovered(frame)} onPointerLeave={() => setHovered(null)}>
-              <FrameThumb frame={frame} avatar={you.avatar} size={118} live={near && (!lowEnd || hovered === frame)} />
-              <div className="mt-1 text-center text-[11px] text-osu-f1">
-                {name ? `${i18n._(name.label)}${name.variant ? ` ${name.variant}` : ""}` : frame}
-              </div>
+            <StaggerItem key={entry.key} className="flex h-[182px] flex-col items-center" onPointerEnter={() => setHovered(entry.key)} onPointerLeave={() => setHovered(null)}>
+              <FrameThumb frame={frame} avatar={you.avatar} size={118} live={near && (!lowEnd || hovered === entry.key)} />
+              <div className="mt-1 text-center text-[11px] text-osu-f1">{i18n._(entry.label)}</div>
+              {entry.variants.length > 1 && (
+                <div className="mt-1 flex flex-wrap justify-center gap-1">
+                  {entry.variants.map((option, index) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      aria-pressed={index === at}
+                      onClick={() => setVariant((current) => ({ ...current, [entry.key]: index }))}
+                      className={`min-w-5 cursor-pointer rounded px-1 text-[10px] leading-4 tabular-nums transition ${index === at ? "bg-osu-l2 text-osu-b6" : "bg-osu-b4 text-osu-f1 hover:text-white"}`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </StaggerItem>
           );
         })}
@@ -363,13 +414,13 @@ function PageButton({ direction, label, onClick }: { direction: 1 | -1; label: s
 /* --- Names --------------------------------------------------------------------- */
 
 const SHOWN_NAMES: [SupporterNameStyleId, SupporterNameFontId | null][] = [
-  ["holo", null],
+  ["inferno", null],
+  ["holo", "unbounded"],
   ["neon", "monoton"],
-  ["glitch", "rubikglitch"],
-  ["molten-gold", "cinzel"],
-  ["pixel", "silkscreen"],
-  ["note-rain", "bungee"],
-  ["ink", "marker"],
+  ["aero", "fredoka"],
+  ["sticker", "luckiest"],
+  ["long-note", "russo"],
+  ["terminal", "monocraft"],
 ];
 
 /* Each shader name is its own WebGL context; on a weak machine the rows keep
@@ -855,7 +906,7 @@ function GiftTicketFlat() {
         <div className="gift-ticket-glint absolute inset-y-0 -left-1/2 w-1/3 bg-gradient-to-r from-transparent via-white/35 to-transparent" />
         <div className="relative">
           <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/80">
-            <img src="/images/icons/supporter-heart.svg" alt="" className="h-4 w-4 brightness-0 invert" />
+            <img src="/images/icons/supporter-gem.svg" alt="" className="h-4 w-4 brightness-0 invert" />
             {t`Gift`}
           </div>
           <div className="mt-1 text-[20px] font-black leading-tight sm:text-[22px]">{t`One week of supporter`}</div>

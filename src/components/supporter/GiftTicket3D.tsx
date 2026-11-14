@@ -344,7 +344,7 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
         paint();
         paintBack();
       };
-      image.src = "/images/icons/supporter-heart.svg";
+      image.src = "/images/icons/supporter-gem.svg";
       void document.fonts.ready.then(() => {
         if (disposed) return;
         paint();

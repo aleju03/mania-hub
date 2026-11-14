@@ -141,6 +141,19 @@ export const UPDATES: ChangelogUpdate[] = [
   { date: "2026-11-09", text: "There's a new Main keymode setting that picks the keymode your Skills tab opens on.", kind: "new" },
   { date: "2026-11-09", text: "There's a new Skill ratings visible to setting, to show your skill ratings to everyone, only you or nobody.", kind: "new", image: { src: "/images/changelog/2026-11-09-skill-ratings-visible-to.webp", alt: "The Skill ratings visible to setting", width: 400, height: 151 } },
   { date: "2026-11-09", text: "Settings has UI scaling for the size of text and controls across the site.", kind: "new", image: { src: "/images/changelog/2026-11-09-ui-scaling.webp", alt: "The UI scaling setting", width: 400, height: 110 } },
+  {
+    date: "2026-11-09",
+    text: "In replays, the Per-finger stats overlay has a Vertical layout.",
+    kind: "new",
+    to: "/replay",
+    image: { src: "/images/changelog/2026-11-09-replay-per-finger-vertical.webp", alt: "Per-finger stats shown as a vertical column, with Vertical ticked in its menu", width: 261, height: 420 },
+    more: [
+      {
+        text: "Keypresses has Split hands, to move each hand on its own.",
+        image: { src: "/images/changelog/2026-11-09-replay-keypresses-split-hands.webp", alt: "Split hands in the Keypresses menu, and the two hands placed apart", width: 586, height: 256 },
+      },
+    ],
+  },
   { date: "2026-11-09", text: "Redesigned map cards. They show what the chart is made of and its top three patterns, and MSD is now called Rating.", kind: "change", to: "/maps", image: { src: "/images/changelog/2026-11-09-map-cards.webp", alt: "Three map cards", width: 640, height: 122 } },
   { date: "2026-11-09", text: "The site font is now Tracker Round, a rounded font made for the site.", kind: "change" },
   { date: "2026-11-09", text: "Fixed the chart preview on map cards blocking scrolling on phones.", to: "/maps" },

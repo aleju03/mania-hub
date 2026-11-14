@@ -2843,8 +2843,12 @@ msgstr "每月 $4"
 #~ msgstr "每月 $4，段位燃起火焰，还有额外的兑换码。"
 
 #: src/routes/support.tsx
-msgid "$4 buys a month of supporter, and every tip adds more time."
-msgstr "$4 可购买一个月的支持者时长，每次打赏都会累加时间。"
+msgid "$4 buys a month of supporter, and every payment adds more time."
+msgstr "$4 可购买一个月的支持者时长，每次付款都会累加时间。"
+
+#: src/routes/support.tsx
+#~ msgid "$4 buys a month of supporter, and every tip adds more time."
+#~ msgstr "$4 可购买一个月的支持者时长，每次打赏都会累加时间。"
 
 #: src/routes/support.tsx
 msgid "$4 is a month"
@@ -4643,8 +4647,12 @@ msgstr "任意金额都按天折算，并累加到你剩余的时长上：$4 等
 #~ msgstr "任何金额都按天计算，并叠加到你的剩余时间上。"
 
 #: src/routes/support.tsx
-msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
-msgstr "任何金额都可以，按天折算。每次打赏都会加到你剩余的时长上。"
+msgid "Any amount works and is counted to the day. Every payment adds to the time you have left."
+msgstr "任何金额都可以，按天折算。每次付款都会加到你剩余的时长上。"
+
+#: src/routes/support.tsx
+#~ msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
+#~ msgstr "任何金额都可以，按天折算。每次打赏都会加到你剩余的时长上。"
 
 #: src/components/supporter/SupportPlans.tsx
 #~ msgid "Any amount. $4 is a month, $40 a full year."
@@ -5577,6 +5585,10 @@ msgstr "黑光"
 msgid "Blend"
 msgstr "混合"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Blinking cursor"
+msgstr "光标闪烁"
+
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
 msgstr "闪电战"
@@ -5970,6 +5982,7 @@ msgstr "暂时无法连接机器人，请稍后刷新。"
 #: src/components/supporter/CustomThemeCredit.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/report.tsx
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Cancel"
 msgstr "取消"
@@ -8699,11 +8712,14 @@ msgstr "延迟"
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/WorkshopFrames.tsx
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Delete"
 msgstr "删除"
 
 #. placeholder {0}: deleting.name
+#. placeholder {0}: summary.name
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Delete {0}?"
 msgstr "要删除「{0}」吗？"
@@ -8765,6 +8781,7 @@ msgstr "删除皮肤"
 msgid "Delete this imported play? Its replay is removed and the preview is recalculated."
 msgstr "删除这条导入的成绩？它的回放会被移除，预览会重新计算。"
 
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Delete this theme?"
 msgstr "删除这个主题？"
@@ -9595,6 +9612,7 @@ msgstr "回声"
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/communities_.$id.tsx
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Edit"
 msgstr "编辑"
@@ -9855,8 +9873,12 @@ msgstr "所有 +连击 减半。"
 #~ msgstr "你每支持 $3（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。"
 
 #: src/routes/support.tsx
-msgid "Every $4 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
-msgstr "你每支持 $4（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。按月订阅每满三个月还会额外送一个兑换码。"
+#~ msgid "Every $4 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
+#~ msgstr "你每支持 $4（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。按月订阅每满三个月还会额外送一个兑换码。"
+
+#: src/routes/support.tsx
+msgid "Every $4 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. You hold one code at a time, and the next shows up once it is used. A monthly subscription earns an extra code every third month, and the same friend can be gifted again after three months."
+msgstr "你每支持 $4（一次付清或分多次都算），就能获得一个一次性兑换码，可送给别人一周的支持者身份。你一次只持有一个兑换码，用掉后才会出现下一个。按月订阅每满三个月还会额外送一个兑换码，同一位朋友三个月后可以再次获赠。"
 
 #: src/routes/support.tsx
 #~ msgid "Every $5 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
@@ -13112,6 +13134,7 @@ msgstr "你使用时会显示在你的主页上，不会进入画廊。"
 msgid "It leaves your list and your profile."
 msgstr "它会从你的列表和个人资料中移除。"
 
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "It leaves your list, your profile and the gallery. Anyone already using it keeps it."
 msgstr "它会从你的列表、主页和画廊中移除。已在使用的人会保留它。"
@@ -30711,6 +30734,14 @@ msgstr "你答对了 {streak} 题，创下新纪录。"
 msgid "You got {streak} right."
 msgstr "你答对了 {streak} 题。"
 
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "You had a supporter week from a gift not long ago. You can be gifted again on {again}."
+msgstr "你不久前已经领取过赠送的支持者周。{again} 起可以再次获赠。"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "You had a supporter week from a gift not long ago. You can be gifted again three months after it."
+msgstr "你不久前已经领取过赠送的支持者周。领取满三个月后可以再次获赠。"
+
 #. placeholder {0}: STAKE_NUMBERS.fewerSlots
 #: src/lib/pack-run.ts
 msgid "You have {0} charm slot fewer."
@@ -30899,8 +30930,8 @@ msgid "You're strongest in <0>{0}</0>"
 msgstr "你最强的是 <0>{0}</0>"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "You've already had a supporter week from a gift."
-msgstr "你已经领取过一次赠送的支持者周。"
+#~ msgid "You've already had a supporter week from a gift."
+#~ msgstr "你已经领取过一次赠送的支持者周。"
 
 #: src/lib/chain-run.ts
 msgid "You've played today's daily run. A new one starts at midnight UTC."

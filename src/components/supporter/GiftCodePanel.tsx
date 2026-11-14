@@ -70,14 +70,18 @@ export function GiftCodePanel({ viewerId }: { viewerId: number }) {
   );
 }
 
-export function useGiftClaimErrorText(): Record<GiftClaimError, string> {
-  const { t } = useLingui();
+/* againAt: when an account gifted in the last three months can be gifted again. */
+export function useGiftClaimErrorText(againAt: number | null = null): Record<GiftClaimError, string> {
+  const { t, i18n } = useLingui();
+  const again = againAt ? new Date(againAt).toLocaleDateString(i18n.locale, { month: "short", day: "numeric", year: "numeric" }) : null;
   return {
     invalid_code: t`This gift code doesn't exist.`,
     already_claimed: t`Someone already claimed this gift.`,
     own_code: t`This is your own gift code. Send the link to a friend.`,
     already_supporter: t`You're already a supporter, so this one is better off with a friend.`,
-    trial_used: t`You've already had a supporter week from a gift.`,
+    trial_used: again
+      ? t`You had a supporter week from a gift not long ago. You can be gifted again on ${again}.`
+      : t`You had a supporter week from a gift not long ago. You can be gifted again three months after it.`,
     signed_out: t`Log in with osu! to claim it.`,
     failed: t`Could not claim it. Try again in a moment.`,
   };
@@ -87,7 +91,8 @@ export function useGiftClaimErrorText(): Record<GiftClaimError, string> {
    /supporter. A claim plays the welcome and hands the page back to reload. */
 export function RedeemGiftCode({ viewerId, onClaimed }: { viewerId: number; onClaimed: () => void }) {
   const { t } = useLingui();
-  const errorText = useGiftClaimErrorText();
+  const [againAt, setAgainAt] = useState<number | null>(null);
+  const errorText = useGiftClaimErrorText(againAt);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GiftClaimError | null>(null);
@@ -105,6 +110,7 @@ export function RedeemGiftCode({ viewerId, onClaimed }: { viewerId: number; onCl
         requestSupporterWelcome();
         onClaimed();
       } else {
+        setAgainAt(result.againAt ?? null);
         setError(result.error);
       }
     } catch {

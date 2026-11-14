@@ -7,9 +7,10 @@ stardust, witch-broom, ice-fairy, scarlet-moon, rainbow-crystal-wings, time-stop
   "af magic circle" by Masahiro Kaneko, "3d rotating crystal" by Arslan Ali.
 
 Everything else is drawn for this site: the green hat (witch-hat), the yin-yang orbs, the shrine ribbon, the shrine gate and
-its blossoms, the broom and star bullets, the snowflakes and the knives. The
+its blossoms, the broom and star bullets and the snowflakes. The
 scarlet moon is a Blender model built and rendered for this site (its seas and craters come from
-noise, not from a photo), and its bats are drawn here.
+noise, not from a photo), and its bats are drawn here. The knives, clock bezel and second hand of
+time-stop-knives are Blender models built and rendered for this site.
 
 None of them uses art from the official Touhou Project games.
 

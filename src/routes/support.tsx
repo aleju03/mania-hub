@@ -196,13 +196,13 @@ function SupportPage() {
   const heroRef = useRef<HTMLDivElement>(null);
   const steps = [
     { title: t`Pick how to pay`, body: t`Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account.` },
-    { title: t`$4 is a month`, body: t`Any amount works and is counted to the day. Every tip adds to the time you have left.` },
+    { title: t`$4 is a month`, body: t`Any amount works and is counted to the day. Every payment adds to the time you have left.` },
     { title: t`Set it up`, body: t`Pick your look on the supporter page. It saves as you go.` },
   ];
 
   return (
     <div className="flex-1">
-      <PageHeader iconSrc="/images/icons/supporter-heart.svg" title={t`support`} />
+      <PageHeader iconSrc="/images/icons/supporter-gem.svg" title={t`support`} />
       {/* clip, not hidden: the gift ticket's canvas reaches past its box
           and must not widen the page on phones, yet still overlap rows above
           and below it; the section nav stays sticky */}
@@ -217,7 +217,7 @@ function SupportPage() {
                 <motion.p variants={HERO_LINE} className="mt-3 text-[15px] leading-relaxed text-osu-l2">
                   {t`Supporting keeps the servers running and new features coming. As thanks, supporters get everything on this page.`}
                 </motion.p>
-                <motion.p variants={HERO_LINE} className="mt-3 text-[15px] leading-relaxed text-osu-l2">{t`$4 buys a month of supporter, and every tip adds more time.`}</motion.p>
+                <motion.p variants={HERO_LINE} className="mt-3 text-[15px] leading-relaxed text-osu-l2">{t`$4 buys a month of supporter, and every payment adds more time.`}</motion.p>
                 <motion.div variants={HERO_LINE} className="mt-5 flex flex-wrap items-center gap-2">
                   <SupportButton />
                   <Link to="/supporter" className="inline-flex h-10 items-center rounded-full bg-osu-b4 px-5 text-[14px] font-semibold text-white transition-colors hover:bg-osu-b3">
@@ -325,7 +325,7 @@ function SupportPage() {
               id="gift"
               title={t`A week for a friend`}
               count={t`One code per $4`}
-              body={t`Every $4 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month.`}
+              body={t`Every $4 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. You hold one code at a time, and the next shows up once it is used. A monthly subscription earns an extra code every third month, and the same friend can be gifted again after three months.`}
             >
               <GiftShowcase />
             </Perk>

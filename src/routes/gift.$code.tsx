@@ -37,6 +37,7 @@ function GiftPage() {
   const [peek, setPeek] = useState<Peek>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GiftClaimError | null>(null);
+  const [againAt, setAgainAt] = useState<number | null>(null);
   const [claimed, setClaimed] = useState<{ expiresAt: number | null } | null>(null);
 
   useEffect(() => {
@@ -59,6 +60,7 @@ function GiftPage() {
         if (viewer) rememberViewerSupporter(viewer.id, result.expiresAt);
         requestSupporterWelcome();
       } else {
+        setAgainAt(result.againAt ?? null);
         setError(result.error);
       }
     } catch {
@@ -68,7 +70,7 @@ function GiftPage() {
     }
   };
 
-  const errorText = useGiftClaimErrorText();
+  const errorText = useGiftClaimErrorText(againAt);
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(`/gift/${code}`)}`;
   const until = claimed?.expiresAt
     ? new Date(claimed.expiresAt).toLocaleDateString(i18n.locale, { month: "short", day: "numeric", year: "numeric" })
@@ -77,7 +79,7 @@ function GiftPage() {
 
   return (
     <div className="flex-1">
-      <PageHeader iconSrc="/images/icons/supporter-heart.svg" title={t`gift`} />
+      <PageHeader iconSrc="/images/icons/supporter-gem.svg" title={t`gift`} />
       <div className="min-h-[70vh] bg-osu-b5">
         <div className="mx-auto max-w-[560px] px-5 py-16 text-center">
           {peek === undefined ? null : claimed ? (

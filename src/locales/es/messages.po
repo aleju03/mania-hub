@@ -2831,8 +2831,12 @@ msgstr "$4 al mes"
 #~ msgstr "$4 al mes, con tu rango en llamas y códigos de regalo extra."
 
 #: src/routes/support.tsx
-msgid "$4 buys a month of supporter, and every tip adds more time."
-msgstr "$4 compran un mes de supporter, y cada aporte suma más tiempo."
+msgid "$4 buys a month of supporter, and every payment adds more time."
+msgstr "$4 compran un mes de supporter, y cada pago suma más tiempo."
+
+#: src/routes/support.tsx
+#~ msgid "$4 buys a month of supporter, and every tip adds more time."
+#~ msgstr "$4 compran un mes de supporter, y cada aporte suma más tiempo."
 
 #: src/routes/support.tsx
 msgid "$4 is a month"
@@ -4631,8 +4635,12 @@ msgstr "Cualquier monto cuenta, calculado al día, y se suma al tiempo que te qu
 #~ msgstr "Cualquier monto cuenta, al día, y se suma al tiempo que te queda."
 
 #: src/routes/support.tsx
-msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
-msgstr "Cualquier monto sirve y se cuenta por días. Cada aporte se suma al tiempo que te queda."
+msgid "Any amount works and is counted to the day. Every payment adds to the time you have left."
+msgstr "Cualquier monto sirve y se cuenta por días. Cada pago se suma al tiempo que te queda."
+
+#: src/routes/support.tsx
+#~ msgid "Any amount works and is counted to the day. Every tip adds to the time you have left."
+#~ msgstr "Cualquier monto sirve y se cuenta por días. Cada aporte se suma al tiempo que te queda."
 
 #: src/components/supporter/SupportPlans.tsx
 #~ msgid "Any amount. $4 is a month, $40 a full year."
@@ -5565,6 +5573,10 @@ msgstr "Luz negra"
 msgid "Blend"
 msgstr "Fusión"
 
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Blinking cursor"
+msgstr "Cursor parpadeante"
+
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
 msgstr "Blitz"
@@ -5958,6 +5970,7 @@ msgstr "No se puede conectar con el bot ahora. Recarga en un momento."
 #: src/components/supporter/CustomThemeCredit.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/report.tsx
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Cancel"
 msgstr "Cancelar"
@@ -8687,11 +8700,14 @@ msgstr "Delay"
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/WorkshopFrames.tsx
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Delete"
 msgstr "Eliminar"
 
 #. placeholder {0}: deleting.name
+#. placeholder {0}: summary.name
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Delete {0}?"
 msgstr "¿Eliminar {0}?"
@@ -8753,6 +8769,7 @@ msgstr "Eliminar skin"
 msgid "Delete this imported play? Its replay is removed and the preview is recalculated."
 msgstr "¿Borrar esta play importada? Se elimina su replay y la vista previa se recalcula."
 
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Delete this theme?"
 msgstr "¿Borrar este tema?"
@@ -9583,6 +9600,7 @@ msgstr "Eco"
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
 #: src/routes/communities_.$id.tsx
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Edit"
 msgstr "Editar"
@@ -9843,8 +9861,12 @@ msgstr "Todo +combo se reduce a la mitad."
 #~ msgstr "Cada $3 que das, en un pago o en varios, te dan un código de un solo uso que le regala a otra persona una semana de supporter."
 
 #: src/routes/support.tsx
-msgid "Every $4 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
-msgstr "Cada $4 que das, en un pago o en varios, te dan un código de un solo uso que le regala a otra persona una semana de supporter. Una suscripción mensual te da un código extra cada tres meses."
+#~ msgid "Every $4 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
+#~ msgstr "Cada $4 que das, en un pago o en varios, te dan un código de un solo uso que le regala a otra persona una semana de supporter. Una suscripción mensual te da un código extra cada tres meses."
+
+#: src/routes/support.tsx
+msgid "Every $4 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. You hold one code at a time, and the next shows up once it is used. A monthly subscription earns an extra code every third month, and the same friend can be gifted again after three months."
+msgstr "Cada $4 que das, en un pago o en varios, te dan un código de un solo uso que le regala a otra persona una semana de supporter. Tienes un código a la vez, y el siguiente aparece cuando lo usan. Una suscripción mensual te da un código extra cada tres meses, y al mismo amigo se le puede regalar otra vez después de tres meses."
 
 #: src/routes/support.tsx
 #~ msgid "Every $5 you give, in one payment or several, earns a one-time code that gives someone else a week of supporter. A monthly subscription earns an extra code every third month."
@@ -13100,6 +13122,7 @@ msgstr "Aparece en tu perfil cuando lo usas, y no entra a la galería."
 msgid "It leaves your list and your profile."
 msgstr "Sale de tu lista y de tu perfil."
 
+#: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "It leaves your list, your profile and the gallery. Anyone already using it keeps it."
 msgstr "Sale de tu lista, tu perfil y la galería. Quienes ya lo usan lo conservan."
@@ -30699,6 +30722,14 @@ msgstr "Acertaste {streak}, un nuevo récord."
 msgid "You got {streak} right."
 msgstr "Acertaste {streak}."
 
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "You had a supporter week from a gift not long ago. You can be gifted again on {again}."
+msgstr "Hace poco tuviste una semana de supporter de regalo. Te pueden regalar otra a partir del {again}."
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "You had a supporter week from a gift not long ago. You can be gifted again three months after it."
+msgstr "Hace poco tuviste una semana de supporter de regalo. Te pueden regalar otra tres meses después."
+
 #. placeholder {0}: STAKE_NUMBERS.fewerSlots
 #: src/lib/pack-run.ts
 msgid "You have {0} charm slot fewer."
@@ -30887,8 +30918,8 @@ msgid "You're strongest in <0>{0}</0>"
 msgstr "Eres más fuerte en <0>{0}</0>"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "You've already had a supporter week from a gift."
-msgstr "Ya tuviste una semana de supporter de regalo."
+#~ msgid "You've already had a supporter week from a gift."
+#~ msgstr "Ya tuviste una semana de supporter de regalo."
 
 #: src/lib/chain-run.ts
 msgid "You've played today's daily run. A new one starts at midnight UTC."

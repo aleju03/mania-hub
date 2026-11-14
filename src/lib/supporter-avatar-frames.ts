@@ -187,7 +187,7 @@ const FRAME_GEOMETRY = {
   "term-hud": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2218, 0.1815, 0.2339, 0.1734] },
   "term-rain": { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2339, 0.2419, 0.2177, 0.2419] },
   "term-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.6452], overhang: [0.1694, 0.2298, 0.1694, 0.4032] },
-  "time-stop-knives": { box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3306, 0.3226, 0.3306, 0.3427] },
+  "time-stop-knives": { box: [-0.5323, -0.5323, 2.0645, 2.0645], overhang: [0.5121, 0.504, 0.5121, 0.5202] },
   "trophy-shelf": { danShelf: true, stillOnly: true, box: [-0.3548, -0.2419, 1.7097, 1.8629], overhang: [0.1492, 0, 0.1492, 0.3871] },
   viewfinder: { box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.0806, 0.1895, 0.0806, 0.1976] },
   "wash-ring": { roundStill: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.371, 0.3669, 0.371, 0.371] },
@@ -332,7 +332,7 @@ export function supporterFrameGeometry(id: SupporterAvatarFrameId): FrameGeometr
 
 /* Bump after re-exporting any frame: /images/ is served cache-first by the
    service worker, so changed art needs a new URL. */
-const FRAME_ART_VERSION = 90;
+const FRAME_ART_VERSION = 91;
 
 /* A second file of a frame drawn from parts (the Trophy shelf's plaques). */
 export function supporterFramePartSrc(id: SupporterAvatarFrameId, part: string): string {

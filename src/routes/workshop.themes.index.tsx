@@ -13,6 +13,7 @@ import { getI18n } from "../lib/i18n";
 import {
   deleteOwnCustomTheme,
   fetchOwnCustomThemes,
+  markCustomThemeGalleryChanged,
   setOwnCustomThemeVisibility,
   wearCustomTheme,
   type CustomThemeSummary,
@@ -47,6 +48,7 @@ function OwnThemesPage() {
     setError(null);
     try {
       await action();
+      markCustomThemeGalleryChanged();
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));

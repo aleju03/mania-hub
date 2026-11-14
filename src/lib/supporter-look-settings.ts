@@ -543,7 +543,7 @@ export const peekSupporterGiftCode = createServerFn({ method: "GET" })
 
 export const claimSupporterGiftCode = createServerFn({ method: "POST" })
   .validator((data: { code?: unknown }) => ({ code: typeof data?.code === "string" && GIFT_CODE_PATTERN.test(data.code) ? data.code : "" }))
-  .handler(async ({ data }): Promise<{ ok: true; expiresAt: number | null; from: string | null } | { ok: false; error: GiftClaimError }> => {
+  .handler(async ({ data }): Promise<{ ok: true; expiresAt: number | null; from: string | null } | { ok: false; error: GiftClaimError; againAt?: number }> => {
     const viewer = await requireViewer();
     if (!viewer) return { ok: false, error: "signed_out" };
     if (!data.code) return { ok: false, error: "invalid_code" };
@@ -552,12 +552,13 @@ export const claimSupporterGiftCode = createServerFn({ method: "POST" })
       headers: bridgeAuthHeaders(true),
       body: JSON.stringify({ userId: viewer.userId, username: viewer.username, code: data.code }),
     });
-    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; expiresAt?: unknown; from?: unknown } | null;
+    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; expiresAt?: unknown; from?: unknown; againAt?: unknown } | null;
     if (response.ok && body?.ok === true) {
       return { ok: true, expiresAt: typeof body.expiresAt === "number" ? body.expiresAt : null, from: typeof body.from === "string" ? body.from : null };
     }
     const known: GiftClaimError[] = ["invalid_code", "already_claimed", "own_code", "already_supporter", "trial_used"];
-    return { ok: false, error: known.includes(body?.error as GiftClaimError) ? body!.error as GiftClaimError : "failed" };
+    // againAt: when a recently gifted account can be gifted again
+    return { ok: false, error: known.includes(body?.error as GiftClaimError) ? body!.error as GiftClaimError : "failed", ...(typeof body?.againAt === "number" ? { againAt: body.againAt } : null) };
   });
 
 const COMPANION_ERRORS: Record<string, string> = {

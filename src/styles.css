@@ -1255,6 +1255,11 @@ html[data-custom-cursor="true"] * {
   display: inline-block;
 }
 
+/* The wearer's choice of a cursor that does not blink. */
+.name-tag--terminal.name-tag--steady::after {
+  animation: none;
+}
+
 @keyframes name-tag-caret {
   50% { opacity: 0; }
 }
@@ -1336,13 +1341,13 @@ html[data-custom-cursor="true"] * {
     linear-gradient(90deg, #ffe838, #f9f04a 60%, #ffe22e);
 }
 
-/* A long note lying on its side: a bright head, the held body and a paler
-   tail, with the light of a hold running along it. */
+/* A long note lying on its side: the held body, with the light of a hold
+   running along it. */
 .name-tag--long-note {
   position: relative;
   isolation: isolate;
-  padding-inline: 0.58em 0.46em;
-  margin-inline: -0.58em -0.24em;
+  padding-inline: 0.46em;
+  margin-inline: -0.46em -0.24em;
   color: #fff;
   -webkit-text-fill-color: #fff;
   text-shadow: 0 0.04em 0.07em rgba(0, 30, 70, 0.75);
@@ -1355,19 +1360,17 @@ html[data-custom-cursor="true"] * {
   z-index: -1;
   border-radius: 0.14em;
   background:
-    linear-gradient(180deg, #ffffff, #c8ecff) left / 0.22em 100% no-repeat,
-    linear-gradient(180deg, #bfe6ff, #8fcfff) right / 0.1em 100% no-repeat,
     linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0) 100%) 0% 0 / 45% 100% no-repeat,
     linear-gradient(180deg, #4fb4ff, #2a7df0);
   box-shadow: 0 0 0.3em rgba(70, 170, 255, 0.6);
   animation: name-tag-hold 2.2s linear infinite;
 }
 
-/* the light enters past the head and leaves past the tail (a 45%-wide image
+/* the light enters past one end and leaves past the other (a 45%-wide image
    is fully off either end at these positions) */
 @keyframes name-tag-hold {
-  from { background-position: left, right, -82% 0, 0 0; }
-  to { background-position: left, right, 182% 0, 0 0; }
+  from { background-position: -82% 0, 0 0; }
+  to { background-position: 182% 0, 0 0; }
 }
 
 /* Karaoke: the name fills with colour from the left as a sung line does,

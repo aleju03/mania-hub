@@ -584,7 +584,7 @@ function SupporterPage() {
 
   return (
     <div className="flex-1">
-      <PageHeader iconSrc="/images/icons/supporter-heart.svg" title={t`supporter`} right={status} />
+      <PageHeader iconSrc="/images/icons/supporter-gem.svg" title={t`supporter`} right={status} />
       <div className="min-h-[80vh] bg-osu-b5" style={profileThemeStyle(shown?.theme ?? null, highwayNotes)}>
         <div className="mx-auto max-w-[1200px] px-3 py-6 sm:px-5 sm:py-8 xl:max-w-[1440px]">
           {!viewer ? (

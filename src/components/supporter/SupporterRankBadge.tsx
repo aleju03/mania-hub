@@ -8,9 +8,11 @@ import { SUPPORTER_RANKS, supporterRank, type SupporterRankDef } from "../../lib
 import { Switch } from "../ui/Switch";
 import { Stagger, StaggerItem } from "./SupportMotion";
 
-/* The supporter hexagon and heart (public/images/icons/supporter-heart.svg),
-   filled with a rank's material. */
-const HEX = "M65 4H35C27.8 4 21.3 7.8 17.7 14L2.7 40c-3.6 6.2-3.6 13.8 0 20l15 26c3.6 6.2 10.1 10 17.3 10h30c7.1 0 13.7-3.8 17.3-10l15-26c3.6-6.2 3.6-13.8 0-20l-15-26C78.7 7.8 72.1 4 65 4Z";
+/* The supporter mark (public/images/icons/supporter-gem.svg): a heart in a
+   flat-topped hexagon, its corners rounded, filled with a rank's material.
+   Drawn for this site from a regular hexagon (circumradius 48, corners of
+   radius 16), which is wider and lower than the hexagon of osu!'s icons. */
+const HEX = "M93.4 42A16 16 0 0 1 93.4 58L78.6 83.6A16 16 0 0 1 64.8 91.6L35.2 91.6A16 16 0 0 1 21.4 83.6L6.6 58A16 16 0 0 1 6.6 42L21.4 16.4A16 16 0 0 1 35.2 8.4L64.8 8.4A16 16 0 0 1 78.6 16.4Z";
 const HEART = "M50 69L33.6 53.2C28.4 48.2 28.2 40.2 33.2 35.6C38 31.2 45.4 32 50 38C54.6 32 62 31.2 66.8 35.6C71.8 40.2 71.6 48.2 66.4 53.2L50 69Z";
 const DAY_MS = 24 * 60 * 60 * 1000;
 /* How long the /support demo shows each rank burning before the next catches. */

@@ -66,7 +66,7 @@ function ClipPage() {
   if (lookup.state !== "ready") {
     return (
       <div className="flex-1 bg-osu-b5">
-        <PageHeader iconSrc="/images/icons/supporter-heart.svg" title={t`clip`} />
+        <PageHeader iconSrc="/images/icons/supporter-gem.svg" title={t`clip`} />
         <div className="mx-auto max-w-[720px] px-4 py-16 text-center">
           <h1 className="text-lg font-semibold text-white">
             {lookup.state === "expired" ? t`This clip expired` : t`Clip not found`}
@@ -82,7 +82,7 @@ function ClipPage() {
   const { clip } = lookup;
   return (
     <div className="flex-1 bg-osu-b5">
-      <PageHeader iconSrc="/images/icons/supporter-heart.svg" title={t`clip`} />
+      <PageHeader iconSrc="/images/icons/supporter-gem.svg" title={t`clip`} />
       <div className="mx-auto max-w-[1100px] px-4 py-5 sm:px-5">
         <div className="overflow-hidden rounded-lg bg-black">
           <video

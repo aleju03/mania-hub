@@ -30,6 +30,7 @@ import {
   fetchOwnCustomTheme,
   fetchOwnCustomThemes,
   discardOwnCustomThemeDraft,
+  markCustomThemeGalleryChanged,
   saveOwnCustomTheme,
   saveOwnCustomThemeDraft,
   type CustomThemeLook,
@@ -631,6 +632,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
         if (result.errors.length) setProblems(result.errors.map((error) => ({ line: error.line, snippet: error.snippet, message: error.message })));
         throw new Error(saveErrorText(result.error));
       }
+      markCustomThemeGalleryChanged();
       setStatus({ tone: "good", text: visibility === "gallery" ? t`Published, and in the gallery.` : t`Published. Use it from your themes.` });
       setPublished(true);
       setDraftAt(null);

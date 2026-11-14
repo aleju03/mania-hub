@@ -1,20 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { PageHeader } from "../components/layout/PageHeader";
 import { WorkshopTitle } from "../components/supporter/WorkshopTitle";
 import { ReportModal } from "../components/supporter/CustomThemeCredit";
 import { ProfileThemeBackdrop } from "../components/supporter/ProfileThemeBackdrop";
+import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { useAuth } from "../lib/auth-context";
 import { reportCustomTheme } from "../lib/custom-theme-reports";
 import { hideBrokenImage, parseCustomTheme, type CustomTheme } from "../lib/custom-themes";
 import { getI18n } from "../lib/i18n";
 import {
+  deleteOwnCustomTheme,
   fetchCustomThemeGallery,
   fetchGalleryCustomTheme,
+  markCustomThemeGalleryChanged,
   wearCustomTheme,
   type CustomThemeSummary,
   type GalleryCustomTheme,
@@ -23,7 +26,8 @@ import { fetchSupporterLookState } from "../lib/supporter-look-settings";
 import { useBodyScrollLock } from "../lib/use-body-scroll-lock";
 
 /* Themes supporters chose to share: stills in a grid, one playing live at a
-   time when opened, to wear, remix or report. */
+   time when opened, to wear, remix or report. Its maker can edit or delete it
+   from there too. */
 export const Route = createFileRoute("/workshop/themes/gallery")({
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
@@ -96,12 +100,21 @@ function ThemeGalleryPage() {
           </div>
         )}
       </div>
-      {open ? <GalleryThemeModal summary={open} onClose={() => setOpen(null)} /> : null}
+      {open ? (
+        <GalleryThemeModal
+          summary={open}
+          onClose={() => setOpen(null)}
+          onDeleted={() => {
+            setThemes((list) => list?.filter((theme) => theme.id !== open.id) ?? list);
+            setOpen(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function GalleryThemeModal({ summary, onClose }: { summary: CustomThemeSummary; onClose: () => void }) {
+function GalleryThemeModal({ summary, onClose, onDeleted }: { summary: CustomThemeSummary; onClose: () => void; onDeleted: () => void }) {
   const { t } = useLingui();
   const auth = useAuth();
   const [theme, setTheme] = useState<GalleryCustomTheme | null | undefined>(undefined);
@@ -109,6 +122,11 @@ function GalleryThemeModal({ summary, onClose }: { summary: CustomThemeSummary; 
   const [status, setStatus] = useState<string | null>(null);
   const [reporting, setReporting] = useState(false);
   const [wearing, setWearing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  // Escape answers the confirm first, and only then closes the preview under it
+  const confirmingRef = useRef(false);
+  confirmingRef.current = confirming;
   useBodyScrollLock(true);
 
   useEffect(() => {
@@ -116,7 +134,7 @@ function GalleryThemeModal({ summary, onClose }: { summary: CustomThemeSummary; 
     fetchGalleryCustomTheme(summary.id).then((next) => alive && setTheme(next)).catch(() => alive && setTheme(null));
     if (auth.viewer) fetchSupporterLookState().then((state) => alive && setSupporter(state.supporter)).catch(() => {});
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !confirmingRef.current) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {
@@ -138,6 +156,19 @@ function GalleryThemeModal({ summary, onClose }: { summary: CustomThemeSummary; 
       setStatus(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setWearing(false);
+    }
+  };
+
+  const remove = async () => {
+    setRemoving(true);
+    setStatus(null);
+    try {
+      await deleteOwnCustomTheme({ data: { themeId: summary.id } });
+      markCustomThemeGalleryChanged();
+      onDeleted();
+    } catch (cause) {
+      setStatus(cause instanceof Error ? cause.message : String(cause));
+      setRemoving(false);
     }
   };
 
@@ -191,6 +222,20 @@ function GalleryThemeModal({ summary, onClose }: { summary: CustomThemeSummary; 
                 {t`Report`}
               </button>
             ) : null}
+            {own ? (
+              <>
+                <Link
+                  to="/workshop/themes/$themeId"
+                  params={{ themeId: String(summary.id) }}
+                  className="inline-flex h-9 items-center rounded-full bg-osu-b4 px-4 text-[12.5px] font-semibold text-white transition-colors hover:bg-osu-b3"
+                >
+                  {t`Edit`}
+                </Link>
+                <button type="button" disabled={removing} onClick={() => setConfirming(true)} className="h-9 cursor-pointer rounded-full px-3 text-[12.5px] font-semibold text-rose-300 hover:text-rose-200 disabled:opacity-60">
+                  {t`Delete`}
+                </button>
+              </>
+            ) : null}
             <button type="button" onClick={onClose} className="h-9 cursor-pointer rounded-full px-3 text-[12.5px] font-semibold text-osu-f1 hover:text-white">
               {t`Close`}
             </button>
@@ -200,6 +245,17 @@ function GalleryThemeModal({ summary, onClose }: { summary: CustomThemeSummary; 
           ) : null}
         </div>
       </div>
+      {confirming ? (
+        <ConfirmModal
+          title={summary.name ? t`Delete ${summary.name}?` : t`Delete this theme?`}
+          body={t`It leaves your list, your profile and the gallery. Anyone already using it keeps it.`}
+          confirmLabel={t`Delete`}
+          cancelLabel={t`Cancel`}
+          danger
+          onConfirm={() => void remove()}
+          onClose={() => setConfirming(false)}
+        />
+      ) : null}
       {reporting && theme ? (
         <ReportModal
           onClose={() => setReporting(false)}

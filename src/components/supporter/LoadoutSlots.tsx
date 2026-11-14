@@ -14,7 +14,7 @@ import {
   type SupporterAvatarFrameId,
 } from "../../lib/supporter-avatar-frames";
 import { SUPPORTER_NAME_FONT_LABELS, type SupporterNameFontId } from "../../lib/supporter-name-fonts";
-import { DEFAULT_SOLID_COLOUR, isSolidNameStyle, NAME_OUTLINE_THICKEST, nameOutlineThickness, nameOutlineValue, nameStyleLabel, solidNameColour, solidNameStyle, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { baseNameStyle, DEFAULT_SOLID_COLOUR, isSolidNameStyle, TERMINAL_STEADY, NAME_OUTLINE_THICKEST, nameOutlineThickness, nameOutlineValue, nameStyleLabel, solidNameColour, solidNameStyle, type SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import { SupporterStyledName } from "./SupporterNameStyle";
 import { announceFrameDanPicked, frameDanName, SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
@@ -820,7 +820,9 @@ const NAME_CLASS = "min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[18p
 function NameStyleDrawer({ current, disabled, username, onTry, onPick, onNameOutline }: DrawerProps) {
   const { t, i18n } = useLingui();
   const { nameStyle, nameFont, nameOutline } = current;
-  const [tab, setTab] = useState(() => NAME_STYLE_GROUPS.find((g) => nameStyle && g.styles.includes(nameStyle))?.key ?? NAME_STYLE_GROUPS[0].key);
+  // the tile a stored style belongs to (Terminal with a still cursor is Terminal's)
+  const picked = nameStyle ? baseNameStyle(nameStyle) : null;
+  const [tab, setTab] = useState(() => NAME_STYLE_GROUPS.find((g) => picked && g.styles.includes(picked))?.key ?? NAME_STYLE_GROUPS[0].key);
   const group = NAME_STYLE_GROUPS.find((g) => g.key === tab) ?? NAME_STYLE_GROUPS[0];
   // The tiles show a still of each style's real shader (a grid of live ones
   // would blow the WebGL budget, gl-budget.ts); the one under the pointer, or
@@ -837,7 +839,7 @@ function NameStyleDrawer({ current, disabled, username, onTry, onPick, onNameOut
       <Chips value={tab} options={NAME_STYLE_GROUPS.map((g) => ({ value: g.key, label: i18n._(g.title) }))} onChange={setTab} />
       <div className="name-tag-grid grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
         {[null, ...group.styles].map((id) => (
-          <Item key={id ?? "plain"} active={nameStyle === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("nameStyle", id)} className="items-stretch">
+          <Item key={id ?? "plain"} active={picked === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("nameStyle", id)} className="items-stretch">
             <span className="flex h-12 items-center justify-center overflow-hidden rounded-md bg-osu-b6 px-3">
               <SupporterStyledName nameStyle={id} nameFont={nameFont} outline={nameOutline} name={username} live={id !== null && id === liveStyle} still className={NAME_CLASS} />
             </span>
@@ -846,6 +848,23 @@ function NameStyleDrawer({ current, disabled, username, onTry, onPick, onNameOut
         ))}
         <SolidColourTile current={nameStyle} nameFont={nameFont} outline={nameOutline} username={username} disabled={disabled} onTry={(value) => onTry("nameStyle", value)} onPick={(value) => onPick("nameStyle", value)} />
       </div>
+      {picked === "terminal" && (
+        <div className="mt-3 flex items-center gap-3 rounded-lg bg-osu-b4 px-3 py-2.5">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={nameStyle !== TERMINAL_STEADY}
+            aria-label={t`Blinking cursor`}
+            disabled={disabled}
+            onClick={() => onPick("nameStyle", nameStyle === TERMINAL_STEADY ? "terminal" : TERMINAL_STEADY)}
+            className="relative h-5 w-9 shrink-0 cursor-pointer rounded-full disabled:cursor-default"
+          >
+            <span className={`absolute inset-0 rounded-full transition-colors ${nameStyle !== TERMINAL_STEADY ? "bg-osu-pink" : "bg-osu-b2"}`} />
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-[left] ${nameStyle !== TERMINAL_STEADY ? "left-[18px]" : "left-0.5"}`} />
+          </button>
+          <span className="text-[12.5px] text-osu-f1">{t`Blinking cursor`}</span>
+        </div>
+      )}
       <NameOutlineSwitch outline={nameOutline} disabled={disabled} onChange={onNameOutline} />
     </div>
   );

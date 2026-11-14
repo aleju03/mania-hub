@@ -23,7 +23,7 @@ float hash(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); ret
 float noise(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
   return mix(mix(hash(i),hash(i+vec2(1,0)),u.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x), u.y); }
 float fbm3(vec2 p){ float v=0., a=.5; mat2 m=mat2(1.6,1.2,-1.2,1.6); for(int i=0;i<3;i++){ v+=a*noise(p); p=m*p; a*=.5; } return v; }
-// the gem: a hexagon with flat top and bottom, corners rounded
+// the gem: a regular hexagon with flat top and bottom, corners rounded
 float sdHex(vec2 p, float r){ const vec3 k=vec3(-.866025404,.5,.577350269); p=abs(p); p-=2.*min(dot(k.xy,p),0.)*k.xy; p-=vec2(clamp(p.x,-k.z*r,k.z*r),r); return length(p)*sign(p.y); }
 void main(){
   vec2 p = (gl_FragCoord.xy - uGem) / uSize; // badge units, y up, gem centre at 0
@@ -38,8 +38,8 @@ void main(){
   // middle so the two halves meet without a seam
   float above = smoothstep(-.2, .2, p.y);
   vec2 ps = vec2(p.x * 1.06, (p.y - lift * mix(.6, 1., above)) * mix(.9, .42, above));
-  float d = sdHex(ps, .40) - .055;
-  float dIn = sdHex(p, .40) - .055;
+  float d = sdHex(ps, .256) - .16;
+  float dIn = sdHex(p, .256) - .16;
   float fuel = ((.14 - d) * 6.5 + (n - .5) * 2.4 - max(p.y, 0.) * 1.05) * 1.15 - .08;
   // catching: the flames grow up out of the gem instead of appearing whole
   fuel -= (1. - uIgnite) * 2.6;

@@ -254,10 +254,32 @@ export interface GalleryCustomTheme {
   remixedFrom: number | null;
 }
 
+/* The gallery list is cached by the browser for a minute. After its maker
+   deletes a theme or moves it in or out of the gallery, their own next reads
+   skip that cache, so the change shows at once for them. */
+const GALLERY_CHANGED_KEY = "mania-hub-theme-gallery-changed";
+const GALLERY_CACHE_MS = 60_000;
+
+export function markCustomThemeGalleryChanged(): void {
+  try {
+    localStorage.setItem(GALLERY_CHANGED_KEY, String(Date.now()));
+  } catch {
+    // storage is off: the list catches up within the minute
+  }
+}
+
+function galleryChangedLately(): boolean {
+  try {
+    return Date.now() - Number(localStorage.getItem(GALLERY_CHANGED_KEY) ?? 0) < GALLERY_CACHE_MS;
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchCustomThemeGallery(sort: "new" | "worn", offset = 0): Promise<CustomThemeSummary[]> {
   const base = getLiveBackendUrl();
   if (!base) return [];
-  const response = await fetch(`${base}/api/supporters/themes?sort=${sort}&offset=${offset}`);
+  const response = await fetch(`${base}/api/supporters/themes?sort=${sort}&offset=${offset}`, galleryChangedLately() ? { cache: "reload" } : undefined);
   if (!response.ok) throw new Error(`Server ${response.status}`);
   return ((await response.json()) as { themes: CustomThemeSummary[] }).themes ?? [];
 }
