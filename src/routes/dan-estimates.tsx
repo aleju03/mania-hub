@@ -547,7 +547,7 @@ function DanEstimatesPage() {
         <Section title={t`Where players land`}>
           <P>
             <Trans>
-              At the time of writing, 12,974 players had a 4K regular dan. This is where they landed:
+              In August 2026, 12,974 players had a 4K regular dan. This is where they landed:
             </Trans>
           </P>
           <DanDistribution rows={RICE_4K_POPULATION} />

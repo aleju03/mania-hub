@@ -3937,10 +3937,6 @@ msgstr "素材"
 #~ msgid "At the time of writing there were skill ratings for 14,385 players on 4K, 4,119 on 7K and 2,879 on 6K. Of the 4K players, 12,974 had enough qualifying passes for a regular dan and 5,038 for an LN dan. This is where the 4K regular estimates landed:"
 #~ msgstr "写这篇文章时，已有 14,385 名 4K 玩家、4,119 名 7K 玩家和 2,879 名 6K 玩家获得技能评分。4K 玩家中，12,974 人有足够的达标通过来估算单点段位，5,038 人足以估算 LN 段位。4K 单点估算分布如下："
 
-#: src/routes/dan-estimates.tsx
-msgid "At the time of writing, 12,974 players had a 4K regular dan. This is where they landed:"
-msgstr "撰写本文时，有 12,974 名玩家拥有 4K 常规段位。分布如下："
-
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -9578,6 +9574,10 @@ msgstr "{minutes} 分钟后"
 #: src/routes/player/$username.tsx
 msgid "in 90d"
 msgstr "90 天内"
+
+#: src/routes/dan-estimates.tsx
+msgid "In August 2026, 12,974 players had a 4K regular dan. This is where they landed:"
+msgstr "2026 年 8 月，有 12,974 名玩家拥有 4K 常规段位。分布如下："
 
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "in flight"

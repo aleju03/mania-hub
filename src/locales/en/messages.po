@@ -3952,10 +3952,6 @@ msgstr "Assets"
 #~ msgid "At the time of writing there were skill ratings for 14,385 players on 4K, 4,119 on 7K and 2,879 on 6K. Of the 4K players, 12,974 had enough qualifying passes for a regular dan and 5,038 for an LN dan. This is where the 4K regular estimates landed:"
 #~ msgstr "At the time of writing there were skill ratings for 14,385 players on 4K, 4,119 on 7K and 2,879 on 6K. Of the 4K players, 12,974 had enough qualifying passes for a regular dan and 5,038 for an LN dan. This is where the 4K regular estimates landed:"
 
-#: src/routes/dan-estimates.tsx
-msgid "At the time of writing, 12,974 players had a 4K regular dan. This is where they landed:"
-msgstr "At the time of writing, 12,974 players had a 4K regular dan. This is where they landed:"
-
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -9605,6 +9601,10 @@ msgstr "in {minutes}m"
 #: src/routes/player/$username.tsx
 msgid "in 90d"
 msgstr "in 90d"
+
+#: src/routes/dan-estimates.tsx
+msgid "In August 2026, 12,974 players had a 4K regular dan. This is where they landed:"
+msgstr "In August 2026, 12,974 players had a 4K regular dan. This is where they landed:"
 
 #: src/components/me/GoalsPanel.tsx
 #~ msgid "in flight"
