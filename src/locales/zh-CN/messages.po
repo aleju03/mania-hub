@@ -1510,6 +1510,10 @@ msgstr "还差 {left} 个 {at}pp+ 的成绩"
 msgid "{left}% to go"
 msgstr "还差 {left}%"
 
+#: src/routes/discord.tsx
+msgid "{levelKeys}K maps from {low}★ to {high}★"
+msgstr "{levelKeys}K 谱面，{low}★ 至 {high}★"
+
 #: src/components/skins/SkinCard.tsx
 msgid "{likeCountLabel} likes"
 msgstr "{likeCountLabel} 个赞"
@@ -6428,6 +6432,7 @@ msgid "Current accuracy percentage."
 msgstr "当前准确率百分比。"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 msgid "Current backdrop"
 msgstr "当前背景"
 
@@ -6453,6 +6458,7 @@ msgstr "光标拖尾"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
+#: src/routes/discord.tsx
 msgid "Custom"
 msgstr "自定义"
 
@@ -11905,6 +11911,10 @@ msgstr "静音谱面预览"
 msgid "muted"
 msgstr "静音"
 
+#: src/routes/discord.tsx
+msgid "My level"
+msgstr "我的水平"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "My mania skin"
 msgstr "我的 mania 皮肤"
@@ -12403,6 +12413,10 @@ msgstr "无键数数据"
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
 #~ msgstr "没有哪个段位系统承认这个数字，头衔仍然只能靠真正打过课题来拿。它当排名也不好用。段位榜上差一级的两个人并不是真的差一级，从不刷准度的玩家会落在自己真实水平之下。这个数字本身也会变，因为评级算法和谱面分析会更新，一次重算把某张谱面上调或下调一级，所有靠这张谱面撑着的人也跟着动。"
+
+#: src/routes/discord.tsx
+msgid "No level yet. It comes from your top plays."
+msgstr "暂无水平数据，它来自你的最佳成绩。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "No Mamestagram plays on this chart."

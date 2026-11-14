@@ -351,6 +351,7 @@ function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; a
         <Toggle checked={alerts.cardPulls} disabled={busy || !usable} onChange={(on) => void save({ cardPulls: on })} label={<Trans>When someone pulls my card</Trans>} />
         <Toggle checked={alerts.weeklyRecap} disabled={busy || !usable} onChange={(on) => void save({ weeklyRecap: on })} label={<Trans>Weekly recap</Trans>} />
       </div>
+      {alerts.newMaps ? <NewMapsDmFilters alerts={alerts} disabled={busy || !usable} onSave={(patch) => void save(patch)} /> : null}
       <div className={`mt-3 flex flex-wrap items-center gap-2 text-[12px] text-osu-f1 ${usable ? "" : "opacity-50"}`}>
         <span className="mr-1"><Trans>Language</Trans></span>
         <Segmented
@@ -383,6 +384,66 @@ function DmAlertsSection({ account, alerts, onChange }: { account: BotAccount; a
     </div>
   );
 }
+
+// Which new farm maps the DM takes: the ones near the viewer's level (their
+// maniacard's stars, in its keymode), or the keys and star range they set.
+function NewMapsDmFilters({ alerts, disabled, onSave }: { alerts: BotAlerts; disabled: boolean; onSave: (patch: BotAlertsPatch) => void }) {
+  const { t } = useLingui();
+  const mode = alerts.newMapsMode ?? "level";
+  const keys = alerts.newMapsKeys ?? [];
+  const level = alerts.newMapsLevel ?? null;
+  const low = level ? Math.max(0, level.stars - NEW_MAPS_LEVEL_STARS).toFixed(1) : "";
+  const high = level ? (level.stars + NEW_MAPS_LEVEL_STARS).toFixed(1) : "";
+  const levelKeys = level?.keyCount ?? 0;
+  const chip = (active: boolean) =>
+    `rounded-md px-2 py-0.5 text-[12px] font-semibold disabled:opacity-60 ${active ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2 hover:brightness-110"}`;
+  return (
+    <div className={`mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px] text-osu-f1 ${disabled ? "opacity-50" : ""}`}>
+      <span><Trans>New farm maps</Trans></span>
+      <Segmented
+        value={mode}
+        disabled={disabled}
+        options={[{ value: "level", label: <Trans>My level</Trans> }, { value: "custom", label: <Trans>Custom</Trans> }]}
+        onChange={(value) => onSave({ newMapsMode: value })}
+      />
+      {mode === "level" ? (
+        <span className="text-[13px] text-osu-l2">
+          {level ? <Trans>{levelKeys}K maps from {low}★ to {high}★</Trans> : <Trans>No level yet. It comes from your top plays.</Trans>}
+        </span>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-1">
+            <button type="button" disabled={disabled} className={chip(keys.length === 0)} onClick={() => { if (keys.length) onSave({ newMapsKeys: [] }); }}><Trans>All</Trans></button>
+            {FILTER_KEYS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                disabled={disabled}
+                className={chip(keys.includes(k))}
+                onClick={() => onSave({ newMapsKeys: keys.includes(k) ? keys.filter((v) => v !== k) : [...keys, k].sort((x, y) => x - y) })}
+              >
+                {k}K
+              </button>
+            ))}
+          </div>
+          <StarRangePill
+            lo={0}
+            hi={15}
+            min={alerts.newMapsMinStars ?? 0}
+            max={alerts.newMapsMaxStars ?? 0}
+            step={0.1}
+            ariaLabel={t`Star rating`}
+            onChange={(newMapsMinStars, newMapsMaxStars) => onSave({ newMapsMinStars, newMapsMaxStars })}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+// How far from the card's stars a farm map still counts as the viewer's level
+// (NEW_MAP_LEVEL_STARS in the backend's dm-alerts.ts).
+const NEW_MAPS_LEVEL_STARS = 1;
 
 function Segmented<T extends string>({ value, options, onChange, disabled }: { value: T; options: Array<{ value: T; label: ReactNode }>; onChange: (value: T) => void; disabled?: boolean }) {
   return (

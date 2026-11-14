@@ -32,6 +32,13 @@ export interface BotAlerts {
   snipes: boolean;
   goals: boolean;
   newMaps: boolean;
+  // New farm maps: near the viewer's level, or in the keys and star range they set.
+  newMapsMode?: "level" | "custom";
+  newMapsKeys?: number[];
+  newMapsMinStars?: number;
+  newMapsMaxStars?: number;
+  // The viewer's level: their maniacard's stars and keymode.
+  newMapsLevel?: { keyCount: number; stars: number } | null;
   cardPulls: boolean;
   weeklyRecap: boolean;
   follows: BotFeedPlayer[];
@@ -42,7 +49,7 @@ export interface BotAlerts {
   localeChosen: boolean;
 }
 
-export type BotAlertsPatch = Partial<Pick<BotAlerts, "snipes" | "goals" | "newMaps" | "cardPulls" | "weeklyRecap">> & { follows?: number[]; dmLocale?: string };
+export type BotAlertsPatch = Partial<Pick<BotAlerts, "snipes" | "goals" | "newMaps" | "newMapsMode" | "newMapsKeys" | "newMapsMinStars" | "newMapsMaxStars" | "cardPulls" | "weeklyRecap">> & { follows?: number[]; dmLocale?: string };
 
 export interface BotChannel {
   id: string;
@@ -163,6 +170,10 @@ export const saveBotAlerts = createServerFn({ method: "POST" })
     if (typeof data?.snipes === "boolean") patch.snipes = data.snipes;
     if (typeof data?.goals === "boolean") patch.goals = data.goals;
     if (typeof data?.newMaps === "boolean") patch.newMaps = data.newMaps;
+    if (data?.newMapsMode === "level" || data?.newMapsMode === "custom") patch.newMapsMode = data.newMapsMode;
+    if (Array.isArray(data?.newMapsKeys)) patch.newMapsKeys = data.newMapsKeys.map(Number).filter((k) => Number.isInteger(k) && k >= 1 && k <= 18).slice(0, 18);
+    if (typeof data?.newMapsMinStars === "number" && Number.isFinite(data.newMapsMinStars)) patch.newMapsMinStars = data.newMapsMinStars;
+    if (typeof data?.newMapsMaxStars === "number" && Number.isFinite(data.newMapsMaxStars)) patch.newMapsMaxStars = data.newMapsMaxStars;
     if (typeof data?.cardPulls === "boolean") patch.cardPulls = data.cardPulls;
     if (typeof data?.weeklyRecap === "boolean") patch.weeklyRecap = data.weeklyRecap;
     if (data?.dmLocale === "en" || data?.dmLocale === "es" || data?.dmLocale === "zh-CN") patch.dmLocale = data.dmLocale;

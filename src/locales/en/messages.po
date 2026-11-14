@@ -1521,6 +1521,10 @@ msgstr "{left} to go at {at}pp+"
 msgid "{left}% to go"
 msgstr "{left}% to go"
 
+#: src/routes/discord.tsx
+msgid "{levelKeys}K maps from {low}★ to {high}★"
+msgstr "{levelKeys}K maps from {low}★ to {high}★"
+
 #: src/components/skins/SkinCard.tsx
 msgid "{likeCountLabel} likes"
 msgstr "{likeCountLabel} likes"
@@ -6443,6 +6447,7 @@ msgid "Current accuracy percentage."
 msgstr "Current accuracy percentage."
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 msgid "Current backdrop"
 msgstr "Current backdrop"
 
@@ -6468,6 +6473,7 @@ msgstr "Cursor trail"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
+#: src/routes/discord.tsx
 msgid "Custom"
 msgstr "Custom"
 
@@ -11932,6 +11938,10 @@ msgstr "Mute chart preview"
 msgid "muted"
 msgstr "muted"
 
+#: src/routes/discord.tsx
+msgid "My level"
+msgstr "My level"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "My mania skin"
 msgstr "My mania skin"
@@ -12430,6 +12440,10 @@ msgstr "No key data"
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
 #~ msgstr "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
+
+#: src/routes/discord.tsx
+msgid "No level yet. It comes from your top plays."
+msgstr "No level yet. It comes from your top plays."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "No Mamestagram plays on this chart."

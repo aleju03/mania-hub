@@ -1498,6 +1498,10 @@ msgstr "quedan {left} a {at}pp o más"
 msgid "{left}% to go"
 msgstr "falta {left}%"
 
+#: src/routes/discord.tsx
+msgid "{levelKeys}K maps from {low}★ to {high}★"
+msgstr "Mapas de {levelKeys}K de {low}★ a {high}★"
+
 #: src/components/skins/SkinCard.tsx
 msgid "{likeCountLabel} likes"
 msgstr "{likeCountLabel} me gusta"
@@ -6416,6 +6420,7 @@ msgid "Current accuracy percentage."
 msgstr "Porcentaje de acc actual."
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
+#: src/components/skins/SkinUpdateModal.tsx
 msgid "Current backdrop"
 msgstr "Fondo actual"
 
@@ -6441,6 +6446,7 @@ msgstr "Estela del cursor"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
+#: src/routes/discord.tsx
 msgid "Custom"
 msgstr "Personalizado"
 
@@ -11893,6 +11899,10 @@ msgstr "Silenciar vista previa del mapa"
 msgid "muted"
 msgstr "silenciado"
 
+#: src/routes/discord.tsx
+msgid "My level"
+msgstr "Mi nivel"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "My mania skin"
 msgstr "Mi skin de mania"
@@ -12391,6 +12401,10 @@ msgstr "Sin datos de keymodes"
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognizes this number, and titles still only come from clearing a real course. It also works badly as a ranking. Two players one step apart on the dan leaderboard are not really one step apart, and a player who never farms accuracy will land below their actual level. The number can also change on its own, because the rating engines and the chart analysis get updated, and when a recompute moves a chart up or down a level, everyone whose passes rely on that chart moves with it."
 #~ msgstr "Ningún ladder reconoce este número, y los títulos siguen saliendo solo de superar un dan real. También funciona mal como ranking. Dos jugadores separados por un escalón en la tabla de dan no están realmente separados por un escalón, y un jugador que nunca farmea precisión va a quedar por debajo de su nivel real. El número también puede cambiar solo, porque los algoritmos de rating y el análisis de charts se actualizan, y cuando un recálculo sube o baja un chart un nivel, todos los que se apoyan en ese chart se mueven con él."
+
+#: src/routes/discord.tsx
+msgid "No level yet. It comes from your top plays."
+msgstr "Aún no hay nivel. Sale de tus top plays."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "No Mamestagram plays on this chart."
