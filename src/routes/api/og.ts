@@ -31,7 +31,7 @@ import { getCountryName, isGlobalScope, isSupportedCountryCode, isSupportedCount
 import { getAssetOrigin } from "../../lib/origin";
 import { drawPlayBanner, fetchPlayBannerSources, type PlayBannerStats } from "../../lib/play-banner";
 import { liveBridgeToken } from "../../lib/live-backend-tokens";
-import { drawRankingsBoard, fetchRankingsBoardAvatars, readRankingsBoard, type RankingsBoardRow } from "../../lib/rankings-board";
+import { drawRankingsBoard, fetchRankingsBoardAvatars, fetchRankingsBoardFlags, readRankingsBoard, type RankingsBoardRow } from "../../lib/rankings-board";
 import {
   getDisplayedAccuracy,
   getDisplayedRank,
@@ -1860,9 +1860,9 @@ async function renderRankingsBoardOg(request: Request, key: string, rows: Rankin
         }
         return art;
       };
-      const [fonts, avatars, emblems] = await Promise.all([loadOgFonts(request), fetchRankingsBoardAvatars(rows), Promise.all(rows.map(badgeFor))]);
+      const [fonts, avatars, emblems, flags] = await Promise.all([loadOgFonts(request), fetchRankingsBoardAvatars(rows), Promise.all(rows.map(badgeFor)), fetchRankingsBoardFlags(rows)]);
       // Only the drawing holds a render slot, not the waits on osu!'s image host.
-      return ogRenderGate.run(() => drawRankingsBoard(rows, avatars, fonts, emblems));
+      return ogRenderGate.run(() => drawRankingsBoard(rows, avatars, fonts, emblems, flags));
     })().finally(() => {
       inFlightRankingsBoards.delete(key);
     });

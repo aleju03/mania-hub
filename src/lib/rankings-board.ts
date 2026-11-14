@@ -14,6 +14,7 @@ import { createElement as h } from "react";
 
 import { renderOgPng } from "./og-image-response";
 import { ogFontList } from "./og-render";
+import { UNKNOWN_FLAG_URL, getCountryFlagLargeUrl } from "./country";
 
 export const RANKINGS_BOARD_WIDTH = 1040;
 const ROW_HEIGHT = 68;
@@ -27,6 +28,8 @@ const PLACE_WIDTH = 170;
 // A dan board keeps a column for the badges, so they line up under each other.
 const EMBLEM_SLOT = 62;
 const EMBLEM_SIZE = 46;
+const FLAG_WIDTH = 42;
+const FLAG_HEIGHT = 28;
 const VALUE_SIZE = 32;
 // Torus digits differ in width; each gets the same box so numbers line up.
 const DIGIT_WIDTH = 20;
@@ -98,7 +101,7 @@ function valueText(text: string) {
     : h("div", { key: index, style: { display: "flex" } }, char));
 }
 
-function rowElement(row: RankingsBoardRow, index: number, withEmblems: boolean) {
+function rowElement(row: RankingsBoardRow, index: number, withEmblems: boolean, withFlag: boolean) {
   const pp = /^([\d,.]+)pp$/.exec(row.value);
   return h(
     "div",
@@ -125,7 +128,7 @@ function rowElement(row: RankingsBoardRow, index: number, withEmblems: boolean) 
     ),
     // The badge is laid over this gap by sharp.
     withEmblems ? h("div", { key: "emblem", style: { display: "flex", width: `${EMBLEM_SLOT}px` } }) : null,
-    h("div", { key: "place", style: { display: "flex", justifyContent: "flex-end", width: `${PLACE_WIDTH}px`, fontSize: "24px", fontWeight: 400, color: "#9a9da8" } }, row.place),
+    h("div", { key: "place", style: { display: "flex", justifyContent: "flex-end", width: `${PLACE_WIDTH}px`, fontSize: "24px", fontWeight: 400, color: "#9a9da8" } }, withFlag ? "" : row.place),
   );
 }
 
@@ -137,6 +140,7 @@ export async function drawRankingsBoard(
   avatars: Array<Buffer | null>,
   fonts: [ArrayBuffer, ArrayBuffer],
   emblems: RankingsBoardEmblemArt[] = [],
+  flags: Array<Buffer | null> = [],
 ): Promise<Buffer> {
   const withEmblems = rows.some((row) => row.emblem);
   const { default: sharp } = await import("sharp");
@@ -146,7 +150,7 @@ export async function drawRankingsBoard(
     h(
       "div",
       { style: { display: "flex", flexDirection: "column", width: `${RANKINGS_BOARD_WIDTH}px`, height: `${height}px`, paddingTop: `${PAD_Y}px`, fontFamily: fontList[0].name } },
-      rows.map((row, index) => rowElement(row, index, withEmblems)),
+      rows.map((row, index) => rowElement(row, index, withEmblems, Boolean(flags[index]))),
     ),
     { width: RANKINGS_BOARD_WIDTH, height, fonts: fontList },
   );
@@ -177,6 +181,20 @@ export async function drawRankingsBoard(
       // Left empty.
     }
   }
+  const flagMask = Buffer.from(`<svg width="${FLAG_WIDTH}" height="${FLAG_HEIGHT}"><rect width="${FLAG_WIDTH}" height="${FLAG_HEIGHT}" rx="3" ry="3"/></svg>`);
+  for (const [index, source] of flags.entries()) {
+    if (!source || index >= rows.length) continue;
+    try {
+      const flag = await sharp(source).resize(FLAG_WIDTH, FLAG_HEIGHT, { fit: "cover" }).composite([{ input: flagMask, blend: "dest-in" }]).png().toBuffer();
+      layers.push({
+        input: flag,
+        left: RANKINGS_BOARD_WIDTH - PAD_X - FLAG_WIDTH,
+        top: PAD_Y + index * ROW_HEIGHT + Math.round((ROW_HEIGHT - FLAG_HEIGHT) / 2),
+      });
+    } catch {
+      // Left empty.
+    }
+  }
   return sharp({ create: { width: RANKINGS_BOARD_WIDTH, height, channels: 3, background: BACKGROUND } }).composite(layers).png().toBuffer();
 }
 
@@ -194,4 +212,21 @@ async function fetchImage(url: string): Promise<Buffer | null> {
 // The host is fixed and only the ids come from the request.
 export function fetchRankingsBoardAvatars(rows: RankingsBoardRow[]): Promise<Array<Buffer | null>> {
   return Promise.all(rows.map((row) => fetchImage(`https://a.ppy.sh/${row.userId}`)));
+}
+
+// The Global board's place is a country code; it is drawn as the flag. A
+// fetch that fails leaves the code written out instead.
+export async function fetchRankingsBoardFlags(rows: RankingsBoardRow[]): Promise<Array<Buffer | null>> {
+  const byCode = new Map<string, Promise<Buffer | null>>();
+  return Promise.all(rows.map((row) => {
+    if (!/^[A-Z]{2}$/.test(row.place)) return null;
+    const url = getCountryFlagLargeUrl(row.place);
+    if (url === UNKNOWN_FLAG_URL) return null;
+    let pending = byCode.get(row.place);
+    if (!pending) {
+      pending = fetchImage(url);
+      byCode.set(row.place, pending);
+    }
+    return pending;
+  }));
 }
