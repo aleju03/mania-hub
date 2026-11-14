@@ -382,9 +382,6 @@ function PopOffsPage() {
       const popoff = JSON.parse(event.data) as PopOff;
       setCachedPopoffs(selectedCountry, mergePopoffs([popoff, ...popoffs]), popoffsWindow ?? (range === "all" ? "24h" : range));
     });
-    source.addEventListener("job_status", () => {
-      setRefreshing(false);
-    });
     return () => source.close();
   }, [liveBackendEnabled, mergePopoffs, popoffs, popoffsWindow, range, selectedCountry, setCachedPopoffs]);
 

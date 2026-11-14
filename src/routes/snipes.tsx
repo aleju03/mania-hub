@@ -176,9 +176,6 @@ function SnipesPage() {
       }
       setSnipes(selectedCountry, [...merged.values()], Date.now());
     });
-    source.addEventListener("job_status", () => {
-      setRefreshing(false);
-    });
     return () => source.close();
   }, [liveBackendEnabled, selectedCountry, setSnipes, snipes, windowActive]);
 
