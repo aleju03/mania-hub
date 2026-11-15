@@ -29,9 +29,18 @@ Filling older rows:
 - `features/activity-detail-on-demand.ts`: when someone opens a profile's per-keymode lists, missing rows are queued for one osu! call each, after the response. Profiles nobody opens cost nothing. It has its own worker lane (sharing one with the sweep starved the sweep), and each chain link takes its own dedupe key (`:<userId>:<link>`) because the queue's conflict clause only updates queued, failed or deferred rows, so a continuation enqueued under the running job's key would write nothing.
 - Scores osu! cannot serve go to `activity_play_detail_misses` and are never asked about again.
 
+### Supporter cosmetics
+
+An active supporter picks a loadout on `/supporter` (profile theme, avatar frame, name style, name font, card foil, card art): pointing at an item tries it on, clicking equips and saves it. Non-supporters can try everything there with nothing saved. Every pick lives on `supporter_card_looks`, is checked against the mirrored id lists in `backend/src/features/supporters.ts`, is set through `POST /api/supporters/self/<slot>`, comes back on `GET /api/supporters/look/{userId}` and lapses with the status.
+
+- **Avatar frames** (`src/lib/supporter-avatar-frames.ts`): static art in `public/images/supporter-frames/` (licences in `licenses/`), a VP9-alpha WebM plus a still PNG per frame, exported by `local-notes/supporter-decorations/export/export-frames.py` with the per-frame geometry. The parts behind the avatar are cut out of the art, so `SupporterAvatarFrame` lies on top. Safari/iOS (WebKit drops VP9 alpha) and reduced motion get the still.
+- **Profile themes** (`src/lib/supporter-profile-themes.ts`): set `--theme-hue`/`--theme-sat` on the profile root and play a WebGL2 backdrop (`profile-theme-shaders.ts`, run by `profile-theme-gl.ts`, loaded on demand) behind the page. Capped pixel count, at most 60fps, only on screen, redrawn on every scrolled frame so it never lags the page; one still under reduced motion; the flat base colour without WebGL2. Judgement rain uses the owner's replay judgements (`judgement-atlas.ts`); Note highway uses their replay skin (`use-highway-notes.ts`) and, with `profile_theme_options.charts`, loops the densest 24s of their best play (`use-highway-chart.ts`).
+- **Name styles and fonts** (`supporter-name-styles.ts`, `supporter-name-fonts.ts`): `name-tag--<id>` and `name-font--<id>` rules in `src/styles.css`, glows as `drop-shadow` so `truncate` never cuts them. `SHADER_NAME_STYLES` also run as WebGL over big names (`name-tag-shaders.ts`, partly `@paper-design/shaders`, Apache-2.0, pinned). Lists read every supporter's style and font from `GET /api/supporters/name-styles`, fetched at most once a minute by `ensureSupporterNameStyles`.
+- **Profile stats and plays**: a supporter swaps the four stat cards (`SUPPORTER_PROFILE_STATS`, `profile_stats`, picked in a gallery that previews every card) and replaces the two top-play cards with any tracked play under their own title, showing its pp, MSD or dan (`features/supporter-profile-plays.ts`, `profile_plays`). The play is copied whole at save time from `player_activity_maps`, MSD and dan at the play's rate.
+
 ### Signatures
 
-Dynamic signatures read `getCachedSignatureProfileSnapshot` (projected best-200, identity, artwork). Image versions hash those inputs rather than timestamps, so unchanged refreshes and below-window plays reuse the finished image.
+Dynamic signatures read `getCachedSignatureProfileSnapshot` (projected best-200, identity, artwork). Image versions hash those inputs rather than timestamps, so unchanged refreshes and below-window plays reuse the finished image. A supporter's stat cards and featured play ride the Insights hash (`insightsPicks`, appended only when set so no one else's version moves).
 
 The Activity type draws the last 53 weeks (26 for Half year) of the public `/activity` read, GLOBAL scope, so it counts what the Activity tab counts, app imports included. Its version hashes the name and avatar url, the user's `player_activity_days` totals, their `companella_local_scores` stamps and today's date in the activity country's zone, so it re-renders on a new play and once a day when the window moves.
 
@@ -61,8 +70,9 @@ The board for plays the skill ratings leave out (`/rankings?tab=unrated`) and th
 
 ## Goals
 
-Logged-in players set targets in `user_goals` (`reach_pp`, `play_pp`, `play_pp_count`, `accuracy`, `pass`, `grade`, `fc`, `reach_rank`), always owned by the osu!-verified viewer id.
+Logged-in players set targets in `user_goals` (`reach_pp`, `play_pp`, `play_pp_count`, `accuracy`, `pass`, `grade`, `fc`, `reach_rank`, `reach_dan`, `reach_rating`), always owned by the osu!-verified viewer id.
 
 - Play-shaped goals complete when ingest sees a matching play (`evaluateScoreGoals`, guarded so a goals bug cannot drop a score). Total-pp goals settle on top-play confirmation (`evaluatePpGoals`) and reconcile on read; profile refresh jobs also reconcile PP/rank goals.
+- Dan and rating goals keep the keymode in `target_count` and what they measure in `target_grade` (`rc`, `ln`, `rc:jack`; a rating axis such as `Overall`, `Stream`, `pattern:ln`). They read the skills job's own row (`readOfficialSkillModes`, never the Companella merge): a dan level counts once the label names it (low tier included), a rating once it reads as the target at two decimals, after the same display shrink the skill card applies. They settle after each skills compute (Node and native follow-up) and on read.
 - A `live_meta` marker (`user_goals_changed_at`) plus a negative cache keep the ingest hot path cheap.
 - Completion emits SSE `goal_completed`. Endpoints `/api/goals`, `/api/goals/create`, `/api/goals/delete`; route `/goals`.

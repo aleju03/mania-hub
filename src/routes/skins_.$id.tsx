@@ -30,6 +30,7 @@ import { canModerateSkinKeymodes, fetchSkinById, formatKeymodes, formatSkinFileS
 import { useSkinLike } from "../lib/use-liked-skins";
 import { pageSeo } from "../lib/seo";
 import { useScrollRestoreRef } from "../lib/use-scroll-restore";
+import { UsernameText } from "../components/ui/UsernameText";
 
 export const Route = createFileRoute("/skins_/$id")({
   loader: async ({ params }) => {
@@ -254,7 +255,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
     && (skin.keymodes.some((keys) => keys >= 2) || skin.screenshots.length > 0);
 
   return (
-    <div ref={scrollRestoreRef} className="relative flex min-h-screen flex-col">
+    <div ref={scrollRestoreRef} className="relative flex min-h-screen flex-col [&_.bg-osu-b4]:bg-[color-mix(in_srgb,var(--color-osu-b3)_80%,var(--color-osu-b5))]">
       <div className="relative z-10 flex flex-1 flex-col overflow-clip">
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader
@@ -414,7 +415,7 @@ function SkinDetailView({ loaded }: { loaded: SkinSummary | null }) {
                         className="inline-flex items-center gap-1.5 font-semibold text-osu-l2 transition-colors hover:text-white"
                       >
                         <Avatar userId={skin.ownerUserId} size={16} shape="circle" />
-                        {skin.ownerUsername}
+                        <UsernameText username={skin.ownerUsername} userId={skin.ownerUserId} />
                       </Link>
                       {/* Reads as the browse card does: time in the catalog,
                           not time since the upload. The exact upload date is a

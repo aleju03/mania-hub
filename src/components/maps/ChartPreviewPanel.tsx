@@ -97,20 +97,17 @@ export function ChartPreviewPanel({
   selectedBeatmapId,
   playbackRate = 1,
   inverse = false,
-  stars,
   preservePitch,
   className = "",
   flatBackdrop = false,
   skinSettingsOverride = null,
+  autoStart = false,
 }: {
   beatmapset: MapsFavouriteBeatmapset;
   selectedBeatmapId: number | null;
   playbackRate?: number;
   // Show the chart as the Invert mod rewrites it (a play set under it).
   inverse?: boolean;
-  // The selected difficulty's star rating at `playbackRate`, when the caller
-  // has it; the 1.0x value from the set otherwise.
-  stars?: number;
   // Off 1.0x the audio pitches with the rate (nightcore/daycore), which is
   // right for a rate picker and for NC/DC plays. A caller that knows the mod
   // was DT or HT sets this to keep the pitch where the map put it.
@@ -120,6 +117,9 @@ export function ChartPreviewPanel({
   // Render with these skin settings instead of the viewer's own replay skin
   // (the skin page previews an uploaded skin, not the local one).
   skinSettingsOverride?: ReplaySkinSettings | null;
+  // Start playing on mount, for a caller whose own button opened the panel
+  // (the random pick card) so the user isn't asked to press play twice.
+  autoStart?: boolean;
 }) {
   const { t } = useLingui();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -700,6 +700,16 @@ export function ChartPreviewPanel({
     if (previewBeatmap && ready) beginPlayback(token);
   }, [applyAudioPlaybackSettings, audioStartSeconds, beginPlayback, chartStartMs, clearPreviewEndTimer, previewBeatmap, ready]);
 
+  // Next frame, after the mount's own reset; cancelled and redone if React
+  // remounts the effect (dev StrictMode), so it starts exactly once.
+  const startPreviewRef = useRef(startPreview);
+  startPreviewRef.current = startPreview;
+  useEffect(() => {
+    if (!autoStart) return;
+    const frame = requestAnimationFrame(() => startPreviewRef.current());
+    return () => cancelAnimationFrame(frame);
+  }, [autoStart]);
+
   useEffect(() => {
     if (requested && previewBeatmap && ready && !previewLoading && audioStartPendingRef.current) {
       beginPlayback(playbackTokenRef.current);
@@ -917,7 +927,7 @@ export function ChartPreviewPanel({
 
       {paused ? (
         <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
-          <div className="grid h-11 w-11 place-items-center rounded-full border border-osu-f1/30 bg-osu-b5/70 shadow-lg shadow-black/20 backdrop-blur-[1px]">
+          <div className={`grid h-11 w-11 place-items-center rounded-full border border-osu-f1/30 shadow-lg shadow-black/20 backdrop-blur-[1px] ${flatBackdrop ? "bg-white/[0.07]" : "bg-osu-b5/70"}`}>
             <Play className="ml-0.5 h-4 w-4 fill-current text-osu-l2" />
           </div>
         </div>
@@ -927,7 +937,9 @@ export function ChartPreviewPanel({
         <button
           type="button"
           onClick={startPreview}
-          className={`absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-md border border-osu-f1/35 bg-osu-b5/70 px-3 py-1.5 text-[11px] font-semibold text-osu-l2 backdrop-blur-sm transition-all duration-200 hover:border-osu-l2/70 hover:bg-osu-b4/80 hover:text-white ${
+          className={`absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-md border border-osu-f1/35 px-3 py-1.5 text-[11px] font-semibold text-osu-l2 backdrop-blur-sm transition-all duration-200 hover:border-osu-l2/70 hover:text-white ${
+            flatBackdrop ? "bg-white/[0.07] hover:bg-white/[0.12]" : "bg-osu-b5/70 hover:bg-osu-b4/80"
+          } ${
             requested && !ending ? "pointer-events-none scale-95 opacity-0" : "scale-100 opacity-100"
           }`}
         >
@@ -953,17 +965,13 @@ export function ChartPreviewPanel({
 
       <div className={`absolute inset-x-0 bottom-0 z-30 flex min-h-10 items-center justify-between gap-3 border-t px-3 py-2 ${flatBackdrop ? "border-transparent bg-transparent" : "border-white/10 bg-osu-b5/80 backdrop-blur-md"}`}>
         <div className="min-w-0 truncate text-[11px] font-semibold text-osu-l2">
-          {selectedBeatmap ? (
-            <>
-              <span className="text-osu-yellow">{(stars ?? selectedBeatmap.difficultyRating).toFixed(2)} ★</span>
-              <span className="text-osu-f1"> / {Math.round(selectedBeatmap.cs)}K / {selectedBeatmap.version}</span>
-            </>
-          ) : (
+          {/* The picked diff is already named above the preview, so only its absence needs saying. */}
+          {selectedBeatmap ? null : (
             <span className="text-osu-f1"><Trans>No mania difficulty selected</Trans></span>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-md bg-osu-b6/35 px-1.5 py-1 text-osu-f1" title={t`Scroll speed`}>
+          <div className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 text-osu-f1 ${flatBackdrop ? "bg-white/[0.05]" : "bg-osu-b6/35"}`} title={t`Scroll speed`}>
             <Gauge className="h-3.5 w-3.5 shrink-0" />
             <input
               type="range"
@@ -1001,7 +1009,9 @@ export function ChartPreviewPanel({
               onClick={togglePlayback}
               disabled={!canToggle}
               aria-label={playing ? t`Pause chart preview` : t`Resume chart preview`}
-              className="grid h-7 w-7 place-items-center rounded-md bg-osu-b3/80 text-osu-l2 transition-colors hover:bg-osu-b2 hover:text-white disabled:cursor-default disabled:opacity-70 disabled:hover:bg-osu-b3/80 disabled:hover:text-osu-l2"
+              className={`grid h-7 w-7 place-items-center rounded-md text-osu-l2 transition-colors hover:text-white disabled:cursor-default disabled:opacity-70 disabled:hover:text-osu-l2 ${
+                flatBackdrop ? "bg-white/[0.08] hover:bg-white/[0.13] disabled:hover:bg-white/[0.08]" : "bg-osu-b3/80 hover:bg-osu-b2 disabled:hover:bg-osu-b3/80"
+              }`}
             >
               {!canToggle ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-osu-pink" />

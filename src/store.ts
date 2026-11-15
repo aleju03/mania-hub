@@ -315,6 +315,7 @@ interface AppState {
   packsSkipAnimations: boolean;
   packsRevealAll: boolean;
   recentPlayRatings: boolean;
+  mapsFourPerRow: boolean;
   changelogNotify: boolean;
   hiddenUsers: Record<number, HiddenUser>;
   avatarAccents: Record<string, CachedAvatarAccent>;
@@ -344,6 +345,7 @@ interface AppState {
   setPacksSkipAnimations: (skip: boolean) => void;
   setPacksRevealAll: (revealAll: boolean) => void;
   setRecentPlayRatings: (show: boolean) => void;
+  setMapsFourPerRow: (four: boolean) => void;
   setChangelogNotify: (notify: boolean) => void;
   addHiddenUser: (user: HiddenUser) => void;
   removeHiddenUser: (userId: number) => void;
@@ -606,6 +608,7 @@ export const useAppStore = create<AppState>()(
       packsSkipAnimations: false,
       packsRevealAll: false,
       recentPlayRatings: false,
+      mapsFourPerRow: false,
       changelogNotify: false,
       hiddenUsers: initialClientHiddenUsers,
       avatarAccents: initialClientAvatarAccents,
@@ -649,6 +652,7 @@ export const useAppStore = create<AppState>()(
       setPacksSkipAnimations: (skip) => set({ packsSkipAnimations: skip }),
       setPacksRevealAll: (revealAll) => set({ packsRevealAll: revealAll }),
       setRecentPlayRatings: (show) => set({ recentPlayRatings: show }),
+      setMapsFourPerRow: (four) => set({ mapsFourPerRow: four }),
       setChangelogNotify: (notify) => set({ changelogNotify: notify }),
       addHiddenUser: (user) =>
         set((state) => {
@@ -1029,6 +1033,9 @@ export const useAppStore = create<AppState>()(
           recentPlayRatings: typeof nextState.recentPlayRatings === "boolean"
             ? nextState.recentPlayRatings
             : currentState.recentPlayRatings,
+          mapsFourPerRow: typeof nextState.mapsFourPerRow === "boolean"
+            ? nextState.mapsFourPerRow
+            : currentState.mapsFourPerRow,
           changelogNotify: typeof nextState.changelogNotify === "boolean"
             ? nextState.changelogNotify
             : currentState.changelogNotify,
@@ -1095,6 +1102,7 @@ export const useAppStore = create<AppState>()(
         packsSkipAnimations: state.packsSkipAnimations,
         packsRevealAll: state.packsRevealAll,
         recentPlayRatings: state.recentPlayRatings,
+        mapsFourPerRow: state.mapsFourPerRow,
         changelogNotify: state.changelogNotify,
         // themeHue is persisted separately via THEME_HUE_STORAGE_KEY so a
         // QuotaExceededError on this big blob (common on mobile Safari) can't
@@ -1234,6 +1242,13 @@ export function usePacksRevealAll(): boolean {
   const revealAll = useAppStore((state) => state.packsRevealAll);
   const hydrated = useHasHydrated();
   return hydrated && revealAll;
+}
+
+// Four map cards per row on wide screens instead of three. Same hydration rule as useNoDans.
+export function useMapsFourPerRow(): boolean {
+  const four = useAppStore((state) => state.mapsFourPerRow);
+  const hydrated = useHasHydrated();
+  return hydrated && four;
 }
 
 export function useChangelogNotify(): boolean {

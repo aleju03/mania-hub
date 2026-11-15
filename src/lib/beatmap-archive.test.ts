@@ -3,8 +3,23 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { extractBeatmapArchiveFile } from "./beatmap-archive";
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+
+/* Each archive source is paced (one request per 2.5s), and a set fetched by
+   range and then whole asks the same mirror twice. Fake clocks let the wait
+   pass at once; setImmediate stays real so module loads and stream reads
+   still get their turn. */
+async function settle<T>(work: Promise<T>): Promise<T> {
+  let done = false;
+  work.then(() => { done = true; }, () => { done = true; });
+  while (!done) {
+    await vi.advanceTimersByTimeAsync(500);
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  return work;
+}
 
 describe("extractBeatmapArchiveFile", () => {
   it("asks osu.direct last, once, and reads every range from the presigned redirect target", async () => {
@@ -37,7 +52,8 @@ describe("extractBeatmapArchiveFile", () => {
       throw new Error(`unexpected fetch ${url}`);
     }));
 
-    const file = await extractBeatmapArchiveFile("1", "bg.jpg");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const file = await settle(extractBeatmapArchiveFile("1", "bg.jpg"));
     expect(file.toString()).toBe("background bytes");
     expect(apiCalls).toHaveLength(1);
     expect(storageRanges.length).toBeGreaterThan(1);
@@ -61,7 +77,8 @@ describe("extractBeatmapArchiveFile", () => {
       return new Response("missing", { status: 404 });
     }));
 
-    const file = await extractBeatmapArchiveFile("2", "bg.jpg");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const file = await settle(extractBeatmapArchiveFile("2", "bg.jpg"));
     expect(file.toString()).toBe("background bytes");
     expect(osuDirectCalls).toEqual([]);
     // The whole-archive pass asks each mirror the range pass just missed

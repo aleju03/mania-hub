@@ -18,6 +18,8 @@ import { SelectMenu } from "../ui/SelectMenu";
 import { ReplaySkinSettingsModal, loadReplaySkinSettingsModal, preloadReplaySkinSettingsModal } from "../replay/LazyReplaySkinSettingsModal";
 import { TranslationReportForm } from "./TranslationReportForm";
 import { CompanellaGroup } from "./CompanellaGroup";
+import { SkillMainKeymodeSetting } from "./SkillMainKeymodeSetting";
+import { SkillVisibilitySetting } from "./SkillVisibilitySetting";
 import { PanelGroup } from "./PanelGroup";
 import {
   ReplaySkinColorWheel,
@@ -93,10 +95,11 @@ import {
   writeCursorSettings,
 } from "../../lib/cursor";
 import type { CursorSettings } from "../../lib/cursor";
-import { useAppStore, useChangelogNotify, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings, useWholeDans, useWholeMapDans } from "../../store";
+import { useAppStore, useChangelogNotify, useMapsFourPerRow, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings, useWholeDans, useWholeMapDans } from "../../store";
 import { markChangelogSeen } from "../../lib/changelog";
 import { Switch } from "../ui/Switch";
 import { SETTINGS_TABS as TABS, type SettingsTabId } from "./settings-tabs";
+import { normalizeUiScale, previewUiScale, UI_SCALE_MAX, UI_SCALE_MIN, UI_SCALE_STEP, useUiScale } from "../../lib/ui-scale";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
@@ -472,6 +475,203 @@ function LanguageGroup() {
   );
 }
 
+/* The nearest ancestor that can scroll (the settings sidebar's body), or the
+   page. Whether it overflows right now does not matter: the drag lends it the
+   room. */
+function scrollParentOf(element: HTMLElement): HTMLElement | Window {
+  for (let node = element.parentElement; node && node !== document.body; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === "auto" || overflowY === "scroll") return node;
+  }
+  return window;
+}
+
+/* Like lazer's UI Scaling slider: the whole site rescales as the thumb moves,
+   and the value is saved when it is let go. The drag reads how far the pointer
+   has moved on the track as it was measured when the drag began, not where the
+   pointer sits on it now, since the track itself grows and shifts with every
+   step of the preview. */
+function UiScaleGroup() {
+  const { t } = useLingui();
+  const [scale, setScale] = useUiScale();
+  const [draft, setDraft] = useState<number | null>(null);
+  const drag = useRef<{ pointerId: number; startX: number; startValue: number; width: number } | null>(null);
+  const shown = draft ?? scale;
+  const range = UI_SCALE_MAX - UI_SCALE_MIN;
+  const fill = ((shown - UI_SCALE_MIN) / range) * 100;
+  const defaultAt = ((1 - UI_SCALE_MIN) / range) * 100;
+  const label = (value: number) => `${value.toFixed(2)}x`;
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  /* Everything above the slider grows or shrinks with the preview and would
+     carry it away from a pointer moving only sideways, so the page (or the
+     drawer it sits in) scrolls by however far the track moved. */
+  const preview = (value: number) => {
+    const next = normalizeUiScale(value);
+    setDraft(next);
+    const track = trackRef.current;
+    const before = track?.getBoundingClientRect().top ?? 0;
+    previewUiScale(next);
+    if (!track) return;
+    const moved = track.getBoundingClientRect().top - before;
+    if (Math.abs(moved) >= 0.5) scrollParentOf(track).scrollBy({ top: moved, behavior: "instant" });
+  };
+  /* The page can run out of room to scroll (a short page, or one already at
+     the top while the scale shrinks), so a drag lends it a viewport of space
+     above and below the content, scrolled past so nothing visibly moves, and
+     takes it back on release. Spacer elements rather than padding: padding on
+     the settings sidebar's body, a flex item, would grow the box instead of
+     giving it more to scroll. */
+  const lent = useRef<{ scroller: HTMLElement | Window; spacers: HTMLElement[]; room: number; anchorBox: HTMLElement; anchor: string } | null>(null);
+  /* What stays of the bottom spacer after a drag: content that fits without
+     scrolling would otherwise snap back to the top and drop the slider away
+     from the pointer the moment it is let go. Empty space below the content,
+     removed with the panel or at the next drag. */
+  const kept = useRef<HTMLElement | null>(null);
+  const lendScrollRoom = (on: boolean) => {
+    const current = lent.current;
+    if (!on) {
+      if (!current) return;
+      lent.current = null;
+      // Where the scroll has to end up is worked out before anything moves:
+      // taking the top space away shortens the scroll and the browser clamps
+      // the position on its own.
+      const [top, bottom] = current.spacers;
+      const element = current.scroller === window ? document.scrollingElement ?? document.documentElement : (current.scroller as HTMLElement);
+      const target = Math.max(0, element.scrollTop - current.room);
+      top.remove();
+      const natural = element.scrollHeight - bottom.offsetHeight - element.clientHeight;
+      const need = Math.ceil(target - natural);
+      if (need > 0) {
+        bottom.style.height = `${need}px`;
+        kept.current = bottom;
+      } else {
+        bottom.remove();
+      }
+      element.scrollTop = target;
+      current.anchorBox.style.overflowAnchor = current.anchor;
+      return;
+    }
+    const track = trackRef.current;
+    if (current || !track) return;
+    const scroller = scrollParentOf(track);
+    const box = scroller === window ? document.body : (scroller as HTMLElement);
+    const room = scroller === window ? window.innerHeight : (scroller as HTMLElement).clientHeight;
+    const spacer = () => {
+      const element = document.createElement("div");
+      element.setAttribute("aria-hidden", "true");
+      element.style.cssText = `height:${room}px;flex-shrink:0;pointer-events:none`;
+      return element;
+    };
+    // The space a previous drag kept becomes this drag's bottom spacer: taking
+    // it away first would clamp the scroll and drop the slider before it moved.
+    const bottom = kept.current?.parentElement === box ? kept.current : spacer();
+    kept.current = null;
+    bottom.style.height = `${room}px`;
+    const spacers = [spacer(), bottom];
+    // Scroll anchoring would move the scroll itself as the spacers come and
+    // go, on top of the corrections made here.
+    const anchorBox = scroller === window ? document.documentElement : box;
+    const anchor = anchorBox.style.overflowAnchor;
+    anchorBox.style.overflowAnchor = "none";
+    box.prepend(spacers[0]);
+    box.append(spacers[1]);
+    lent.current = { scroller, spacers, room, anchorBox, anchor };
+    scroller.scrollBy({ top: room, behavior: "instant" });
+  };
+  useEffect(() => () => {
+    lendScrollRoom(false);
+    kept.current?.remove();
+  }, []);
+  const commit = (value: number) => {
+    lendScrollRoom(false);
+    setDraft(null);
+    setScale(normalizeUiScale(value));
+  };
+  return (
+    <PanelGroup
+      label={t`UI scaling`}
+      action={scale !== 1 ? (
+        <button type="button" onClick={() => setScale(1)} className="cursor-pointer text-[11px] font-semibold text-osu-f1 hover:text-white">
+          {t`Reset`}
+        </button>
+      ) : null}
+    >
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[11px] font-semibold text-osu-l1">{t`Size of text and controls across the site`}</span>
+          <span className="rounded-md border border-osu-b3/50 bg-osu-b5/70 px-2 py-0.5 text-xs font-bold tabular-nums text-white">{label(shown)}</span>
+        </div>
+        <div
+          ref={trackRef}
+          role="slider"
+          tabIndex={0}
+          aria-label={t`UI scaling`}
+          aria-valuemin={UI_SCALE_MIN}
+          aria-valuemax={UI_SCALE_MAX}
+          aria-valuenow={shown}
+          aria-valuetext={label(shown)}
+          className="relative flex h-5 cursor-pointer touch-none items-center outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/50 rounded-full"
+          onPointerDown={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            if (rect.width <= 0) return;
+            try {
+              event.currentTarget.setPointerCapture(event.pointerId);
+            } catch {
+              // a pointer that is already gone; the drag still follows moves over the track
+            }
+            // A press away from the thumb jumps there first, then drags on from it.
+            const start = UI_SCALE_MIN + Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)) * range;
+            drag.current = { pointerId: event.pointerId, startX: event.clientX, startValue: start, width: rect.width };
+            lendScrollRoom(true);
+            preview(start);
+          }}
+          onPointerMove={(event) => {
+            const active = drag.current;
+            if (!active || active.pointerId !== event.pointerId) return;
+            preview(active.startValue + ((event.clientX - active.startX) / active.width) * range);
+          }}
+          onPointerUp={(event) => {
+            const active = drag.current;
+            if (!active || active.pointerId !== event.pointerId) return;
+            drag.current = null;
+            commit(active.startValue + ((event.clientX - active.startX) / active.width) * range);
+          }}
+          onPointerCancel={() => {
+            drag.current = null;
+            lendScrollRoom(false);
+            if (draft != null) commit(draft);
+          }}
+          onKeyDown={(event) => {
+            const steps: Record<string, number> = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1, PageUp: 4, PageDown: -4 };
+            if (event.key === "Home" || event.key === "End") {
+              event.preventDefault();
+              commit(event.key === "Home" ? UI_SCALE_MIN : UI_SCALE_MAX);
+            } else if (steps[event.key]) {
+              event.preventDefault();
+              commit(scale + steps[event.key] * UI_SCALE_STEP);
+            }
+          }}
+        >
+          <div className="h-1.5 w-full rounded-full bg-[rgba(38,38,51,0.7)]">
+            <div className="h-full rounded-full bg-osu-pink" style={{ width: `${fill}%` }} />
+          </div>
+          {/* where 1.00x, the default, sits */}
+          <div className="pointer-events-none absolute top-1/2 h-3 w-px -translate-x-1/2 -translate-y-1/2 bg-white/60" style={{ left: `${defaultAt}%` }} />
+          <div
+            className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-osu-pink"
+            style={{ left: `${fill}%` }}
+          />
+        </div>
+        <div className="relative h-3 text-[10px] font-semibold text-osu-f1/80">
+          <span className="absolute left-0">{label(UI_SCALE_MIN)}</span>
+          <span className="absolute -translate-x-1/2 text-osu-l2" style={{ left: `${defaultAt}%` }}>{t`${label(1)} default`}</span>
+          <span className="absolute right-0">{label(UI_SCALE_MAX)}</span>
+        </div>
+      </div>
+    </PanelGroup>
+  );
+}
+
 function AppearancePanel({
   cursorSettings,
   onUpdateCursor,
@@ -483,6 +683,7 @@ function AppearancePanel({
   return (
     <div className="space-y-6">
       <LanguageGroup />
+      <UiScaleGroup />
       <PanelGroup
         label={t`Custom cursor`}
         action={<Switch checked={cursorSettings.enabled} onChange={(enabled) => onUpdateCursor({ enabled })} />}
@@ -1040,6 +1241,8 @@ function PreferencesPanel() {
   const setPacksRevealAll = useAppStore((state) => state.setPacksRevealAll);
   const recentPlayRatings = useRecentPlayRatings();
   const setRecentPlayRatings = useAppStore((state) => state.setRecentPlayRatings);
+  const mapsFourPerRow = useMapsFourPerRow();
+  const setMapsFourPerRow = useAppStore((state) => state.setMapsFourPerRow);
   const changelogNotify = useChangelogNotify();
   const setChangelogNotify = useAppStore((state) => state.setChangelogNotify);
   const hiddenUsers = useAppStore((state) => state.hiddenUsers);
@@ -1126,17 +1329,26 @@ function PreferencesPanel() {
           <div>
             {/* No Dans hides the dan half, so the row names only what it still shows. */}
             <div className="text-[12px] font-semibold text-osu-l1">
-              {noDans ? <Trans>MSD on recent plays</Trans> : <Trans>MSD and dan on recent plays</Trans>}
+              {noDans ? <Trans>Rating on recent plays</Trans> : <Trans>Rating and dan on recent plays</Trans>}
             </div>
             <div className="text-[11px] text-osu-f1">
-              {noDans ? <Trans>Shows the MSD of each play in Recent Plays</Trans> : <Trans>Shows the MSD and dan of each play in Recent Plays</Trans>}
+              {noDans ? <Trans>Shows the rating of each play in Recent Plays</Trans> : <Trans>Shows the rating and dan of each play in Recent Plays</Trans>}
             </div>
           </div>
           <Switch
             checked={recentPlayRatings}
             onChange={setRecentPlayRatings}
-            label={noDans ? t`MSD on recent plays` : t`MSD and dan on recent plays`}
+            label={noDans ? t`Rating on recent plays` : t`Rating and dan on recent plays`}
           />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-semibold text-osu-l1"><Trans>Four maps per row</Trans></div>
+            <div className="text-[11px] text-osu-f1">
+              <Trans>Shows four maps per row instead of three on the maps page, on wide screens</Trans>
+            </div>
+          </div>
+          <Switch checked={mapsFourPerRow} onChange={setMapsFourPerRow} label={t`Four maps per row`} />
         </div>
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -1284,6 +1496,10 @@ function PreferencesPanel() {
           </ul>
         )}
       </PanelGroup>
+
+      <SkillMainKeymodeSetting />
+
+      <SkillVisibilitySetting />
     </div>
   );
 }

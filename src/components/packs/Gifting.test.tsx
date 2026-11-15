@@ -5,8 +5,8 @@ import { getI18n } from "#/lib/i18n";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { CollectedCard } from "#/lib/pack-collection";
 import type { ReactNode } from "react";
-const { search, send, inbox, dismiss, respond } = vi.hoisted(() => ({ search: vi.fn(), send: vi.fn(), inbox: vi.fn(), dismiss: vi.fn(), respond: vi.fn() }));
-vi.mock("#/lib/pack-gifts", () => ({ GIFT_MESSAGE_MAX_CHARS: 140, searchOwnGiftRecipients: search, sendOwnPackGift: send, fetchOwnPackGifts: inbox, dismissOwnPackGifts: dismiss, respondToOwnPackGift: respond }));
+const { search, send, inbox, dismiss, respond, heldCopies } = vi.hoisted(() => ({ search: vi.fn(), send: vi.fn(), inbox: vi.fn(), dismiss: vi.fn(), respond: vi.fn(), heldCopies: vi.fn() }));
+vi.mock("#/lib/pack-gifts", () => ({ GIFT_MESSAGE_MAX_CHARS: 140, searchOwnGiftRecipients: search, sendOwnPackGift: send, fetchOwnPackGifts: inbox, dismissOwnPackGifts: dismiss, respondToOwnPackGift: respond, fetchOwnHeldCopies: heldCopies }));
 vi.mock("./PackDialog", () => ({ PackDialog: ({ title, children }: { title: string; children: ReactNode }) => <div role="dialog" aria-label={title}>{children}</div> }));
 vi.mock("./CardTile", () => ({ CollectionCardTile: ({ card }: { card: { username: string } }) => <div>{card.username} card</div> }));
 vi.mock("./useCardThumbnails", () => ({ useCardThumbnails: () => ({ onThumbnailError: () => {} }) }));
@@ -16,7 +16,7 @@ import { GiftInbox } from "./GiftInbox";
 const card: CollectedCard = { userId: 77, cardKey: "77", username: "Friend", avatarUrl: "https://a.ppy.sh/77", countryCode: "CR", tier: "rare", tierLabel: "Rare", skills: null, pp: 1000, globalRank: 20, copies: 3, recycledCopies: 0, firstPulledAt: 1, lastPulledAt: 1 };
 const recipient = { userId: 102, username: "Recipient", avatarUrl: "https://a.ppy.sh/102", countryCode: "CR" };
 const wrap = (children: ReactNode) => <I18nProvider i18n={getI18n("en")}>{children}</I18nProvider>;
-beforeEach(() => { vi.clearAllMocks(); search.mockResolvedValue([recipient]); send.mockResolvedValue({ ok: true, giftId: 1, recipient, remainingCopies: 2, replayed: false }); });
+beforeEach(() => { vi.clearAllMocks(); search.mockResolvedValue([recipient]); heldCopies.mockResolvedValue(null); send.mockResolvedValue({ ok: true, giftId: 1, recipient, remainingCopies: 2, replayed: false }); });
 afterEach(cleanup);
 it("selects and confirms the recipient before sending exactly one named card", async () => {
   const onSent = vi.fn();
@@ -28,9 +28,22 @@ it("selects and confirms the recipient before sending exactly one named card", a
   fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "  enjoy it  " } });
   fireEvent.click(screen.getByRole("button", { name: "Send to Recipient" }));
   await screen.findByRole("status");
-  expect(send).toHaveBeenCalledWith({ data: { recipientUserId: 102, cardKey: "77", requestId: expect.any(String), message: "  enjoy it  " } });
+  expect(send).toHaveBeenCalledWith({ data: { recipientUserId: 102, cardKey: "77", requestId: expect.any(String), message: "  enjoy it  ", serial: null } });
   expect(screen.getByRole("status").textContent).toContain("enjoy it");
   expect(onSent).toHaveBeenCalledTimes(1);
+});
+it("gives the highest copy unless another one is picked", async () => {
+  heldCopies.mockResolvedValueOnce({ serials: [{ serial: 1, pulledBy: null }, { serial: 2904, pulledBy: null }], minted: 2905 });
+  render(wrap(<GiftSpareDialog card={{ ...card, serial: 1, mintedTotal: 2905 }} onClose={() => {}} onSent={() => {}} />));
+  fireEvent.change(screen.getByRole("textbox", { name: "Find a collector" }), { target: { value: "Reci" } });
+  fireEvent.click(await screen.findByRole("button", { name: "Recipient" }));
+  const highest = await screen.findByRole("radio", { name: "#2,904" });
+  expect(highest.getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(screen.getByRole("radio", { name: "#1" }));
+  fireEvent.click(screen.getByRole("button", { name: "Send to Recipient" }));
+  await screen.findByRole("status");
+  expect(send.mock.calls.at(-1)?.[0].data.serial).toBe(1);
+  expect(screen.getByRole("status").textContent).toContain("Sent #1 to Recipient.");
 });
 it("reuses the same request id when delivery could not be confirmed", async () => {
   send.mockRejectedValueOnce(new Error("connection lost"));

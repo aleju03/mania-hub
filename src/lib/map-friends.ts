@@ -44,10 +44,13 @@ export const forgetMyFriends = createServerFn({ method: "POST" }).handler(async 
 });
 
 export const getMyFriendsMapScores = createServerFn({ method: "GET" })
-  .validator((data: { beatmapId?: unknown; offset?: unknown; name?: unknown }) => ({
+  .validator((data: { beatmapId?: unknown; offset?: unknown; name?: unknown; speed?: unknown; mods?: unknown }) => ({
     beatmapId: Math.max(0, Math.floor(Number(data?.beatmapId) || 0)),
     offset: Math.max(0, Math.floor(Number(data?.offset) || 0)),
     name: typeof data?.name === "string" ? data.name.slice(0, 32) : "",
+    // The backend checks both; anything else is a 400.
+    speed: data?.speed === "dt" || data?.speed === "ht" ? data.speed : "",
+    mods: typeof data?.mods === "string" ? data.mods.slice(0, 16) : "",
   }))
   .handler(async ({ data }): Promise<LiveMapScoresSnapshot> => {
     const userId = await viewerId();
@@ -56,6 +59,8 @@ export const getMyFriendsMapScores = createServerFn({ method: "GET" })
     const query = new URLSearchParams({ beatmap: String(data.beatmapId), user: String(userId), friends: "1" });
     if (data.offset) query.set("offset", String(data.offset));
     if (data.name) query.set("q", data.name);
+    if (data.speed) query.set("speed", data.speed);
+    if (data.mods) query.set("mods", data.mods);
     const response = await fetch(`${base}/api/snapshots/map-scores?${query.toString()}`, { headers: bridgeAuthHeaders() });
     if (!response.ok) throw new Error(`map scores answered ${response.status}`);
     return (await response.json()) as LiveMapScoresSnapshot;

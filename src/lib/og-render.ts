@@ -44,15 +44,15 @@ export function getFont(request: Request, fileName: string): Promise<ArrayBuffer
 
 export async function loadOgFonts(request: Request): Promise<[ArrayBuffer, ArrayBuffer]> {
   return Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
+    getFont(request, "TrackerRound-Regular.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
   ]);
 }
 
 export function ogFontList(regularFont: ArrayBuffer, heavyFont: ArrayBuffer) {
   return [
-    { name: "Torus OG" as const, data: regularFont, style: "normal" as const, weight: 400 as const },
-    { name: "Torus OG" as const, data: heavyFont, style: "normal" as const, weight: 900 as const },
+    { name: "Tracker Round OG" as const, data: regularFont, style: "normal" as const, weight: 400 as const },
+    { name: "Tracker Round OG" as const, data: heavyFont, style: "normal" as const, weight: 900 as const },
   ];
 }
 

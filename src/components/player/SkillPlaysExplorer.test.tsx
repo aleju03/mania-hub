@@ -151,7 +151,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     const titles = screen.getAllByText(/^Recent 10\d$/).map((node) => node.textContent);
     expect(titles).toEqual(["Recent 103", "Recent 101"]);
     fireEvent.click(screen.getByText("not rated"));
-    expect(screen.getByText("Accuracy below skill rating range, so this play has no MSD rating on any skillset.")).toBeTruthy();
+    expect(screen.getByText("Accuracy below skill rating range, so this play has no rating on any skillset.")).toBeTruthy();
     fireEvent.click(screen.getByText("Recent 103"));
     expect(within(screen.getByTestId("map-rating-state")).getByText("Accuracy below skill rating range")).toBeTruthy();
     fireEvent.click(await findFilterButton("not counted"));

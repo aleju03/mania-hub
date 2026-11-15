@@ -1,21 +1,51 @@
 declare module "three" {
-  export class Quaternion {}
+  export class Quaternion {
+    constructor(...args: any[]);
+    copy(quaternion: Quaternion): this;
+    setFromAxisAngle(axis: Vector3, angle: number): this;
+    multiplyQuaternions(a: Quaternion, b: Quaternion): this;
+  }
 
   export class Object3D {
     children: Object3D[];
-    position: { x: number; y: number; z: number; set: (...args: any[]) => void };
+    position: { x: number; y: number; z: number; set: (...args: any[]) => void; copy: (other: { x: number; y: number; z: number }) => void };
     rotation: { x: number; y: number; z: number; set: (...args: any[]) => void };
     scale: { x: number; y: number; z: number; setScalar: (value: number) => void };
     quaternion: Quaternion;
     renderOrder: number;
+    userData: Record<string, any>;
     add(...objects: Object3D[]): void;
     remove(...objects: Object3D[]): void;
     traverse(callback: (object: Object3D) => void): void;
     getWorldPosition(target: Vector3): Vector3;
     worldToLocal(vector: Vector3): Vector3;
+    lookAt(x: number, y: number, z: number): void;
+  }
+
+  export interface Material {
+    userData?: Record<string, any>;
+    toneMapped?: boolean;
+    transparent?: boolean;
+    depthWrite?: boolean;
+    blending?: unknown;
+    blendSrc?: unknown;
+    blendDst?: unknown;
+    blendSrcAlpha?: unknown;
+    blendDstAlpha?: unknown;
+    dispose(): void;
+  }
+
+  export class Box3 {
+    min: Vector3;
+    max: Vector3;
+    constructor(...args: any[]);
+    setFromObject(object: Object3D): this;
+    getSize(target: Vector3): Vector3;
+    getCenter(target: Vector3): Vector3;
   }
 
   export class Mesh extends Object3D {
+    isMesh?: boolean;
     geometry?: { dispose: () => void };
     material?: { dispose: () => void } | Array<{ dispose: () => void }>;
     constructor(...args: any[]);
@@ -26,6 +56,17 @@ declare module "three" {
     constructor(...args: any[]);
     computeBoundingBox(): void;
     translate(...args: any[]): void;
+    dispose(): void;
+  }
+
+  export class CircleGeometry {
+    constructor(...args: any[]);
+    dispose(): void;
+  }
+
+  export class CylinderGeometry {
+    constructor(...args: any[]);
+    rotateX(angle: number): this;
     dispose(): void;
   }
 
@@ -45,15 +86,22 @@ declare module "three" {
     dispose(): void;
   }
 
-  export class Shape {
+  export class Path {
     constructor(...args: any[]);
     moveTo(...args: any[]): void;
     lineTo(...args: any[]): void;
     quadraticCurveTo(...args: any[]): void;
+    absarc(...args: any[]): void;
+    absellipse(...args: any[]): void;
+  }
+
+  export class Shape extends Path {
+    holes: Path[];
   }
 
   export class Color {
     constructor(...args: any[]);
+    setRGB(r: number, g: number, b: number, colorSpace?: unknown): this;
   }
 
   export class Vector2 {
@@ -69,7 +117,11 @@ declare module "three" {
     z: number;
     constructor(...args: any[]);
     set(x: number, y: number, z: number): this;
+    copy(vector: Vector3): this;
+    add(vector: Vector3): this;
+    sub(vector: Vector3): this;
     applyQuaternion(quaternion: Quaternion): this;
+    normalize(): this;
   }
 
   export class Vector4 {
@@ -109,6 +161,7 @@ declare module "three" {
 
   export class ShaderMaterial {
     uniforms: any;
+    userData: Record<string, any>;
     constructor(...args: any[]);
     dispose(): void;
   }
@@ -118,6 +171,10 @@ declare module "three" {
   }
 
   export class DirectionalLight extends Object3D {
+    constructor(...args: any[]);
+  }
+
+  export class HemisphereLight extends Object3D {
     constructor(...args: any[]);
   }
 
@@ -139,13 +196,18 @@ declare module "three" {
   }
 
   export class WebGLRenderer {
-    domElement: HTMLElement;
+    domElement: HTMLCanvasElement;
+    outputColorSpace: unknown;
+    toneMapping: unknown;
     capabilities: { getMaxAnisotropy(): number };
     constructor(...args: any[]);
     setSize(...args: any[]): void;
     setPixelRatio(...args: any[]): void;
     render(...args: any[]): void;
     compile(...args: any[]): void;
+    compileAsync(...args: any[]): Promise<unknown>;
+    initTexture(texture: unknown): void;
+    getContext(): WebGLRenderingContext | WebGL2RenderingContext;
     dispose(): void;
     forceContextLoss(): void;
   }
@@ -177,9 +239,17 @@ declare module "three" {
 
   export const LinearFilter: unknown;
   export const SRGBColorSpace: unknown;
+  export const LinearSRGBColorSpace: unknown;
+  export const NeutralToneMapping: unknown;
   export const ClampToEdgeWrapping: unknown;
   export const RGBAFormat: unknown;
   export const DoubleSide: unknown;
+  export const FrontSide: unknown;
+  export const NormalBlending: unknown;
+  export const CustomBlending: unknown;
+  export const SrcAlphaFactor: unknown;
+  export const OneMinusSrcAlphaFactor: unknown;
+  export const OneFactor: unknown;
 }
 
 declare module "three/*";

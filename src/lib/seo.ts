@@ -19,7 +19,9 @@ export const DEFAULT_DESCRIPTION =
 // rows mixing pp gains and skill picks.
 // 50: the player card became an osu! profile header: cover on top, avatar on
 // the seam, team, a 90-day rank line, and ranks split by keymode.
-export const OG_IMAGE_VERSION = "51";
+// 53: Tracker Round, with the redrawn heavy r. 51 shipped with Torus on prod, and local renders share
+// prod's R2 cache, so the font switch needs a key of its own (52 holds local test renders).
+export const OG_IMAGE_VERSION = "53";
 
 /* Builds the og:image URL. The image itself only needs title + country —
    the description stays in the HTML `<meta>` for social-card body text
@@ -98,6 +100,11 @@ export function pullOgImagePath(ownerId: number, cardKey: string | number): stri
   return kindOgImagePath("pull", { owner: String(ownerId), card: String(cardKey) });
 }
 
+/* An Overjoy run's share link: the run's card, 1200x630. */
+export function overjoyRunOgImagePath(shareId: string): string {
+  return kindOgImagePath("overjoy-run", { id: shareId });
+}
+
 export const DEFAULT_OG_IMAGE_PATH = ogImagePath();
 
 export type MetaEntry =
@@ -107,10 +114,13 @@ export type MetaEntry =
 
 export type LinkEntry = { rel: string; href: string };
 
-export function absoluteUrl(path: string, origin: string): string {
+// origin can be missing at runtime: when the server render fails, the client
+// hydrates the route before the root's beforeLoad has put it on the context,
+// and a throw here turned that recoverable error into a blank page.
+export function absoluteUrl(path: string, origin: string | undefined): string {
   if (/^https?:\/\//i.test(path)) return path;
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  const base = origin.replace(/\/+$/, "");
+  const base = (origin ?? "").replace(/\/+$/, "");
   return base ? `${base}${normalized}` : normalized;
 }
 
@@ -127,12 +137,12 @@ export interface PageSeoInput {
   imageHeight?: number | null;
   imageCountry?: string;
   imageKind?: string;
-  /* OG cards stay English (Torus has no CJK glyphs) and their R2 cache key is
+  /* OG cards stay English (Tracker Round has no CJK glyphs) and their R2 cache key is
      derived from the title baked into the image. A route with a localized
      `title` passes the English original here so every locale shares the one
      English card instead of forking cache keys per language. */
   imageTitle?: string;
-  type?: "website" | "article" | "profile";
+  type?: "website" | "article" | "profile" | "video.other";
   social?: boolean;
   noindex?: boolean;
   appendSiteName?: boolean;

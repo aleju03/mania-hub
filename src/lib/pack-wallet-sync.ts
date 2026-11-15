@@ -1,3 +1,4 @@
+import type { PackSpell } from "#/lib/pack-pending";
 import { PACK_MAX_PLAYER_CARDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
@@ -46,8 +47,8 @@ export interface ServerPackCollectionCard {
   recycledCopies: number;
   firstPulledAt: number;
   lastPulledAt: number;
-  /* Mint order for this collector, and the serials the card has handed out in
-     total. Server-side only: a browser-local wallet has no serials. */
+  /* The holding's lowest copy number, and the numbers the card has handed out
+     in total. Server-side only: a browser-local wallet has no serials. */
   serial?: number | null;
   mintedTotal?: number;
   /* When this holding was granted or gifted, null for a pulled one. */
@@ -55,6 +56,10 @@ export interface ServerPackCollectionCard {
   /* Who gave it, for a holding that arrived as an accepted gift. Null for a
      pull and for a grant-desk card, which has no person behind it. */
   giftedBy?: { userId: number; username: string } | null;
+  /* Who pulled the copy shown, when someone else did and gifted it on. */
+  serialFrom?: { userId: number; username: string; pulledAt: number; pulled: boolean } | null;
+  /* Ember burnt or Frost froze a copy in this holding (looks only). */
+  spell?: PackSpell;
   /* A team card pinned to a showcase ("team:<id>", userId the negative team
      id), and whether the showcase's owner is on that team. */
   team?: PackTeamCard;
@@ -242,7 +247,7 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     const tier = typeof input?.tier === "string" ? input.tier : "all";
     const query = typeof input?.query === "string" ? input.query : "";
     const sort =
-      input?.sort === "newest" ? ("newest" as const) : input?.sort === "copies" ? ("copies" as const) : ("rarity" as const);
+      input?.sort === "newest" || input?.sort === "copies" || input?.sort === "mastery" ? input.sort : ("rarity" as const);
     const duplicatesOnly = input?.duplicatesOnly === true;
     const mark = isPackCardMark(input?.mark) ? input.mark : null;
     const teams = input?.teams === true;
@@ -394,6 +399,128 @@ export const saveOwnPackShowcase = createServerFn({ method: "POST" })
       : [];
   });
 
+/* Sends the viewer's edits to the shared card board (backend
+   features/pack-boards.ts). The backend checks every add against the viewer's
+   holdings and cap and only ever touches their own cards. */
+export interface PackBoardSaveResult {
+  ok: boolean;
+  count: number;
+  cap: number;
+  z: (number | null)[];
+  removed: number[];
+  /* Edits refused because the region they went into is full. */
+  full: number;
+  /* ...because they would cover another player's day-old-or-newer cards. */
+  protected: number;
+  /* ...because the player went faster than the per-minute allowance. */
+  slow: number;
+  /* Cards the save took off for forming a forbidden shape. */
+  forbidden: number;
+  regions: [number, number][];
+  /* Set while an admin has barred the player: when it ends, 0 for never. */
+  bannedUntil?: number;
+}
+
+export const sendPackBoardOps = createServerFn({ method: "POST" })
+  .validator((input: { ops?: unknown }) => ({
+    ops: Array.isArray(input?.ops) ? input.ops.slice(0, 2500) : [],
+  }))
+  .handler(async ({ data }): Promise<PackBoardSaveResult | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const target = await getSyncTarget();
+    if (!target) return null;
+    const url = target.url.replace(/\/api\/pack-wallet\/(\d+)$/, "/api/pack-collection/$1/board");
+    const response = await fetch(url, { method: "POST", headers: target.headers, body: JSON.stringify(data) });
+    if (!response.ok) throw new Error(`Pack board save failed (${response.status}).`);
+    return (await response.json()) as PackBoardSaveResult;
+  });
+
+/* The collectors with drawings fresh today who have the viewer among their
+   osu! friends, and so let them add to those drawings. Also the viewer's own
+   board ban, when there is one (when it ends, 0 for never). */
+export const fetchPackBoardFriendOf = createServerFn({ method: "GET" }).handler(async (): Promise<{ owners: number[]; bannedUntil: number | null }> => {
+  const { setResponseHeader } = await import("@tanstack/react-start/server");
+  setResponseHeader("Cache-Control", "private, no-store");
+  const none = { owners: [], bannedUntil: null };
+  const target = await getSyncTarget();
+  if (!target) return none;
+  const url = target.url.replace(/\/api\/pack-wallet\/(\d+)$/, "/api/pack-collection/$1/board");
+  const response = await fetch(url, { headers: target.headers }).catch(() => null);
+  if (!response?.ok) return none;
+  const body = (await response.json().catch(() => ({}))) as { owners?: unknown; bannedUntil?: unknown };
+  return {
+    owners: Array.isArray(body.owners) ? body.owners.filter((id): id is number => Number.isInteger(id)) : [],
+    bannedUntil: typeof body.bannedUntil === "number" ? body.bannedUntil : null,
+  };
+});
+
+/* Board bans (admin): bars a player from laying cards for 1, 7 or 30 days,
+   or for good (days null), taking all their cards off; or lifts a bar. */
+export interface PackBoardBan {
+  userId: number;
+  username: string;
+  /* When it ends, 0 for never. */
+  until: number;
+  bannedAt: number;
+}
+
+async function packBoardBansRequest(init?: RequestInit): Promise<Response | null> {
+  const { requireTrueAdminAccess } = await import("./auth-server");
+  await requireTrueAdminAccess("Manage card board bans");
+  const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
+  if (!base) return null;
+  return fetch(`${base}/api/admin/pack-board/bans`, {
+    ...init,
+    headers: { "content-type": "application/json", ...(process.env.LIVE_ADMIN_TOKEN ? { authorization: `Bearer ${process.env.LIVE_ADMIN_TOKEN}` } : {}) },
+  });
+}
+
+export const fetchPackBoardBans = createServerFn({ method: "GET" }).handler(async (): Promise<PackBoardBan[]> => {
+  const { setResponseHeader } = await import("@tanstack/react-start/server");
+  setResponseHeader("Cache-Control", "private, no-store");
+  const response = await packBoardBansRequest();
+  if (!response?.ok) return [];
+  const body = (await response.json().catch(() => ({}))) as { bans?: PackBoardBan[] };
+  return Array.isArray(body.bans) ? body.bans : [];
+});
+
+export const setPackBoardBan = createServerFn({ method: "POST" })
+  .validator((input: { ownerUserId: number; days?: number | null; lift?: boolean }) => ({
+    ownerUserId: Math.floor(Number(input?.ownerUserId) || 0),
+    days: input?.days == null ? null : Math.floor(Number(input.days) || 0),
+    lift: input?.lift === true,
+  }))
+  .handler(async ({ data }): Promise<boolean> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    if (data.ownerUserId <= 0) return false;
+    const response = await packBoardBansRequest({ method: "POST", body: JSON.stringify(data.lift ? { ownerUserId: data.ownerUserId, lift: true } : { ownerUserId: data.ownerUserId, days: data.days }) });
+    return Boolean(response?.ok);
+  });
+
+/* Moderation: takes one card (n) or every card of a collector off the board.
+   True-admin only, server-side like every admin call. */
+export const removePackBoardCards = createServerFn({ method: "POST" })
+  .validator((input: { ownerUserId: number; n?: number | null }) => ({
+    ownerUserId: Math.floor(Number(input?.ownerUserId) || 0),
+    n: input?.n == null ? null : Math.floor(Number(input.n) || 0),
+  }))
+  .handler(async ({ data }): Promise<boolean> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const { requireTrueAdminAccess } = await import("./auth-server");
+    await requireTrueAdminAccess("Remove cards from the card board");
+    const base = (process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL)?.trim().replace(/\/$/, "");
+    if (!base || data.ownerUserId <= 0) return false;
+    const response = await fetch(`${base}/api/admin/pack-board/remove`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(process.env.LIVE_ADMIN_TOKEN ? { authorization: `Bearer ${process.env.LIVE_ADMIN_TOKEN}` } : {}) },
+      body: JSON.stringify(data),
+    });
+    return response.ok;
+  });
+
 /* A shelf also takes a team card, "team:<id>", which no wallet holds. */
 function sanitizeShowcaseKey(value: string): string | null {
   const team = /^team:(\d{1,12})(:eternal)?$/.exec(value.trim());
@@ -415,8 +542,8 @@ function sanitizeCardKey(value: string): string | null {
   return variant > 0 ? `${userId}:v${variant}` : null;
 }
 
-/* What the pull log minted: the serial this account now holds each card at,
-   and how many serials that card has ever handed out. */
+/* What the pull log minted: the number of the copy just pulled of each card,
+   and how many numbers that card has ever handed out. */
 export interface PackPullMint {
   userId: number;
   cardKey: string;
@@ -440,7 +567,7 @@ export interface PackPullRecordCard {
    identity always comes from the login cookie; a tampered client can only
    ever log pulls as itself, and the data is social flavor, never economy. */
 export const recordServerPackPulls = createServerFn({ method: "POST" })
-  .validator((input: { packType?: unknown; cards?: unknown; drawId?: unknown }) => {
+  .validator((input: { packType?: unknown; cards?: unknown; drawId?: unknown; spell?: unknown }) => {
     const packType =
       typeof input?.packType === "string" && /^[a-z0-9_]{1,24}$/.test(input.packType) ? input.packType : null;
     const cards: PackPullRecordCard[] = (Array.isArray(input?.cards) ? input.cards : [])
@@ -461,7 +588,9 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
       })
       .filter((card): card is PackPullRecordCard => card !== null);
     if (!packType || cards.length === 0) throw new Error("Invalid pack pull record.");
-    return { packType, cards, drawId: typeof input.drawId === "string" ? input.drawId.slice(0, 64) : undefined };
+    // Ember burnt or Frost froze the pack: the backend checks the blade and marks the copies
+    const spell = input.spell === "burnt" || input.spell === "frozen" ? input.spell : undefined;
+    return { packType, cards, drawId: typeof input.drawId === "string" ? input.drawId.slice(0, 64) : undefined, spell };
   })
   .handler(async ({ data }): Promise<{ recorded: number; mints: PackPullMint[] } | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -485,6 +614,7 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
         drawId: data.drawId,
         packType: data.packType,
         cards: data.cards,
+        ...(data.spell ? { spell: data.spell } : {}),
       }),
     });
     if (!response.ok) throw new Error(`Pack pull record failed (${response.status}).`);
@@ -669,6 +799,32 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
     if (!response.ok) throw new Error(`Pack collection recycle failed (${response.status}).`);
     const body = (await response.json()) as { gained?: unknown; payload?: unknown; rev?: unknown };
     return {
+      gained: Number(body.gained) || 0,
+      payload: typeof body.payload === "string" ? body.payload : "",
+      rev: Number(body.rev) || 0,
+    };
+  });
+
+/* Puts one numbered copy back in the pool for the next pull of that card,
+   paid like recycling it (backend pack-copy-pool.ts). Player cards only. */
+export const releaseServerPackCardCopy = createServerFn({ method: "POST" })
+  .validator((input: { cardKey?: unknown; serial?: unknown }) => {
+    const cardKey = typeof input?.cardKey === "string" ? sanitizeCardKey(input.cardKey) : null;
+    const serial = Math.floor(Number(input?.serial) || 0);
+    if (!cardKey || serial <= 0 || !Number.isSafeInteger(serial)) throw new Error("Invalid release request.");
+    return { mode: "release" as const, cardKey, serial };
+  })
+  .handler(async ({ data }): Promise<{ released: boolean; gained: number; payload: string; rev: number } | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const target = await getSyncTarget();
+    if (!target) return null;
+    const url = target.url.replace("/api/pack-wallet/", "/api/pack-collection/");
+    const response = await fetch(url, { method: "POST", headers: target.headers, body: JSON.stringify(data) });
+    if (!response.ok) throw new Error(`Pack copy release failed (${response.status}).`);
+    const body = (await response.json()) as { released?: unknown; gained?: unknown; payload?: unknown; rev?: unknown };
+    return {
+      released: body.released === true,
       gained: Number(body.gained) || 0,
       payload: typeof body.payload === "string" ? body.payload : "",
       rev: Number(body.rev) || 0,

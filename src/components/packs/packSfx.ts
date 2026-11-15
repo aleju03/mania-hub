@@ -4,6 +4,8 @@
    The context is created lazily on the first call, which always happens
    inside a user gesture, so autoplay policies never block it. */
 
+import type { SupporterBladeId } from "#/lib/supporter-pack-style";
+
 let context: AudioContext | null = null;
 let master: GainNode | null = null;
 let noiseBuffer: AudioBuffer | null = null;
@@ -45,6 +47,7 @@ interface NoiseOptions {
   startFreq: number;
   endFreq?: number;
   q?: number;
+  filter?: BiquadFilterType;
 }
 
 function playNoise(ctx: AudioContext, options: NoiseOptions) {
@@ -56,7 +59,7 @@ function playNoise(ctx: AudioContext, options: NoiseOptions) {
   // Random offset so back-to-back bursts never sound like the same sample.
   source.playbackRate.value = 0.9 + Math.random() * 0.2;
   const filter = ctx.createBiquadFilter();
-  filter.type = "bandpass";
+  filter.type = options.filter ?? "bandpass";
   filter.frequency.setValueAtTime(options.startFreq, t);
   if (options.endFreq) {
     filter.frequency.exponentialRampToValueAtTime(options.endFreq, t + options.duration);
@@ -160,6 +163,52 @@ export function playPackRip() {
   playNoise(ctx, { duration: 0.05, gain: 0.2, startFreq: 3400, q: 2.5 });
   playNoise(ctx, { duration: 0.26, gain: 0.32, startFreq: 1500, endFreq: 380, q: 0.9 });
   playTone(ctx, { freq: 150, endFreq: 52, duration: 0.2, gain: 0.26, type: "sine" });
+}
+
+/* A supporter's blade (packBlades.ts) sounds like itself as it cuts, under
+   its recorded cut sounds (playBladeTick below): a fine steel tick for the
+   katana, crackle for ember and a buzz for lightning (the others have none). Same
+   pacing and pitch climb as playSlashTick. */
+/* The blades with a synthesized stand-in (ticks, and a rip while the
+   recording loads). */
+const SYNTH_BLADES: ReadonlySet<SupporterBladeId> = new Set<SupporterBladeId>(["katana", "ember", "lightning"]);
+
+function synthBladeTick(ctx: AudioContext, blade: SupporterBladeId, progress: number) {
+  if (blade === "katana") {
+    playNoise(ctx, { duration: 0.028, gain: 0.34, startFreq: 5200 + progress * 2600 + Math.random() * 500, q: 14 });
+  } else if (blade === "ember") {
+    playNoise(ctx, { duration: 0.02, gain: 0.3, startFreq: 900 + Math.random() * 2200, q: 3 });
+    if (Math.random() < 0.5) playNoise(ctx, { at: 0.012 + Math.random() * 0.02, duration: 0.014, gain: 0.22, startFreq: 2800 + Math.random() * 2000, q: 4 });
+  } else {
+    playTone(ctx, { freq: 110 + progress * 60, duration: 0.04, gain: 0.05, type: "sawtooth", drive: true });
+    playNoise(ctx, { duration: 0.03, gain: 0.2, startFreq: 3000 + progress * 1800, q: 6 });
+  }
+}
+
+/* The pack giving, for a supporter's blade, while its recording is still
+   loading. */
+function synthBladeRip(ctx: AudioContext, blade: SupporterBladeId) {
+  // the newer blades wait for their own sound: no synth stand-in for them
+  if (!SYNTH_BLADES.has(blade)) return;
+  if (blade === "katana") {
+    // the draw: a hiss rising to a ring that hangs in the air
+    playNoise(ctx, { duration: 0.18, gain: 0.26, startFreq: 2400, endFreq: 9000, q: 1.4 });
+    playTone(ctx, { at: 0.06, freq: 2637, duration: 0.9, gain: 0.05, type: "sine" });
+    playTone(ctx, { at: 0.06, freq: 3951, duration: 0.6, gain: 0.025, type: "sine" });
+    playTone(ctx, { freq: 140, endFreq: 50, duration: 0.18, gain: 0.2, type: "sine" });
+  } else if (blade === "ember") {
+    // the whoomp of a catch, and a scatter of crackle
+    playNoise(ctx, { duration: 0.42, gain: 0.3, startFreq: 260, endFreq: 1400, q: 0.7 });
+    playTone(ctx, { freq: 120, endFreq: 48, duration: 0.3, gain: 0.24, type: "sine" });
+    for (let index = 0; index < 9; index += 1) {
+      playNoise(ctx, { at: 0.05 + Math.random() * 0.5, duration: 0.012 + Math.random() * 0.02, gain: 0.12 + Math.random() * 0.14, startFreq: 1500 + Math.random() * 3500, q: 3 });
+    }
+  } else {
+    // the crack, and the thunder rolling after it
+    playNoise(ctx, { duration: 0.06, gain: 0.42, startFreq: 4200, q: 0.6 });
+    playNoise(ctx, { at: 0.04, duration: 1.1, gain: 0.32, startFreq: 180, endFreq: 70, q: 0.9 });
+    playTone(ctx, { at: 0.02, freq: 70, endFreq: 38, duration: 0.8, gain: 0.2, type: "sine" });
+  }
 }
 
 /* The blade going through the pack's middle: card stock, not foil. Drier and
@@ -616,4 +665,531 @@ export function playRecycleClink(gained: number) {
     // Inharmonic partial that makes the tick read as metal instead of a beep.
     playTone(ctx, { at, freq: freq * 2.51, duration: 0.05, gain: 0.028, type: "sine" });
   }
+}
+
+/* --- Supporter blades: recorded sounds (packBlades.ts names the files) ---- */
+
+const bladeSamples = new Map<string, SampleSlot>();
+
+function bladeSlot(url: string): SampleSlot {
+  let slot = bladeSamples.get(url);
+  if (!slot) {
+    slot = { url, buffer: null, load: null };
+    bladeSamples.set(url, slot);
+  }
+  return slot;
+}
+
+function playBuffer(ctx: AudioContext, buffer: AudioBuffer, gain: number, rate = 1) {
+  if (!master) return;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.playbackRate.value = rate;
+  const level = ctx.createGain();
+  level.gain.value = gain;
+  source.connect(level).connect(master);
+  source.start();
+}
+
+/* Fetches and decodes a blade's two sounds ahead of the first cut. Safe
+   before any gesture: a suspended context still decodes. */
+export function warmBladeSounds(sound: { cut: string; rip: string; loop?: string } | undefined): void {
+  if (!sound) return;
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  void loadSample(ctx, bladeSlot(sound.cut));
+  void loadSample(ctx, bladeSlot(sound.rip));
+  if (sound.loop) void loadSample(ctx, bladeSlot(sound.loop));
+}
+
+let bladeLoop: { url: string; source: AudioBufferSourceNode; level: GainNode } | null = null;
+
+/* A blade with a loop (ink's brush on paper) sounds the whole time it moves:
+   the loop runs while it is held, its level and pitch following the speed
+   (px/s), and it fades on its own when the pointer stops. */
+export function moveBladeLoop(sound: { loop?: string } | undefined, speed: number): void {
+  if (!sound?.loop) return;
+  const ctx = ensureAudio();
+  if (!ctx || !master) return;
+  const buffer = bladeSamples.get(sound.loop)?.buffer;
+  if (!buffer) return;
+  if (!bladeLoop || bladeLoop.url !== sound.loop) {
+    stopBladeLoop();
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    const level = ctx.createGain();
+    level.gain.value = 0;
+    source.connect(level).connect(master);
+    source.start(0, Math.random() * buffer.duration);
+    bladeLoop = { url: sound.loop, source, level };
+  }
+  const now = ctx.currentTime;
+  const fast = Math.min(1, speed / 1600);
+  const gain = bladeLoop.level.gain;
+  gain.cancelScheduledValues(now);
+  gain.setTargetAtTime(fast * 0.6, now, 0.03);
+  // no more movement: it fades out
+  gain.setTargetAtTime(0, now + 0.09, 0.07);
+  bladeLoop.source.playbackRate.setTargetAtTime(0.9 + fast * 0.25, now, 0.05);
+}
+
+/* The blade let go: the loop fades and stops. */
+export function stopBladeLoop(): void {
+  const loop = bladeLoop;
+  if (!loop) return;
+  bladeLoop = null;
+  const ctx = ensureAudio();
+  if (!ctx) {
+    loop.source.stop();
+    return;
+  }
+  loop.level.gain.cancelScheduledValues(ctx.currentTime);
+  loop.level.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+  loop.source.stop(ctx.currentTime + 0.3);
+}
+
+/* The blade going into the foil, once per stroke. */
+export function playBladeCut(sound: { cut: string; rip: string } | undefined): void {
+  if (!sound) return;
+  const ctx = ensureAudio();
+  const buffer = bladeSamples.get(sound.cut)?.buffer;
+  if (ctx && buffer) playBuffer(ctx, buffer, 0.75, 0.96 + Math.random() * 0.08);
+}
+
+let lastBladeSampleTickAt = 0;
+
+/* Each stretch of foil the blade gets through. Lightning repeats its
+   recorded cut, pitched up as the cut nears the end; steel and fire keep a
+   light synthesized tick under the stroke; frost, void, gale and ink are
+   quiet here (their cut plays once per stroke, from playBladeCut). */
+export function playBladeTick(blade: SupporterBladeId | null, progress: number, sound?: { cut: string; rip: string }) {
+  if (!blade) {
+    playSlashTick(progress);
+    return;
+  }
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  if (!SYNTH_BLADES.has(blade)) return;
+  const now = typeof performance !== "undefined" ? performance.now() : 0;
+  if (blade === "lightning" && sound) {
+    const buffer = bladeSamples.get(sound.cut)?.buffer;
+    if (buffer) {
+      if (now - lastBladeSampleTickAt < 85) return;
+      lastBladeSampleTickAt = now;
+      playBuffer(ctx, buffer, 0.4, 0.85 + Math.random() * 0.4);
+      return;
+    }
+  }
+  if (now - lastTickAt < 26) return;
+  lastTickAt = now;
+  synthBladeTick(ctx, blade, progress);
+}
+
+/* The pack giving: the blade's recording, or its synthesized stand-in if the
+   file has not arrived yet. */
+export function playBladeRip(blade: SupporterBladeId | null, sound?: { cut: string; rip: string }) {
+  if (!blade) {
+    playPackRip();
+    return;
+  }
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const buffer = sound ? bladeSamples.get(sound.rip)?.buffer : null;
+  if (buffer) playBuffer(ctx, buffer, 0.95);
+  else synthBladeRip(ctx, blade);
+  // the low thump of the pack itself, under every blade
+  playTone(ctx, { freq: 130, endFreq: 48, duration: 0.22, gain: 0.16, type: "sine" });
+}
+
+/* The pack run's sounds. Rendered cues, not live synth:
+   scripts/audio/pack-run-sfx.py layers recorded foley with sampled acoustic
+   instruments for each beat of the run (see public/audio/packs/run/README.md)
+   and writes public/audio/packs/run/. A cue that has not decoded yet stays
+   silent; prefetchRunSounds() starts every decode ahead of the table.
+
+   Some files are sprites: fixed-length slots laid end to end, each slot a
+   different take of the same cue, so back-to-back plays differ. The scoring
+   steps are four takes each at one base pitch; runSound.ts raises the whole
+   hit by playback rate as a chain grows. `slot` and `count` here mirror the renderer's Sprite(...)
+   calls; change both together. runSound.ts owns which beat plays what. */
+interface RunCueShape {
+  slot?: number;
+  count?: number;
+}
+
+const RUN_CUES = {
+  "pack-open": {},
+  deal: { slot: 0.3, count: 3 },
+  flip: { slot: 0.18, count: 3 },
+  hover: { slot: 0.2, count: 3 },
+  "step-notes": { slot: 0.42, count: 4 },
+  "step-combo": { slot: 0.5, count: 4 },
+  "step-multiplier": { slot: 0.6, count: 4 },
+  "step-again": { slot: 0.5, count: 4 },
+  "charm-fire": { slot: 0.5, count: 4 },
+  "step-miss": {},
+  finish: {},
+  "count-tick": { slot: 0.1, count: 4 },
+  slam: {},
+  "slam-heavy": {},
+  "fire-ignite": {},
+  "fire-loop": {},
+  "tally-line": {},
+  "tally-total": {},
+  "clear-song": {},
+  /* The last bar of the music (Cool Vibes) into its final hit:
+     local-notes/overjoy-sfx/cues/stage_cleared.py, not the renderer. */
+  "clear-stage": {},
+  "run-cleared": {},
+  "run-failed": {},
+  shards: {},
+  /* Two takes of Kenney's "card-shove" (CC0), cut by
+     local-notes/overjoy-sfx/cues/shop_in.py, not the renderer. */
+  "shop-in": { slot: 0.45, count: 2 },
+  reroll: {},
+  buy: {},
+  sell: {},
+  "charm-move": { slot: 0.3, count: 2 },
+  refuse: {},
+  "ui-tap": { slot: 0.14, count: 2 },
+  /* A 727 on the table: the owner's clip, not rendered by the script. */
+  wysi: {},
+  /* Map cards and interest: scripts/audio/run-extra-sfx.sh. */
+  played: {},
+  interest: {},
+} satisfies Record<string, RunCueShape>;
+
+export type RunCueName = keyof typeof RUN_CUES;
+
+/* Takes per scoring step type (the step sprites' slot count). */
+export const RUN_CHAIN_TAKES = 4;
+
+/* Bumped whenever scripts/audio/pack-run-sfx.py re-renders the set, so a
+   cached copy of the old file is never decoded. */
+const RUN_SAMPLES_VERSION = 10;
+
+const runSamples = new Map<RunCueName, SampleSlot>(
+  (Object.keys(RUN_CUES) as RunCueName[]).map((name) => [
+    name,
+    { url: `/audio/packs/run/${name}.mp3?v=${RUN_SAMPLES_VERSION}`, buffer: null, load: null },
+  ]),
+);
+
+/* Decodes every run cue ahead of the table. Safe before a gesture and to
+   call repeatedly, like the Eternal prefetch. */
+export function prefetchRunSounds(): void {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  for (const slot of runSamples.values()) void loadSample(ctx, slot);
+}
+
+export interface RunCueOptions {
+  /* Which slot of a sprite (clamped to its count); ignored by single cues. */
+  slot?: number;
+  rate?: number;
+  gain?: number;
+  /* Seconds from now. */
+  at?: number;
+}
+
+/* Plays a run cue if it has decoded; a cue still loading is skipped. A sprite
+   slot stops 30 ms before its end, inside the silent margin the renderer
+   leaves, so the mp3's pre-echo of the next slot never sounds. */
+export function playRunCue(name: RunCueName, options: RunCueOptions = {}): void {
+  const ctx = ensureAudio();
+  const sample = runSamples.get(name);
+  if (!ctx || !sample || !master) return;
+  if (!sample.buffer) {
+    void loadSample(ctx, sample);
+    return;
+  }
+  const shape: RunCueShape = RUN_CUES[name];
+  const source = ctx.createBufferSource();
+  source.buffer = sample.buffer;
+  source.playbackRate.value = options.rate ?? 1;
+  const gain = ctx.createGain();
+  gain.gain.value = options.gain ?? 0.8;
+  source.connect(gain).connect(master);
+  const when = ctx.currentTime + (options.at ?? 0);
+  if (shape.slot && shape.count) {
+    const index = Math.max(0, Math.min(shape.count - 1, Math.floor(options.slot ?? 0)));
+    const offset = index * shape.slot;
+    if (offset >= sample.buffer.duration) return;
+    source.start(when, offset, Math.min(shape.slot - 0.03, sample.buffer.duration - offset));
+  } else {
+    source.start(when);
+  }
+}
+
+/* The calls below predate runSound.ts and are kept for HandScore.tsx; they
+   route onto the same cues. */
+
+export function playRunNote(step: number) {
+  playRunCue("step-notes", { slot: step % RUN_CHAIN_TAKES, rate: Math.min(1.4, 0.9 + 0.016 * step), gain: 0.78 });
+}
+
+export function playRunCombo(step: number) {
+  playRunCue("step-combo", { slot: step % RUN_CHAIN_TAKES, rate: Math.min(1.4, 0.9 + 0.016 * step), gain: 0.78 });
+}
+
+export function playRunFinish() {
+  playRunCue("finish", { gain: 0.75 });
+}
+
+/* A card that scores nothing. */
+export function playRunMiss() {
+  playRunCue("step-miss", { gain: 0.8 });
+}
+
+/* Shards in or out. */
+export function playRunCredit(gain: boolean) {
+  playRunCue(gain ? "shards" : "buy", { gain: 0.6 });
+}
+
+let lastMeterTickAt = 0;
+let lastMeterTake = 0;
+
+/* One notch of the score meter rolling up; `progress` 0..1 lifts the pitch
+   as it nears the total. Throttled to one notch per 45 ms, so a fast roll is
+   a ratchet rather than a smear, and each notch takes a different recording
+   than the last with a little pitch jitter. */
+export function playRunMeterTick(progress: number) {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  if (ctx.currentTime - lastMeterTickAt < 0.045) return;
+  lastMeterTickAt = ctx.currentTime;
+  lastMeterTake = (lastMeterTake + 1 + Math.floor(Math.random() * 3)) % 4;
+  const lift = Math.max(0, Math.min(1, progress));
+  const jitter = 1 + (Math.random() * 2 - 1) * 0.03;
+  playRunCue("count-tick", { slot: lastMeterTake, rate: (0.92 + lift * 0.3) * jitter, gain: 0.42 });
+}
+
+const RUN_SLAM_GAIN = 1.0;
+const RUN_SLAM_HEAVY_GAIN = 0.8;
+
+/* The total landing on the meter. `share` is how much of the song's target
+   it covered: the weight layer under it starts at 35% and reaches full at
+   the target, so even a small total lands harder than any scoring step. */
+export function playRunTotal(share: number) {
+  const lift = Math.max(0, Math.min(1, share));
+  playRunCue("slam", { rate: 1 - lift * 0.04, gain: RUN_SLAM_GAIN });
+  playRunCue("slam-heavy", { rate: 1 - lift * 0.04, gain: RUN_SLAM_HEAVY_GAIN * (0.35 + 0.65 * lift) });
+}
+
+/* The fire-loop file holds FIRE_LOOP_SECONDS of flame padded on each side
+   with FIRE_LOOP_PAD of its own wrap (scripts/audio/pack-run-sfx.py), so
+   looping between those points is seamless whether or not a decoder trims
+   the mp3's encoder delay. */
+const FIRE_LOOP_PAD = 0.1;
+const FIRE_LOOP_SECONDS = 6;
+
+let fireLoop: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+let fireLoopWanted = false;
+let fireLoopLevel = 0.3;
+
+/* Starts the quiet flame loop with a soft fade in; a call while it already
+   plays only updates its level. If the file is still decoding it starts once
+   it lands, unless it was stopped in the meantime. */
+export function startRunFireLoop(level = 0.3): void {
+  fireLoopWanted = true;
+  fireLoopLevel = level;
+  const ctx = ensureAudio();
+  const sample = runSamples.get("fire-loop");
+  if (!ctx || !sample || !master) return;
+  if (fireLoop) {
+    fireLoop.gain.gain.cancelScheduledValues(ctx.currentTime);
+    fireLoop.gain.gain.setTargetAtTime(level, ctx.currentTime, 0.25);
+    return;
+  }
+  if (!sample.buffer) {
+    void loadSample(ctx, sample).then(() => {
+      if (fireLoopWanted && !fireLoop && sample.buffer) startRunFireLoop(fireLoopLevel);
+    });
+    return;
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = sample.buffer;
+  source.loop = true;
+  source.loopStart = FIRE_LOOP_PAD;
+  source.loopEnd = Math.min(sample.buffer.duration, FIRE_LOOP_PAD + FIRE_LOOP_SECONDS);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+  gain.gain.setTargetAtTime(level, ctx.currentTime, 0.35);
+  source.connect(gain).connect(master);
+  source.start(ctx.currentTime, FIRE_LOOP_PAD);
+  fireLoop = { source, gain };
+}
+
+/* Fades the flame loop out over about a second and releases it. */
+export function stopRunFireLoop(): void {
+  fireLoopWanted = false;
+  const ctx = context;
+  const loop = fireLoop;
+  fireLoop = null;
+  if (!ctx || !loop) return;
+  loop.gain.gain.cancelScheduledValues(ctx.currentTime);
+  loop.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.25);
+  loop.source.stop(ctx.currentTime + 1.5);
+}
+
+/* Ember's burn on a pack (PackStage): the same recorded flame as the run's
+   loop, swelling as the front spreads and dropping to a low smoulder once it
+   has burnt through. A recording on purpose: short synthesized noise blips at
+   a steady rate read as wet, fleshy smacks rather than fire. */
+export function warmPackBurnSound(): void {
+  const ctx = ensureAudio();
+  const sample = runSamples.get("fire-loop");
+  if (ctx && sample) void loadSample(ctx, sample);
+}
+
+export function setPackBurnSound(level: number): void {
+  startRunFireLoop(level);
+}
+
+export function stopPackBurnSound(): void {
+  stopRunFireLoop();
+}
+
+/* A song, a stage (its final song) or the whole run cleared. */
+export function playRunBlindCleared(kind: "song" | "stage" | "run" = "song") {
+  playRunCue(kind === "run" ? "run-cleared" : kind === "stage" ? "clear-stage" : "clear-song", {
+    gain: kind === "run" ? 0.9 : 0.8,
+  });
+}
+
+/* A failed run. */
+export function playRunOver() {
+  playRunCue("run-failed", { gain: 0.9 });
+}
+
+/* Overjoy's music: "Cool Vibes" by Kevin MacLeod (incompetech.com, CC BY
+   4.0), baked into one file by local-notes/overjoy-music/sourced. It plays
+   from the song's start, then loops file time MUSIC_LOOP_START..END, a span
+   that starts and ends on the same bar; the end of the file repeats the
+   audio after the loop start, so the seam holds whether or not a decoder
+   trims the mp3's encoder delay. It sits low enough to go unnoticed, ducks
+   under a round chart's preview clip, falls silent while the tab is hidden,
+   and the player can turn it off (kept in localStorage). */
+const MUSIC_URL = "/audio/packs/run/music/cool-vibes.mp3?v=1";
+const MUSIC_LOOP_START = 17.456;
+const MUSIC_LOOP_END = 185.1345;
+const MUSIC_LEVEL = 0.2;
+const MUSIC_DUCKED = 0.04;
+const MUSIC_OFF_KEY = "overjoy-music-off";
+
+const musicSample: SampleSlot = { url: MUSIC_URL, buffer: null, load: null };
+let music: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+let musicWanted = false;
+let musicDucked = false;
+/* Ducked under a stinger cut from the music itself, until this time (ms). */
+let musicStingerUntil = 0;
+let musicStingerTimer: number | null = null;
+let musicHidden = false;
+const musicListeners = new Set<() => void>();
+/* This page's choice, which wins over storage (private mode can't write it). */
+let musicOnHere: boolean | null = null;
+
+export function isRunMusicOn(): boolean {
+  if (musicOnHere !== null) return musicOnHere;
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(MUSIC_OFF_KEY) !== "1";
+  } catch {
+    return true;
+  }
+}
+
+export function subscribeRunMusic(listener: () => void): () => void {
+  musicListeners.add(listener);
+  return () => musicListeners.delete(listener);
+}
+
+function musicTarget(): number {
+  if (!isRunMusicOn() || musicHidden) return 0.0001;
+  return musicDucked || performance.now() < musicStingerUntil ? MUSIC_DUCKED : MUSIC_LEVEL;
+}
+
+function applyMusicLevel(timeConstant = 0.4): void {
+  const ctx = context;
+  if (!ctx || !music) return;
+  music.gain.gain.cancelScheduledValues(ctx.currentTime);
+  music.gain.gain.setTargetAtTime(musicTarget(), ctx.currentTime, timeConstant);
+}
+
+function onMusicVisibility(): void {
+  musicHidden = document.visibilityState === "hidden";
+  applyMusicLevel(musicHidden ? 0.15 : 0.6);
+}
+
+/* Starts the music with a slow fade in. Safe before a gesture: on a
+   suspended context the source waits and starts with the first click. */
+export function startRunMusic(): void {
+  musicWanted = true;
+  if (music) return;
+  const ctx = ensureAudio();
+  if (!ctx || !master) return;
+  if (!musicSample.buffer) {
+    void loadSample(ctx, musicSample).then(() => {
+      if (musicWanted && !music && musicSample.buffer) startRunMusic();
+    });
+    return;
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = musicSample.buffer;
+  source.loop = true;
+  source.loopStart = MUSIC_LOOP_START;
+  source.loopEnd = Math.min(musicSample.buffer.duration, MUSIC_LOOP_END);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+  source.connect(gain).connect(master);
+  source.start(ctx.currentTime);
+  music = { source, gain };
+  musicHidden = document.visibilityState === "hidden";
+  document.addEventListener("visibilitychange", onMusicVisibility);
+  applyMusicLevel(1.2);
+}
+
+/* Fades the music out and releases it. */
+export function stopRunMusic(): void {
+  musicWanted = false;
+  const ctx = context;
+  const playing = music;
+  music = null;
+  document.removeEventListener("visibilitychange", onMusicVisibility);
+  if (!ctx || !playing) return;
+  playing.gain.gain.cancelScheduledValues(ctx.currentTime);
+  playing.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.3);
+  playing.source.stop(ctx.currentTime + 2);
+}
+
+/* Turns the music on or off for good (the setting outlives the run). */
+export function setRunMusicOn(on: boolean): void {
+  musicOnHere = on;
+  try {
+    if (on) window.localStorage.removeItem(MUSIC_OFF_KEY);
+    else window.localStorage.setItem(MUSIC_OFF_KEY, "1");
+  } catch {
+    // Private mode: musicOnHere still holds it for this page.
+  }
+  applyMusicLevel(on ? 0.6 : 0.2);
+  for (const listener of musicListeners) listener();
+}
+
+/* Drops the music low for `ms`, under a stinger that would clash with it. */
+export function duckRunMusicFor(ms: number): void {
+  musicStingerUntil = performance.now() + ms;
+  applyMusicLevel(0.15);
+  if (musicStingerTimer !== null) window.clearTimeout(musicStingerTimer);
+  musicStingerTimer = window.setTimeout(() => {
+    musicStingerTimer = null;
+    applyMusicLevel(0.8);
+  }, ms);
+}
+
+/* Drops the music low while a round chart's preview clip plays. */
+export function duckRunMusic(on: boolean): void {
+  if (musicDucked === on) return;
+  musicDucked = on;
+  applyMusicLevel(on ? 0.25 : 0.8);
 }

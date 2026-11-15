@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { LazySettingsPanel } from "../settings/LazySettingsPanel";
 import { useLingui } from "@lingui/react/macro";
+import { scaledPx } from "#/lib/ui-scale-values";
 
 interface SettingsDrawerProps {
   open: boolean;
@@ -47,7 +48,7 @@ export function SettingsDrawer({ open, onClose, onBackdropClose }: SettingsDrawe
           open ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={onBackdropClose ?? onClose}
-        style={{ top: 60 }}
+        style={{ top: scaledPx(60) }}
         aria-hidden={!open}
       />
       <div

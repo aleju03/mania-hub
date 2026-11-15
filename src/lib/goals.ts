@@ -5,7 +5,7 @@ import { liveBridgeToken } from "./live-backend-tokens";
 // cookie server-side and forwards that id with the bridge token (the roster-self-track pattern), so
 // a logged-in user can only ever read or mutate their own goals. The browser never sends a user id.
 
-export type GoalKind = "reach_pp" | "play_pp" | "play_pp_count" | "accuracy" | "pass" | "grade" | "fc" | "reach_rank";
+export type GoalKind = "reach_pp" | "play_pp" | "play_pp_count" | "accuracy" | "pass" | "grade" | "fc" | "reach_rank" | "reach_dan" | "reach_rating";
 export type GoalStatus = "open" | "completed";
 export type GoalSpeedBucket = "normal" | "ht" | "dt";
 
@@ -16,6 +16,8 @@ export interface GoalProgress {
   detail: string | null;
   /** Best grade letter so far on a grade goal's map (A/S/SS), for a best-vs-target badge row. */
   currentGrade?: string | null;
+  /** The player's dan label right now on a dan goal's ladder ("7+", "gamma--"). */
+  currentLabel?: string | null;
 }
 
 export interface UserGoal {

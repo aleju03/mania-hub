@@ -126,7 +126,8 @@ describe("public collection activity privacy", () => {
 
   it("does not offer newest-first ordering on somebody else's shelf", () => {
     expect(shelf).not.toContain('"newest"');
-    expect(shelf).not.toContain("setSort");
+    // rarity and card level reveal nothing about when a card was pulled
+    expect(shelf).toContain('const SHELF_SORTS = ["rarity", "mastery"] as const;');
   });
 });
 

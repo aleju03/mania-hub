@@ -7,6 +7,7 @@ import { useLingui } from "@lingui/react/macro";
 import type { ServerPackCollectionMissingPlayer } from "#/lib/pack-wallet-sync";
 import { CountryFlag } from "../ui/CountryFlag";
 import type { WishlistApi } from "./useWishlist";
+import { UsernameText } from "../ui/UsernameText";
 
 export function MissingPlayerTile({ player, wishlist }: {
   player: ServerPackCollectionMissingPlayer;
@@ -50,7 +51,7 @@ export function MissingPlayerTile({ player, wishlist }: {
       <span className="absolute left-1.5 top-1.5 text-[10px] text-osu-f1/60 tabular-nums">#{player.poolRank}</span>
       <CountryFlag code={player.countryCode} size="xs" decorative className="absolute right-1.5 top-2" />
       <img src={player.avatarUrl} alt="" className="h-1/2 w-auto rounded-full object-cover opacity-30 grayscale" loading="lazy" draggable={false} />
-      <span className="mt-2 w-full truncate text-center text-[11px] text-osu-f1">{player.username}</span>
+      <UsernameText username={player.username} userId={player.userId} className="mt-2 w-full truncate text-center text-[11px] text-osu-f1" />
     </Link>
     {wishlist && <button type="button" onClick={wish} disabled={wishFull} title={wishFull ? t`Wishlist is full (5)` : undefined} aria-pressed={wished}
       className={`text-center text-[10px] ${wished ? "cursor-pointer text-osu-pink hover:text-white" : wishFull ? "cursor-not-allowed text-osu-f1/40" : "cursor-pointer text-osu-f1/70 hover:text-white"}`}>
@@ -67,7 +68,7 @@ export function MissingPlayerTile({ player, wishlist }: {
           items[(index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
         }}
         className="fixed z-50 w-[210px] rounded-lg border border-osu-b3/50 bg-osu-b5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.55)]">
-        <div className="truncate px-3 py-2 text-[12px] font-bold text-white">{player.username}</div>
+        <div className="truncate px-3 py-2 text-[12px] font-bold text-white"><UsernameText username={player.username} userId={player.userId} /></div>
         <button type="button" role="menuitem" onClick={wish} disabled={wishFull}
           className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-osu-f1 hover:bg-osu-b4/60 hover:text-white focus:bg-osu-b4/60 disabled:cursor-not-allowed disabled:opacity-40">
           <Star size={13} />{wishFull ? t`Wishlist is full (5)` : wished ? t`Remove wish` : t`Wish`}

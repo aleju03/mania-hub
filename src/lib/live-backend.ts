@@ -1,6 +1,16 @@
+import { parseSubmittedCompanion, parseSupporterCompanion, type SubmittedCompanion, type SupporterCompanion } from "./supporter-companions";
+import { isSupporterCardSleeve, NO_PACK_STYLE, parsePackStyle, type SupporterCardSleeveId, type SupporterPackStyle } from "./supporter-pack-style";
+import { parseProfileStats, parseProfileStatsData, type ProfileStatId, type ProfileStatsData } from "./profile-stats";
+import { parseProfilePlays, type ProfilePlays } from "./profile-plays";
 import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
+import { isSupporterAvatarFrame, parseFrameDan, parseWorkshopFrameArt, registerWorkshopFrames, type FrameDan, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
+import { parseSubmittedFrames, type SubmittedFrame } from "./workshop-frames";
+import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
+import { isSupporterProfileTheme, parseProfileThemeOptions, type ProfileThemeOptions, type SupporterProfileThemeId } from "./supporter-profile-themes";
+import { isSupporterNameOutline, isSupporterNameStyle, type SupporterNameStyleId } from "./supporter-name-styles";
+import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 import type { VibroAnalysis } from "#dan/vibro-sections";
 import { requireAdminAccess, requireTrueAdminAccess } from "./auth";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
@@ -11,7 +21,9 @@ import type { ServerPackCollectionCard, ServerPackCollectionPage } from "./pack-
 import type { ReplaySpectatorTicket } from "./replay-spectator";
 import { LEADERBOARD_PAGE_SIZE, type ClearLeaderboardSnapshot, type DanLeaderboardSnapshot, type DanSide, type SkillLeaderboardSnapshot } from "./skill-leaderboards";
 import type { UnratedPlaysSnapshot } from "./unrated-plays";
+import { fetchOwnSkillPath, isOwnSkillPath } from "./skill-privacy";
 import { CrossTabEventSource, supportsCrossTabEventSource } from "./cross-tab-event-source";
+import { parseCustomTheme, type CustomTheme } from "./custom-themes";
 import { SharedEventSourcePool, type PoolableEventSource, type SharedEventSource } from "./shared-event-source";
 
 export type LivePlayerSkills = MyDataSkillBreakdown;
@@ -286,6 +298,7 @@ export const LIVE_EVENT_NAMES = [
   "pack_pull",
   "goat_poll",
   "donation_goal",
+  "pack_board",
   "job_status",
 ] as const;
 
@@ -378,8 +391,21 @@ export interface LiveMapScoreEntry {
   isLazer: boolean;
   hasReplay: boolean;
   playedAt: string | null;
+  /** The speed the play ran at: 1, 1.5, 0.75 or a custom rate on the DT and HT boards. */
+  rate?: number;
   /** Set on a play sent through an app (Companella, Hashi) instead of osu!; scoreId is then the feed's negative id. */
   companella?: { importId: string; replay: boolean; app?: string; video?: string };
+}
+
+/**
+ * One mod board of a chart. `usual` is the Scores tab's own mix (nomod, DT
+ * and HT at their own rates, with HR, HD, NF and the like); `dt` and `ht` hold
+ * those plays at any rate; `mods` are the note mods (IN, HO, NR) the board's
+ * plays all carry.
+ */
+export interface LiveMapBoard {
+  speed: "usual" | "dt" | "ht";
+  mods: string[];
 }
 
 export interface LiveMapScoresSnapshot {
@@ -390,6 +416,8 @@ export interface LiveMapScoresSnapshot {
   self: LiveMapScoreEntry | null;
   /** Players per country on the whole board, on the unfiltered first page only. */
   countries?: Array<{ code: string; count: number }>;
+  /** The chart's boards with a player on each, on the unfiltered first page only. */
+  boards?: Array<LiveMapBoard & { count: number }>;
 }
 
 export type LiveMapsRefreshProgressStatus = "queued" | "running" | "done" | "failed";
@@ -869,6 +897,9 @@ export interface LiveBackendStorageBreakdown {
   tableBytes: number;
   fileBytes: number | null;
   walBytes: number | null;
+  /** The .osu artifacts database and its WAL; absent from older backends. */
+  osuArtifactsBytes?: number | null;
+  osuArtifactsWalBytes?: number | null;
   maxBytes: number;
   capturedAt: string;
 }
@@ -1093,88 +1124,6 @@ export const fetchLiveBackendVpsMetrics = createServerFn({ method: "GET" })
     );
   });
 
-export interface LiveBackendHonoraryCardOwner {
-  userId: number;
-  username: string;
-  copies: number;
-  firstPulledAt: number;
-  lastPulledAt: number;
-}
-
-export interface LiveBackendHonoraryCardPulls {
-  cardUserId: number;
-  cardUsername: string | null;
-  owners: LiveBackendHonoraryCardOwner[];
-  ownerCount: number;
-  copies: number;
-  firstPulledAt: number | null;
-  lastPulledAt: number | null;
-}
-
-export interface LiveBackendHonoraryCollector {
-  userId: number;
-  username: string;
-  cards: number;
-  copies: number;
-  lastPulledAt: number;
-}
-
-export interface LiveBackendHonoraryLatestPull {
-  ownerUserId: number;
-  ownerUsername: string;
-  cardUserId: number;
-  cardUsername: string | null;
-  pulledAt: number;
-}
-
-export interface LiveBackendHonoraryPulls {
-  rosterSize: number;
-  pulledCards: number;
-  distinctOwners: number;
-  totalCopies: number;
-  cards: LiveBackendHonoraryCardPulls[];
-  /* Absent from a backend that predates the leaderboard. */
-  collectors?: LiveBackendHonoraryCollector[];
-  collectorsListed?: number;
-  latest?: LiveBackendHonoraryLatestPull | null;
-  ownersPerCard: number;
-  capturedAt: number;
-}
-
-// Who holds which GOAT card, for the admin roster section. Admin-gated; the
-// token is injected server-side (never in the browser), mirroring
-// fetchLiveBackendSweeps. Returns null when the backend predates the endpoint.
-export const fetchLiveBackendHonoraryPulls = createServerFn({ method: "GET" })
-  .handler(async (): Promise<LiveBackendHonoraryPulls | null> => {
-    await requireAdminAccess("Server honorary pulls");
-    const base = getServerLiveBackendUrl();
-    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
-    const headers: HeadersInit = {};
-    if (process.env.LIVE_ADMIN_TOKEN) {
-      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
-    }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS);
-    let response: Response;
-    try {
-      response = await fetch(`${base}/api/admin/honorary-pulls`, { headers, signal: controller.signal });
-    } catch (err) {
-      if (isAbortError(err)) throw new Error("Honorary pulls timed out.");
-      throw err;
-    } finally {
-      clearTimeout(timeout);
-    }
-    if (response.status === 404) return null;
-    const body = await response.json() as LiveBackendHonoraryPulls & { error?: unknown };
-    if (!response.ok) {
-      const message = body && typeof body === "object" && "error" in body
-        ? String((body as { error?: unknown }).error)
-        : `Server ${response.status} for /api/admin/honorary-pulls`;
-      throw new Error(message);
-    }
-    return { ...body, cards: Array.isArray(body.cards) ? body.cards : [] };
-  });
-
 export interface LiveBackendOsuDirectBudget {
   family: 4 | 6;
   ip: string | null;
@@ -1207,7 +1156,7 @@ export interface LiveBackendMapDownloads {
 
 // The admin "Map downloads" card: osu.direct's per-IP budget, mirror health,
 // songs no mirror served and the .osu download lane. Admin-gated; the token is
-// injected server-side, mirroring fetchLiveBackendHonoraryPulls. Returns null
+// injected server-side, mirroring fetchLiveBackendSweeps. Returns null
 // when the backend predates the endpoint.
 export interface LiveBackendPartnerUsageDay {
   day: string;
@@ -2203,6 +2152,13 @@ export async function fetchLivePlayerSkillsDirect(userId: number): Promise<LiveP
   return fetchLiveJson(`/api/profiles/${userId}/skills`);
 }
 
+/* Refetches past the browser's 60-second copy, so a change the player just
+   made to how their skills show is what their profile loads next. */
+export async function refreshLivePlayerSkillsDirect(userId: number): Promise<LivePlayerSkills> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  return fetchLiveJson(`/api/profiles/${userId}/skills`, { cache: "reload" });
+}
+
 export interface LivePlayerSkillHistorySnapshot {
   ratings: Record<string, number>;
   dan: Record<"rc" | "ln", { label: string; beyondTable: boolean } | null>;
@@ -3173,14 +3129,22 @@ export async function fetchLiveSnipeBoard(
 export async function fetchLiveMapScores(
   beatmapId: number,
   userId?: number | null,
-  options: { offset?: number; country?: string; name?: string } = {},
+  options: { offset?: number; country?: string; name?: string; board?: LiveMapBoard } = {},
 ): Promise<LiveMapScoresSnapshot> {
   const query = new URLSearchParams({ beatmap: String(beatmapId) });
   if (userId != null && userId > 0) query.set("user", String(userId));
   if (options.offset) query.set("offset", String(options.offset));
   if (options.country) query.set("country", options.country);
   if (options.name) query.set("q", options.name);
+  setMapBoardQuery(query, options.board);
   return fetchLiveJson(`/api/snapshots/map-scores?${query.toString()}`);
+}
+
+/** Adds a mod board's `speed` and `mods` to a map-scores query; the usual board adds nothing. */
+export function setMapBoardQuery(query: URLSearchParams, board: LiveMapBoard | undefined): void {
+  if (!board) return;
+  if (board.speed !== "usual") query.set("speed", board.speed);
+  if (board.mods.length) query.set("mods", board.mods.join(","));
 }
 
 // The Random tab draws server-side: the filters travel with the request and the
@@ -4335,6 +4299,81 @@ export async function fetchLivePackCardGifts(ownerUserId: number, cardKey: strin
   return fetchLiveJson(`/api/packs/card-gifts?owner=${ownerUserId}&card=${encodeURIComponent(cardKey)}`);
 }
 
+/* Every edition one collector has pulled, card key to editions (best first).
+   Public like the shelf it decorates (live-backend pack-run.ts). */
+export async function fetchLivePackEditions(userId: number): Promise<Record<string, string[]>> {
+  const body = await fetchLiveJson<{ editions?: Record<string, string[]> }>(`/api/packs/editions/${userId}`);
+  return body.editions && typeof body.editions === "object" ? body.editions : {};
+}
+
+export interface LivePackRunBoardEntry {
+  userId: number;
+  username: string;
+  bestAnte: number;
+  bestHand: number;
+  runsWon: number;
+  level: number;
+}
+
+export async function fetchLivePackRunBoard(): Promise<LivePackRunBoardEntry[]> {
+  const body = await fetchLiveJson<{ entries?: LivePackRunBoardEntry[] }>("/api/packs/run/board");
+  return Array.isArray(body.entries) ? body.entries : [];
+}
+
+export interface LiveChainRunBoardEntry {
+  rank: number;
+  userId: number;
+  username: string;
+  cc?: string;
+  round: number;
+  bestRow: number;
+  rows: number;
+  finished: boolean;
+  updatedAt: number;
+}
+
+export type LiveChainBoardPeriod = "all" | "month" | "day";
+
+/* The chain run's board for a period (all time, or this UTC month): each
+   player's best run, by round reached then best row, plus `user`'s own entry
+   when asked for. */
+export async function fetchLiveChainRunBoard(
+  period: LiveChainBoardPeriod = "all",
+  user?: number | null,
+  limit = 20,
+): Promise<{ entries: LiveChainRunBoardEntry[]; mine: LiveChainRunBoardEntry | null }> {
+  const params = new URLSearchParams({ limit: String(Math.max(1, Math.min(50, Math.floor(limit)))), period });
+  if (user) params.set("user", String(user));
+  const body = await fetchLiveJson<{ entries?: LiveChainRunBoardEntry[]; mine?: LiveChainRunBoardEntry | null }>(`/api/chain-run/board?${params}`);
+  return { entries: Array.isArray(body.entries) ? body.entries : [], mine: body.mine ?? null };
+}
+
+/* The cards a guest chain run plays on: a slice of the pool plus the GOATs
+   (see the backend's getChainGuestPool). */
+export async function fetchLiveChainGuestPool<Card>(): Promise<{ cards: Card[]; goats: Card[]; charts: Card[] } | null> {
+  try {
+    const body = await fetchLiveJson<{ cards?: Card[]; goats?: Card[]; charts?: Card[] }>("/api/chain-run/guest-pool");
+    return Array.isArray(body.cards)
+      ? { cards: body.cards, goats: Array.isArray(body.goats) ? body.goats : [], charts: Array.isArray(body.charts) ? body.charts : [] }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/* One board entry and what its run was built from (snapshot null on entries
+   older than snapshots); null when the player has no entry for the period. */
+export async function fetchLiveChainRunSheet<Snapshot>(
+  userId: number,
+  period: LiveChainBoardPeriod,
+): Promise<{ entry: LiveChainRunBoardEntry; snapshot: Snapshot | null } | null> {
+  try {
+    return await fetchLiveJson(`/api/chain-run/board/${userId}?period=${period}`);
+  } catch {
+    return null;
+  }
+}
+
 /* How the community holds one player's own card ("your card got pulled"). */
 export async function fetchLivePackPulledStats(userId: number): Promise<LivePackPulledStats> {
   return fetchLiveJson(`/api/packs/pulled-stats/${userId}`);
@@ -4420,6 +4459,9 @@ export interface LivePackCommunityStats {
     firstFinds: LivePackCollector[];
     longestStanding: LivePackCollector[];
     completion: LivePackCollector[];
+    /* Mastery levels summed over every card held; missing from an older
+       backend. */
+    mastery?: Array<LivePackCollector & { mastery: number }>;
     rarestCards: LivePackCommunityCard[];
     mostOwnedCards: LivePackCommunityCard[];
   };
@@ -4533,26 +4575,113 @@ export async function fetchLivePackShowcaseCards(userId: number, options: { fres
   return Array.isArray(body.cards) ? body.cards : [];
 }
 
+/* The shared card board (backend features/pack-boards.ts). The table is cut
+   into regions; the overview lists the ones with cards and their versions. */
+export interface LivePackBoardOverview {
+  regions: [id: number, cards: number, version: number][];
+  total: number;
+  owners: number;
+  /* Stacking numbers from here up are under a day old: protected from other
+     players' cards. */
+  freshFrom: number;
+}
+
+export async function fetchLivePackBoardOverview(): Promise<LivePackBoardOverview> {
+  const body = await fetchLiveJson<Partial<LivePackBoardOverview>>("/api/packs/board/overview");
+  return {
+    regions: Array.isArray(body.regions) ? body.regions : [],
+    total: Number(body.total) || 0,
+    owners: Number(body.owners) || 0,
+    freshFrom: Number(body.freshFrom) || 0,
+  };
+}
+
+/* Regions' zoomed-out colour grids (backend regionPreview): one byte per
+   half-card cell, the tier of the top card there (1-based, 0 for bare table),
+   64 cells a side plus a 2-cell margin. Sent deflated and base64'd. */
+export async function fetchLivePackBoardPreviews(ids: number[]): Promise<[id: number, version: number, cells: Uint8Array][]> {
+  const body = await fetchLiveJson<{ previews?: [number, number, string][] }>(`/api/packs/board/previews?ids=${ids.join(",")}`);
+  const previews = Array.isArray(body.previews) ? body.previews : [];
+  return Promise.all(previews.map(async ([id, version, packed]): Promise<[number, number, Uint8Array]> => {
+    const raw = Uint8Array.from(atob(packed), (char) => char.charCodeAt(0));
+    const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return [id, version, new Uint8Array(await new Response(stream).arrayBuffer())];
+  }));
+}
+
+/* The full held cards behind board placements, for drawing their real faces
+   up close: [owner, key, card] for each "owner:key" asked for that is still
+   held. At most 60 a call. */
+export async function fetchLivePackBoardFaces(pairs: string[]): Promise<[number, string, ServerPackCollectionCard][]> {
+  const body = await fetchLiveJson<{ cards?: [number, string, ServerPackCollectionCard][] }>(
+    `/api/packs/board/faces?c=${encodeURIComponent(pairs.join(","))}`,
+  );
+  return Array.isArray(body.cards) ? body.cards : [];
+}
+
+/* Regions' cards, each as eight numbers in a flat list (z, owner index,
+   owner's card number, face index, x, y, turn, size), with the faces (key,
+   tier, player name) and owners (id, name, the lowest card number they laid
+   in the last day or null) they point at. */
+export interface LivePackBoardRegions {
+  regions: { id: number; version: number; cards: number[] }[];
+  faces: [string, string | null, string][];
+  owners: [number, string, (number | null)?][];
+}
+
+export async function fetchLivePackBoardRegions(ids: number[]): Promise<LivePackBoardRegions> {
+  const body = await fetchLiveJson<Partial<LivePackBoardRegions>>(`/api/packs/board/regions?ids=${ids.join(",")}`);
+  return {
+    regions: Array.isArray(body.regions) ? body.regions : [],
+    faces: Array.isArray(body.faces) ? body.faces : [],
+    owners: Array.isArray(body.owners) ? body.owners : [],
+  };
+}
+
+/* One collector's cards on the table (card number, region, key), their cap,
+   and every card they could lay down (key, tier, copies, player name). */
+export interface LivePackBoardOwner {
+  cards: [n: number, region: number, key: string][];
+  cap: number;
+  inventory: [key: string, tier: string | null, copies: number, name: string][];
+}
+
+/* `cardsOnly` skips the inventory, for counting what is down. */
+export async function fetchLivePackBoardOwner(userId: number, cardsOnly = false): Promise<LivePackBoardOwner> {
+  const body = await fetchLiveJson<Partial<LivePackBoardOwner>>(`/api/packs/board/owner/${userId}${cardsOnly ? "?only=cards" : ""}`);
+  return {
+    cards: Array.isArray(body.cards) ? body.cards : [],
+    cap: Number(body.cap) || 0,
+    inventory: Array.isArray(body.inventory) ? body.inventory : [],
+  };
+}
+
 /* The shared wall pages over cards and whole sets. Owners are shown only
    when inspecting a card. cardTotal counts cards; total drives pagination. */
+export type LivePackShowcaseWallKind = "players" | "teams" | "sets";
+
 export async function fetchLivePackShowcaseWall(options: {
   page?: number;
   pageSize?: number;
   /* Only the cards wearing this mark, sets flattened to the members that do. */
   mark?: PackCardMark | null;
+  /* Player or team cards alone (sets' members included), or only the sets. */
+  kind?: LivePackShowcaseWallKind | null;
   fresh?: boolean;
 } = {}): Promise<{
   cards: LivePackShowcaseWallCard[];
   total: number;
   cardTotal?: number;
   /* Over the whole wall, whatever the page was filtered to; the backend
-     sends it with the first page only. */
+     sends them with the first page only. */
   markCounts?: Record<PackCardMark, number>;
+  kindCounts?: Record<LivePackShowcaseWallKind, number>;
 }> {
   const query = new URLSearchParams();
   if (options.page) query.set("page", String(options.page));
   if (options.pageSize) query.set("pageSize", String(options.pageSize));
   if (options.mark) query.set("mark", options.mark);
+  if (options.kind) query.set("kind", options.kind);
   // Skips the browser's ten-second cache, for the read straight after a save:
   // the whole point of the wall is that you put something on it and see it.
   if (options.fresh) query.set("fresh", String(Date.now()));
@@ -4562,6 +4691,17 @@ export async function fetchLivePackShowcaseWall(options: {
 /* The whole hub in one read: totals plus every record board. */
 export async function fetchLivePackCommunityStats(): Promise<LivePackCommunityStats> {
   return fetchLiveJson("/api/packs/community/stats");
+}
+
+export type LivePackCollectorBoard = "completion" | "mastery" | "packsOpened" | "biggestCollections" | "goatHolders" | "firstFinds" | "longestStanding";
+
+/* Where one collector stands on each record board they are on at all. */
+export interface LivePackCollectorStanding {
+  boards: Partial<Record<LivePackCollectorBoard, { rank: number; collector: LivePackCollector & { mastery?: number } }>>;
+}
+
+export async function fetchLivePackCollectorStanding(userId: number): Promise<LivePackCollectorStanding> {
+  return fetchLiveJson(`/api/packs/community/standing?userId=${Math.floor(userId)}`);
 }
 
 export async function fetchLivePackCollectors(options: {
@@ -4597,6 +4737,8 @@ export async function fetchLivePackCollectorCards(userId: number, options: {
   /* The public shelf includes teams; the showcase picker reads them
      separately, so calls without a pool keep the player-only read. */
   pool?: "all" | "players" | "teams";
+  /* Rarity when left out. */
+  sort?: "mastery" | null;
 } = {}): Promise<LivePackCommunityCollectionPage> {
   const query = new URLSearchParams();
   if (options.page) query.set("page", String(options.page));
@@ -4604,6 +4746,7 @@ export async function fetchLivePackCollectorCards(userId: number, options: {
   if (options.tier && options.tier !== "all") query.set("tier", options.tier);
   if (options.query?.trim()) query.set("q", options.query.trim());
   if (options.mark) query.set("mark", options.mark);
+  if (options.sort) query.set("sort", options.sort);
   if (options.pool) {
     query.set("teams", "1");
     if (options.pool !== "all") query.set(options.pool === "teams" ? "teamsOnly" : "playersOnly", "1");
@@ -4729,10 +4872,15 @@ export interface LiveSharedPackCard {
     /* Badge text this one holding was given, printed on the card art in place
        of the tier's name. Null for every ordinary card. */
     customLabel: string | null;
+    /* Ember burnt or Frost froze a copy of it: the shared card wears it too. */
+    spell?: "burnt" | "frozen";
     /* And the image it floats in its background in place of the tier's own
        pattern, for the same reason: a shared card has to look like the card
        its owner holds. Null for every ordinary card. */
     motif: CardMotif | null;
+    /* The player's supporter look, present only while they are an active
+       supporter. Absent on a backend older than supporter looks. */
+    supporterLook?: SupporterLook | null;
     skills: unknown | null;
     pp: number;
     globalRank: number;
@@ -4776,6 +4924,462 @@ export async function fetchLivePackSharedCard(
   const normalizedPullId = Math.floor(Number(pullId) || 0);
   const query = normalizedPullId > 0 ? `?pull=${normalizedPullId}` : "";
   return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${encodeURIComponent(cardKey)}${query}`);
+}
+
+/* A player's supporter card look, avatar frame, name style and profile theme, for the
+   profile card and hero (collection payloads carry the look inline). Null when they are not an
+   active supporter, and on any failure: an ordinary card and a bare avatar are
+   the safe fallback. Cached in memory per user id for a few minutes, so moving
+   between profile tabs does not refetch it. */
+const SUPPORTER_LOOK_TTL_MS = 5 * 60_000;
+export interface SupporterProfileLook {
+  look: SupporterLook | null;
+  /* When their current unbroken run began, which sets their rank; null unless active. */
+  runStartedAt: number | null;
+  /* A monthly subscription keeps their time renewing. */
+  renewing: boolean;
+  /* A renewing supporter whose subscription is $10 or more a payment. */
+  patron: boolean;
+  /* An earlier rank they chose to show instead of the current one (0 Amber .. 11 Holo). */
+  shownRank: number | null;
+  /* Whether that renewing rank shows its fire; the supporter can turn it off. */
+  rankFire: boolean;
+  frame: SupporterAvatarFrameId | null;
+  nameStyle: SupporterNameStyleId | null;
+  nameFont: SupporterNameFontId | null;
+  /* The outline round their name, six hex digits; null for none. */
+  nameOutline: string | null;
+  profileTheme: SupporterProfileThemeId | null;
+  profileThemeOptions: ProfileThemeOptions;
+  /* Their own theme, when they wear one instead of a built-in (profileTheme is then null). */
+  customTheme: CustomTheme | null;
+  /* The supporter's four insight cards, null for the usual four. */
+  profileStats: ProfileStatId[] | null;
+  /* The keymode their strongest-skill card shows; null follows their main keymode. */
+  profileSkillKeys: number | null;
+  profileStatsData: ProfileStatsData;
+  /* Plays they put in place of the newest and oldest top play, null for those two. */
+  profilePlays: ProfilePlays | null;
+  /* Their sleeve, binder and reveal confetti in packs. */
+  packStyle: SupporterPackStyle;
+  /* Their own dan, which the Dan license frame shows; null without a verdict. */
+  dan: FrameDan | null;
+  /* The dans on their Trophy shelf frame, left to right (five at most). */
+  shelf: FrameDan[];
+  /* Their osu! name, which the Desktop icon frame labels itself with. */
+  username: string | null;
+  /* The figure beside their profile's numbers, null for none. */
+  companion: SupporterCompanion | null;
+}
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, renewing: false, patron: false, shownRank: null, rankFire: true, frame: null, nameStyle: null, nameFont: null, nameOutline: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileSkillKeys: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null, shelf: [], username: null };
+interface SupporterLookCacheEntry {
+  at: number;
+  value: Promise<SupporterProfileLook>;
+  /* Set once the request settles, for the peek helpers. */
+  settled?: SupporterProfileLook;
+}
+const supporterLookCache = new Map<number, SupporterLookCacheEntry>();
+/* Players whose look was just saved here: their next read skips the browser's
+   HTTP cache too (the public read is cacheable for 30s), or a profile opened
+   right after a save would show the old look. */
+const supporterLooksToReload = new Set<number>();
+
+/* A look tried on at /supporter and shown on the viewer's own profile
+   (supporter-preview.ts): while it is set, every read of that player's look
+   here, and their name, frame, sleeve and row in lists, wears it instead.
+   Nothing about it leaves this browser. */
+let lookPreview: { userId: number; look: Partial<SupporterProfileLook> } | null = null;
+const lookPreviewListeners = new Set<() => void>();
+
+export function setSupporterLookPreview(userId: number, look: Partial<SupporterProfileLook> | null): void {
+  const next = look && userId > 0 ? { userId, look } : null;
+  if (!next && !lookPreview) return;
+  lookPreview = next;
+  previewRowThemes = null;
+  for (const listener of lookPreviewListeners) listener();
+  for (const listener of nameStyleListeners) listener();
+}
+
+export function supporterLookPreviewFor(userId: number): Partial<SupporterProfileLook> | null {
+  return lookPreview?.userId === userId ? lookPreview.look : null;
+}
+
+export function subscribeSupporterLookPreview(listener: () => void): () => void {
+  lookPreviewListeners.add(listener);
+  return () => lookPreviewListeners.delete(listener);
+}
+
+/* The look with the preview laid over it, for the previewed player. */
+function withLookPreview(userId: number, value: SupporterProfileLook): SupporterProfileLook {
+  return lookPreview?.userId === userId ? { ...value, ...lookPreview.look } : value;
+}
+
+/* What the peek helpers read: the settled look, previewed. */
+function peekSettledLook(userId: number): SupporterProfileLook | undefined {
+  const id = Math.floor(Number(userId) || 0);
+  const settled = freshSupporterLookEntry(id)?.settled;
+  return lookPreview?.userId === id ? withLookPreview(id, settled ?? NO_SUPPORTER_LOOK) : settled;
+}
+
+function freshSupporterLookEntry(userId: number): SupporterLookCacheEntry | undefined {
+  const cached = supporterLookCache.get(userId);
+  return cached && Date.now() - cached.at < SUPPORTER_LOOK_TTL_MS ? cached : undefined;
+}
+
+export function fetchLiveSupporterProfileLook(userId: number): Promise<SupporterProfileLook> {
+  const id = Math.floor(Number(userId) || 0);
+  if (lookPreview?.userId === id) return fetchSupporterProfileLookUnpreviewed(id).then((value) => withLookPreview(id, value));
+  return fetchSupporterProfileLookUnpreviewed(id);
+}
+
+function fetchSupporterProfileLookUnpreviewed(id: number): Promise<SupporterProfileLook> {
+  if (id <= 0 || !getLiveBackendUrl()) return Promise.resolve(NO_SUPPORTER_LOOK);
+  const cached = freshSupporterLookEntry(id);
+  if (cached) return cached.value;
+  const entry: SupporterLookCacheEntry = { at: Date.now(), value: Promise.resolve(NO_SUPPORTER_LOOK) };
+  const reload = supporterLooksToReload.delete(id);
+  entry.value = fetchLiveJson<unknown>(`/api/supporters/look/${id}`, reload ? { cache: "reload" } : undefined)
+    .then((body) => {
+      const value = parseSupporterProfileLook(body);
+      entry.settled = value;
+      return value;
+    })
+    .catch(() => {
+      if (supporterLookCache.get(id) === entry) supporterLookCache.delete(id);
+      return NO_SUPPORTER_LOOK;
+    });
+  supporterLookCache.set(id, entry);
+  return entry.value;
+}
+
+/* The backend's answer for one player's look, checked field by field. */
+export function parseSupporterProfileLook(raw: unknown): SupporterProfileLook {
+  const body = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  // a workshop frame comes with its art, which every frame on the page draws from
+  registerWorkshopFrames(parseWorkshopFrameArt(body.frameArt));
+  return {
+    look: parseSupporterLook(body.look ?? null),
+    runStartedAt: typeof body.runStartedAt === "number" && Number.isFinite(body.runStartedAt) ? body.runStartedAt : null,
+    renewing: body.renewing === true,
+    patron: body.renewing === true && body.patron === true,
+    shownRank: Number.isInteger(body.shownRank) && Number(body.shownRank) >= 0 && Number(body.shownRank) < 12 ? Number(body.shownRank) : null,
+    rankFire: body.rankFire !== false,
+    frame: isSupporterAvatarFrame(body.frame) ? body.frame : null,
+    nameStyle: isSupporterNameStyle(body.nameStyle) ? body.nameStyle : null,
+    nameFont: isSupporterNameFont(body.nameFont) ? body.nameFont : null,
+    nameOutline: isSupporterNameOutline(body.nameOutline) ? body.nameOutline : null,
+    profileTheme: isSupporterProfileTheme(body.profileTheme) ? body.profileTheme : null,
+    profileThemeOptions: parseProfileThemeOptions(body.profileThemeOptions),
+    customTheme: parseCustomTheme(body.customTheme),
+    profileStats: parseProfileStats(body.profileStats),
+    profileSkillKeys: Number.isInteger(body.profileSkillKeys) && Number(body.profileSkillKeys) >= 1 && Number(body.profileSkillKeys) <= 18 ? Number(body.profileSkillKeys) : null,
+    profileStatsData: parseProfileStatsData(body.profileStatsData),
+    profilePlays: parseProfilePlays(body.profilePlays),
+    packStyle: parsePackStyle(body.packStyle),
+    companion: parseSupporterCompanion(body.companion),
+    dan: parseFrameDan(body.dan),
+    shelf: Array.isArray(body.shelf) ? body.shelf.map(parseFrameDan).filter((dan): dan is FrameDan => dan !== null).slice(0, 5) : [],
+    username: typeof body.username === "string" && body.username ? body.username : null,
+  };
+}
+
+/* A look the server render already fetched (the profile route's loader),
+   handed to the browser's cache so the page and everything that peeks at it
+   start from it instead of fetching it again. */
+export function seedLiveSupporterLook(userId: number, raw: unknown): SupporterProfileLook {
+  const id = Math.floor(Number(userId) || 0);
+  const value = parseSupporterProfileLook(raw);
+  if (id > 0 && typeof window !== "undefined" && !freshSupporterLookEntry(id)) {
+    supporterLookCache.set(id, { at: Date.now(), value: Promise.resolve(value), settled: value });
+  }
+  return withLookPreview(id, value);
+}
+
+/* The raw look for the server render, from the backend directly; null if it
+   doesn't answer within `timeoutMs`, so a slow backend never holds the page. */
+export async function fetchServerSupporterLook(userId: number, timeoutMs: number): Promise<unknown> {
+  const id = Math.floor(Number(userId) || 0);
+  const base = getServerLiveBackendUrl();
+  if (id <= 0 || !base) return null;
+  try {
+    const response = await fetch(`${base}/api/supporters/look/${id}`, { signal: AbortSignal.timeout(timeoutMs) });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function fetchLiveSupporterLook(userId: number): Promise<SupporterLook | null> {
+  return fetchLiveSupporterProfileLook(userId).then((value) => value.look);
+}
+
+/* Drops the cached look, for the settings page after a save, so the next
+   profile card fetches the new one rather than waiting out the TTL. */
+export function forgetLiveSupporterLook(userId: number): void {
+  const id = Math.floor(Number(userId) || 0);
+  supporterLookCache.delete(id);
+  supporterLooksToReload.add(id);
+}
+
+/* The look, frame or name style already fetched for this player, without a
+   request, so a card, avatar or name that remounts does not flash plain first.
+   Undefined when not known yet. */
+export function peekLiveSupporterLook(userId: number): SupporterLook | null | undefined {
+  return peekSettledLook(userId)?.look;
+}
+
+export function peekLiveSupporterFrame(userId: number): SupporterAvatarFrameId | null | undefined {
+  return peekSettledLook(userId)?.frame;
+}
+
+export function peekLiveSupporterNameStyle(userId: number): SupporterNameStyleId | null | undefined {
+  return peekSettledLook(userId)?.nameStyle;
+}
+
+export function peekLiveSupporterNameFont(userId: number): SupporterNameFontId | null | undefined {
+  return peekSettledLook(userId)?.nameFont;
+}
+
+export function peekLiveSupporterNameOutline(userId: number): string | null | undefined {
+  return peekSettledLook(userId)?.nameOutline;
+}
+
+export function peekLiveSupporterProfileTheme(userId: number): SupporterProfileThemeId | null | undefined {
+  return peekSettledLook(userId)?.profileTheme;
+}
+
+export function peekLiveSupporterCustomTheme(userId: number): CustomTheme | null | undefined {
+  return peekSettledLook(userId)?.customTheme;
+}
+
+export function peekLiveSupporterProfileThemeOptions(userId: number): ProfileThemeOptions | undefined {
+  return peekSettledLook(userId)?.profileThemeOptions;
+}
+
+export function peekLiveSupporterRunStartedAt(userId: number): number | null | undefined {
+  return peekSettledLook(userId)?.runStartedAt;
+}
+
+export function peekLiveSupporterRenewing(userId: number): boolean | undefined {
+  return peekSettledLook(userId)?.renewing;
+}
+
+export function peekLiveSupporterRankFire(userId: number): boolean | undefined {
+  return peekSettledLook(userId)?.rankFire;
+}
+
+export function peekLiveSupporterCompanion(userId: number): SupporterCompanion | null | undefined {
+  return peekSettledLook(userId)?.companion;
+}
+
+/* Every companion supporters submitted, newest first. */
+export async function fetchLiveSubmittedCompanions(): Promise<SubmittedCompanion[]> {
+  const body = await fetchLiveJson<{ companions?: unknown }>("/api/supporters/companions", { cache: "no-store" });
+  return Array.isArray(body?.companions) ? body.companions.map(parseSubmittedCompanion).filter((entry): entry is SubmittedCompanion => entry !== null) : [];
+}
+
+/* Every workshop frame on the shared list, newest first. */
+export async function fetchLiveWorkshopFrames(): Promise<SubmittedFrame[]> {
+  const body = await fetchLiveJson<{ frames?: unknown }>("/api/supporters/frames", { cache: "no-store" });
+  return parseSubmittedFrames(body?.frames);
+}
+
+export function peekLiveSupporterPackStyle(userId: number): SupporterPackStyle | undefined {
+  return peekSettledLook(userId)?.packStyle;
+}
+
+export function peekLiveSupporterProfileStats(userId: number): { stats: ProfileStatId[] | null; skillKeys: number | null; data: ProfileStatsData; plays: ProfilePlays | null } | undefined {
+  const settled = peekSettledLook(userId);
+  return settled ? { stats: settled.profileStats, skillKeys: settled.profileSkillKeys, data: settled.profileStatsData, plays: settled.profilePlays } : undefined;
+}
+
+/* Every active supporter's name tag style and name font, for names in lists. One
+   small map shared by every UsernameText, fetched at most once a minute;
+   names subscribe and restyle when it lands. */
+const NAME_STYLE_MAP_TTL_MS = 60_000;
+let nameStyleMap: {
+  at: number;
+  styles: Map<number, SupporterNameStyleId>;
+  fonts: Map<number, SupporterNameFontId>;
+  outlines?: Map<number, string>;
+  frames: Map<number, SupporterAvatarFrameId>;
+  sleeves: Map<number, SupporterCardSleeveId>;
+  themes: Map<number, SupporterRowTheme>;
+} | null = null;
+let nameStyleMapInflight = false;
+// set after a local save, so the next fetch skips the HTTP cache (max-age 60)
+let nameStyleMapReload = false;
+/* The same, across a page reload: the browser's copy of the map stays fresh
+   for a minute, so a reload right after a save would bring the old look
+   back. The save's time is kept for a little longer than that. */
+const NAME_STYLE_SAVED_AT_KEY = "mania-hub-look-saved-at";
+const NAME_STYLE_SAVED_WINDOW_MS = 90_000;
+
+function markNameStyleMapStale(): void {
+  nameStyleMapReload = true;
+  try {
+    window.localStorage.setItem(NAME_STYLE_SAVED_AT_KEY, String(Date.now()));
+  } catch {
+    // storage blocked: this page's flag still covers it
+  }
+}
+
+function lookSavedRecently(): boolean {
+  try {
+    const at = Number(window.localStorage.getItem(NAME_STYLE_SAVED_AT_KEY));
+    return Number.isFinite(at) && Date.now() - at < NAME_STYLE_SAVED_WINDOW_MS;
+  } catch {
+    return false;
+  }
+}
+const nameStyleListeners = new Set<() => void>();
+
+export function subscribeSupporterNameStyles(listener: () => void): () => void {
+  nameStyleListeners.add(listener);
+  return () => nameStyleListeners.delete(listener);
+}
+
+export function getSupporterNameStyle(userId: number): SupporterNameStyleId | null {
+  const preview = supporterLookPreviewFor(userId);
+  if (preview && "nameStyle" in preview) return preview.nameStyle ?? null;
+  return nameStyleMap?.styles.get(userId) ?? null;
+}
+
+export function getSupporterNameOutline(userId: number): string | null {
+  const preview = supporterLookPreviewFor(userId);
+  if (preview && "nameOutline" in preview) return preview.nameOutline ?? null;
+  return nameStyleMap?.outlines?.get(userId) ?? null;
+}
+
+/* After the supporter page saves an outline, so the viewer's own name updates at once. */
+export function setSupporterNameOutlineLocally(userId: number, outline: string | null): void {
+  const outlines = new Map(nameStyleMap?.outlines ?? []);
+  if (outline) outlines.set(userId, outline);
+  else outlines.delete(userId);
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
+  markNameStyleMapStale();
+  for (const listener of nameStyleListeners) listener();
+}
+
+export function getSupporterNameFont(userId: number): SupporterNameFontId | null {
+  const preview = supporterLookPreviewFor(userId);
+  if (preview && "nameFont" in preview) return preview.nameFont ?? null;
+  return nameStyleMap?.fonts.get(userId) ?? null;
+}
+
+/* The avatar frame lists draw around this player's avatar (the same map). */
+export function getSupporterListFrame(userId: number): SupporterAvatarFrameId | null {
+  const preview = supporterLookPreviewFor(userId);
+  if (preview && "frame" in preview) return preview.frame ?? null;
+  return nameStyleMap?.frames.get(userId) ?? null;
+}
+
+/* The card sleeve a supporter's collection tiles wear (the same map). */
+export function getSupporterSleeve(userId: number): SupporterCardSleeveId | null {
+  const preview = supporterLookPreviewFor(userId);
+  if (preview?.packStyle) return preview.packStyle.sleeve ?? null;
+  return nameStyleMap?.sleeves.get(userId) ?? null;
+}
+
+/* Every supporter's profile theme, for the banners behind list rows (the
+   same map; a new Map whenever it changes, so it works as a store snapshot). */
+/* What a list row shows behind a supporter: a built-in theme's strip, or a custom theme's banner row image. */
+export type SupporterRowTheme = SupporterProfileThemeId | { image: string };
+const CUSTOM_ROW_URL = /^https:\/\/cdn\.mania-tracker\.com\/theme-assets\/[a-f0-9]{64}\.webp$/;
+
+// the list themes with the preview's in, rebuilt only when either changes
+let previewRowThemes: { base: ReadonlyMap<number, SupporterRowTheme> | null; themes: ReadonlyMap<number, SupporterRowTheme> } | null = null;
+
+export function getSupporterListThemes(): ReadonlyMap<number, SupporterRowTheme> | null {
+  const base = nameStyleMap?.themes ?? null;
+  if (!lookPreview || !("profileTheme" in lookPreview.look)) return base;
+  if (previewRowThemes?.base !== base) {
+    const themes = new Map(base ?? []);
+    const { profileTheme, profileThemeOptions } = lookPreview.look;
+    if (profileTheme && profileThemeOptions?.rows) themes.set(lookPreview.userId, profileTheme);
+    else themes.delete(lookPreview.userId);
+    previewRowThemes = { base, themes };
+  }
+  return previewRowThemes.themes;
+}
+
+/* After the supporter page saves a sleeve, so the viewer's own tiles update at once. */
+export function setSupporterSleeveLocally(userId: number, sleeve: SupporterCardSleeveId | null): void {
+  const sleeves = new Map(nameStyleMap?.sleeves ?? []);
+  if (sleeve) sleeves.set(userId, sleeve);
+  else sleeves.delete(userId);
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines: nameStyleMap?.outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves, themes: nameStyleMap?.themes ?? new Map() };
+  markNameStyleMapStale();
+  for (const listener of nameStyleListeners) listener();
+}
+
+export function ensureSupporterNameStyles(): void {
+  if (nameStyleMapInflight || !getLiveBackendUrl()) return;
+  if (nameStyleMap && Date.now() - nameStyleMap.at < NAME_STYLE_MAP_TTL_MS) return;
+  nameStyleMapInflight = true;
+  const reload = nameStyleMapReload || lookSavedRecently();
+  nameStyleMapReload = false;
+  // a new URL too, so no cache between here and the backend answers it
+  fetchLiveJson<{ styles?: Record<string, unknown>; fonts?: Record<string, unknown>; outlines?: Record<string, unknown>; frames?: Record<string, unknown>; sleeves?: Record<string, unknown>; themes?: Record<string, unknown>; customRows?: Record<string, unknown>; frameArt?: unknown }>(reload ? `/api/supporters/name-styles?fresh=${Date.now()}` : "/api/supporters/name-styles", reload ? { cache: "reload" } : undefined)
+    .then((body) => {
+      registerWorkshopFrames(parseWorkshopFrameArt(body?.frameArt));
+      const styles = new Map<number, SupporterNameStyleId>();
+      for (const [id, style] of Object.entries(body?.styles ?? {})) if (isSupporterNameStyle(style)) styles.set(Number(id), style);
+      const fonts = new Map<number, SupporterNameFontId>();
+      for (const [id, font] of Object.entries(body?.fonts ?? {})) if (isSupporterNameFont(font)) fonts.set(Number(id), font);
+      const outlines = new Map<number, string>();
+      for (const [id, outline] of Object.entries(body?.outlines ?? {})) if (isSupporterNameOutline(outline)) outlines.set(Number(id), outline);
+      const frames = new Map<number, SupporterAvatarFrameId>();
+      for (const [id, frame] of Object.entries(body?.frames ?? {})) if (isSupporterAvatarFrame(frame)) frames.set(Number(id), frame);
+      const sleeves = new Map<number, SupporterCardSleeveId>();
+      for (const [id, sleeve] of Object.entries(body?.sleeves ?? {})) if (isSupporterCardSleeve(sleeve)) sleeves.set(Number(id), sleeve);
+      const themes = new Map<number, SupporterRowTheme>();
+      for (const [id, theme] of Object.entries(body?.themes ?? {})) if (isSupporterProfileTheme(theme)) themes.set(Number(id), theme);
+      for (const [id, url] of Object.entries(body?.customRows ?? {})) if (typeof url === "string" && CUSTOM_ROW_URL.test(url)) themes.set(Number(id), { image: url });
+      nameStyleMap = { at: Date.now(), styles, fonts, outlines, frames, sleeves, themes };
+      for (const listener of nameStyleListeners) listener();
+    })
+    .catch(() => {})
+    .finally(() => {
+      nameStyleMapInflight = false;
+    });
+}
+
+/* After the supporter page saves a frame, so the viewer's framed avatar in
+   lists updates without waiting for the next fetch. */
+export function setSupporterFrameLocally(userId: number, frame: SupporterAvatarFrameId | null): void {
+  const frames = new Map(nameStyleMap?.frames ?? []);
+  if (frame) frames.set(userId, frame);
+  else frames.delete(userId);
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines: nameStyleMap?.outlines, frames, sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
+  markNameStyleMapStale();
+  for (const listener of nameStyleListeners) listener();
+}
+
+/* After the supporter page saves a theme, so the viewer's own rows update. */
+export function setSupporterThemeLocally(userId: number, theme: SupporterRowTheme | null): void {
+  const themes = new Map(nameStyleMap?.themes ?? []);
+  if (theme) themes.set(userId, theme);
+  else themes.delete(userId);
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles: nameStyleMap?.styles ?? new Map(), fonts: nameStyleMap?.fonts ?? new Map(), outlines: nameStyleMap?.outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes };
+  markNameStyleMapStale();
+  for (const listener of nameStyleListeners) listener();
+}
+
+/* After the supporter page saves a style, so the viewer's own name updates
+   everywhere without waiting for the next fetch. */
+export function setSupporterNameStyleLocally(userId: number, style: SupporterNameStyleId | null, font?: SupporterNameFontId | null): void {
+  const styles = new Map(nameStyleMap?.styles ?? []);
+  if (style) styles.set(userId, style);
+  else styles.delete(userId);
+  const fonts = new Map(nameStyleMap?.fonts ?? []);
+  if (font !== undefined) {
+    if (font) fonts.set(userId, font);
+    else fonts.delete(userId);
+  }
+  nameStyleMap = { at: nameStyleMap?.at ?? 0, styles, fonts, outlines: nameStyleMap?.outlines, frames: nameStyleMap?.frames ?? new Map(), sleeves: nameStyleMap?.sleeves ?? new Map(), themes: nameStyleMap?.themes ?? new Map() };
+  markNameStyleMapStale();
+  for (const listener of nameStyleListeners) listener();
 }
 
 /* The public pull feed: notable-only by default (high mints and first-ever
@@ -4885,10 +5489,27 @@ export function openLiveEventSource(country: string, options?: { observe?: boole
   return liveEventSourcePool.open(`${base}/api/live?${query.toString()}`);
 }
 
+// The signed-in player, seeded by the root layout in the browser only: a
+// player who keeps their ratings private reads their own through the bridge.
+let signedInViewerId: number | null = null;
+export function noteSignedInViewer(id: number | null): void {
+  if (typeof window !== "undefined") signedInViewerId = id;
+}
+
 async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
   const base = getLiveBackendUrl();
   if (!base) throw new Error("Server is not configured.");
   const response = await fetch(`${base}${path}`, { credentials: "omit", ...init });
+  // A private player's ratings come back hidden from the anonymous read; on
+  // their own profile, ask again as them (lib/skill-privacy.ts).
+  if (response.status === 403 && signedInViewerId != null && path.startsWith(`/api/profiles/${signedInViewerId}/`) && isOwnSkillPath(path)) {
+    const own = await fetchOwnSkillPath({ data: { path } }).catch(() => null);
+    if (own?.ok) {
+      const payload = JSON.parse(own.body);
+      harvestAvatarAccents(payload);
+      return payload as T;
+    }
+  }
   // Same "Server <status>" message as the plain Error this used to throw, but
   // carrying the status and a 429's retry-after so callers like the pack draw
   // can tell a rate-limited request from a broken backend.

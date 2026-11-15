@@ -375,6 +375,8 @@ interface StorageFootprint {
   analyticsWal: number | null;
   journal?: number | null;
   journalWal?: number | null;
+  osuArtifacts?: number | null;
+  osuArtifactsWal?: number | null;
   backups: number | null;
   replayVideoWork: number | null;
 }
@@ -998,6 +1000,10 @@ function StorageBreakdownModal({ status, onClose }: { status: LiveBackendStatus 
   const walBytes = data?.walBytes ?? status?.storage?.walBytes ?? null;
   const fileTotal = dbFileBytes != null || walBytes != null ? (dbFileBytes ?? 0) + (walBytes ?? 0) : null;
   const maxBytes = data?.maxBytes ?? status?.storage?.maxBytes ?? 0;
+  // The .osu artifacts file sits beside the main one but outside its cap and its table pages.
+  const artifactsBytes = data?.osuArtifactsBytes ?? null;
+  const artifactsWalBytes = data?.osuArtifactsWalBytes ?? null;
+  const artifactsTotal = artifactsBytes != null || artifactsWalBytes != null ? (artifactsBytes ?? 0) + (artifactsWalBytes ?? 0) : null;
   const TOP_N = 14;
   const rows = data?.tables ?? [];
   const shown = rows.slice(0, TOP_N);
@@ -1027,6 +1033,11 @@ function StorageBreakdownModal({ status, onClose }: { status: LiveBackendStatus 
                   {formatBytes(fileTotal)} file + WAL of {formatBytes(maxBytes)} limit{data ? ` · ${formatBytes(totalTableBytes)} table pages · ${data.tables.length} tables` : ""}
                   {scanning ? " · scanning" : stale ? " · cached" : ""}
                 </div>
+                {artifactsTotal != null ? (
+                  <div className="text-[10px] text-osu-f1">
+                    .osu artifacts {formatBytes(artifactsBytes)} file + {formatBytes(artifactsWalBytes)} WAL, outside the limit
+                  </div>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -2142,6 +2153,8 @@ function StoragePathRows({ paths }: { paths: StorageFootprint | null | undefined
     { label: "Analytics WAL", bytes: paths.analyticsWal },
     { label: "Journal database", bytes: paths.journal ?? null },
     { label: "Journal WAL", bytes: paths.journalWal ?? null },
+    { label: ".osu artifacts database", bytes: paths.osuArtifacts ?? null },
+    { label: ".osu artifacts WAL", bytes: paths.osuArtifactsWal ?? null },
     { label: "Backups directory", bytes: paths.backups },
     { label: "Replay video work dir", bytes: paths.replayVideoWork },
   ];

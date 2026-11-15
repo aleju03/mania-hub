@@ -182,7 +182,7 @@ describe("ManiaReplayRenderer initialization", () => {
   });
 
   it("can hide the replay life bar for chart previews", () => {
-    const source = fs.readFileSync(path.resolve(__dirname, "../../routes/maps.tsx"), "utf8");
+    const source = fs.readFileSync(path.resolve(__dirname, "../maps/ChartPreviewPanel.tsx"), "utf8");
 
     expect(source).toContain("showHealthBar: false");
   });
@@ -218,20 +218,17 @@ describe("ManiaReplayRenderer initialization", () => {
   });
 
   it("uses the saved replay skin for chart previews", () => {
-    const source = fs.readFileSync(path.resolve(__dirname, "../../routes/maps.tsx"), "utf8");
+    // Every chart preview, the Random pick's included, runs through the shared panel.
     const panelSource = fs.readFileSync(path.resolve(__dirname, "../maps/ChartPreviewPanel.tsx"), "utf8");
 
     // Through the shared hook, which also rebuilds the art for an applied
     // custom skin: localStorage alone holds the asset-free copy.
-    expect(source).toContain("const skinSettings = useReplaySkinSettings();");
     expect(panelSource).toContain("const localSkinSettings = useReplaySkinSettings();");
-    // Both stages build from the ref, never the effect's closure: rebuilding
+    // The stage builds from the ref, never the effect's closure: rebuilding
     // an applied skin's art is async, so on a reroll it can land while the
     // renderer's dynamic import is still in flight, and a stage built from the
     // captured value would keep the asset-free copy until something else
     // changed the settings.
-    expect(source).toContain("skinSettings: skinSettingsRef.current,");
-    expect(source).toContain("renderer.setSkinSettings(skinSettingsRef.current);");
     expect(panelSource).toContain("skinSettings: skinSettingsRef.current,");
     expect(panelSource).toContain("renderer.setSkinSettings(skinSettingsRef.current);");
   });

@@ -15,10 +15,12 @@ import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import { parsePackTeamCard, teamCardUser, teamPackCardKey, type PackTeamCard } from "./team-cards";
 export { parsePackTeamCard, teamCardFace, teamCardSkills, teamCardUser, teamPackCardKey, type PackTeamCard } from "./team-cards";
 import { parseCardMotif, type CardMotif } from "./card-motif";
+import { parseSupporterLook, type SupporterLook } from "./supporter-card-looks";
 import { parsePackCardKey } from "./pack-collection";
 import { HONORARY_PACK_POOL, honoraryPlayerById, isHonoraryPlayer, type HonoraryPlayer } from "./honorary-players";
 import { getUserScoresBestWindow } from "./osu";
-import { drawServerPack, type ServerPackDrawResult, type ServerWalletState } from "./pack-draw";
+import { drawServerPack, type ServerPackDrawResult, type ServerPackDrawSlot, type ServerWalletState } from "./pack-draw";
+import { RUN_EDITIONS, type PackRunOpenPayload, type RunEdition } from "./pack-run";
 import type { OsuScore } from "./types";
 
 /* Default cards per pack; pack types override via cardCount. */
@@ -74,6 +76,9 @@ export interface PackPlayer {
   cardKey?: string;
   customLabel?: string | null;
   motif?: CardMotif | null;
+  /* The player's supporter look, for every copy of their card. Display-only:
+     it changes how the face is drawn and nothing about the deal. */
+  supporterLook?: SupporterLook | null;
   /* Dealt by the wishlist's pity roll (live-backend pack-wishlist.ts): a
      player this collector named and the pack reached for. Display-only, like
      the flags above - it only decides whether the reveal prints the tag. */
@@ -91,6 +96,10 @@ export interface PackPlayer {
   /* The team card's pull log entry, which the server holds off the feed until
      the reveal finishes and releases it (releaseServerTeamPackPulls). */
   teamPullEventId?: number;
+  /* The edition this copy rolled and whether a chain pull dealt it (the pack
+     run, live-backend pack-run.ts). Display-only: the server stored both. */
+  edition?: RunEdition | null;
+  chained?: boolean;
 }
 
 /* The variant fields a server slot may carry, bounded: a key that is not a
@@ -843,6 +852,15 @@ export interface ServerPackDeal {
   /* The wallet after the spend (the draw is the purchase); null only if the
      backend response somehow lacked one. */
   wallet: ServerWalletState | null;
+  /* The pack run's side of the open: the score to animate and the run as it
+     now stands. Absent for a collector without runs. */
+  run?: PackRunOpenPayload;
+}
+
+/* What a slot says about its own copy in the pack run, bounded. */
+function packRunSlotFields(slot: ServerPackDrawSlot): Pick<PackPlayer, "edition" | "chained"> {
+  const edition = (RUN_EDITIONS as readonly string[]).includes(slot.edition ?? "") ? (slot.edition as RunEdition) : null;
+  return { ...(edition ? { edition } : {}), ...(slot.chained === true ? { chained: true } : {}) };
 }
 
 /* Maps the backend's dealt hand into the shapes the reveal renders. Honorary
@@ -883,10 +901,13 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
             }
           : {}),
         ...(pullEventId > 0 ? { teamPullEventId: pullEventId } : {}),
+        ...packRunSlotFields(slot),
       });
       continue;
     }
     const variant = packPlayerVariantFields(slot);
+    const supporterLook = parseSupporterLook(slot.supporterLook ?? null);
+    const look = supporterLook ? { supporterLook } : {};
     if (typeof slot.isNew === "boolean") {
       isNewByCardKey.set(
         variant.cardKey ?? (slot.honorary ? `${slot.userId}:goat` : slot.eternal ? `${slot.userId}:eternal` : String(slot.userId)),
@@ -895,7 +916,7 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
     }
     if (slot.honorary) {
       const member = honoraryPlayerById(slot.userId);
-      if (member?.cardReady) players.push(honoraryToPackPlayer(member));
+      if (member?.cardReady) players.push({ ...honoraryToPackPlayer(member), ...look, ...packRunSlotFields(slot) });
       continue;
     }
     if (slot.eternal) {
@@ -909,6 +930,8 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
       players.push({
         eternal: true,
         ...variant,
+        ...look,
+        ...packRunSlotFields(slot),
         user: {
           id: slot.userId,
           username: slot.username || snapshot?.username || `User ${slot.userId}`,
@@ -923,6 +946,8 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
     }
     players.push({
       ...variant,
+      ...look,
+      ...packRunSlotFields(slot),
       user: {
         id: slot.userId,
         username: slot.username ?? `User ${slot.userId}`,
@@ -949,6 +974,7 @@ export function mapServerPackDraw(result: ServerPackDrawResult): ServerPackDeal 
     scoresByUserId,
     isNewByCardKey,
     wallet: result.wallet,
+    ...(result.run ? { run: result.run } : {}),
   };
 }
 
@@ -966,8 +992,10 @@ export type ServerPackDealOutcome =
    of the server wallet, and comes back with the hand, its cards, and the
    spent balance. Failures other than the outcomes above throw into the
    page's "couldn't deal" retry. */
-export async function drawPackPlayersFromServer(packTypeId: PackTypeId): Promise<ServerPackDealOutcome> {
-  const outcome = await drawServerPack({ data: { packType: packTypeId } });
+/* `run` is true for a pack opened from the run's page, the only opens the
+   run scores. */
+export async function drawPackPlayersFromServer(packTypeId: PackTypeId, run = false): Promise<ServerPackDealOutcome> {
+  const outcome = await drawServerPack({ data: { packType: packTypeId, run } });
   if (!outcome) return { kind: "unavailable" };
   if (outcome.status === "busy") return { kind: "busy", reason: outcome.reason };
   if (outcome.status === "paused") return { kind: "paused", pausedUntil: outcome.pausedUntil };

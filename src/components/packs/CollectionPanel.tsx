@@ -1,10 +1,11 @@
 import { GiftSpareDialog } from "./GiftSpareDialog";
+import { ReleaseCopyDialog } from "./ReleaseCopyDialog";
 import { useCardContextMenu } from "./useCardContextMenu";
 import { MissingPlayerTile } from "./MissingPlayerTile";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Gift, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Gift, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search, Undo2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg, plural } from "@lingui/core/macro";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
@@ -38,7 +39,13 @@ import { playRecycleClink } from "./packSfx";
 import { MarkFilters } from "./collections/MarkFilters";
 import { teamImageProxyUrl } from "#/lib/team-image";
 import { useAuth } from "#/lib/auth-context";
+import { useSupporterPackStyle } from "#/lib/use-supporter-pack-style";
+import type { SupporterBinderId } from "#/lib/supporter-pack-style";
+import { BINDER_PAGE_SIZE, BinderPages } from "./BinderPages";
 import { rememberTeamName } from "../../lib/analytics-teams";
+import { UsernameText } from "../ui/UsernameText";
+import { fetchLivePackBoardOwner, fetchLivePackEditions } from "#/lib/live-backend";
+import type { RunEdition } from "#/lib/pack-run";
 
 export type { CardMint };
 
@@ -51,8 +58,9 @@ type CollectionTierFilter = ManiaCardTier | "all" | "unrated" | "untracked";
 
 /* "newest" orders by when the card first joined the collection (dup pulls do
    not resurface a card); "copies" puts the most duplicated cards first;
+   "mastery" puts the cards held most over time first (recycled copies count);
    "rarity" is the classic tier-then-pp order. */
-type CollectionSortMode = "rarity" | "newest" | "copies";
+type CollectionSortMode = "rarity" | "newest" | "copies" | "mastery";
 
 const COLLECTION_SORTS: Array<{
   id: CollectionSortMode;
@@ -62,6 +70,7 @@ const COLLECTION_SORTS: Array<{
   { id: "rarity", label: msg`Rarity`, hint: msg`Highest tier first, then pp` },
   { id: "newest", label: msg`Newest`, hint: msg`When each card first joined your collection` },
   { id: "copies", label: msg`Copies`, hint: msg`Most copies first` },
+  { id: "mastery", label: msg`Card level`, hint: msg`Highest card level first, counting recycled copies` },
 ];
 
 /* How you read your own collection is a standing preference, not a transient
@@ -74,7 +83,7 @@ function readStoredCollectionSort(): CollectionSortMode {
   if (typeof window === "undefined") return "rarity";
   try {
     const stored = window.localStorage.getItem(COLLECTION_SORT_STORAGE_KEY);
-    return stored === "newest" || stored === "copies" ? stored : "rarity";
+    return stored === "newest" || stored === "copies" || stored === "mastery" ? stored : "rarity";
   } catch {
     return "rarity";
   }
@@ -123,6 +132,8 @@ interface CollectionPanelProps {
   /* Recycle callbacks return the shards gained so the panel can play the
      clink and spawn the "+N" burst at the click point. */
   onRecycleCard: (cardKey: string) => number | Promise<number>;
+  /* Puts one numbered copy back in the pool (synced collections only). */
+  onReleaseCopy?: (cardKey: string, serial: number) => Promise<{ released: boolean; gained: number } | null>;
   onRecycleWhole: (cardKey: string) => number | Promise<number>;
   onRecycleWholeMany: (cardKeys: string[]) => number | Promise<number>;
   onRecycleWholeMatching: (filter: {
@@ -147,6 +158,10 @@ interface CollectionPanelProps {
     toggle: (userId: number) => Promise<void>;
     full: boolean;
   };
+  /* Set while the collector has pack runs: the grid then wears each card's
+     best edition, and a new value refetches the editions (it moves with
+     every scored pack). */
+  editionsVersion?: string | null;
 }
 
 interface LoadedServerCollectionPage {
@@ -465,6 +480,7 @@ export function CollectionPanel({
   collectionRevision = 0,
   onGiftSent,
   onRecycleCard,
+  onReleaseCopy,
   onRecycleWhole,
   onRecycleWholeMany,
   onRecycleWholeMatching,
@@ -472,10 +488,51 @@ export function CollectionPanel({
   onApplyMint,
   binders,
   wishlist,
+  editionsVersion = null,
 }: CollectionPanelProps) {
   const { t, i18n } = useLingui();
   // Only for the self chip's badge, which wears the collector's own face.
   const viewer = useAuth().viewer;
+  // How many of each card the viewer has down on the board: a recycle that
+  // leaves fewer copies takes the rest off, so the buttons say so first.
+  const [boardRead, setBoardRead] = useState(0);
+  const [onBoard, setOnBoard] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    if (!viewer?.id) return;
+    let live = true;
+    fetchLivePackBoardOwner(viewer.id, true)
+      .then((owner) => {
+        if (!live) return;
+        const counts = new Map<string, number>();
+        for (const [, , key] of owner.cards) counts.set(key, (counts.get(key) ?? 0) + 1);
+        setOnBoard(counts);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [viewer?.id, boardRead]);
+  // placements that come off when only `keep` copies stay
+  const offBoard = (cardKey: string, keep: number) => Math.max(0, (onBoard.get(cardKey) ?? 0) - keep);
+  // A supporter's own collection reads as their binder: two 3x3 pages a spread.
+  const binder = useSupporterPackStyle(viewer?.id, { own: true }).binder;
+  const collectionPageSize = binder ? BINDER_PAGE_SIZE : COLLECTION_PAGE_SIZE;
+  const [editions, setEditions] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    if (editionsVersion === null || !viewer) {
+      setEditions({});
+      return;
+    }
+    let cancelled = false;
+    void fetchLivePackEditions(viewer.id)
+      .then((next) => {
+        if (!cancelled) setEditions(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [editionsVersion, viewer]);
   const [query, setQuery] = useState("");
   // Searching a synced collection is a server round trip per distinct query, so
   // it waits for a pause in typing instead of firing a request per keystroke.
@@ -568,7 +625,6 @@ export function CollectionPanel({
      face fallback while a thumbnail renders); "page" holds the placeholder
      grid a pending page shows, which locally loads too fast to look at. */
   const [skeletonSim, setSkeletonSim] = useState<"off" | "cards" | "page">("off");
-  const collectionControlsRef = useRef<HTMLDivElement | null>(null);
   const [serverPage, setServerPage] = useState<LoadedServerCollectionPage | null>(() => {
     const initialRequest = {
       page: 0,
@@ -598,6 +654,7 @@ export function CollectionPanel({
   const [serverMissingKey, setServerMissingKey] = useState<string | null>(null);
   const [serverRefreshKey, setServerRefreshKey] = useState(0);
   const [giftCard, setGiftCard] = useState<CollectedCard | null>(null);
+  const [releaseCard, setReleaseCard] = useState<CollectedCard | null>(null);
   const lastCollectionRevision = useRef(collectionRevision);
   useEffect(() => {
     if (lastCollectionRevision.current === collectionRevision) return;
@@ -641,6 +698,7 @@ export function CollectionPanel({
     void Promise.resolve(action()).then((gained) => {
       celebrateRecycle(gained, anchor);
       if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
+      if (gained > 0) setBoardRead((read) => read + 1);
     });
   };
   const clearRecycleAllHold = () => {
@@ -827,7 +885,7 @@ export function CollectionPanel({
   const activeQuery = useServerCollection ? debouncedQuery : query;
   const serverRequest = {
     page: collectionPage,
-    pageSize: COLLECTION_PAGE_SIZE,
+    pageSize: collectionPageSize,
     tier: tierFilter,
     query: activeQuery.trim().toLowerCase(),
     sort: sortMode,
@@ -851,7 +909,9 @@ export function CollectionPanel({
           ? b.firstPulledAt - a.firstPulledAt || tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp
           : sortMode === "copies"
             ? b.copies - a.copies || tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp
-            : tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp,
+            : sortMode === "mastery"
+              ? b.copies + (b.recycledCopies ?? 0) - a.copies - (a.recycledCopies ?? 0) || tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp
+              : tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp,
       )
     : [];
   const cards = useServerCollection ? (activeServerPage?.cards as CollectedCard[] | undefined) ?? [] : localCards;
@@ -962,13 +1022,18 @@ export function CollectionPanel({
           ? serverPoolProgress?.retiredOwnedCount ?? 0
           : Math.max(0, Math.floor(Number(serverTierCounts[tierFilter === "unrated" ? "unrated" : tierFilter]) || 0));
   const filteredTotal = useServerCollection ? serverMetaPage?.total ?? estimatedFilteredTotal : visibleCards.length;
-  const totalPages = Math.max(1, Math.ceil(filteredTotal / COLLECTION_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / collectionPageSize));
   const currentPage = Math.min(collectionPage, totalPages - 1);
-  const pageStart = currentPage * COLLECTION_PAGE_SIZE;
-  const pageEnd = Math.min(filteredTotal, pageStart + COLLECTION_PAGE_SIZE);
+  const pageStart = currentPage * collectionPageSize;
+  const pageEnd = Math.min(filteredTotal, pageStart + collectionPageSize);
   const pageCards = useServerCollection ? cards : visibleCards.slice(pageStart, pageEnd);
   // Faces for the page, filled in cheapest-source-first.
   const { onThumbnailError: handleThumbnailError } = useCardThumbnails(pageCards);
+  /* The binder's next and previous spreads, their faces made while this one
+     is being read, the ones no store has too: left for the turn, those held
+     it back most of a second on a phone. */
+  const [readAhead, setReadAhead] = useState<CollectedCard[]>([]);
+  useCardThumbnails(readAhead);
   /* The missing list pages on its own index and shares the search box. Its
      last known total keeps the pager on screen while the next page loads,
      the same way the collection's counts do. */
@@ -1033,7 +1098,7 @@ export function CollectionPanel({
   // Skeletons mirror what the current filter will return: a rarity filter
   // (without a search) resolves to exactly that rarity's count rather than a
   // full page of placeholders.
-  const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, filteredTotal - pageStart));
+  const placeholderCount = Math.max(1, Math.min(collectionPageSize, filteredTotal - pageStart));
   const placeholderTiers: Array<ManiaCardTier | null> = showSkeletonGrid
     ? (sortMode !== "rarity" || duplicatesOnly || mark !== null || cardKind !== null) && tierFilter === "all"
       // Sorted by pull date the page mixes rarities unpredictably, so the
@@ -1056,6 +1121,12 @@ export function CollectionPanel({
     : visibleCards.reduce((sum, card) => sum + wholeCardShardValue(card), 0);
   const selectedCount = selectionScope === "all" ? filteredTotal : selected.size;
   const bulkShardTotal = selectionScope === "all" ? filteredShardTotal : selectedShardTotal;
+  // Board copies a recycle would take: every board card past its last copy
+  // (duplicates), or all of a picked card's (whole).
+  const duplicatesOffBoard = [...onBoard.keys()].reduce((sum, key) => sum + offBoard(key, 1), 0);
+  const selectedOffBoard = [...selected].reduce((sum, key) => sum + offBoard(key, 0), 0);
+  // "Select all" recycles on the server's filter, so which board cards match isn't known here.
+  const boardHasCards = [...onBoard.values()].some((count) => count > 0);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 250);
@@ -1114,7 +1185,7 @@ export function CollectionPanel({
     void fetchServerPackCollectionPage({
       data: {
         page: collectionPage,
-        pageSize: COLLECTION_PAGE_SIZE,
+        pageSize: collectionPageSize,
         tier: tierFilter,
         query: trimmedQuery,
         sort: sortMode,
@@ -1145,6 +1216,61 @@ export function CollectionPanel({
       cancelled = true;
     };
   }, [walletReady, useServerCollection, missingOpen, collectionPage, tierFilter, trimmedQuery, sortMode, duplicatesOnly, mark, teamsOnly, playersOnly, serverCacheKey, serverFilterKey, serverRefreshKey]);
+
+  /* A binder turns its page as a page, so the spreads either side are read
+     ahead, faces and all: by the time the reader turns, the next page is a
+     cache hit and the leaf lands on cards rather than on loading slots. */
+  useEffect(() => {
+    // Whatever was read ahead sat next to a page that is no longer on screen.
+    setReadAhead((current) => (current.length ? [] : current));
+    if (!binder || !useServerCollection || missingOpen || !activeServerPage) return;
+    let cancelled = false;
+    // The next spread first: it is the likelier turn.
+    const neighbours = [collectionPage + 1, collectionPage - 1].filter((index) => index >= 0 && index < totalPages);
+    const found = new Map<number, CollectedCard[]>();
+    const publish = () => {
+      if (!cancelled) setReadAhead(neighbours.flatMap((index) => found.get(index) ?? []));
+    };
+    const timer = window.setTimeout(() => {
+      for (const index of neighbours) {
+        const request = { ...serverRequest, page: index };
+        const key = serverCollectionCacheKey(request);
+        const cached = serverCollectionPageCache.get(key);
+        if (cached) {
+          found.set(index, cached.cards as CollectedCard[]);
+          continue;
+        }
+        void fetchServerPackCollectionPage({
+          data: {
+            page: index,
+            pageSize: collectionPageSize,
+            tier: tierFilter,
+            query: trimmedQuery,
+            sort: sortMode,
+            duplicatesOnly,
+            mark,
+            teams: true,
+            teamsOnly,
+            playersOnly,
+          },
+        })
+          .then((page) => {
+            if (cancelled || !page) return;
+            serverCollectionPageCache.set(key, page);
+            found.set(index, page.cards as CollectedCard[]);
+            publish();
+          })
+          .catch(() => {});
+      }
+      if (found.size > 0) publish();
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // serverCacheKey stands for the whole request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [binder, useServerCollection, missingOpen, Boolean(activeServerPage), serverCacheKey, totalPages]);
 
   /* The missing list, read only while it is on screen. Not cached across
      opens like the collection pages are: the point of the list is which
@@ -1262,6 +1388,14 @@ export function CollectionPanel({
             <Trans>shards</Trans>
           </span>
           {recyclable > 0 && !selecting && !missingOpen && (
+            <span className="relative inline-flex">
+            {/* How many leave the board, as a note over the button: inside it,
+                the longer text widened the button and re-wrapped the row. */}
+            {recycleAllHint && duplicatesOffBoard > 0 && (
+              <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-1.5 whitespace-nowrap rounded-md border border-osu-b3/60 bg-osu-b5 px-2 py-1 text-[11px] font-semibold text-osu-l2 shadow-lg">
+                {plural(duplicatesOffBoard, { one: "# comes off the board", other: "# come off the board" })}
+              </span>
+            )}
             <button
               ref={recycleAllButtonRef}
               type="button"
@@ -1319,6 +1453,7 @@ export function CollectionPanel({
                 </span>
               </span>
             </button>
+            </span>
           )}
           {/* Selecting and recycling act on held cards; the missing list has
               none, so both controls step aside while it is open. */}
@@ -1362,7 +1497,6 @@ export function CollectionPanel({
       {(collectionTotal > 0 || missingOpen || useServerCollection) && (
         <>
         <div
-          ref={collectionControlsRef}
           className="mt-4 flex scroll-mt-[76px] flex-wrap items-center gap-x-3 gap-y-2"
           data-select-keep=""
         >
@@ -1421,7 +1555,7 @@ export function CollectionPanel({
                   type="button"
                   onClick={() => setTierFilter(selected ? "all" : (value as CollectionTierFilter))}
                   disabled={count === 0 && !selected}
-                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors disabled:cursor-default disabled:opacity-35 ${
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-extrabold transition-colors disabled:cursor-default disabled:opacity-35 ${
                     rgb
                       ? selected
                         ? ""
@@ -1627,7 +1761,13 @@ export function CollectionPanel({
             : t`No cards match the selected rarity.`}
         </div>
       ) : (
-        <div className={`mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${selecting ? "select-none" : ""}`}>
+        <BinderOrGrid
+          binder={binder}
+          page={currentPage}
+          ready={!showSkeletonGrid}
+          settled={pageCards.every((card) => !card.skills || Boolean(getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card))))}
+          className={`mt-4 ${selecting ? "select-none" : ""}`}
+        >
           {showSkeletonGrid
             ? placeholderTiers.map((tier, index) => <CollectionCardPlaceholder key={`placeholder-${index}`} tier={tier} team={teamsOnly} />)
             : pageCards.map((card) => {
@@ -1683,7 +1823,7 @@ export function CollectionPanel({
                     aria-pressed={cardSelected}
                     aria-label={cardSelected ? t`Deselect ${card.username}` : t`Select ${card.username}`}
                   >
-                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} edition={(editions[cardKey]?.[0] as RunEdition | undefined) ?? null} />
                     <span
                       className={`pointer-events-none absolute inset-0 rounded-[10px] ${
                         cardSelected ? "ring-2 ring-osu-pink" : "bg-black/45"
@@ -1704,6 +1844,7 @@ export function CollectionPanel({
                         card,
                         thumbnail,
                         rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+                        edition: (editions[cardKey]?.[0] as RunEdition | undefined) ?? null,
                       });
                       setLiftedCardKey(cardKey);
                     }}
@@ -1711,21 +1852,30 @@ export function CollectionPanel({
                     style={liftedCardKey === cardKey ? { visibility: "hidden" } : undefined}
                     aria-label={t`View ${card.username}'s card`}
                   >
-                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} onThumbnailError={handleThumbnailError} edition={(editions[cardKey]?.[0] as RunEdition | undefined) ?? null} />
                   </button>
                 )}
-                {selecting || card.recyclable === false ? null : card.copies > 1 ? (
+                {/* A binder pocket holds the card alone; recycling goes through Select there. */}
+                {selecting || binder || card.recyclable === false ? null : card.copies > 1 ? (
                   <button
                     type="button"
-                    onClick={(event) => runRecycle(() => onRecycleCard(cardKey), event.currentTarget)}
-                    className="mx-auto mt-1.5 flex items-center gap-1 text-[10px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
+                    onClick={(event) => {
+                      // cards of it on the board coming off: ask once first
+                      if (offBoard(cardKey, 1) > 0 && !confirming) {
+                        setConfirmCardKey(cardKey);
+                        return;
+                      }
+                      setConfirmCardKey(null);
+                      runRecycle(() => onRecycleCard(cardKey), event.currentTarget);
+                    }}
+                    className={`mx-auto mt-1.5 flex items-center gap-1 text-[10px] transition-colors hover:text-white cursor-pointer ${confirming ? "font-bold text-osu-pink-light" : "text-osu-f1"}`}
                     title={t`Recycle ${plural(card.copies - 1, {
                       one: "# duplicate copy",
                       other: "# duplicate copies",
                     })}`}
                   >
                     <Recycle className="h-3 w-3" />
-                    +{dupValue}
+                    {confirming ? t`sure? ${offBoard(cardKey, 1)} off the board` : `+${dupValue}`}
                   </button>
                 ) : (
                   <button
@@ -1744,13 +1894,13 @@ export function CollectionPanel({
                     title={t`Recycle this card (removes it from your collection)`}
                   >
                     <Recycle className="h-3 w-3" />
-                    {confirming ? t`sure? +${lastCopyValue}` : `+${lastCopyValue}`}
+                    {confirming ? (offBoard(cardKey, 0) > 0 ? t`sure? ${offBoard(cardKey, 0)} off the board` : t`sure? +${lastCopyValue}`) : `+${lastCopyValue}`}
                   </button>
                 )}
               </div>
             );
           })}
-        </div>
+        </BinderOrGrid>
       )}
 
       {missingOpen
@@ -1763,10 +1913,7 @@ export function CollectionPanel({
                 pageEnd={missingPageEnd}
                 total={missingTotal}
                 noun="players"
-                onPageChange={(page) => {
-                  setMissingPageIndex(page);
-                  collectionControlsRef.current?.scrollIntoView({ block: "start" });
-                }}
+                onPageChange={setMissingPageIndex}
               />
             </div>
           )
@@ -1778,10 +1925,9 @@ export function CollectionPanel({
                 pageStart={pageStart}
                 pageEnd={pageEnd}
                 total={filteredTotal}
-                onPageChange={(page) => {
-                  setCollectionPage(page);
-                  collectionControlsRef.current?.scrollIntoView({ block: "start" });
-                }}
+                // The page turns in place: the reader stays by this pager to
+                // turn the next one rather than being sent back up to the top.
+                onPageChange={setCollectionPage}
               />
             </div>
           )}
@@ -1851,6 +1997,7 @@ export function CollectionPanel({
                       : await onRecycleWholeMany(Array.from(selected));
                     celebrateRecycle(gained, anchor);
                     if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
+                    if (gained > 0) setBoardRead((read) => read + 1);
                     exitSelecting();
                   } finally {
                     setBulkBusy(false);
@@ -1864,7 +2011,14 @@ export function CollectionPanel({
               <Recycle className={`h-3.5 w-3.5 ${bulkBusy ? "animate-spin" : ""}`} />
               {bulkBusy
                 ? t`Recycling...`
-                : confirmBulk
+                : confirmBulk && selectionScope !== "all" && selectedOffBoard > 0
+                  ? t`Sure? This also takes ${plural(selectedOffBoard, { one: "# card off the board", other: "# cards off the board" })}`
+                  : confirmBulk && selectionScope === "all" && boardHasCards
+                  ? t`Sure? ${plural(selectedCount, {
+                      one: "# card leaves the collection, and off the board if it's there",
+                      other: "# cards leave the collection, and any on the board come off it",
+                    })}`
+                  : confirmBulk
                   ? t`Sure? ${plural(selectedCount, {
                       one: "# card leaves the collection",
                       other: "# cards leave the collection",
@@ -1912,6 +2066,12 @@ export function CollectionPanel({
         }
       }} />}
 
+      {releaseCard && onReleaseCopy && <ReleaseCopyDialog card={releaseCard} onClose={() => setReleaseCard(null)} onRelease={onReleaseCopy} onReleased={(gained) => {
+        playRecycleClink(gained);
+        serverCollectionPageCache.clear();
+        setServerRefreshKey((value) => value + 1);
+      }} />}
+
       {menu && (
         <>
           <div
@@ -1935,7 +2095,7 @@ export function CollectionPanel({
               ) : (
                 <img src={honoraryAvatarUrl(menu.card.userId) ?? menu.card.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" draggable={false} />
               )}
-              <span className="truncate text-[12px] font-bold text-white">{menu.card.username}</span>
+              <UsernameText username={menu.card.username} userId={menu.card.userId} className="truncate text-[12px] font-bold text-white" />
             </div>
             <div className="mx-2 my-1 h-px bg-osu-b3/40" />
             {menu.card.team ? (
@@ -1990,6 +2150,13 @@ export function CollectionPanel({
                 <Gift className="h-3 w-3" />{t`Gift a card…`}
               </button>
             )}
+            {onReleaseCopy && syncStatus === "synced" && !menu.card.team && menu.card.recyclable !== false && menu.card.copies > 0
+              && canPutBack(menu.card) && (
+              <button type="button" role="menuitem" onClick={() => { setReleaseCard(menu.card); setMenu(null); }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer">
+                <Undo2 className="h-3 w-3" />{t`Put back in the pool…`}
+              </button>
+            )}
             {menu.card.recyclable !== false && menu.card.copies > 1 && (
               <button
                 type="button"
@@ -2002,6 +2169,9 @@ export function CollectionPanel({
               >
                 <Recycle className="h-3 w-3" />
                 <Trans>Recycle duplicates +{duplicateShardValue(menu.card)}</Trans>
+                {offBoard(packCardKeyOf(menu.card), 1) > 0 ? (
+                  <span className="ml-auto pl-2 text-[10px] text-osu-pink-light">{t`${offBoard(packCardKeyOf(menu.card), 1)} off the board`}</span>
+                ) : null}
               </button>
             )}
             {menu.card.recyclable !== false && (
@@ -2022,7 +2192,9 @@ export function CollectionPanel({
               >
                 <Recycle className="h-3 w-3" />
                 {menuConfirm
-                  ? t`Sure? The card leaves the collection`
+                  ? offBoard(packCardKeyOf(menu.card), 0) > 0
+                    ? t`Sure? It leaves the collection and the board`
+                    : t`Sure? The card leaves the collection`
                   : menu.card.copies > 1
                     ? t`Recycle all copies +${wholeCardShardValue(menu.card)}`
                     : t`Recycle card +${wholeCardShardValue(menu.card)}`}
@@ -2039,4 +2211,25 @@ export function CollectionPanel({
       />
     </section>
   );
+}
+
+/* Only cards a pack can deal go back in the pool: the card, its GOAT and its
+   circulating Eternal. A hand-granted variant (award-style Eternals among them)
+   is never pulled, so its number would never come out again. */
+function canPutBack(card: CollectedCard): boolean {
+  const key = packCardKeyOf(card);
+  return key === String(card.userId) || key === `${card.userId}:goat` || key === `${card.userId}:eternal`;
+}
+
+/* The collection page: the usual grid, or a supporter's binder pages. */
+function BinderOrGrid({ binder, page, ready, settled, className, children }: {
+  binder: SupporterBinderId | null;
+  page: number;
+  ready: boolean;
+  settled: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  if (binder) return <BinderPages binder={binder} page={page} ready={ready} settled={settled} className={className}>{children}</BinderPages>;
+  return <div className={`grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${className}`}>{children}</div>;
 }

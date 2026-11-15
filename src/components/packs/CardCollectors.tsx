@@ -13,6 +13,7 @@ import {
   type ServerPackCardCollector,
   type ServerPackCardCollectors,
 } from "../../lib/pack-wallet-sync";
+import { UsernameText } from "../ui/UsernameText";
 
 /* "Who has my card": the names behind the owners count on the packs page.
    The count is public, this list is not - the server function resolves the
@@ -267,7 +268,7 @@ function CollectorName({
         dimmed ? "text-white/40" : "text-white"
       }`}
     >
-      {collector.username}
+      <UsernameText username={collector.username} userId={collector.userId} />
     </button>
   );
 }
@@ -299,7 +300,7 @@ function CollectorFooter({
     <div className="flex flex-shrink-0 items-center gap-3 border-t border-osu-b3/15 px-4 py-3 sm:px-5">
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex items-baseline gap-1.5">
-          <span className="truncate text-[14px] font-bold leading-tight text-white">{collector.username}</span>
+          <UsernameText username={collector.username} userId={collector.userId} className="truncate text-[14px] font-bold leading-tight text-white" />
           {/* Pulling your own card out of a pack is rare enough to name. */}
           {collector.userId === cardUserId ? (
             <span className="flex-shrink-0 text-[10px] leading-tight text-osu-f1"><Trans>you</Trans></span>

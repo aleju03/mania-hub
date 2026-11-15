@@ -8,6 +8,7 @@ import { PackDialog } from "./PackDialog";
 import { CollectionCardTile } from "./CardTile";
 import { useCardThumbnails } from "./useCardThumbnails";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "./cardThumbnailCache";
+import { UsernameText } from "../ui/UsernameText";
 
 export function GiftInbox({ onReceived }: { onReceived: () => void }) {
   const { t } = useLingui();
@@ -75,7 +76,7 @@ export function GiftInbox({ onReceived }: { onReceived: () => void }) {
     finally { mutating.current = false; setBusy(false); }
   };
   const refusal = (reason: PackGiftError) => {
-    if (reason === "no_spare") return t`They no longer have that card to give.`;
+    if (reason === "no_spare" || reason === "serial_not_held") return t`They no longer have that card to give.`;
     if (reason === "gift_not_found") return t`That gift is no longer there.`;
     return t`That did not go through. Try again.`;
   };
@@ -150,7 +151,7 @@ function GiftReceipt({ gift, onThumbnailError, onRespond, answering, disabled }:
       <div className="flex items-center gap-5 sm:gap-6">
         <div className="relative w-[112px] shrink-0 sm:w-[136px]">
           {card ? <div className="-rotate-3 drop-shadow-[0_8px_12px_rgba(0,0,0,0.4)]">
-            <CollectionCardTile card={card} thumbnail={getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card))} canBackfill={false} onApplyMint={() => false} onThumbnailError={onThumbnailError} showCopies={false} />
+            <CollectionCardTile card={card} thumbnail={getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card))} canBackfill={false} onApplyMint={() => false} onThumbnailError={onThumbnailError} showCopies={false} mastery={false} />
           </div> : <div className="flex aspect-[5/7] items-center justify-center rounded-xl border border-white/10 bg-white/5"><Gift aria-hidden="true" size={36} className="text-osu-pink-light" /></div>}
           <div aria-hidden="true" className="absolute -bottom-2 -right-2 flex h-8 w-8 rotate-6 items-center justify-center rounded-lg border border-white/15 bg-osu-b4 text-osu-pink-light shadow-lg">
             <Gift size={16} />
@@ -160,11 +161,24 @@ function GiftReceipt({ gift, onThumbnailError, onRespond, answering, disabled }:
           <p className="text-[11px] text-osu-f1">{t`A gift from`}</p>
           <div className="mt-1.5 flex items-center gap-2">
             <img src={gift.sender.avatarUrl} alt="" width={24} height={24} className="h-6 w-6 shrink-0 rounded-full ring-1 ring-white/10" />
-            <span className="break-words text-[12px] font-semibold leading-snug text-white [overflow-wrap:anywhere]">{gift.sender.username}</span>
+            <UsernameText username={gift.sender.username} avatarUrl={gift.sender.avatarUrl} className="break-words text-[12px] font-semibold leading-snug text-white [overflow-wrap:anywhere]" />
           </div>
           {card ? <>
-            <p className="mt-4 break-words text-[17px] font-bold leading-tight text-white [overflow-wrap:anywhere]">{card.username}</p>
+            <p className="mt-4 break-words text-[17px] font-bold leading-tight text-white [overflow-wrap:anywhere]"><UsernameText username={card.username} userId={card.userId} /></p>
             <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-osu-f1">{card.customLabel ?? tier?.label}</p>
+            {/* Which numbered copy this is: the number is half of what a
+                particular copy means. */}
+            {(() => {
+              // The copy on offer (for one that named none, the copy it would
+              // hand over now); a taken gift names the copy it picked.
+              const serial = gift.serial ?? (gift.status === "pending" ? card.serial : null);
+              if (!serial) return null;
+              const serialText = serial.toLocaleString("en-US");
+              return <p className={`mt-2 text-[12px] font-bold tabular-nums ${serial === 1 ? "text-amber-300" : "text-white"}`}>
+                {card.mintedTotal && card.mintedTotal > serial ? t`#${serialText} of ${card.mintedTotal.toLocaleString("en-US")}` : t`#${serialText}`}
+                {card.serialFrom?.pulled ? <span className="ml-1 font-normal text-osu-f1">{t`pulled by ${card.serialFrom.username}`}</span> : null}
+              </p>;
+            })()}
             {gift.status === "pending"
               ? card.copies > 0 && <p className="mt-4 text-[11px] leading-relaxed text-osu-f1">{t`You already have ${card.copies}.`}</p>
               : <p className="mt-4 text-[11px] leading-relaxed text-osu-f1">{t`It's already in your collection.`}</p>}

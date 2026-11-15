@@ -1,22 +1,34 @@
+import type { PackSpell } from "#/lib/pack-pending";
+import { spellSeed } from "#/lib/pack-spell-art";
+import { SpellFace } from "./SpellFace";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { useSupporterSleeve } from "#/lib/use-supporter-pack-style";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Share2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "#/lib/auth-context";
-import { formatDate, formatOrdinal } from "#/lib/format";
+import { formatDate } from "#/lib/format";
+import { MasteryLine } from "./run/MasteryBadge";
 import { useLocale } from "#/lib/locale-context";
 import { useViewerTimeZone } from "#/lib/use-viewer-time-zone";
 import { fetchLivePackCardGifts, fetchLivePackCardStats, isLiveBackendConfigured, packCollectorParam, type LivePackCardGifts } from "#/lib/live-backend";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack-collection";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
+import { sleeveReach } from "../player/maniacard3d/cardSleeve";
+import { cardHaloLook } from "../player/maniacard3d/cardHalo";
 import { CountryFlag } from "../ui/CountryFlag";
 import { renderCardSkeletonThumbnail, renderCardThumbnail } from "./cardSnapshot";
 import { collectedCardRenderData } from "./cardThumbnailCache";
+import { EditionSheen } from "./run/EditionSheen";
+import { masteryLevel, type RunEdition } from "#/lib/pack-run";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { rememberTeamName } from "../../lib/analytics-teams";
+import { effectiveCardLook } from "../../lib/supporter-card-looks";
+import { UsernameText } from "../ui/UsernameText";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 export interface CardSpotlightTarget {
   card: CollectedCard;
@@ -34,6 +46,13 @@ export interface CardSpotlightTarget {
   /* Who chose to put this card on the showcase wall, where the tiles carry no
      name of their own and finding this out is the point of opening one. */
   showcasedBy?: { userId: number; username: string; avatarUrl: string; countryCode: string | null } | null;
+  /* The pack run finish on this copy (or the best one the viewer holds),
+     drawn by the 3D card's overlay and the sheen over the still. */
+  edition?: RunEdition | null;
+  /* The still is a plain thumbnail of a burnt or frozen copy (the pack
+     summary's, which lays the look on as a SpellFace): it gets the same
+     overlay until the 3D card, which bakes the look in, takes over. */
+  spellOverStill?: PackSpell | null;
 }
 
 /* The WebGL card fills the host's height divided by the renderer's 1.05
@@ -45,7 +64,7 @@ function isMobileViewport() {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
-    window.matchMedia("(max-width: 640px)").matches
+    window.matchMedia(scaledMediaQuery("(max-width: 640px)")).matches
   );
 }
 
@@ -94,6 +113,13 @@ export function CardSpotlight({
      so a collector who holds a player's ordinary card and a granted one is
      told about the card in front of them rather than about the player. */
   const cardOwnerId = target?.ownerUserId ?? viewerId;
+  // The holder's case, around the live card.
+  const ownerSleeve = useSupporterSleeve(cardOwnerId);
+  const ownerSleeveRef = useRef(ownerSleeve);
+  ownerSleeveRef.current = ownerSleeve;
+  useEffect(() => {
+    rendererRef.current?.setSleeve(ownerSleeve);
+  }, [ownerSleeve]);
   const showcasedBy = target?.showcasedBy ?? null;
   /* The day the holder got it, however they got it. Shown on every card: a
      pull with no date said only how it ranked, which is the less interesting
@@ -176,9 +202,12 @@ export function CardSpotlight({
 
   useBodyScrollLock(target != null);
 
-  /* Where the card lands: centered, leaving room for the info block below. */
+  /* Where the card lands: centered, leaving room for the info block below,
+     and for the holder's case around it: the card keeps its size in a case
+     and the case takes the room it needs. */
   const layout = useMemo(() => {
     if (!target || typeof window === "undefined") return null;
+    const reach = ownerSleeve ? sleeveReach(ownerSleeve) : { top: 0, bottom: 0, side: 0 };
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     /* Room under the card for the info block. On a narrow screen the
@@ -187,13 +216,19 @@ export function CardSpotlight({
     const infoHeight = vw < 640 ? 154 : 118;
     const gap = 16;
     const margin = 16;
-    const maxHeight = Math.min(470, vh - infoHeight - gap - margin * 2);
-    const width = Math.min(vw * 0.82, (maxHeight * 5) / 7);
+    const tall = 1 + reach.top + reach.bottom;
+    const maxHeight = Math.min(470, (vh - infoHeight - gap - margin * 2) / tall);
+    const width = Math.min((vw * 0.82) / (1 + (2 * reach.side * 7) / 5), (maxHeight * 5) / 7);
     const height = (width * 7) / 5;
     const left = (vw - width) / 2;
-    const top = Math.max(margin, (vh - (height + gap + infoHeight)) / 2);
-    return { left, top, width, height, infoTop: top + height + gap };
-  }, [target]);
+    const top = Math.max(margin, (vh - (height * tall + gap + infoHeight)) / 2) + reach.top * height;
+    return { left, top, width, height, infoTop: top + height * (1 + reach.bottom) + gap };
+  }, [target, ownerSleeve]);
+
+  // A case arriving after the card mounted moves the card; the canvas follows.
+  useEffect(() => {
+    rendererRef.current?.resize();
+  }, [layout]);
 
   /* Mount the live 3D card once the flight has mostly settled; the texture
      pipeline is heavy enough to stutter the spring if started right away.
@@ -204,7 +239,10 @@ export function CardSpotlight({
     const card = target?.card;
     if (!card?.skills) return;
     let cancelled = false;
-    const data = collectedCardRenderData(card, card.skills);
+    const base = collectedCardRenderData(card, card.skills);
+    const edition = target?.edition ?? null;
+    const serial = card.serial && card.serial > 0 ? { number: card.serial, total: card.mintedTotal ?? null } : null;
+    const data = base.status === "ready" ? { ...base, edition, serial } : base;
     const fallbackTo2d = () => {
       rendererRef.current?.dispose();
       rendererRef.current = null;
@@ -227,15 +265,26 @@ export function CardSpotlight({
           // Keep the inspected card's foil alive between touches without
           // opting mobile into the more expensive desktop quality profile.
           continuousIdle: true,
+          // Alone on screen, so it can afford antialiasing on phones.
+          sharp: true,
           // Touch drag still tilts it, but the modal does not follow the gyro.
           gyro: false,
+          sleeveGrows: true,
+          lazyBack: true,
           onReady: () => {
-            if (!cancelled) setCanvasReady(true);
+            if (cancelled) return;
+            setCanvasReady(true);
+            // The canvas was sized while the card was still flying in; its
+            // width is capped by the distance to the screen's edge, so a card
+            // opened from the edge came out cropped. Measure it again here.
+            rendererRef.current?.resize();
           },
           onError: () => {
             if (!cancelled) fallbackTo2d();
           },
         });
+        rendererRef.current.setSleeve(ownerSleeveRef.current);
+        rendererRef.current.setHalo(cardHaloLook(masteryLevel(card.copies + (card.recycledCopies ?? 0))));
         rendererRef.current.resize();
       } catch {
         if (!cancelled) fallbackTo2d();
@@ -268,7 +317,7 @@ export function CardSpotlight({
   const tier = card ? spotlightCardTier(card) : null;
   const tierLabel = card?.tierLabel ?? (card?.tier ? MANIA_TIER_STYLES[card.tier].label : null);
   const baseImage =
-    target?.thumbnail ?? (tier ? renderCardSkeletonThumbnail(tier, 600, card?.motif ?? null, Boolean(card?.team)) : null);
+    target?.thumbnail ?? (tier ? renderCardSkeletonThumbnail(tier, 600, effectiveCardLook(card?.motif, card?.team ? null : card?.supporterLook).motif, Boolean(card?.team)) : null);
 
   return createPortal(
     <AnimatePresence onExitComplete={onExitComplete}>
@@ -315,13 +364,26 @@ export function CardSpotlight({
             }
           >
             {baseImage ? (
-              <img
-                src={hiResFallback ?? baseImage}
-                alt={t`${card.username} maniacard`}
-                className="h-full w-full rounded-[14px] object-cover shadow-[0_18px_48px_rgba(0,0,0,0.6)]"
+              <span
+                className="relative block h-full w-full overflow-hidden rounded-[14px]"
                 style={{ opacity: canvasReady ? 0 : 1, transition: "opacity 0.2s ease-out" }}
-                draggable={false}
-              />
+              >
+                {(() => {
+                  const still = (
+                    <img
+                      src={hiResFallback ?? baseImage}
+                      alt={t`${card.username} maniacard`}
+                      className="h-full w-full rounded-[14px] object-cover shadow-[0_18px_48px_rgba(0,0,0,0.6)]"
+                      draggable={false}
+                    />
+                  );
+                  // the 2D fallback is rendered from the card's data, which bakes the look in already
+                  return target?.spellOverStill && !hiResFallback ? (
+                    <SpellFace spell={target.spellOverStill} seed={spellSeed(card.userId)}>{still}</SpellFace>
+                  ) : still;
+                })()}
+                <EditionSheen edition={target?.edition} />
+              </span>
             ) : (
               <div className="h-full w-full rounded-[14px] bg-osu-b4 shadow-[0_18px_48px_rgba(0,0,0,0.6)]" />
             )}
@@ -351,7 +413,7 @@ export function CardSpotlight({
             <div className="flex flex-col items-center gap-1.5 text-center">
               <div className="flex items-center gap-2">
                 {!card.team && <CountryFlag code={card.countryCode} size="sm" />}
-                <span className="text-[15px] font-bold text-white">{card.username}</span>
+                <UsernameText username={card.username} userId={card.userId} className="text-[15px] font-bold text-white" />
                 {tierLabel && tier && (
                   <span
                     className="rounded-full border px-2 py-px text-[10px] font-bold uppercase tracking-wide"
@@ -430,7 +492,7 @@ export function CardSpotlight({
                           preload="intent"
                           className="font-semibold text-white transition-colors hover:text-osu-pink-light"
                         >
-                          {showcasedBy.username}
+                          <UsernameText username={showcasedBy.username} userId={showcasedBy.userId} />
                         </Link>
                       ) : null;
                       const dateText = gotAt > 0 ? formatDate(new Date(gotAt).toISOString(), viewerTimeZone, locale) : null;
@@ -443,7 +505,7 @@ export function CardSpotlight({
                             preload="intent"
                             className="font-semibold text-white transition-colors hover:text-osu-pink-light"
                           >
-                            {giftedBy.username}
+                            <UsernameText username={giftedBy.username} userId={giftedBy.userId} />
                           </Link>
                         );
                         if (nameLink) {
@@ -478,22 +540,50 @@ export function CardSpotlight({
                       }
                       return dateText ? <Trans>Pulled on {dateText}</Trans> : <Trans>Pulled</Trans>;
                     })()}
-                    {!card.grantedAt && card.serial ? (
+                    {/* The copy's number, whoever pulled it and however it
+                        got here: every copy has one, so it says nothing a
+                        grant or a gift would make untrue. */}
+                    {card.serial ? (
                       <span className={`tabular-nums ${card.serial === 1 ? "font-bold text-amber-300" : ""}`}>
                         {(() => {
-                          const ordinalText = formatOrdinal(card.serial, locale);
-                          // Skip the total when it just repeats the serial ("61st of 61").
+                          const serialText = card.serial.toLocaleString("en-US");
+                          // Skip the total when it just repeats the number ("#61 of 61").
                           if (card.mintedTotal && card.mintedTotal !== card.serial) {
                             const totalText = card.mintedTotal.toLocaleString("en-US");
-                            return <Trans>, {ordinalText} of {totalText} to pull it</Trans>;
+                            return <Trans>, copy #{serialText} of {totalText}</Trans>;
                           }
-                          return <Trans>, {ordinalText} to pull it</Trans>;
+                          return <Trans>, copy #{serialText}</Trans>;
                         })()}
                       </span>
                     ) : null}
+                    {/* A copy that came from someone else still says who
+                        pulled it. Its own line: the one above is about how
+                        this holder got the card. */}
+                    {card.serialFrom?.pulled ? (() => {
+                      const from = card.serialFrom;
+                      const pullerLink = (
+                        <Link
+                          to="/packs/collections"
+                          search={{ collector: packCollectorParam(from) }}
+                          preload="intent"
+                          className="font-semibold text-white transition-colors hover:text-osu-pink-light"
+                        >
+                          <UsernameText username={from.username} userId={from.userId} />
+                        </Link>
+                      );
+                      const pulledText = from.pulledAt > 0 ? formatDate(new Date(from.pulledAt).toISOString(), viewerTimeZone, locale) : null;
+                      return (
+                        <span className="mt-0.5 block">
+                          {pulledText ? <Trans>Pulled by {pullerLink} on {pulledText}</Trans> : <Trans>Pulled by {pullerLink}</Trans>}
+                        </span>
+                      );
+                    })() : null}
                   </span>
                 </div>
               ) : null}
+              {/* Mastery, for anyone looking: the copies a collector has
+                  been through are part of what a card on their shelf says. */}
+              <MasteryLine copies={card.copies + (card.recycledCopies ?? 0)} own={!showcasedBy && target?.ownerUserId == null} />
               {/* The gifts the holding itself cannot account for. One line
                   however many there were: a card given ten times is a tally,
                   not ten receipts. Said as history rather than as a count of

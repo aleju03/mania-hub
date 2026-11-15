@@ -38,6 +38,9 @@ export interface ResolvedSignature {
   versions: Record<SignatureType, string>;
   /** The exact projected inputs hashed by the backend, avoiding a second read. */
   profile?: SignatureProfileSnapshot | null;
+  /** A supporter's own profile cards for the insights render, raw from the
+      backend (parse with readInsightsPicks); null draws the usual ones. */
+  insightsPicks?: { stats?: unknown; data?: unknown; play?: unknown } | null;
 }
 
 /* base64url, as minted by the backend. Checked before any network call so a

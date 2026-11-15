@@ -15,6 +15,7 @@ import { CollectionCardPlaceholder, CollectionCardTile } from "../CardTile";
 import { cardThumbnailKeyForCollectionCard, getMemoryCardThumbnail } from "../cardThumbnailCache";
 import { useCardThumbnails } from "../useCardThumbnails";
 import { useDebounced } from "./useDebounced";
+import { UsernameText } from "../../ui/UsernameText";
 
 /* Choosing which of your cards to show. Reads your own collection through the
    same public paged endpoint the rest of this page uses, rather than the
@@ -470,7 +471,7 @@ function PickerGrid({
                 <Check size={12} strokeWidth={3} />
               </span>
             )}
-            <div className="mt-1 truncate text-center text-[10px] text-osu-f1">{card.username}</div>
+            <div className="mt-1 truncate text-center text-[10px] text-osu-f1"><UsernameText username={card.username} userId={card.userId} /></div>
           </button>
         );
       })}

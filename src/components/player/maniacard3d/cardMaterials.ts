@@ -2,7 +2,6 @@ import {
   Color,
   DataTexture,
   MeshBasicMaterial,
-  MeshStandardMaterial,
   RGBAFormat,
   ShaderMaterial,
   Vector2,
@@ -11,10 +10,11 @@ import {
 } from "three";
 import type { Texture } from "three";
 import { CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH, type ShaderQuality } from "./layout";
-import { cardOverlayFragmentShader, cardOverlayVertexShader } from "./cardShaders";
+import { cardMotifPaintFragmentShader, cardOverlayFragmentShader, cardOverlayVertexShader } from "./cardShaders";
 import { getCosmicTierPalette, type PreparedCardMotif } from "./cardTexture";
 import type { FaceLayout, Rect } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
+import { supporterFoilIndex } from "#/lib/supporter-foils";
 
 /* A face rect in the shader's UV space, whose y runs up from the bottom. */
 function textureRectUv(rect: Rect): Vector4 {
@@ -26,12 +26,19 @@ function textureRectUv(rect: Rect): Vector4 {
   );
 }
 
+/* The card's thin edge. The scene has only an ambient light, under which a
+   lit material comes out as its colour times light / pi times (1 - metalness):
+   a flat shade. The unlit material paints that shade straight, without
+   compiling the heaviest built-in program for a sliver of the card. */
+const EDGE_SHADE = (1.4 / Math.PI) * (1 - 0.18);
+
 export function createEdgeMaterial(data: ManiaCardReadyData) {
-  return new MeshStandardMaterial({
-    color: new Color(data.edgeColor.r / 255, data.edgeColor.g / 255, data.edgeColor.b / 255),
-    roughness: 0.36,
-    metalness: 0.18,
-  });
+  // The numbers are taken as linear values, the same ones the lighting scaled.
+  const color = new Color(data.edgeColor.r / 255, data.edgeColor.g / 255, data.edgeColor.b / 255) as Color & { r: number; g: number; b: number };
+  color.r *= EDGE_SHADE;
+  color.g *= EDGE_SHADE;
+  color.b *= EDGE_SHADE;
+  return new MeshBasicMaterial({ color });
 }
 
 /* Bound to uMotif on every card that has no motif of its own. A sampler must
@@ -55,6 +62,23 @@ export function createFaceMaterial(texture: Texture) {
   });
 }
 
+/* The painted motif's own layer, between the front's background and its
+   printed content. Normal alpha blending: it is paint, not light. */
+export function createMotifPaintMaterial(motif: PreparedCardMotif) {
+  return new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    vertexShader: cardOverlayVertexShader,
+    fragmentShader: cardMotifPaintFragmentShader,
+    uniforms: {
+      uTime: { value: 0 },
+      uMotif: { value: motif.texture },
+      uMotifSize: { value: new Vector2(motif.cellWidth, motif.cellHeight) },
+      uMotifOpacity: { value: motif.opacity },
+    },
+  });
+}
+
 export function createOverlayMaterial(
   data: ManiaCardReadyData,
   layout: FaceLayout,
@@ -63,6 +87,8 @@ export function createOverlayMaterial(
      in grid cells. Null keeps the tier's own drifting layer, which is what
      every un-granted card wants. */
   motif: PreparedCardMotif | null = null,
+  /* Ember's char as alpha (cardTexture.ts): no foil where the card burnt. */
+  spellMask: Texture | null = null,
 ) {
   const avatar = layout.masks.avatar;
   const flag = layout.masks.flag;
@@ -80,6 +106,10 @@ export function createOverlayMaterial(
       uIntensity: { value: 0.88 },
       // Common cards keep the triangle sparkle but drop the holo/foil sheen.
       uFoil: { value: data.tier === "common" ? 0 : 1 },
+      // A supporter's card foils on every tier, common included.
+      uSupporter: { value: data.supporterFoil ? 1 : 0 },
+      uTierLayer: { value: 1 },
+      uFoilStyle: { value: data.supporterFoil ? supporterFoilIndex(data.supporterFoil) : 0 },
       // Cosmic tiers trade the triangle sparkle for a drifting starfield.
       uStarfield: { value: cosmic ? 1 : 0 },
       uLight: { value: new Vector2(0.5, 0.38) },
@@ -88,13 +118,18 @@ export function createOverlayMaterial(
       uMotif: { value: motif?.texture ?? getEmptyMotifTexture() },
       uMotifOn: { value: motif ? 1 : 0 },
       uMotifSize: { value: new Vector2(motif?.cellWidth ?? 0.34, motif?.cellHeight ?? 0.34) },
-      uMotifOpacity: { value: motif?.opacity ?? 1 },
+      // A printed motif is already on the front: the overlay only needs to know
+      // one is there, so it neither drifts a second copy nor brings the flecks back.
+      uMotifOpacity: { value: motif?.painted ? 0 : (motif?.opacity ?? 1) },
       uRainbow: { value: cosmic?.rainbow ?? 1 },
       uAvatarMask: { value: textureRectUv(avatar) },
       uTextureSize: { value: new Vector2(CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT) },
       uAvatarRadius: { value: layout.front.avatar.radius },
       uFlagMask: { value: flag ? textureRectUv(flag.rect) : new Vector4(-1, -1, 0, 0) },
       uFlagRadius: { value: flag?.radius ?? 0 },
+      uSpellMask: { value: spellMask ?? getEmptyMotifTexture() },
+      uSpellMaskOn: { value: spellMask ? 1 : 0 },
+      uEdition: { value: data.edition === "foil" ? 1 : data.edition === "holo" ? 2 : data.edition === "polychrome" ? 3 : 0 },
     },
   });
 }

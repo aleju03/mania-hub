@@ -17,12 +17,15 @@ import {
 } from "../components/packs/collections/CommunityStatsHeader";
 import { RecordBoards, RecordBoardsSkeleton } from "../components/packs/collections/RecordBoards";
 import { ShowcaseTab } from "../components/packs/collections/ShowcaseTab";
+import { BoardsTab } from "../components/packs/collections/board/BoardsTab";
 import {
+  fetchLivePackCollectorStanding,
   fetchLivePackCommunityStats,
   fetchLivePackRecentPulls,
   isLiveBackendConfigured,
   openLiveEventSource,
   packCollectorLabel,
+  type LivePackCollectorStanding,
   type LivePackCommunityStats,
   type LivePackPullFeedEntry,
 } from "../lib/live-backend";
@@ -31,6 +34,7 @@ import { DEFAULT_COUNTRY_CODE } from "../lib/country";
 import { pageSeo } from "../lib/seo";
 import { useScrollRestoreRef } from "../lib/use-scroll-restore";
 import { track } from "../lib/analytics";
+import { useAuth } from "../lib/auth-context";
 
 /* The community side of /packs: the cards people put up, everybody else's
    shelves, and how the whole card game has gone.
@@ -58,6 +62,7 @@ const readShowcaseSlots = createIsomorphicFn()
 const TABS = [
   { id: "showcase" as const, label: msg`Showcase` },
   { id: "stats" as const, label: msg`Stats` },
+  { id: "board" as const, label: msg`Board` },
   { id: "collectors" as const, label: msg`Collectors` },
 ];
 
@@ -68,14 +73,21 @@ export const Route = createFileRoute("/packs_/collections")({
     const userId = context.auth?.viewer?.id ?? 0;
     return { showcaseSlots: userId > 0 ? readShowcaseSlots(userId) : 0 };
   },
-  validateSearch: (search: Record<string, unknown>): { collector?: string; tab?: CollectionsTab } => {
+  validateSearch: (search: Record<string, unknown>): { collector?: string; tab?: CollectionsTab; at?: string } => {
     /* An osu! username or id. Trimmed and length-capped here so the value that
        reaches the backend (which looks it up in two tables) is already the
        shape a name has; anything longer was not a name. */
-    const collector = typeof search.collector === "string" ? search.collector.trim().slice(0, 60) : "";
+    // A bare id in a typed URL is read as a number: taken as its text, or the
+    // page gets the number itself and breaks on it.
+    const rawCollector = typeof search.collector === "number" && Number.isFinite(search.collector) ? String(search.collector) : search.collector;
+    const collector = typeof rawCollector === "string" ? rawCollector.trim().slice(0, 60) : "";
     const tab = TABS.find((item) => item.id === search.tab)?.id;
+    /* A spot on the card board, "x,y" in card widths and an optional zoom in
+       percent, from a shared link. */
+    const at = typeof search.at === "string" && /^-?\d{1,4},-?\d{1,4}(,\d{1,3})?$/.test(search.at) ? search.at : "";
     return {
       ...(collector ? { collector } : {}),
+      ...(at && tab === "board" ? { at } : {}),
       // The default tab is not written to the URL, so the plain path stays the
       // link people share.
       ...(tab && tab !== "showcase" ? { tab } : {}),
@@ -98,7 +110,7 @@ export const Route = createFileRoute("/packs_/collections")({
 
 function CollectionsPage() {
   const { t, i18n } = useLingui();
-  const { collector, tab } = Route.useSearch();
+  const { collector, tab, at } = Route.useSearch();
   const { showcaseSlots } = Route.useRouteContext();
   const navigate = useNavigate();
   const scrollRestoreRef = useScrollRestoreRef();
@@ -161,6 +173,8 @@ function CollectionsPage() {
                 <ShowcaseTab shelfSlots={showcaseSlots} />
               ) : id === "stats" ? (
                 <StatsTab active={!collector && activeTab === "stats"} />
+              ) : id === "board" ? (
+                <BoardsTab at={at} />
               ) : (
                 <CollectorDirectory />
               )}
@@ -248,6 +262,21 @@ export function mergePulls(
 
 export function StatsTab({ active }: { active: boolean }) {
   const [stats, setStats] = useState<LivePackCommunityStats | null>(null);
+  const viewerId = useAuth().viewer?.id ?? null;
+  /* The viewer's own place on each board, for a row under any board they are
+     not in the top ten of. Read again whenever the boards are. */
+  const [standing, setStanding] = useState<LivePackCollectorStanding | null>(null);
+  const computedAt = stats?.computedAt ?? null;
+  useEffect(() => {
+    if (!active || viewerId === null || computedAt === null) return;
+    let cancelled = false;
+    fetchLivePackCollectorStanding(viewerId)
+      .then((next) => !cancelled && setStanding(next))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [active, viewerId, computedAt]);
   const [pulls, setPulls] = useState<CountedPull[]>([]);
   const [failed, setFailed] = useState(false);
   /* When the snapshot was last asked for, so a tab being opened again knows
@@ -400,7 +429,7 @@ export function StatsTab({ active }: { active: boolean }) {
   return (
     <div className="space-y-10">
       <CommunityStatsHeader totals={live.totals} />
-      <RecordBoards stats={live} />
+      <RecordBoards stats={live} viewerId={viewerId} standing={viewerId === null ? null : standing} />
     </div>
   );
 }

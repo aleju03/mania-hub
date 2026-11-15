@@ -25,6 +25,7 @@ import { getRecentCommunityUploads, type CommunityUploadEntry } from "#/lib/uplo
 import { getCommunityBeatmapAssetUrl } from "#/lib/community-beatmap-assets";
 import { searchPlayersOnOsu } from "#/lib/player-search";
 import type { BeatmapScoreLookupStatus, OsuBeatmap, OsuBeatmapset, OsuScore } from "#/lib/types";
+import { UsernameText } from "../ui/UsernameText";
 
 export type ReplayBrowseMode = "player" | "beatmap" | "side-by-side" | "upload";
 
@@ -1290,7 +1291,7 @@ function PlayerSuggestions({
             <div className="absolute inset-0 bg-gradient-to-r from-osu-b4/95 via-osu-b4/80 to-osu-b4/65" aria-hidden="true" />
             <img src={avatarImageSrc(player.avatar_url, player.id)} alt="" className="relative w-14 h-14 rounded-full flex-shrink-0 object-cover ring-2 ring-white/10" loading="lazy" />
             <div className="relative flex-1 min-w-0">
-              <div className="text-base font-semibold text-white truncate">{player.username}</div>
+              <div className="text-base font-semibold text-white truncate"><UsernameText username={player.username} userId={player.id} /></div>
               {player.global_rank != null && (
                 <div className="mt-1 text-xs text-osu-f1">#{player.global_rank.toLocaleString("en-US")}</div>
               )}
@@ -1429,7 +1430,7 @@ function BeatmapReplayBrowser({
               <GradeImg grade={getDisplayedRank(score)} size={26} />
               <img src={avatarImageSrc(score.user?.avatar_url, score.user?.id)} alt="" className="w-7 h-7 rounded-full flex-shrink-0" loading="lazy" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-white truncate">{score.user?.username}</div>
+                <div className="text-sm text-white truncate"><UsernameText username={score.user?.username ?? ""} userId={score.user?.id} /></div>
                 <ScoreModBadges score={score} className="mt-1 flex gap-0.5 sm:hidden" hideWhenEmpty />
               </div>
               <ScoreModBadges score={score} className="hidden sm:flex w-28 flex-shrink-0 justify-end gap-0.5" />

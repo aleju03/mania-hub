@@ -4,6 +4,7 @@ import { Loader2, Pause, Play, Search, Volume2, VolumeX } from "lucide-react";
 import { explainPrism, type PrismExplanation, type PrismExplainSection } from "#dan/prism/explain";
 import type { PrismPattern } from "#dan/prism/workload";
 import { parseManiaBeatmap } from "#dan/beatmap-parser";
+import { drawFiltered } from "../../lib/canvas";
 import { getBeatmapFile } from "../../lib/osu";
 import { getBeatmapAudioUrl } from "../../lib/audio-url";
 import { fetchLiveMapSearch, loadLiveMapSearchEntry, type LiveMapSearchEntry } from "../../lib/live-backend";
@@ -425,9 +426,7 @@ function tintNote(image: HTMLImageElement, color: string): CanvasImageSource {
   canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) return image;
-  ctx.filter = "grayscale(1) brightness(1.25)";
-  ctx.drawImage(image, 0, 0);
-  ctx.filter = "none";
+  drawFiltered(ctx, "grayscale(1) brightness(1.25)", (layer) => layer.drawImage(image, 0, 0));
   ctx.globalCompositeOperation = "multiply";
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, width, height);
@@ -535,10 +534,10 @@ function Playfield({ explanation, positionRef, position, pxPerMs, playing }: {
       ctx.shadowColor = "rgba(0,0,0,0.85)";
       ctx.shadowBlur = 10;
       ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.font = "700 40px Torus, sans-serif";
+      ctx.font = "700 40px Tracker Round, sans-serif";
       ctx.fillText(reading.demand.toFixed(1), width / 2, y);
       ctx.fillStyle = GROUP_COLOR[main];
-      ctx.font = "700 13px Torus, sans-serif";
+      ctx.font = "700 13px Tracker Round, sans-serif";
       ctx.fillText(labels[main].toUpperCase(), width / 2, y + 24);
       ctx.shadowBlur = 0;
       ctx.shadowColor = "transparent";
@@ -608,7 +607,7 @@ function SongGraph({ explanation, position, onSeek }: { explanation: PrismExplan
     // Song time along the bottom, every 30 seconds on short charts, every minute on long ones.
     const songLength = length * explanation.rate;
     const step = songLength <= 150_000 ? 30_000 : 60_000;
-    ctx.font = "11px Torus, sans-serif";
+    ctx.font = "11px Tracker Round, sans-serif";
     ctx.fillStyle = "#8f879c";
     ctx.textBaseline = "alphabetic";
     for (let song = Math.ceil(explanation.origin / step) * step; song <= explanation.origin + songLength; song += step) {

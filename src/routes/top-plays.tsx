@@ -790,7 +790,7 @@ function PopOffsPage() {
                       {p.rank != null && (
                         <div
                           className={`hidden sm:block flex-shrink-0 w-12 text-right text-lg font-bold tabular-nums ${p.rank <= 3 ? "text-osu-l2" : "text-osu-f1"}`}
-                          style={{ fontFamily: "Torus" }}
+                          style={{ fontFamily: "Tracker Round" }}
                         >
                           #{p.rank}
                         </div>
@@ -800,12 +800,12 @@ function PopOffsPage() {
                         {p.rank != null && (
                           <div
                             className={`sm:hidden text-[11px] font-bold tabular-nums leading-none mb-0.5 ${p.rank <= 3 ? "text-osu-l2" : "text-osu-f1"}`}
-                            style={{ fontFamily: "Torus" }}
+                            style={{ fontFamily: "Tracker Round" }}
                           >
                             #{p.rank}
                           </div>
                         )}
-                        <div className="text-base sm:text-lg font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>
+                        <div className="text-base sm:text-lg font-bold text-osu-pink" style={{ fontFamily: "Tracker Round" }}>
                           {Math.round(p.pp)}
                         </div>
                         <div className="text-[8px] uppercase tracking-wider text-osu-f1 font-semibold">pp</div>

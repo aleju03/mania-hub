@@ -1,4 +1,8 @@
+import type { PackSpell } from "#/lib/pack-pending";
+import type { SupporterCardSleeveId } from "#/lib/supporter-pack-style";
 import type { CardMotif } from "#/lib/card-motif";
+import type { SupporterLook } from "#/lib/supporter-card-looks";
+import type { SupporterFoilId } from "#/lib/supporter-foils";
 import type { ManiaCardTier, ManiaCardTierStyle, ManiaSkills, NextManiaCardTier } from "#/lib/maniacard";
 import type { OsuScore, OsuUser } from "#/lib/types";
 
@@ -16,6 +20,14 @@ export interface ManiaCardPanelProps {
   tierOverride?: ManiaCardTier;
   /** A team card: the banner face, and a rating explainer with only the ladder. */
   team?: ManiaCardTeamInput;
+  /** Draws this supporter look instead of the one fetched for the player:
+      a look object previews it, null previews the plain card. Undefined
+      (the default) fetches the player's own. */
+  supporterLookOverride?: SupporterLook | null;
+  /** False leaves out the rating and next-tier progress beside the card. */
+  showTierProgress?: boolean;
+  /** The case the card is kept in (a supporter's sleeve), drawn around it in 3D. */
+  sleeve?: SupporterCardSleeveId | null;
 }
 
 export interface ManiaCardTeamInput {
@@ -67,8 +79,23 @@ export interface ManiaCardReadyData {
      triangle flecks, or the cosmic tiers' starfield - with one image. Only a
      holding granted from /admin/collections has one. */
   motif: CardMotif | null;
+  /* The player is an active supporter: the foil they picked plays over the
+     card (flat surfaces bake the holo still for every foil). Independent of
+     motif, which may be the holding's own art or the supporter's chosen one. */
+  supporterFoil?: SupporterFoilId;
   /* Set on a team card, which draws the banner face instead of the player's. */
   team?: ManiaCardTeamFace | null;
+  /* The pack run's edition on this copy (foil, holo, polychrome). Drawn by the
+     overlay shader only, never into the face texture, so a thumbnail of the
+     card stays the same for every copy of it. */
+  edition?: "foil" | "holo" | "polychrome" | null;
+  /* This copy's mint number and how many the card has minted, stamped on the
+     back. Only the 3D card draws a back, so the shared front thumbnails are
+     untouched. */
+  serial?: { number: number; total: number | null } | null;
+  /* Ember burnt or Frost froze this copy before its pack was opened: baked
+     into the front (pack-spell-art.ts), so thumbnails carry it too. */
+  spell?: { kind: PackSpell; seed: number } | null;
 }
 
 export interface ManiaCardEmptyData {
@@ -86,4 +113,6 @@ export interface ManiaCardRenderInput {
      own (a milestone card dealt by the server); see labelOverride below. */
   labelOverride?: string | null;
   motifOverride?: CardMotif | null;
+  /* The player's supporter look; see buildManiaCardRenderDataFromSkills. */
+  supporterLook?: SupporterLook | null;
 }

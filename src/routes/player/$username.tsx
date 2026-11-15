@@ -1,3 +1,6 @@
+import { ProfilePreviewBar, useSupporterProfilePreview } from "#/components/supporter/ProfilePreviewBar";
+import { ProfileCompanion } from "../../components/supporter/Companion";
+import { builtInCompanion, type SupporterCompanion } from "../../lib/supporter-companions";
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { Suspense, lazy, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -18,8 +21,27 @@ import {
   fetchLivePlayerProfileSnapshotDirect,
   fetchLivePlayerRecentScoresDirect,
   fetchLivePlayerSkillsDirect,
+  fetchLiveSupporterProfileLook,
+  supporterLookPreviewFor,
+  fetchServerSupporterLook,
+  seedLiveSupporterLook,
+  peekLiveSupporterCompanion,
+  peekLiveSupporterRenewing,
+  peekLiveSupporterRankFire,
+  peekLiveSupporterRunStartedAt,
   fetchRestrictedPpPlayerDirect,
   isLiveBackendConfigured,
+  peekLiveSupporterFrame,
+  peekLiveSupporterNameFont,
+  peekLiveSupporterNameOutline,
+  peekLiveSupporterNameStyle,
+  peekLiveSupporterProfileTheme,
+  peekLiveSupporterProfileThemeOptions,
+  peekLiveSupporterCustomTheme,
+  peekLiveSupporterProfileStats,
+  peekLiveSupporterLook,
+  forgetLiveSupporterLook,
+  LiveBackendRequestError,
   type LivePlayerSkills,
   type LiveKeymodePpPlay,
   type LivePlayerKeymodePpTail,
@@ -41,6 +63,7 @@ import {
   getDisplayedRank,
   getScoreIdentity,
   getScoreTimeMs,
+  getScoreUrl,
 } from "../../lib/score";
 import { useAuth } from "../../lib/auth-context";
 import { Segmented, SkillPlaysExplorer, prefetchSkillPlaysExplorerView, type SkillPlaysExplorerView } from "../../components/player/SkillPlaysExplorer";
@@ -59,14 +82,35 @@ import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel, preloadManiaCard3DPanel } from "../../components/player/maniacard3d/LazyManiaCard3DPanel";
 import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../lib/maniacard";
 import { SkillBreakdownBody, SkillModePanel, SkillModeOption } from "../../components/player/SkillBreakdown";
-import { qualifyingSkillModes, skillRatingAccent, type SkillAxisEntry } from "../../lib/skill-axes";
+import { qualifyingSkillModes, withMainKeymodeFirst, skillRatingAccent, type SkillAxisEntry } from "../../lib/skill-axes";
 import { SkillPlaysModal } from "../../components/player/SkillPlaysModal";
 import { AddScoreModal } from "../../components/player/AddScoreModal";
 import { DanEvidenceModal } from "../../components/player/DanEvidenceModal";
 import { SkillsUntrackedNotice } from "../../components/player/SkillsUntrackedNotice";
+import { frameOverhangMargins, SupporterAvatarFrame } from "../../components/player/SupporterAvatarFrame";
+import { framedAvatarStyle, supporterFrameGeometry, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
+import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
+import type { SupporterNameStyleId } from "../../lib/supporter-name-styles";
+import { SupporterStyledName } from "../../components/supporter/SupporterNameStyle";
+import { SupporterRankBadge } from "../../components/supporter/SupporterRankBadge";
+import { ProfileThemeBackdrop } from "../../components/supporter/ProfileThemeBackdrop";
+import { CustomThemeCredit } from "../../components/supporter/CustomThemeCredit";
+import { HoursCard, LnSplitCard, NotesCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, SkillCard, SkillKeymodeChoice, StreakCard, useExtraStatPreviews } from "../../components/player/ProfileStatCards";
+import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "../../lib/profile-stats";
+import { saveSupporterProfilePlaysSetting, saveSupporterProfileSkillKeysSetting, saveSupporterProfileStatsSetting, saveSupporterRankFireSetting } from "../../lib/supporter-look-settings";
+import { profilePlayAsTrackedPlay, type ProfilePlayPick, type ProfilePlays } from "../../lib/profile-plays";
+import { FeaturedPlayCard, FeaturedPlayDialog, FeaturedPlayEditButton } from "../../components/player/FeaturedPlays";
+import { useViewerIsSupporter } from "../../lib/viewer-supporter";
+import { useHighwayNotes } from "../../components/supporter/use-highway-notes";
+import { useHighwayChart } from "../../components/supporter/use-highway-chart";
+import { useHighwayPlay } from "../../components/supporter/use-highway-play";
+import { HighwayPlayHud } from "../../components/supporter/HighwayPlayHud";
+import { PROFILE_THEME_LOOKS, profileThemeStyle, type ProfileThemeOptions, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
+import { CUSTOM_THEME_COVER, customThemeStyle, type CustomTheme } from "../../lib/custom-themes";
+import type { BackdropTheme } from "../../lib/profile-theme-gl";
 import { buildRestrictedBestList, profileRailTotals } from "../../components/player/restricted-best-scores";
 import { companellaImportsToScores, dropCompanellaOsuTwins } from "../../lib/companella-scores";
-import type { OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
+import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { calculateUserProfileInsights, KEY_PP_LIST_LIMIT } from "../../lib/profile-insights";
 import { buildCourseClearScore, buildTrackedPlayScore } from "../../lib/tracked-play-score";
 import {
@@ -143,6 +187,11 @@ import { rememberTeamName } from "../../lib/analytics-teams";
 // actually opens it; the about tab itself stays light.
 const BBCodeEditorLazy = lazy(() => import("../../components/player/bbcode/BBCodeEditor"));
 const GUEST_AVATAR_URL = "https://osu.ppy.sh/images/layout/avatar-guest@2x.png";
+/* The empty space left of the hero's 1200px column (its 16px padding, plus
+   half of whatever the window has beyond 1200px, less room for a scrollbar):
+   a frame's art may spread into it, so a wide frame moves the avatar only on
+   a window too narrow to hold it. */
+const HERO_LEFT_GUTTER = "max(16px, calc((100vw - 1200px) / 2 + 8px))";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userRecentRequestCache = new Map<number, Promise<OsuScore[]>>();
@@ -226,11 +275,6 @@ const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
 const RECENT_PRIORITY_DEFER_MS = 1200;
-const TUNG_TUNG_SAHUR_AUDIO_SRC = "/audio/tung-tung-sahur-keycap.mp3";
-const TUNG_TUNG_SAHUR_GLOW_COLORS = ["#38d9ff", "#ff3f57", "#8bff3f", "#b45cff", "#ffd53d", "#ff7a2f"];
-const TUNG_TUNG_SAHUR_BASE_REST = { y: 0, scaleY: 1 };
-const TUNG_TUNG_SAHUR_TOP_REST = { x: -3.25, y: 4, scaleY: 1, filter: "brightness(1)" };
-const TUNG_TUNG_SAHUR_ACTUATION_MS = 49;
 export type PlayerTab = "best" | "recent" | "card" | "about" | "activity" | "skills";
 const PLAYER_TABS: PlayerTab[] = ["best", "recent", "skills", "about", "card", "activity"];
 
@@ -289,6 +333,9 @@ function hasLegacyShowCountryParam(searchStr: string): boolean {
 
 export type PlayerLoaderData = {
   cachedSnapshot: LivePlayerProfileSnapshot | null;
+  /* The player's supporter look as the backend sent it (theme, frame, name,
+     stats, plays, companion), so a reload renders it from the first paint. */
+  cachedSupporterLook?: unknown;
   cachedInsights: UserProfileInsights | null;
   cachedBestFilters: PlayerBestFilterMetadata | null;
   cachedManiaCardSkills: ManiaSkills | null;
@@ -414,9 +461,10 @@ function slimLoaderSnapshot(snapshot: LivePlayerProfileSnapshot): LivePlayerProf
 // Keep the SSR score payload capped without changing full-window UI: insights,
 // filter options, and Maniacard skills are tiny projections calculated before
 // trimming the scores used to paint the initial list.
-export function buildPlayerLoaderData(snapshot: LivePlayerProfileSnapshot | null): PlayerLoaderData {
+export function buildPlayerLoaderData(snapshot: LivePlayerProfileSnapshot | null, supporterLook: unknown = null): PlayerLoaderData {
   const bestScores = snapshot ? dedupeScores(snapshot.bestScores) : [];
   return {
+    cachedSupporterLook: supporterLook,
     cachedSnapshot: snapshot ? slimLoaderSnapshot({ ...snapshot, bestScores }) : null,
     cachedInsights: bestScores.length
       ? calculateUserProfileInsights(bestScores)
@@ -429,6 +477,8 @@ export function buildPlayerLoaderData(snapshot: LivePlayerProfileSnapshot | null
       : null,
   };
 }
+
+const PROFILE_SUPPORTER_LOOK_LOADER_TIMEOUT_MS = 300;
 
 function withProfileLoaderBudget<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -469,8 +519,13 @@ export async function loadPlayerRouteData(username: string): Promise<PlayerLoade
   } catch {
     cachedSnapshot = null;
   }
+  // a quick read, so the page renders in the player's look rather than
+  // switching to it after it loads
+  const supporterLook = cachedSnapshot?.user.id
+    ? await fetchServerSupporterLook(cachedSnapshot.user.id, PROFILE_SUPPORTER_LOOK_LOADER_TIMEOUT_MS)
+    : null;
 
-  return buildPlayerLoaderData(cachedSnapshot);
+  return buildPlayerLoaderData(cachedSnapshot, supporterLook);
 }
 
 export function buildPlayerRouteHead({
@@ -939,6 +994,12 @@ function PlayerDefaultRoute() {
   const { username } = Route.useParams();
   const loaderData = Route.useLoaderData();
   const location = useLocation();
+  // the viewer's own profile can wear what they tried on at /supporter
+  const viewer = useAuth().viewer;
+  const viewerIsSupporter = useViewerIsSupporter(viewer?.id);
+  const loadedUser = loaderData?.cachedSnapshot?.user;
+  const ownProfile = !!viewer && (loadedUser ? loadedUser.id === viewer.id : viewer.username.toLowerCase() === username.toLowerCase());
+  const preview = useSupporterProfilePreview(ownProfile && viewer ? viewer.id : null);
   const legacyShowCountryFlag = readLegacyShowCountryFlag(location.searchStr);
   const hasLegacyShowCountry = hasLegacyShowCountryParam(location.searchStr);
 
@@ -959,12 +1020,16 @@ function PlayerDefaultRoute() {
   }, [hasLegacyShowCountry, legacyShowCountryFlag]);
 
   return (
-    <PlayerProfilePage
-      username={username}
-      loaderData={loaderData}
-      initialTab={getPlayerTabFromPathname(location.pathname)}
-      showCountryFlag={location.state.showPlayerCountryFlag === true || legacyShowCountryFlag}
-    />
+    <>
+      <PlayerProfilePage
+        key={preview.remountKey}
+        username={username}
+        loaderData={loaderData}
+        initialTab={getPlayerTabFromPathname(location.pathname)}
+        showCountryFlag={location.state.showPlayerCountryFlag === true || legacyShowCountryFlag}
+      />
+      {preview.previewing ? <ProfilePreviewBar supporter={viewerIsSupporter} onEnd={preview.end} /> : null}
+    </>
   );
 }
 
@@ -1104,6 +1169,156 @@ export function PlayerProfilePage({
   });
   const restrictedPpPending = !!user?.account_status && restrictedPp?.userId !== user.id;
   const restrictedStanding = user?.account_status && restrictedPp?.userId === user.id ? restrictedPp.standing : null;
+  /* A supporter's avatar frame, name style, name font and profile theme (picked on
+     /supporter). Only an answer about this user counts. */
+  const profileUserId = user?.id ?? 0;
+  const [supporterFrame, setSupporterFrame] = useState<{
+    userId: number;
+    frame: SupporterAvatarFrameId | null;
+    nameStyle: SupporterNameStyleId | null;
+    nameFont: SupporterNameFontId | null;
+    nameOutline: string | null;
+    profileTheme: SupporterProfileThemeId | null;
+    profileThemeOptions: ProfileThemeOptions;
+    customTheme: CustomTheme | null;
+    profileStats: ProfileStatId[] | null;
+    profileSkillKeys: number | null;
+    profileStatsData: ProfileStatsData;
+    profilePlays: ProfilePlays | null;
+    companion: SupporterCompanion | null;
+    /* When their unbroken run began, for the rank beside the name. */
+    runStartedAt: number | null;
+    /* A monthly subscription renews them, marked on the rank. */
+    renewing: boolean;
+    patron: boolean;
+    shownRank: number | null;
+    /* Whether that rank shows its fire; the supporter can turn it off. */
+    rankFire: boolean;
+    /* Only an active supporter has a card look. */
+    supporter: boolean;
+  } | null>(() => {
+    // the look the server render fetched, so the first paint already wears it
+    const raw = loaderData?.cachedSupporterLook;
+    if (!raw || !profileUserId) return null;
+    const value = seedLiveSupporterLook(profileUserId, raw);
+    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null };
+  });
+  useEffect(() => {
+    if (!profileUserId) return;
+    let alive = true;
+    const known = peekLiveSupporterFrame(profileUserId);
+    if (known !== undefined) {
+      setSupporterFrame({
+        userId: profileUserId,
+        frame: known,
+        nameStyle: peekLiveSupporterNameStyle(profileUserId) ?? null,
+        nameFont: peekLiveSupporterNameFont(profileUserId) ?? null,
+        nameOutline: peekLiveSupporterNameOutline(profileUserId) ?? null,
+        profileTheme: peekLiveSupporterProfileTheme(profileUserId) ?? null,
+        profileThemeOptions: peekLiveSupporterProfileThemeOptions(profileUserId) ?? {},
+        customTheme: peekLiveSupporterCustomTheme(profileUserId) ?? null,
+        profileStats: peekLiveSupporterProfileStats(profileUserId)?.stats ?? null,
+        profileSkillKeys: peekLiveSupporterProfileStats(profileUserId)?.skillKeys ?? null,
+        profileStatsData: peekLiveSupporterProfileStats(profileUserId)?.data ?? {},
+        profilePlays: peekLiveSupporterProfileStats(profileUserId)?.plays ?? null,
+        companion: peekLiveSupporterCompanion(profileUserId) ?? null,
+        runStartedAt: peekLiveSupporterRunStartedAt(profileUserId) ?? null,
+        renewing: peekLiveSupporterRenewing(profileUserId) ?? false,
+        patron: false,
+        shownRank: null,
+        rankFire: peekLiveSupporterRankFire(profileUserId) ?? true,
+        supporter: peekLiveSupporterLook(profileUserId) != null,
+      });
+    }
+    void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [profileUserId]);
+  const heroFrame = supporterFrame?.userId === profileUserId ? supporterFrame.frame : null;
+  /* Wings and other wide frames take most of a phone's width beside the
+     avatar: the name keeps that spot and the links go full width under both. */
+  const heroFrameWide = heroFrame != null && supporterFrameGeometry(heroFrame).overhang[0] + supporterFrameGeometry(heroFrame).overhang[2] >= 0.5;
+  const heroNameStyle = supporterFrame?.userId === profileUserId ? supporterFrame.nameStyle : null;
+  const heroNameFont = supporterFrame?.userId === profileUserId ? supporterFrame.nameFont : null;
+  const heroNameOutline = supporterFrame?.userId === profileUserId ? supporterFrame.nameOutline : null;
+  const heroRunStartedAt = supporterFrame?.userId === profileUserId ? supporterFrame.runStartedAt : null;
+  const heroRenewing = supporterFrame?.userId === profileUserId && supporterFrame.renewing;
+  const heroPatron = supporterFrame?.userId === profileUserId && supporterFrame.patron;
+  const heroShownRank = supporterFrame?.userId === profileUserId ? supporterFrame.shownRank : null;
+  const heroRankFire = supporterFrame?.userId === profileUserId ? supporterFrame.rankFire : true;
+  const profileTheme = supporterFrame?.userId === profileUserId ? supporterFrame.profileTheme : null;
+  const customTheme = supporterFrame?.userId === profileUserId ? supporterFrame.customTheme : null;
+  /* What the backdrop draws: a built-in theme, or their own. */
+  const themed: BackdropTheme | null = profileTheme ?? customTheme;
+  /* The owner can leave their osu! banner out from under the theme. */
+  const hideCoverUnderTheme = supporterFrame?.userId === profileUserId && !!supporterFrame.profileThemeOptions.hideCover;
+  /* The four insight cards: a supporter's own pick, or the usual four. The
+     owner's swaps show at once and save in the background. */
+  const [statsOverride, setStatsOverride] = useState<{ userId: number; stats: ProfileStatId[] } | null>(null);
+  const profileStatSlots: readonly ProfileStatId[] = (statsOverride?.userId === profileUserId ? statsOverride.stats : null)
+    ?? (supporterFrame?.userId === profileUserId ? supporterFrame.profileStats : null)
+    ?? DEFAULT_PROFILE_STATS;
+  const profileStatsData = supporterFrame?.userId === profileUserId ? supporterFrame.profileStatsData : {};
+  const viewerIsSupporter = useViewerIsSupporter(auth.viewer?.id);
+  const extraStatPreviews = useExtraStatPreviews(profileStatsData);
+  // The owner's own look says whether they are a supporter; the stored hint
+  // only covers browsers that have been to /supporter.
+  const ownerIsSupporter = supporterFrame?.userId === profileUserId && supporterFrame.supporter;
+  // not while previewing a look tried on at /supporter, which saves nothing
+  const canSwapStats = !!auth.viewer && auth.viewer.id === profileUserId && (viewerIsSupporter || ownerIsSupporter) && !supporterLookPreviewFor(profileUserId);
+  const setProfileStats = (next: ProfileStatId[]) => {
+    setStatsOverride({ userId: profileUserId, stats: next });
+    const isDefault = next.every((entry, index) => entry === DEFAULT_PROFILE_STATS[index]);
+    void saveSupporterProfileStatsSetting({ data: { profileStats: isDefault ? null : next } })
+      .then(() => {
+        // The streak and player count ride the public look, so read it again.
+        forgetLiveSupporterLook(profileUserId);
+        return fetchLiveSupporterProfileLook(profileUserId);
+      })
+      .then((value) => {
+        setSupporterFrame((current) => current?.userId === profileUserId
+          ? { ...current, profileStats: value.profileStats, profileStatsData: value.profileStatsData }
+          : current);
+      })
+      .catch(() => setStatsOverride(null));
+  };
+  /* The keymode of their strongest-skill card, picked in the stat picker. */
+  const profileSkillKeys = supporterFrame?.userId === profileUserId ? supporterFrame.profileSkillKeys : null;
+  const setProfileSkillKeys = (keys: number | null) => {
+    const before = profileSkillKeys;
+    const apply = (value: number | null) => setSupporterFrame((current) => current?.userId === profileUserId ? { ...current, profileSkillKeys: value } : current);
+    apply(keys);
+    void saveSupporterProfileSkillKeysSetting({ data: { skillKeyCount: keys } })
+      .then(() => forgetLiveSupporterLook(profileUserId))
+      .catch(() => apply(before));
+  };
+  /* The fire on their own renewing rank, switched from the rank's tip. */
+  const canSetRankFire = !!auth.viewer && auth.viewer.id === profileUserId && heroRenewing;
+  const setRankFire = (on: boolean) => {
+    const apply = (value: boolean) => setSupporterFrame((current) => current?.userId === profileUserId ? { ...current, rankFire: value } : current);
+    apply(on);
+    void saveSupporterRankFireSetting({ data: { rankFire: on } })
+      .then(() => forgetLiveSupporterLook(profileUserId))
+      .catch(() => apply(!on));
+  };
+  /* The two plays under the stats: the supporter's own picks, or the usual
+     newest and oldest top play. Saved before they show, since the backend
+     works out each play's numbers. */
+  const profilePlays = supporterFrame?.userId === profileUserId ? supporterFrame.profilePlays : null;
+  const [editingPlay, setEditingPlay] = useState<number | null>(null);
+  const saveProfilePlay = async (slot: number, pick: ProfilePlayPick | null) => {
+    const picks = [0, 1].map((index): ProfilePlayPick | null => {
+      if (index === slot) return pick;
+      const kept = profilePlays?.[index];
+      return kept ? { title: kept.title, beatmapId: kept.play.beatmapId, day: kept.play.day, show: kept.show } : null;
+    });
+    const saved = await saveSupporterProfilePlaysSetting({ data: { profilePlays: picks.some(Boolean) ? picks : null } });
+    forgetLiveSupporterLook(profileUserId);
+    setSupporterFrame((current) => current?.userId === profileUserId ? { ...current, profilePlays: saved.profilePlays } : current);
+  };
   const restrictedBest = useMemo(
     () => restrictedStanding
       ? buildRestrictedBestList(restrictedStanding.best, {
@@ -1134,6 +1349,19 @@ export function PlayerProfilePage({
     [restrictedBest],
   );
   const profileInsights = restrictedInsights ?? storedProfileInsights;
+  /* The Note highway plays the owner's replay skin notes in their main keymode, unless they kept its own. */
+  const mainKeys = profileInsights?.keySplit.reduce<{ keyCount: number; count: number } | null>((top, entry) => (!top || entry.count > top.count ? entry : top), null)?.keyCount ?? null;
+  const highwayNotes = useHighwayNotes(
+    profileUserId,
+    mainKeys,
+    (profileTheme === "highway" && !(supporterFrame?.userId === profileUserId && supporterFrame.profileThemeOptions.stockNotes)) || profileTheme === "judgements",
+  );
+  // and, when they switched it on, their best play's chart in that keymode
+  const highwayCharts = profileTheme === "highway" && supporterFrame?.userId === profileUserId && !!supporterFrame.profileThemeOptions.charts;
+  const highwayChart = useHighwayChart(profileUserId, best, highwayNotes?.lanes ?? mainKeys ?? 4, highwayCharts);
+  // a visitor can play it with their own keys (the lanes the backdrop draws: the skin's, the chart's, or four)
+  const highwayLanes = highwayNotes?.lanes ?? highwayChart?.lanes ?? 4;
+  const highwayPlay = useHighwayPlay({ active: profileTheme === "highway", lanes: highwayLanes, chart: highwayChart });
   /* Recent follows Best there: the stored osu! plays stay hidden and only the
      account's Companella imports show, in the same list as anyone's. */
   const shownRecent = useMemo(
@@ -1239,6 +1467,14 @@ export function PlayerProfilePage({
       country_code: user.country_code,
     }));
   }, [user]);
+
+  /* The newest and oldest top play open the same details card as their rows
+     in the Best tab, found there by score; one the list no longer holds keeps
+     its link to osu!. */
+  const openTopPlay = (snapshot: InsightScoreSnapshot | null) => {
+    const score = snapshot?.scoreUrl ? best.find((entry) => getScoreUrl(entry) === snapshot.scoreUrl) : undefined;
+    return score ? () => setDetailScore(score) : undefined;
+  };
 
   /* Tracked plays for the keymode the Best tab is filtered to, minus every map
      the window already lists. Empty for "all", for an untracked player, and
@@ -1983,8 +2219,11 @@ export function PlayerProfilePage({
   const rankDelta90d = rankHistoryPoints.length >= 2
     ? rankHistoryPoints[0] - rankHistoryPoints[rankHistoryPoints.length - 1]
     : null;
-  const showTungTungSahur = user.username.toLowerCase() === "sebasrj";
-  const showYunarkmTuna = user.username.toLowerCase() === "yunarkm";
+  /* A supporter's companion beside the numbers. SebasRJ's keycap came first,
+     as a one-off, and stays his until he picks one. */
+  const companion: SupporterCompanion | null = (supporterFrame?.userId === profileUserId ? supporterFrame.companion : null)
+    ?? (user.username.toLowerCase() === "sebasrj" ? { builtIn: builtInCompanion("sahur-keycap")! } : null);
+  const showYunarkmTuna = !companion && user.username.toLowerCase() === "yunarkm";
   // The tab strip sits flush on the section edge unless a filter/sort bar
   // follows it, which then needs the breathing room back.
   const hasTabControls = tab === "recent" || (tab === "best" && bestWindowLoaded && shownBest.length > 0);
@@ -2083,7 +2322,7 @@ export function PlayerProfilePage({
       // Same shape as the private server pills beside it (ServerLinkPill).
       className="inline-flex items-center gap-1.5 rounded-full bg-white/10 py-0.5 pl-0.5 pr-2 font-semibold text-white/80 transition-colors duration-150 hover:bg-white/20 hover:text-white"
     >
-      <span className="h-4 w-4 rounded-full bg-osu-pink text-white">
+      <span className="h-4 w-4 rounded-full bg-[#ff66aa] text-white">
         <OsuLogo className="h-4 w-4" />
       </span>
       <Trans>osu! profile</Trans>
@@ -2104,8 +2343,23 @@ export function PlayerProfilePage({
   // alongside a link and a presence readout.
   const joinedValue = !profileStatsProjectedOnly && hasValidDate(user.join_date) ? formatDate(user.join_date, "UTC", locale) : null;
 
+  /* A supporter's profile theme: the page takes its colours, and its bands
+     turn see-through over the theme's backdrop, which stays pinned behind
+     them as the page scrolls (clipped to the profile, so not under the
+     footer). Nothing here makes a stacking context, so the modals still sit
+     over the nav: the backdrop comes first and the bands after it are
+     positioned, which is enough to paint them over it. */
+  const band = themed ? "relative bg-osu-b5/[0.78]" : "bg-osu-b5";
   return (
-    <div className="flex-1">
+    <div className={themed ? "relative flex-1 overflow-clip" : "flex-1"} style={customTheme && !profileTheme ? customThemeStyle(customTheme) : profileThemeStyle(profileTheme, highwayNotes)}>
+      {themed && (
+        <div aria-hidden className="pointer-events-none sticky top-0 h-0">
+          <ProfileThemeBackdrop theme={themed} notes={highwayNotes} chart={highwayPlay.chart} play={highwayPlay.play} scroll className="absolute inset-x-0 top-0 h-screen" />
+        </div>
+      )}
+      {themed && profileTheme === "highway" && (
+        <HighwayPlayHud playing={highwayPlay.playing} hud={highwayPlay.hud} keys={highwayPlay.keys} lanes={highwayLanes} binding={highwayPlay.binding} onChangeKeys={highwayPlay.startBinding} />
+      )}
       {/* Avatar modal */}
       <AnimatePresence>
         {avatarOpen && (
@@ -2135,7 +2389,7 @@ export function PlayerProfilePage({
               transition={{ duration: 0.15, delay: 0.05 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <span className="text-white font-bold text-lg">{user.username}</span>
+              <UsernameText username={user.username} userId={user.id} className="text-white font-bold text-lg" />
               <a
                 href={`https://osu.ppy.sh/users/${user.id}/mania`}
                 target="_blank"
@@ -2323,40 +2577,62 @@ export function PlayerProfilePage({
 
       {/* Hero: cover art, identity, and the headline ranks share one band, with
           the 90-day rank trend drawn edge to edge underneath them. */}
-      <header className="relative isolate overflow-hidden bg-osu-b4">
-        {coverImage && (
+      {/* Under a theme the hero is see-through, so it does not isolate: the
+          cover blends into the backdrop behind it as a soft grey texture. */}
+      <header className={`relative overflow-hidden ${themed ? "" : "isolate bg-osu-b4"}`}>
+        {coverImage && !(themed && hideCoverUnderTheme) && (
           <img
             src={coverImage}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
-            style={{ filter: "brightness(0.34) saturate(1.15)" }}
+            style={themed
+              ? { filter: "grayscale(1) contrast(1.15)", opacity: profileTheme ? PROFILE_THEME_LOOKS[profileTheme].cover : CUSTOM_THEME_COVER, mixBlendMode: "soft-light" }
+              : { filter: "brightness(0.34) saturate(1.15)" }}
           />
         )}
-        <div className="absolute inset-0 bg-[radial-gradient(135%_120%_at_12%_0%,rgba(0,0,0,0.25),rgba(0,0,0,0.82))]" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-osu-b5" />
+        <div className={`absolute inset-0 ${themed ? "bg-[radial-gradient(135%_120%_at_12%_0%,rgba(0,0,0,0.05),rgba(0,0,0,0.5))]" : "bg-[radial-gradient(135%_120%_at_12%_0%,rgba(0,0,0,0.25),rgba(0,0,0,0.82))]"}`} />
+        <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent ${themed ? "to-osu-b5/[0.78]" : "to-osu-b5"}`} />
         <RankTrendline history={rankHistoryPoints} />
 
         <div className="relative mx-auto max-w-[1200px] px-4 pt-8 pb-7 sm:px-5 sm:pt-12 sm:pb-9">
-          <div className="flex items-center gap-4 sm:gap-5">
-            <button
-              type="button"
-              onClick={() => setAvatarOpen(true)}
-              className="h-[84px] w-[84px] flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.45)] ring-2 ring-white/15 transition duration-150 hover:ring-osu-pink/70 sm:h-[124px] sm:w-[124px]"
+          {/* The name drops under the avatar when a wide frame leaves it less
+              than its basis, instead of truncating to a few letters. On phones
+              a wide frame splits the column: the name stays beside the avatar
+              unless it can't fit whole, and the links take the next line. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 sm:gap-x-5">
+            <div
+              className="relative flex-shrink-0 [--hero-avatar:84px] sm:[--hero-avatar:124px]"
+              style={heroFrame ? frameOverhangMargins(heroFrame, "var(--hero-avatar)", "28px", HERO_LEFT_GUTTER) : undefined}
             >
-              <img
-                src={avatarSrc}
-                alt={`${user.username}'s avatar`}
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
-            </button>
-            <div className="min-w-0 flex-1">
-              <h1 className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+              <button
+                type="button"
+                onClick={() => setAvatarOpen(true)}
+                className="block h-[84px] w-[84px] cursor-pointer overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.45)] ring-2 ring-white/15 transition duration-150 hover:ring-osu-pink/70 sm:h-[124px] sm:w-[124px]"
+                style={framedAvatarStyle(heroFrame)}
+              >
+                <img
+                  src={avatarSrc}
+                  alt={`${user.username}'s avatar`}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </button>
+              {heroFrame && <SupporterAvatarFrame frame={heroFrame} userId={profileUserId} name={user.username} />}
+            </div>
+            <div className={`min-w-0 flex-1 basis-[11rem] ${heroFrameWide ? "max-sm:contents" : ""}`}>
+              <h1 className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 ${heroFrameWide ? "max-sm:min-w-auto max-sm:max-w-full max-sm:flex-1 max-sm:basis-0" : ""}`}>
                 {/* `truncate` clips at the padding box, and with leading-none the
                     box is tighter than the ink: a capital J overhangs it on the
                     left and below. The padding/-margin pair buys room on every
                     side without moving anything. */}
-                <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate p-2 -m-2 text-[26px] font-black leading-none text-white sm:text-[40px]" />
+                {/* A supporter's name style replaces the accent colour; a name
+                    font alone keeps it. */}
+                {heroNameStyle ? (
+                  <SupporterStyledName live nameStyle={heroNameStyle} nameFont={heroNameFont} outline={heroNameOutline} name={user.display_name ?? user.username} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]" />
+                ) : (
+                  <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} nameTag={supporterFrame?.userId === profileUserId ? { font: heroNameFont, outline: heroNameOutline } : undefined} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]" />
+                )}
+                <SupporterRankBadge runStartedAt={heroRunStartedAt} renewing={heroRenewing} patron={heroPatron} shownRank={heroShownRank} own={!!auth.viewer && auth.viewer.id === profileUserId} fire={heroRankFire} onFireChange={canSetRankFire ? setRankFire : undefined} className="h-6 w-6 sm:h-8 sm:w-8" />
                 {showProfileCountryFlag ? (
                   <Link
                     to="/"
@@ -2375,6 +2651,7 @@ export function PlayerProfilePage({
                   />
                 ) : null}
               </h1>
+              <div className={heroFrameWide ? "max-sm:basis-full max-sm:[&>:first-child]:mt-0" : undefined}>
               <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-white/50">
                 {heroMeta.map((item, index) => (
                   <span key={index} className="inline-flex items-center gap-2">
@@ -2404,12 +2681,13 @@ export function PlayerProfilePage({
                   }}
                 />
               ) : null}
+              </div>
             </div>
           </div>
 
           {/* The keycap easter egg stands on the rail below and leans into this
               corner, so on narrow screens the numbers step out of its way. */}
-          <div className={`mt-7 grid grid-cols-2 gap-x-6 gap-y-5 sm:mt-9 sm:flex sm:flex-wrap sm:items-end sm:gap-x-12 sm:pr-0 ${showTungTungSahur ? "pr-16" : showYunarkmTuna ? "pr-24" : ""}`}>
+          <div className={`mt-7 grid grid-cols-2 gap-x-6 gap-y-5 sm:mt-9 sm:flex sm:flex-wrap sm:items-end sm:gap-x-12 sm:pr-0 ${companion || showYunarkmTuna ? "pr-24" : ""}`}>
             <HeroStat
               label={t`Global`}
               value={restrictedPpPending ? heroValueSkeleton : shownGlobalRank ? `#${formatNumber(shownGlobalRank)}` : "-"}
@@ -2461,12 +2739,12 @@ export function PlayerProfilePage({
       </header>
 
       {/* Stats */}
-      <div className="bg-osu-b5">
+      <div className={band}>
         <div className={`max-w-[1200px] mx-auto px-4 sm:px-5 ${hasTabControls ? "pb-4" : ""}`}>
           {/* Play totals and the grade tally share one flat rail: no boxes, just
               the numbers with a hairline under them. */}
           <div className="relative flex flex-wrap items-center gap-x-8 gap-y-5 border-b border-osu-b3/25 py-5 sm:gap-x-12">
-            {showTungTungSahur && <TungTungSahurKeycap />}
+            {companion && <ProfileCompanion companion={companion} />}
             {showYunarkmTuna && <YunarkmTuna />}
             <RailStat
               label={t`Accuracy`}
@@ -2522,100 +2800,185 @@ export function PlayerProfilePage({
               const profileInsights = displayedProfileInsights;
               const hasPpDistribution = profileInsights.ppRange != null && profileInsights.ppDistribution.length > 0;
               const hasKeyPp = profileInsights.keyPp.length > 0;
+              // What each stat would show, for the owner's picker.
+              const topKeys = [...profileInsights.keySplit].sort((a, b) => b.count - a.count)[0];
+              const statPreviews: Partial<Record<ProfileStatId, string | null>> = canSwapStats ? {
+                keySplit: topKeys ? `${Math.round((topKeys.count / profileInsights.sampleSize) * 100)}% ${topKeys.keyCount}K` : null,
+                mostUsedMod: profileInsights.mostUsedMod?.label ?? null,
+                medianBpm: profileInsights.medianBpm != null ? `${Math.round(profileInsights.medianBpm)} BPM` : null,
+                ppRange: profileInsights.ppRange ? (() => {
+                  const top = Math.round(profileInsights.ppRange.top);
+                  const bottom = Math.round(profileInsights.ppRange.bottom);
+                  return t`${top} to ${bottom}`;
+                })() : null,
+                ...extraStatPreviews,
+              } : {};
+              const renderStatCell = (stat: ProfileStatId): ReactNode => {
+                switch (stat) {
+                  case "keySplit":
+                    return (
+                      <KeySplitCard
+                        keySplit={profileInsights.keySplit}
+                        sampleSize={profileInsights.sampleSize}
+                        onOpen={hasKeyPp ? () => setKeyPpModalOpen(true) : undefined}
+                        onPrefetch={hasKeyPp ? loadKeyPpTail : undefined}
+                      />
+                    );
+                  case "mostUsedMod":
+                    return (
+                      <div
+                        className={`${INSIGHT_CELL_CLASS} group ${profileInsights.mostUsedMod ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
+                        onClick={profileInsights.mostUsedMod ? () => setModModalOpen(true) : undefined}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className={INSIGHT_LABEL_CLASS}>{t`Most Used Mod`}</div>
+                          {profileInsights.mostUsedMod && <ExpandHint />}
+                        </div>
+                        {profileInsights.mostUsedMod ? (
+                          <>
+                            <div className="mt-2 flex items-center gap-2">
+                              <ModBadge mod={profileInsights.mostUsedMod.label} />
+                              <span className="text-[26px] font-black leading-none text-white">{profileInsights.mostUsedMod.label}</span>
+                            </div>
+                            <div className="mt-auto flex items-center gap-2 pt-2.5">
+                              <div className="h-1 flex-1 overflow-hidden rounded-full bg-osu-b3/50">
+                                <div
+                                  className="h-full rounded-full bg-osu-yellow"
+                                  style={{ width: `${Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] tabular-nums text-osu-f1">
+                                {Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mt-2 text-sm text-osu-f1">{t`No mod preference`}</div>
+                        )}
+                      </div>
+                    );
+                  case "medianBpm":
+                    return (
+                      <div
+                        className={`${INSIGHT_CELL_CLASS} group ${profileInsights.medianBpm != null ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
+                        onClick={profileInsights.medianBpm != null ? () => setBpmModalOpen(true) : undefined}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className={INSIGHT_LABEL_CLASS}>{t`Median BPM`}</div>
+                          {profileInsights.medianBpm != null && <ExpandHint />}
+                        </div>
+                        {profileInsights.medianBpm != null ? (
+                          <>
+                            <div className="mt-2 flex items-baseline gap-1.5">
+                              <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.medianBpm)}</span>
+                              <span className="text-[11px] font-semibold text-osu-f1">{t`BPM`}</span>
+                            </div>
+                            {profileInsights.bpmRange && (
+                              <div className="mt-auto pt-2.5 text-[11px] tabular-nums text-osu-f1">
+                                <Trans>{Math.round(profileInsights.bpmRange.min)} to {Math.round(profileInsights.bpmRange.max)}</Trans>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="mt-2 text-sm text-osu-f1">-</div>
+                        )}
+                      </div>
+                    );
+                  case "ppRange":
+                    return (
+                      <button
+                        type="button"
+                        className={`${INSIGHT_CELL_CLASS} group w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-osu-pink/50 ${hasPpDistribution ? INSIGHT_CELL_INTERACTIVE_CLASS : "cursor-default"}`}
+                        onClick={hasPpDistribution ? () => setPpModalOpen(true) : undefined}
+                        disabled={!hasPpDistribution}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className={INSIGHT_LABEL_CLASS}>{t`PP Range`}</div>
+                          {hasPpDistribution && <ExpandHint />}
+                        </div>
+                        {profileInsights.ppRange ? (
+                          <>
+                            <div className="mt-2 flex items-baseline gap-1.5">
+                              <span className="text-[26px] font-black leading-none tabular-nums text-osu-pink-light">{Math.round(profileInsights.ppRange.top)}</span>
+                              <span className="text-[11px] text-osu-f1">{t`to`}</span>
+                              <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.ppRange.bottom)}</span>
+                            </div>
+                            <div className="mt-auto pt-2.5 text-[11px] text-osu-f1">{t`${Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)}pp spread`}</div>
+                          </>
+                        ) : (
+                          <div className="mt-2 text-sm text-osu-f1">-</div>
+                        )}
+                      </button>
+                    );
+                  case "ratio":
+                    return <RatioCard ratio={profileStatsData.ratio} />;
+                  case "lnSplit":
+                    return <LnSplitCard lnSplit={profileStatsData.lnSplit} />;
+                  case "streak":
+                    return <StreakCard streak={profileStatsData.streak} />;
+                  case "percentile":
+                    return <PercentileCard percentile={profileStatsData.percentile} />;
+                  case "session":
+                    return <SessionCard session={profileStatsData.session} />;
+                  case "notes":
+                    return <NotesCard notes={profileStatsData.notes} />;
+                  case "skill":
+                    return <SkillCard userId={profileUserId} keyCount={profileSkillKeys} />;
+                  case "hours":
+                    return <HoursCard hours={profileStatsData.hours} />;
+                }
+              };
               return (
               <div className="space-y-3">
                 {/* One panel, four cells: the 1px gaps show the parent through as
                     hairlines so this reads as a single object, not four boxes. */}
                 <div className={INSIGHT_PANEL_CLASS}>
-                  <KeySplitCard
-                    keySplit={profileInsights.keySplit}
-                    sampleSize={profileInsights.sampleSize}
-                    onOpen={hasKeyPp ? () => setKeyPpModalOpen(true) : undefined}
-                    onPrefetch={hasKeyPp ? loadKeyPpTail : undefined}
-                  />
-                  <div
-                    className={`${INSIGHT_CELL_CLASS} group ${profileInsights.mostUsedMod ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
-                    onClick={profileInsights.mostUsedMod ? () => setModModalOpen(true) : undefined}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className={INSIGHT_LABEL_CLASS}>{t`Most Used Mod`}</div>
-                      {profileInsights.mostUsedMod && <ExpandHint />}
+                  {profileStatSlots.map((stat, slot) => (
+                    <div key={`${slot}:${stat}`} className="group/stat relative grid">
+                      {renderStatCell(stat)}
+                      {canSwapStats && (
+                        <ProfileStatPicker
+                          slot={slot}
+                          slots={profileStatSlots}
+                          previews={statPreviews}
+                          renderCell={renderStatCell}
+                          onChange={setProfileStats}
+                          extra={(slots) => slots.includes("skill") ? <SkillKeymodeChoice userId={profileUserId} value={profileSkillKeys} onChange={setProfileSkillKeys} /> : null}
+                        />
+                      )}
                     </div>
-                    {profileInsights.mostUsedMod ? (
-                      <>
-                        <div className="mt-2 flex items-center gap-2">
-                          <ModBadge mod={profileInsights.mostUsedMod.label} />
-                          <span className="text-[26px] font-black leading-none text-white">{profileInsights.mostUsedMod.label}</span>
-                        </div>
-                        <div className="mt-auto flex items-center gap-2 pt-2.5">
-                          <div className="h-1 flex-1 overflow-hidden rounded-full bg-osu-b3/50">
-                            <div
-                              className="h-full rounded-full bg-osu-yellow"
-                              style={{ width: `${Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] tabular-nums text-osu-f1">
-                            {Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="mt-2 text-sm text-osu-f1">{t`No mod preference`}</div>
-                    )}
-                  </div>
-                  <div
-                    className={`${INSIGHT_CELL_CLASS} group ${profileInsights.medianBpm != null ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
-                    onClick={profileInsights.medianBpm != null ? () => setBpmModalOpen(true) : undefined}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className={INSIGHT_LABEL_CLASS}>{t`Median BPM`}</div>
-                      {profileInsights.medianBpm != null && <ExpandHint />}
-                    </div>
-                    {profileInsights.medianBpm != null ? (
-                      <>
-                        <div className="mt-2 flex items-baseline gap-1.5">
-                          <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.medianBpm)}</span>
-                          <span className="text-[11px] font-semibold text-osu-f1">{t`BPM`}</span>
-                        </div>
-                        {profileInsights.bpmRange && (
-                          <div className="mt-auto pt-2.5 text-[11px] tabular-nums text-osu-f1">
-                            <Trans>{Math.round(profileInsights.bpmRange.min)} to {Math.round(profileInsights.bpmRange.max)}</Trans>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="mt-2 text-sm text-osu-f1">-</div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    className={`${INSIGHT_CELL_CLASS} group w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-osu-pink/50 ${hasPpDistribution ? INSIGHT_CELL_INTERACTIVE_CLASS : "cursor-default"}`}
-                    onClick={hasPpDistribution ? () => setPpModalOpen(true) : undefined}
-                    disabled={!hasPpDistribution}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className={INSIGHT_LABEL_CLASS}>{t`PP Range`}</div>
-                      {hasPpDistribution && <ExpandHint />}
-                    </div>
-                    {profileInsights.ppRange ? (
-                      <>
-                        <div className="mt-2 flex items-baseline gap-1.5">
-                          <span className="text-[26px] font-black leading-none tabular-nums text-osu-pink-light">{Math.round(profileInsights.ppRange.top)}</span>
-                          <span className="text-[11px] text-osu-f1">{t`to`}</span>
-                          <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.ppRange.bottom)}</span>
-                        </div>
-                        <div className="mt-auto pt-2.5 text-[11px] text-osu-f1">{t`${Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)}pp spread`}</div>
-                      </>
-                    ) : (
-                      <div className="mt-2 text-sm text-osu-f1">-</div>
-                    )}
-                  </button>
+                  ))}
                 </div>
 
                 {/* Row 2: Newest + Oldest top play with map backgrounds */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <TopPlayCard label={t`Newest Top Play`} snapshot={displayedProfileInsights.newestTopPlay} />
-                  <TopPlayCard label={t`Oldest Top Play`} snapshot={displayedProfileInsights.oldestTopPlay} />
+                  {([
+                    [t`Newest Top Play`, displayedProfileInsights.newestTopPlay],
+                    [t`Oldest Top Play`, displayedProfileInsights.oldestTopPlay],
+                  ] as const).map(([label, snapshot], slot) => {
+                    const featured = profilePlays?.[slot] ?? null;
+                    return (
+                      <div key={slot} className="group/featured relative">
+                        {featured ? (
+                          <FeaturedPlayCard entry={featured} onOpen={() => openTrackedPlayDetails(profilePlayAsTrackedPlay(featured.play))} />
+                        ) : (
+                          <TopPlayCard label={label} snapshot={snapshot} onOpen={openTopPlay(snapshot)} />
+                        )}
+                        {canSwapStats && <FeaturedPlayEditButton onClick={() => setEditingPlay(slot)} />}
+                        <AnimatePresence>
+                        {editingPlay === slot && (
+                          <FeaturedPlayDialog
+                            slotLabel={label}
+                            current={featured}
+                            onSave={(pick) => saveProfilePlay(slot, pick)}
+                            onReset={featured ? () => saveProfilePlay(slot, null) : null}
+                            onClose={() => setEditingPlay(null)}
+                          />
+                        )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               );
@@ -2737,7 +3100,7 @@ export function PlayerProfilePage({
       </div>
 
       {/* Tab body: About card or scores list */}
-      <div className="bg-osu-b5 border-t border-osu-b3/20">
+      <div className={`${band} border-t border-osu-b3/20`}>
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5 space-y-1.5">
           {tab === "recent" && <SharedRecentPlay userId={user.id} username={user.username} />}
           <AnimatePresence mode="wait" initial={false}>
@@ -2898,167 +3261,12 @@ export function PlayerProfilePage({
           )}
         </div>
       </div>
+      {customTheme && !profileTheme ? (
+        <div className={band}>
+          <CustomThemeCredit theme={customTheme} ownerId={profileUserId} />
+        </div>
+      ) : null}
     </div>
-  );
-}
-
-function TungTungSahurKeycap() {
-  const { t } = useLingui();
-  const [pressed, setPressed] = useState(false);
-  const [actuated, setActuated] = useState(false);
-  const [glowColor, setGlowColor] = useState(TUNG_TUNG_SAHUR_GLOW_COLORS[0]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const actuationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearActuationTimer = useCallback(() => {
-    if (!actuationTimerRef.current) return;
-    clearTimeout(actuationTimerRef.current);
-    actuationTimerRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      clearActuationTimer();
-      const audio = audioRef.current;
-      if (!audio) return;
-      audio.pause();
-      audio.currentTime = 0;
-    };
-  }, [clearActuationTimer]);
-
-  const triggerActuation = useCallback(() => {
-    actuationTimerRef.current = null;
-    setActuated(true);
-    setGlowColor((current) => {
-      const choices = TUNG_TUNG_SAHUR_GLOW_COLORS.filter((color) => color !== current);
-      return choices[Math.floor(Math.random() * choices.length)] ?? current;
-    });
-
-    const audio = audioRef.current ?? new Audio(TUNG_TUNG_SAHUR_AUDIO_SRC);
-    audioRef.current = audio;
-    audio.volume = 0.8;
-    audio.currentTime = 0;
-    void audio.play().catch(() => undefined);
-  }, []);
-
-  const release = useCallback(() => {
-    clearActuationTimer();
-    setPressed(false);
-    setActuated(false);
-  }, [clearActuationTimer]);
-
-  const press = useCallback(() => {
-    clearActuationTimer();
-    setPressed(true);
-    setActuated(false);
-    actuationTimerRef.current = setTimeout(triggerActuation, TUNG_TUNG_SAHUR_ACTUATION_MS);
-  }, [clearActuationTimer, triggerActuation]);
-
-  return (
-    <button
-      type="button"
-      aria-label={t`Tung tung sahur keycap`}
-      className="group absolute right-3 bottom-full z-20 h-28 w-16 translate-y-1 cursor-pointer touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/80 focus-visible:ring-offset-2 focus-visible:ring-offset-osu-b5 sm:right-5 sm:h-32 sm:w-[4.5rem]"
-      onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture(event.pointerId);
-        press();
-      }}
-      onPointerUp={release}
-      onPointerCancel={release}
-      onPointerLeave={release}
-      onBlur={release}
-      onKeyDown={(event) => {
-        if ((event.key === " " || event.key === "Enter") && !event.repeat) press();
-      }}
-      onKeyUp={(event) => {
-        if (event.key === " " || event.key === "Enter") release();
-      }}
-    >
-      <span className="absolute inset-x-5 bottom-0 h-3 rounded-full bg-black/35 blur-md transition-opacity duration-200 group-hover:opacity-90" />
-      <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-base.webp"
-        alt=""
-        draggable={false}
-        className="absolute inset-x-0 bottom-0 z-10 mx-auto w-[61%] object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.38)]"
-        initial={TUNG_TUNG_SAHUR_BASE_REST}
-        animate={{ y: pressed ? 1 : 0, scaleY: pressed ? 0.985 : 1 }}
-        transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.65 }}
-      />
-      <motion.span
-        className="absolute left-1/2 bottom-[37.5%] z-[18] h-3 w-8 -translate-x-1/2 rounded-full blur-sm"
-        style={{
-          background: `radial-gradient(ellipse, ${glowColor} 0%, ${glowColor}bb 38%, transparent 74%)`,
-          boxShadow: `0 0 10px 3px ${glowColor}`,
-        }}
-        initial={{ opacity: 0, scale: 0.78 }}
-        animate={{ opacity: actuated ? 1 : 0, scale: actuated ? 1.08 : 0.78 }}
-        transition={{ duration: actuated ? 0.05 : 0.24, ease: "easeOut" }}
-      />
-      <motion.span
-        className="absolute left-1/2 bottom-[38.6%] z-[19] h-1.5 w-6 -translate-x-1/2 rounded-full blur-[1px]"
-        style={{
-          background: `radial-gradient(ellipse, white 0%, ${glowColor} 45%, transparent 78%)`,
-          boxShadow: `0 0 7px 2px ${glowColor}`,
-        }}
-        initial={{ opacity: 0, scaleX: 0.86 }}
-        animate={{ opacity: actuated ? 1 : 0, scaleX: actuated ? 1.08 : 0.86 }}
-        transition={{ duration: actuated ? 0.04 : 0.2, ease: "easeOut" }}
-      />
-      <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-top.webp"
-        alt=""
-        draggable={false}
-        className="absolute inset-x-0 bottom-[35%] z-20 mx-auto w-[78%] object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,0.42)]"
-        initial={TUNG_TUNG_SAHUR_TOP_REST}
-        animate={{
-          x: -3.25,
-          y: pressed ? 17 : 4,
-          scaleY: pressed ? 0.972 : 1,
-          filter: pressed ? "brightness(0.92)" : "brightness(1)",
-        }}
-        transition={{ type: "spring", stiffness: 640, damping: 31, mass: 0.55 }}
-      />
-      <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-base.webp"
-        alt=""
-        draggable={false}
-        className="absolute inset-x-0 bottom-0 z-30 mx-auto w-[61%] object-contain"
-        style={{ clipPath: "inset(12% 0 0 0)" }}
-        initial={TUNG_TUNG_SAHUR_BASE_REST}
-        animate={{ y: pressed ? 1 : 0, scaleY: pressed ? 0.985 : 1 }}
-        transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.65 }}
-      />
-      <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-top.webp"
-        alt=""
-        draggable={false}
-        className="absolute inset-x-0 bottom-[35%] z-40 mx-auto w-[78%] object-contain"
-        style={{ clipPath: "inset(0 70% 0 0)" }}
-        initial={TUNG_TUNG_SAHUR_TOP_REST}
-        animate={{
-          x: -3.25,
-          y: pressed ? 17 : 4,
-          scaleY: pressed ? 0.972 : 1,
-          filter: pressed ? "brightness(0.92)" : "brightness(1)",
-        }}
-        transition={{ type: "spring", stiffness: 640, damping: 31, mass: 0.55 }}
-      />
-      <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-top.webp"
-        alt=""
-        draggable={false}
-        className="absolute inset-x-0 bottom-[35%] z-40 mx-auto w-[78%] object-contain"
-        style={{ clipPath: "inset(0 0 0 84%)" }}
-        initial={TUNG_TUNG_SAHUR_TOP_REST}
-        animate={{
-          x: -3.25,
-          y: pressed ? 17 : 4,
-          scaleY: pressed ? 0.972 : 1,
-          filter: pressed ? "brightness(0.92)" : "brightness(1)",
-        }}
-        transition={{ type: "spring", stiffness: 640, damping: 31, mass: 0.55 }}
-      />
-    </button>
   );
 }
 
@@ -3227,7 +3435,8 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
     return () => observer.disconnect();
   }, []);
   const [skills, setSkills] = useState<LivePlayerSkills | null>(null);
-  const [skillsError, setSkillsError] = useState(false);
+  // "hidden": the player keeps their ratings to themselves (or turned them off).
+  const [skillsError, setSkillsError] = useState<false | "failed" | "hidden">(false);
   const [selectedSkill, setSelectedSkill] = useState<{ entry: SkillAxisEntry; keyCount: number } | null>(null);
   const [selectedDan, setSelectedDan] = useState<{ side: "rc" | "ln"; keyCount: number } | null>(null);
   /* Which keymode the open panel is for; null follows the profile's own main. */
@@ -3293,8 +3502,8 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           attempts += 1;
           timer = setTimeout(() => void load(), attempts <= 12 ? 6_000 : 15_000);
         }
-      } catch {
-        if (!cancelled) setSkillsError(true);
+      } catch (error) {
+        if (!cancelled) setSkillsError(error instanceof LiveBackendRequestError && error.status === 403 ? "hidden" : "failed");
       }
     };
     void load();
@@ -3316,11 +3525,11 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
     setCourseScore(null);
   }, [noDans]);
 
-  const modes = qualifyingSkillModes(skills);
+  const modes = withMainKeymodeFirst(qualifyingSkillModes(skills), skills?.mainKeyCount ?? null);
   /* `modes` arrives ranked by rated plays, most first, and the strip keeps
      that order: the keymode someone plays leads, and its panel is the one that
      opens. Keycount order would put a profile's 4K first whether they play it
-     or not. */
+     or not. A keymode the player picked in Settings leads instead. */
   const skillModeStrip = modes;
   const activeSkillMode = modes.find((mode) => mode.keyCount === skillModeKey) ?? modes[0] ?? null;
   const view = noDans && skillsView === "dan" ? "ratings" : skillsView;
@@ -3405,7 +3614,13 @@ function PlayerSkillsPanel({ user }: { user: OsuUser }) {
           />
         </div>
       ) : null}
-      {skillsError ? (
+      {skillsError === "hidden" ? (
+        <div className="py-8 text-center text-sm text-osu-f1">
+          {auth.viewer?.id === user.id
+            ? t`Your skill ratings are turned off. You can turn them back on in Settings.`
+            : t`${user.username} keeps their skill ratings private.`}
+        </div>
+      ) : skillsError ? (
         <div className="py-8 text-center text-sm text-osu-f1">{t`Could not load skill ratings. Try again in a bit.`}</div>
       ) : !skills ? (
         /* Shaped like what lands: a keymode strip over one panel, not the

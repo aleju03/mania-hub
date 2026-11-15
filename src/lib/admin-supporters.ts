@@ -2,13 +2,15 @@ import { createServerFn } from "@tanstack/react-start";
 
 import { adminAuthHeaders } from "./live-backend-tokens";
 import { getServerLiveBackendUrl } from "./live-backend";
+import { parseSubmittedCompanion, type SubmittedCompanion } from "./supporter-companions";
+import { parseSubmittedFrames } from "./workshop-frames";
 
 /* /admin/players?tab=supporters, backed by backend features/supporters.ts:
    every donation with who gave and how it was linked to an osu! account, the
-   supporter list, and the owner's link, unlink, grant and Ko-fi CSV import
-   actions. */
+   supporter list, and the owner's link, unlink, grant, Ko-fi CSV import and
+   Google contributor export import actions. */
 
-export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "manual" | "unlinked";
+export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "message_match" | "manual" | "unlinked" | "claim" | "email_claim";
 
 export interface AdminDonationRow {
   provider: string;
@@ -23,6 +25,8 @@ export interface AdminDonationRow {
   linkedUserId: number | null;
   linkedUsername: string | null;
   linkMethod: DonationLinkMethod | null;
+  /** A Google claim awaiting the export, or one the export proved made up. */
+  claimStatus?: "pending" | "revoked" | null;
 }
 
 export interface AdminSupporterRow {
@@ -32,6 +36,10 @@ export interface AdminSupporterRow {
   firstSupportedAt: number;
   lastDonationAt: number | null;
   active: boolean;
+  /** Their own card motif image, when they uploaded one. */
+  customMotifUrl: string | null;
+  /** A rank pinned for them (0 Amber .. 11 Holo, supporter-ranks.ts), or null for the real monthly count. */
+  rankPin: number | null;
 }
 
 export interface AdminSupportersView {
@@ -39,7 +47,7 @@ export interface AdminSupportersView {
   supporters: AdminSupporterRow[];
 }
 
-async function adminRequest<T>(path: string, body?: unknown): Promise<T> {
+export async function adminRequest<T>(path: string, body?: unknown): Promise<T> {
   const { requireAdminAccess } = await import("./auth");
   await requireAdminAccess("Manage supporters");
   const base = getServerLiveBackendUrl();
@@ -102,3 +110,95 @@ export const importAdminKofiCsv = createServerFn({ method: "POST" })
     return { csv };
   })
   .handler(({ data }) => adminRequest<{ ok: true; rows: number; inserted: number; linked: number }>("/api/admin/supporters/import", data));
+
+export const clearAdminSupporterMotif = createServerFn({ method: "POST" })
+  .validator((data: { userId?: unknown }) => {
+    const userId = Number(data?.userId);
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Pick a supporter.");
+    return { userId };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; cleared: boolean }>("/api/admin/supporters/clear-motif", data));
+
+/* Pins the rank a supporter shows whatever their run's length, or (null)
+   goes back to counting the months. */
+export const setAdminSupporterRank = createServerFn({ method: "POST" })
+  .validator((data: { userId?: unknown; rank?: unknown }) => {
+    const userId = Number(data?.userId);
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("Pick a supporter.");
+    const rank = data?.rank === null ? null : Number(data?.rank);
+    if (rank !== null && !(Number.isInteger(rank) && rank >= 0 && rank < 12)) throw new Error("Pick a rank.");
+    return { userId, rank };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true }>("/api/admin/supporters/rank-pin", data));
+
+/* Every submitted companion, listed or waiting for review. */
+export const loadAdminCompanions = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { companions } = await adminRequest<{ companions: unknown[] }>("/api/admin/supporters/companions", {});
+    return companions.map(parseSubmittedCompanion).filter((entry): entry is SubmittedCompanion => entry !== null);
+  });
+
+/* Puts a submitted companion on everyone's list, or takes it off (and off
+   everyone wearing it but its submitter). */
+export const setAdminCompanionListed = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; listed?: unknown }) => {
+    const id = typeof data?.id === "string" && /^u\d{1,12}$/.test(data.id) ? data.id : null;
+    if (!id) throw new Error("Pick a companion.");
+    return { id, listed: data?.listed === true };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; updated: boolean }>("/api/admin/supporters/list-companion", data));
+
+/* Takes a submitted companion off the list and off everyone wearing it. */
+export const deleteAdminCompanion = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown }) => {
+    const id = typeof data?.id === "string" && /^u\d{1,12}$/.test(data.id) ? data.id : null;
+    if (!id) throw new Error("Pick a companion.");
+    return { id };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; deleted: boolean }>("/api/admin/supporters/delete-companion", data));
+
+/* Every workshop frame, listed or waiting for review. */
+export const loadAdminFrames = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { frames } = await adminRequest<{ frames: unknown[] }>("/api/admin/supporters/frames", {});
+    return parseSubmittedFrames(frames);
+  });
+
+/* Puts a workshop frame on everyone's list, or takes it off (and off everyone
+   wearing it but its maker). */
+export const setAdminFrameListed = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; listed?: unknown }) => {
+    const id = typeof data?.id === "string" && /^u\d{1,12}$/.test(data.id) ? data.id : null;
+    if (!id) throw new Error("Pick a frame.");
+    return { id, listed: data?.listed === true };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; updated: boolean }>("/api/admin/supporters/list-frame", data));
+
+/* Marks a workshop frame as looked at, so the review list leads with new ones. */
+export const setAdminFrameReviewed = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown }) => {
+    const id = typeof data?.id === "string" && /^u\d{1,12}$/.test(data.id) ? data.id : null;
+    if (!id) throw new Error("Pick a frame.");
+    return { id };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; updated: boolean }>("/api/admin/supporters/review-frame", data));
+
+/* Takes a workshop frame off the list and off everyone wearing it. */
+export const deleteAdminFrame = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown }) => {
+    const id = typeof data?.id === "string" && /^u\d{1,12}$/.test(data.id) ? data.id : null;
+    if (!id) throw new Error("Pick a frame.");
+    return { id };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; deleted: boolean }>("/api/admin/supporters/delete-frame", data));
+
+/* Publisher Center's contributor export: confirms Google claims, adds unclaimed
+   orders, revokes claims it does not list. */
+export const importAdminGoogleExport = createServerFn({ method: "POST" })
+  .validator((data: { csv?: unknown }) => {
+    const csv = typeof data?.csv === "string" ? data.csv : "";
+    if (!csv.trim()) throw new Error("Pick a CSV file.");
+    if (csv.length > 8 * 1024 * 1024) throw new Error("That file is too large.");
+    return { csv };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; rows: number; confirmed: number; added: number; revoked: number; pending: number }>("/api/admin/supporters/import-google", data));

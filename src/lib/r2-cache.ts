@@ -39,6 +39,9 @@ import {
 // with no other durable copy and must NEVER get a lifecycle rule; the rest is
 // re-derivable cache, so adding a rule later is safe (a miss re-uploads and
 // refreshes the object's age). Replay endpoint kind rides on S3 object metadata.
+// shared-clips/ (at the bucket root, written by the backend's
+// shared-clips/r2.ts) wants a 1-day rule: the backend deletes each clip once
+// its 24 hours are up, and the rule is the backstop for what that misses.
 // maniacards/ here is a leftover: the live pool moved to the public image
 // bucket (pack-thumbnail-store.ts) on 2026-08-05, and the stranded copies just
 // age out under the existing 90d rule.
@@ -669,6 +672,14 @@ export async function getReplayVideoSignedUrl(id: string, filename: string): Pro
   return signGetUrl(storageKey, mimeType);
 }
 
+/* A shared clip's video or poster (lib/shared-clips.ts), signed for the
+   redirect that serves it. The caller has already checked the clip is live. */
+export async function getSharedClipSignedUrl(id: string, file: "video" | "poster", contentType: "video/mp4" | "video/webm"): Promise<string | null> {
+  if (!/^[a-zA-Z0-9]{10}$/.test(id) || !getClient()) return null;
+  if (file === "poster") return signGetUrl(`shared-clips/${id}/poster.jpg`, "image/jpeg");
+  return signGetUrl(`shared-clips/${id}/clip.${contentType === "video/webm" ? "webm" : "mp4"}`, contentType);
+}
+
 // Reads on a bucket with a custom domain go straight to the CDN address: it is
 // the same URL the site hands out, it costs no signing round-trip, and it is
 // the one an admin actually wants to copy out of the preview.
@@ -872,6 +883,7 @@ function assertReplayCacheKey(storageKey: string): void {
 // invisible here until it is listed as a root.
 const SKINS_PREFIX = "skins/";
 const BUG_REPORTS_PREFIX = "bug-reports/";
+const SHARED_CLIPS_PREFIX = "shared-clips/";
 
 type AdminBucketDef = {
   id: R2AdminBucketId;
@@ -900,6 +912,11 @@ const ADMIN_BUCKETS: AdminBucketDef[] = [
         prefix: BUG_REPORTS_PREFIX,
         label: "bug reports",
         deleteWarning: "Screenshots attached to a bug report. Deleting one leaves the report pointing at nothing; delete the report from /admin/bug-reports instead, which removes both.",
+      },
+      {
+        prefix: SHARED_CLIPS_PREFIX,
+        label: "shared clips",
+        deleteWarning: "A supporter's shared replay clip, deleted by the backend 24 hours after upload. Deleting one early breaks a link someone may have just posted.",
       },
     ],
     getClient,

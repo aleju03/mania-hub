@@ -1,7 +1,7 @@
 /* Pieces of the player profile page that the team page draws the same way:
    the hero and rail stats, the insight panel cells and the skeletons. */
 
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
@@ -143,7 +143,19 @@ export function ExpandHint() {
   );
 }
 
-export function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScoreSnapshot | null }) {
+/* A plain click opens the play's details card on the site when `onOpen` is
+   given; a modified or middle click still follows the link to osu!. */
+export function openOnPlainClick(onOpen: (() => void) | undefined) {
+  return onOpen
+    ? (event: MouseEvent<HTMLAnchorElement>) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      onOpen();
+    }
+    : undefined;
+}
+
+export function TopPlayCard({ label, snapshot, onOpen }: { label: string; snapshot: InsightScoreSnapshot | null; onOpen?: () => void }) {
   const locale = useLocale();
   const { t } = useLingui();
   const viewerTimeZone = useViewerTimeZone();
@@ -163,6 +175,7 @@ export function TopPlayCard({ label, snapshot }: { label: string; snapshot: Insi
       href={href}
       target="_blank"
       rel="noreferrer"
+      onClick={openOnPlainClick(onOpen)}
       className="group/topplay relative block h-[120px] overflow-hidden rounded-xl bg-osu-b4 ring-1 ring-inset ring-white/[0.06] transition duration-150 hover:ring-osu-pink/40"
     >
       {snapshot.coverUrl && (

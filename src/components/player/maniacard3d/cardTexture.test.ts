@@ -32,7 +32,7 @@ describe("loadCardFonts", () => {
     // 900 is the username and the stat values, 800 the stat labels and the
     // star average: the pair that used to come out in two different fonts.
     expect(requested.map((font) => font.split(" ")[0]).sort()).toEqual(["800", "900"]);
-    for (const font of requested) expect(font).toContain("Torus");
+    for (const font of requested) expect(font).toContain("Tracker Round");
   });
 
   it("draws in the fallback instead of failing when a face will not load", async () => {
@@ -57,7 +57,7 @@ describe("loadCardFonts", () => {
 describe("createCardTextures", () => {
   it("waits for the fonts before measuring, not just before drawing", () => {
     // The username is auto-sized from its measured width, so a late font would
-    // leave the card sized off Arial metrics even once it drew in Torus.
+    // leave the card sized off Arial metrics even once it drew in Tracker Round.
     const source = readFileSync(fileURLToPath(new URL("./cardTexture.ts", import.meta.url)), "utf8");
     const awaited = source.indexOf("await loadCardFonts();");
     const measured = source.indexOf("buildFaceLayout(data, measure)");

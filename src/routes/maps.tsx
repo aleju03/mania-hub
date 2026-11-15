@@ -2,18 +2,18 @@ import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react
 import { Trans, Plural, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import { Children, Fragment, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Dices } from "lucide-react";
-import { getBeatmapFile } from "../lib/osu";
-import { loadReplayRenderer } from "../lib/replay-renderer-loader";
 import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { displayCountryName, isGlobalScope } from "../lib/country";
 import { useLocale } from "../lib/locale-context";
 import { isRegionScope } from "../lib/regions";
-import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
+import { formatNumber, formatDuration, formatTimeAgo, intlLocaleTag } from "../lib/format";
+import type { AppLocale } from "../lib/locale";
+import { oszDownloadUrl } from "../lib/beatmap-mirrors";
 import { MANIA_PATTERN_LABELS } from "../lib/mania-patterns";
 import { PageHeader } from "../components/layout/PageHeader";
 import { Avatar } from "../components/ui/Avatar";
@@ -42,7 +42,10 @@ import {
 import { StarRangePill } from "../components/maps/StarRangePill";
 import { MapCollectionsSection } from "../components/maps/MapCollectionsSection";
 import { MapDetailModal } from "../components/maps/MapDetailModal";
-import { PATTERN_COLOR, StarRatingBadge } from "../components/maps/SearchCard";
+import { ChartPreviewPanel } from "../components/maps/ChartPreviewPanel";
+import { DiffTabs } from "../components/maps/MapDetailHeader";
+import { BeatmapStatusBadge, MAP_STATUS_LABELS } from "../components/ui/BeatmapStatusBadge";
+import { stripKeymodePrefix, Hairline, MapCardFooter, MapCardFrame, OszButton, OsuDirectButton, PATTERN_COLOR, SearchCardGridSkeleton, StarRatingBadge, mapCardGridClass } from "../components/maps/SearchCard";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import type {
@@ -52,15 +55,13 @@ import type {
   MapsFarmedPlayer,
   MapsFavouriteBeatmapset,
   MapsPlayerEntry,
-  ReplayFrame,
 } from "../lib/types";
-import type { ManiaBeatmap, ManiaNote, ManiaScrollVelocity } from "../lib/beatmap-parser";
-import { useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
+import { useHasHydrated, useHiddenUserIds, useMapsFourPerRow, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
 import { fetchMapSharePreview, mapCoverUrl, MAP_COVER_HEIGHT, MAP_COVER_WIDTH, type MapSharePreview } from "../lib/map-share-preview";
 import { getI18n } from "../lib/i18n";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
-import { getBeatmapAudioUrl, getPreviewAudioProxyUrl } from "../lib/audio-url";
+import { getPreviewAudioProxyUrl } from "../lib/audio-url";
 import { getPreviewAnalyser, releasePreviewAnalyser } from "../lib/preview-analyser";
 import {
   DEFAULT_REPLAY_VOLUME,
@@ -70,22 +71,12 @@ import {
 } from "../lib/replay-preferences";
 import {
   RANDOM_REPLAY_PREVIEW_MS,
-  buildAutoplayFrames,
   getBracketBpmBase,
-  getChartPreviewPlaybackPlan,
-  getPreviewInitialCombo,
-  getPreviewNotes,
-  getPreviewScrollVelocities,
   isLikelyBracketBpmVariantSet,
   isLikelyRateVariantSet,
   parseBracketBpm,
   parseDifficultyRate,
-  resolveInitialChartPreviewAudioMode,
-  shouldUseSetPreviewForReplayAudio,
 } from "../lib/chart-preview";
-import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, readReplayScrollSpeed } from "../lib/replay-scroll-speed";
-import { useReplaySkinSettings } from "../lib/use-replay-skin-settings";
-import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
 import {
   fetchLiveMapSearchEntry,
@@ -101,7 +92,6 @@ import { LIVE_MAPS_PLAYERS_PAGE_SIZE, RANDOM_DRAW_BATCH_SIZE } from "../lib/live
 import type { LiveMapSearchEntry, LiveMapsBrowseTab, LiveMapsDetailsPlayer, LiveMapsPageValue, LiveMapsPlayersKind, LiveMapsRandomDrawSnapshot, LiveMapsRandomDrawValue, LiveMapsRandomPick, LiveMapsRefreshProgress } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { useCountryWarming } from "../lib/use-country-warming";
-import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import {
   cycleTriStateCsv,
   getTriStateMode,
@@ -119,10 +109,12 @@ import {
 } from "../lib/maps-random-draw-params";
 import type { RandomPattern, RandomWeight } from "../lib/maps-random-draw-params";
 import { MapsRandomDrawController } from "../lib/maps-random-draw-state";
+import { scaledPx } from "../lib/ui-scale-values";
 import type { RandomDrawEvent } from "../lib/maps-random-draw-state";
 import { useWindowActive } from "../lib/window-activity";
 import { useBodyScrollLock } from "../lib/use-body-scroll-lock";
 import { msdRangesForFacet, parseMsdRanges, serializeMsdRanges } from "../lib/map-search-msd";
+import { UsernameText } from "../components/ui/UsernameText";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -226,46 +218,6 @@ const FARMED_DOMINANT_MOD_SHARE = 0.4;
 const RANDOM_PICK_SETTINGS_STORAGE_KEY = "mania-hub-maps-random-pick-settings-v1";
 const SEARCH_URL_DEBOUNCE_MS = 250;
 const LIVE_MAPS_PAGE_CACHE_MAX_ENTRIES = 48;
-
-function beatmapStatusBadgeClass(status: string): string {
-  const normalized = status.toLowerCase();
-  const colorClass =
-    normalized === "ranked" || normalized === "approved"
-      ? "bg-[#6cf27f]"
-      : normalized === "loved"
-        ? "bg-[#f26fa6]"
-        : normalized === "graveyard"
-          ? "bg-[#b3b3b3]"
-          : "bg-[#ffd36b]";
-
-  return [
-    "inline-flex shrink-0 items-center justify-center rounded-full",
-    "px-2.5 py-1 text-[10px] font-extrabold uppercase leading-none text-black",
-    colorClass,
-  ].join(" ");
-}
-
-function BeatmapStatusBadge({ status, className = "" }: { status: string; className?: string }) {
-  const { i18n } = useLingui();
-  const normalized = status.toLowerCase();
-  const descriptor = MAP_STATUS_LABELS[normalized];
-  return (
-    <span className={`${beatmapStatusBadgeClass(status)} ${className}`}>
-      {descriptor ? i18n._(descriptor) : status}
-    </span>
-  );
-}
-
-const MAP_STATUS_LABELS: Record<string, MessageDescriptor> = {
-  ranked: msg`Ranked`,
-  approved: msg`Ranked`,
-  qualified: msg`Qualified`,
-  loved: msg`Loved`,
-  graveyard: msg`Graveyard`,
-  pending: msg`Pending`,
-  wip: msg`Pending`,
-  other: msg`Other`,
-};
 
 const DEFAULT_MAPS_SEARCH: MapsSearch = {
   // Search leads the view bar and is the landing tab; the country lenses follow.
@@ -474,6 +426,11 @@ const RANDOM_PATTERN_CHIP_COLOR: Record<RandomPattern, string> = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+// "15.9M": the global play counts in the map details' stats line.
+function formatCompactPlays(n: number, locale: AppLocale): string {
+  return new Intl.NumberFormat(intlLocaleTag(locale), { notation: "compact", maximumFractionDigits: 1 }).format(Math.max(0, n));
+}
+
 function parseKeyCount(version: string): number | null {
   const match = version.match(/\b(\d)K\b/i);
   return match ? parseInt(match[1]) : null;
@@ -494,25 +451,6 @@ function getDefaultRandomBeatmapId(beatmaps: NonNullable<MapsFavouriteBeatmapset
     return lowest?.id ?? beatmaps.at(-1)?.id ?? null;
   }
   return beatmaps[0]?.id ?? null;
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-async function getBeatmapFileWithRetry(beatmapId: number, beatmapsetId?: number) {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const result = await getBeatmapFile({ data: { beatmapId, beatmapsetId } });
-      if (!result.content.trim()) throw new Error("Empty beatmap file");
-      return result;
-    } catch (error) {
-      lastError = error;
-      if (attempt < 2) await wait(250 * (attempt + 1));
-    }
-  }
-  throw lastError;
 }
 
 function setAudioPreservesPitch(audio: HTMLAudioElement, preservesPitch: boolean): void {
@@ -544,112 +482,6 @@ function resetAudioElement(audio: HTMLAudioElement | null, unload = false): void
       // Best-effort cleanup; pausing above is the important part.
     }
   }
-}
-
-const AUDIO_METADATA_TIMEOUT_MS = 1500;
-const SELECTED_AUDIO_METADATA_TIMEOUT_MS = 60_000;
-const SELECTED_AUDIO_SEEK_SETTLE_TIMEOUT_MS = 5000;
-
-function waitForAudioMetadata(
-  audio: HTMLAudioElement,
-  timeoutMs = AUDIO_METADATA_TIMEOUT_MS,
-  requireMetadata = false,
-): Promise<void> {
-  if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    let timeoutId: number | null = null;
-    const done = (loaded: boolean) => {
-      if (timeoutId) window.clearTimeout(timeoutId);
-      audio.removeEventListener("loadedmetadata", onLoadedMetadata);
-      audio.removeEventListener("error", onError);
-      if (loaded || !requireMetadata) {
-        resolve();
-      } else {
-        reject(new Error("Audio metadata did not load"));
-      }
-    };
-    const onLoadedMetadata = () => done(true);
-    const onError = () => done(false);
-    const onTimeout = () => {
-      done(audio.readyState >= HTMLMediaElement.HAVE_METADATA);
-    };
-    audio.addEventListener("loadedmetadata", onLoadedMetadata);
-    audio.addEventListener("error", onError);
-    timeoutId = window.setTimeout(onTimeout, timeoutMs);
-  });
-}
-
-const AUDIO_SEEK_TOLERANCE_SECONDS = 0.25;
-const AUDIO_SEEK_SETTLE_TIMEOUT_MS = 1200;
-
-function waitForAudioSeekSettle(
-  audio: HTMLAudioElement,
-  targetSeconds: number,
-  timeoutMs = AUDIO_SEEK_SETTLE_TIMEOUT_MS,
-): Promise<void> {
-  return new Promise((resolve) => {
-    let rafId: number | null = null;
-    let timeoutId: number | null = null;
-    let settledFrames = 0;
-    const isCloseToTarget = () => Math.abs(audio.currentTime - targetSeconds) <= AUDIO_SEEK_TOLERANCE_SECONDS;
-
-    const cleanup = () => {
-      if (rafId != null) window.cancelAnimationFrame(rafId);
-      if (timeoutId != null) window.clearTimeout(timeoutId);
-      audio.removeEventListener("seeked", scheduleCheck);
-      audio.removeEventListener("canplay", scheduleCheck);
-      audio.removeEventListener("loadeddata", scheduleCheck);
-      audio.removeEventListener("timeupdate", scheduleCheck);
-      audio.removeEventListener("error", done);
-    };
-    const done = () => {
-      cleanup();
-      resolve();
-    };
-    const check = () => {
-      rafId = null;
-      if (audio.error) {
-        done();
-        return;
-      }
-      if (!audio.seeking && isCloseToTarget()) {
-        settledFrames += 1;
-        if (settledFrames >= 2) {
-          done();
-          return;
-        }
-      } else {
-        settledFrames = 0;
-      }
-      scheduleCheck();
-    };
-    function scheduleCheck() {
-      if (rafId == null) rafId = window.requestAnimationFrame(check);
-    }
-
-    audio.addEventListener("seeked", scheduleCheck);
-    audio.addEventListener("canplay", scheduleCheck);
-    audio.addEventListener("loadeddata", scheduleCheck);
-    audio.addEventListener("timeupdate", scheduleCheck);
-    audio.addEventListener("error", done);
-    timeoutId = window.setTimeout(done, timeoutMs);
-    scheduleCheck();
-  });
-}
-
-async function seekAudioElement(
-  audio: HTMLAudioElement,
-  seconds: number,
-  options?: { metadataTimeoutMs?: number; requireMetadata?: boolean; seekSettleTimeoutMs?: number },
-): Promise<void> {
-  const targetSeconds = Math.max(0, seconds);
-  await waitForAudioMetadata(audio, options?.metadataTimeoutMs, options?.requireMetadata);
-  try {
-    audio.currentTime = targetSeconds;
-  } catch {
-    return;
-  }
-  await waitForAudioSeekSettle(audio, targetSeconds, options?.seekSettleTimeoutMs);
 }
 
 // ── Route ──────────────────────────────────────────────────────────────────
@@ -689,7 +521,7 @@ export const Route = createFileRoute("/maps")({
         title: isSearch ? i18n._(msg`Map search`) : i18n._(msg`Map collections`),
         description: isSearch
           ? i18n._(msg`Search every ranked osu!mania map by title, keymode, stars, and status.`)
-          : i18n._(msg`Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD.`),
+          : i18n._(msg`Browse rotating osu!mania map packs grouped by pattern, dan estimate, and rating.`),
         // Search is the default tab and its default search param is stripped
         // from the visible URL, so keep the canonical aligned with /maps.
         path: isSearch ? "/maps" : withSearchParams("/maps", { tab }),
@@ -803,6 +635,7 @@ export const Route = createFileRoute("/maps")({
 
 function MapsPage() {
   const { t, i18n } = useLingui();
+  const fourPerRow = useMapsFourPerRow();
   const navigate = useNavigate();
   const mapsSearch = Route.useSearch();
   const mapsSearchRef = useRef(mapsSearch);
@@ -1710,12 +1543,18 @@ function MapsPage() {
               </div>
             )}
             {showMapsSummary && mapsUpdatedAt && (
-              <span className="text-[10px] text-osu-f1">
+              <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-osu-f1">
                 {tab === "random" ? (
-                  <Trans>{formatNumber(randomPickCount, locale)} possible picks · {formatNumber(randomDraw?.uniqueSets ?? 0, locale)} unique sets &middot; updated {formatTimeAgo(mapsUpdatedAt, locale)}</Trans>
+                  <>
+                    <span><Trans>{formatNumber(randomPickCount, locale)} possible picks</Trans></span>
+                    <Hairline />
+                    <span><Trans>{formatNumber(randomDraw?.uniqueSets ?? 0, locale)} unique sets</Trans></span>
+                  </>
                 ) : (
-                  <Trans>{formatNumber(currentTotal, locale)} maps &middot; updated {formatTimeAgo(mapsUpdatedAt, locale)}</Trans>
+                  <span><Trans>{formatNumber(currentTotal, locale)} maps</Trans></span>
                 )}
+                <Hairline />
+                <span><Trans>updated {formatTimeAgo(mapsUpdatedAt, locale)}</Trans></span>
               </span>
             )}
             {canUseAdminFeatures && !selectedIsRegion && !isLoading && !error && (randomDraw || currentLiveMapsPage) && (
@@ -2100,14 +1939,14 @@ function MapsPage() {
               {tab === "random" ? (
                 <RandomPickLoadingSkeleton />
               ) : (
-                <MapsCardGridSkeleton count={PAGE_SIZE} />
+                <SearchCardGridSkeleton count={PAGE_SIZE} />
               )}
             </div>
           )}
 
           {/* Card grid */}
           {tab !== "random" && !error && currentList.length > 0 && (
-            <div key={`${tab}-${page}`} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 cards-enter">
+            <div key={`${tab}-${page}`} className={`${mapCardGridClass(fourPerRow)} cards-enter`}>
                 {tab === "farmed"
                   ? (currentList as MapsFarmedEntry[]).map((map) => (
                       <FarmedCard
@@ -2158,9 +1997,7 @@ function MapsPage() {
                         <div className="text-[10px] uppercase tracking-wider text-osu-f1">
                           <Trans>random pick from</Trans>
                         </div>
-                        <div className="text-[15px] font-semibold text-osu-l2 group-hover:text-white transition-colors truncate">
-                          {randomPick.player.username}
-                        </div>
+                        <UsernameText username={randomPick.player.username} userId={randomPick.player.id} className="block truncate text-[15px] font-semibold text-osu-l2 group-hover:text-white transition-colors" />
                         <div className="text-[10px] text-osu-f1">
                           <Trans>{randomPick.player.favouriteCount} favourites</Trans>
                         </div>
@@ -2342,23 +2179,6 @@ function MapsLoadingIndicator({ firstBuild }: { firstBuild: boolean }) {
   );
 }
 
-function MapsCardGridSkeleton({ count }: { count: number }) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
-          <Skeleton className="w-full h-[90px] rounded-none" />
-          <div className="p-3 space-y-2">
-            <Skeleton className="h-3.5 w-3/4" />
-            <Skeleton className="h-3 w-1/2" />
-            <Skeleton className="h-3 w-2/3" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function RandomPickLoadingSkeleton() {
   return (
     <div className="max-w-[640px] mx-auto space-y-5">
@@ -2436,11 +2256,6 @@ function RandomCardSkeleton() {
         </div>
       </div>
 
-      <div
-        className="relative mt-4 min-h-[420px] overflow-visible md:absolute md:left-[calc(100%_+_24px)] md:top-[-52px] md:mt-0 md:h-[calc(100%+52px)] md:w-[300px] md:min-h-[calc(100%+52px)]"
-      >
-        <Skeleton className="absolute left-1/2 top-1/2 h-8 w-28 -translate-x-1/2 -translate-y-1/2 md:left-[150px]" />
-      </div>
     </div>
   );
 }
@@ -2572,7 +2387,7 @@ function MiniModIcon({ mod, size = 10 }: { mod: string; size?: number }) {
   return (
     <span
       className="absolute flex items-center justify-center rounded-full border border-osu-b5 z-10 overflow-hidden"
-      style={{ width: size, height: size, top: offset, right: offset, backgroundColor: bg }}
+      style={{ width: scaledPx(size), height: scaledPx(size), top: scaledPx(offset), right: scaledPx(offset), backgroundColor: bg }}
       title={mod}
     >
       <ModGlyph
@@ -2602,18 +2417,20 @@ function PlayerAvatars({
   const total = Math.max(totalCount ?? players.length, players.length);
   const overflow = total - VISIBLE_AVATARS;
 
+  // Inside a clickable card: each avatar does its own thing, never opens the card.
   return (
-    <div className="flex items-center gap-0.5 mt-1.5">
+    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
       {visible.map((p) => {
         const mainMod = getMainMod(p.mods);
         return (
           <button
             key={p.id}
+            type="button"
             onClick={() => onPlayerClick(p)}
-            className="cursor-pointer relative"
-            title={p.pp ? `${Math.round(p.pp)}pp` : p.username}
+            className="cursor-pointer relative rounded-full transition-transform hover:-translate-y-0.5"
+            title={p.pp ? `${p.username} | ${Math.round(p.pp)}pp` : p.username}
           >
-            <Avatar url={p.avatarUrl} size={18} />
+            <Avatar url={p.avatarUrl} size={24} />
             {mainMod && <MiniModIcon mod={mainMod} />}
           </button>
         );
@@ -2622,7 +2439,7 @@ function PlayerAvatars({
         <button
           type="button"
           onClick={onMoreClick}
-          className="text-[8px] text-osu-f1 ml-0.5 cursor-pointer hover:text-osu-l2 transition-colors"
+          className="ml-0.5 grid h-6 min-w-6 cursor-pointer place-items-center rounded-full bg-white/[0.07] px-1.5 text-[10.5px] font-semibold tabular-nums text-osu-l2 transition-colors hover:bg-white/[0.12] hover:text-white"
           title={t`All players`}
         >
           +{overflow}
@@ -2793,107 +2610,95 @@ function MapDetailsContent({
   }, [cover]);
   const coverReady = decodedCover === cover;
 
+  const detailStats: ReactNode[] = [
+    adjustedLength !== null ? <span key="length" className="font-bold tabular-nums text-white">{formatDuration(adjustedLength)}</span> : null,
+    bpm && bpm > 0 ? (
+      <span key="bpm"><span className="font-bold tabular-nums text-white">{Math.round(dominantMod === "DT" ? bpm * 1.5 : dominantMod === "HT" ? bpm * 0.75 : bpm)}</span> BPM</span>
+    ) : null,
+    dominantModFile ? (
+      <span key="mod" className="inline-flex items-center gap-1.5">
+        <ModGlyph file={dominantModFile} color={dominantModColor} className="h-3.5 w-3.5" style={{ transform: "scale(1.2)" }} />
+        dominant {dominantMod}
+      </span>
+    ) : null,
+  ].filter(Boolean);
+
   return (
     <>
       <button
         type="button"
         onClick={onClose}
-        aria-label="Close"
-        className="absolute top-3 right-3 z-30 w-8 h-8 rounded-full bg-black/55 hover:bg-black/85 text-white/90 hover:text-white flex items-center justify-center transition-colors cursor-pointer ring-1 ring-white/15"
+        aria-label={t`Close`}
+        className="absolute top-2.5 right-2.5 z-30 grid h-8 w-8 place-items-center rounded-lg bg-black/45 text-white/80 backdrop-blur-sm hover:bg-black/70 hover:text-white transition-colors cursor-pointer"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="h-4 w-4">
+          <path d="M6 6l12 12M18 6L6 18" />
         </svg>
       </button>
 
-      <div className="relative z-10 -mb-px h-[190px] shrink-0 overflow-hidden bg-osu-b5 sm:h-[220px]">
-        <div
-          className={`absolute inset-0 bg-cover bg-center transition-opacity duration-0 ease-out sm:duration-300 ${coverReady ? "opacity-100" : "opacity-0"}`}
-          style={coverReady ? { backgroundImage: `url("${cover.replace(/"/g, '\\"')}")` } : undefined}
-          aria-hidden="true"
-        />
-        <div className="absolute inset-0 z-10 bg-gradient-to-t from-osu-b5 via-osu-b5/45 to-black/25" />
-        <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-4 pr-14">
+      {/* Header, matching the map detail modal: the cover dissolves into the
+          panel, keymode and status in its corner, the title over it. */}
+      <div className="relative z-10 h-[188px] shrink-0">
+        <div className="absolute inset-0 [mask-image:linear-gradient(to_bottom,black_35%,transparent)]">
+          <div
+            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-0 ease-out sm:duration-300 ${coverReady ? "opacity-100" : "opacity-0"}`}
+            style={coverReady ? { backgroundImage: `url("${cover.replace(/"/g, '\\"')}")` } : undefined}
+            aria-hidden="true"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/20" />
+        </div>
+        <div className="absolute left-4 right-14 top-3.5 z-20 flex items-center gap-2">
+          {keyCount ? (
+            <span className="inline-flex items-center rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-extrabold leading-none tabular-nums text-white">{keyCount}K</span>
+          ) : null}
           <BeatmapStatusBadge status={status} />
-          <div className="flex flex-wrap justify-end gap-1.5">
-            {keyCount && (
-              <span className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">
-                {keyCount}K
-              </span>
-            )}
-            {stars !== null && <StarRatingBadge stars={stars} />}
-          </div>
         </div>
-        <div className="absolute inset-x-0 bottom-0 z-20 px-5 pb-5 sm:px-6">
-          <div className="text-[10px] text-white/70 truncate uppercase tracking-wide">
-            {artist}
-          </div>
-          <div className="mt-1 text-[23px] sm:text-[28px] font-bold text-white leading-[1.08] line-clamp-2 break-words pr-8 drop-shadow-lg">
-            {title}
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-white/78">
-            <span className="truncate">by <span className="text-white font-semibold">{creator}</span></span>
-            {details.kind !== "favourite" && (
-              <>
-                <span className="text-white/35">·</span>
-                <span className="min-w-0 truncate text-white/90">[{details.map.version}]</span>
-              </>
-            )}
-          </div>
+        <div className="absolute inset-x-0 bottom-0 z-20 px-4 pb-3">
+          <h2 className="truncate text-[24px] font-extrabold leading-tight text-white drop-shadow-md">{title}</h2>
+          <p className="flex min-w-0 items-center gap-2.5 text-[13px] leading-tight text-white/75">
+            <span className="truncate">{artist}</span>
+            <Hairline className="bg-white/20" />
+            <span className="min-w-0 truncate text-white/55"><Trans>mapped by {creator}</Trans></span>
+          </p>
+          {stars !== null || details.kind !== "favourite" ? (
+            <div className="mt-2.5 flex min-w-0 items-center gap-2.5 text-[12.5px] text-white/70">
+              {stars !== null ? <StarRatingBadge stars={stars} large className="shrink-0" /> : null}
+              {details.kind !== "favourite" ? <span className="min-w-0 truncate font-semibold text-white/85">{stripKeymodePrefix(details.map.version)}</span> : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
-      <div className="shrink-0 border-b border-osu-b3/35 bg-osu-b5 px-5 py-3 sm:px-6">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {adjustedLength !== null && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-osu-b4 ring-1 ring-osu-b3/50 text-[10px] font-semibold text-osu-l2">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5 text-osu-f1">
-                <circle cx="12" cy="12" r="9" />
-                <polyline points="12 7 12 12 15 14" />
-              </svg>
-              {formatDuration(adjustedLength)}
-            </span>
-          )}
-          {bpm && bpm > 0 && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-osu-b4 ring-1 ring-osu-b3/50 text-[10px] font-semibold text-osu-l2">
-              <span className="text-osu-f1">♪</span>
-              {Math.round(dominantMod === "DT" ? bpm * 1.5 : dominantMod === "HT" ? bpm * 0.75 : bpm)}
-              <span className="text-osu-f1 lowercase">bpm</span>
-            </span>
-          )}
-          {dominantModFile && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-osu-b4 ring-1 ring-osu-b3/50 text-[10px] font-semibold text-osu-l2">
-              <ModGlyph
-                file={dominantModFile}
-                color={dominantModColor}
-                className="h-3 w-3"
-                style={{ transform: "scale(1.2)" }}
-              />
-              dominant {dominantMod}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="overflow-y-auto flex-1 min-h-0 bg-osu-b5 px-5 py-4 sm:px-6 space-y-4">
+      <div className="overflow-y-auto flex-1 min-h-0 px-4 pb-4 pt-3 space-y-4">
         {details.kind === "farmed" && (
-          <FarmedDetails key={`farmed:${details.map.beatmapId}`} entry={details.map} country={country} />
+          <FarmedDetails key={`farmed:${details.map.beatmapId}`} entry={details.map} country={country} extraStats={detailStats} />
         )}
         {details.kind === "popular" && (
-          <PopularDetails key={`popular:${details.map.beatmapId}`} entry={details.map} country={country} />
+          <PopularDetails key={`popular:${details.map.beatmapId}`} entry={details.map} country={country} extraStats={detailStats} />
         )}
         {details.kind === "favourite" && (
           <FavouriteDetails key={`favourite:${details.fav.beatmapsetId}`} entry={details.fav} country={country} />
         )}
       </div>
 
-      <div className="shrink-0 border-t border-osu-b3/40 px-4 py-3 flex items-center gap-2 bg-osu-b4/95">
+      {/* The map detail modal's footer: download first, then the osu! links. */}
+      <div className="shrink-0 border-t border-white/5 p-3.5 flex flex-wrap items-center gap-2">
+        <a
+          href={oszDownloadUrl(setId)}
+          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-osu-pink px-3.5 py-2 text-[12px] font-bold text-white hover:bg-osu-pink-light transition-colors"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
+            <path d="M12 3v10" />
+            <path d="m7 10 5 4 5-4" />
+            <path d="M5 20h14" />
+          </svg>
+          {t`Download .osz`}
+        </a>
         <a
           href={beatmapsetUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-osu-b3/70 hover:bg-osu-b3 text-white/85 hover:text-white text-[12px] font-semibold transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-white/[0.07] px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-white/[0.12] hover:text-white transition-colors cursor-pointer"
           title={t`Open beatmap page on osu!`}
         >
           <span><Trans>Beatmap page</Trans></span>
@@ -2905,10 +2710,10 @@ function MapDetailsContent({
         </a>
         <a
           href={osuDirectUrl}
-          className="hidden items-center gap-1.5 px-3 py-2 rounded-lg bg-osu-b3/70 hover:bg-osu-b3 text-white/85 hover:text-white text-[12px] font-semibold transition-colors cursor-pointer sm:inline-flex"
+          className="hidden items-center gap-1.5 whitespace-nowrap rounded-lg bg-white/[0.07] px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-white/[0.12] hover:text-white transition-colors cursor-pointer sm:inline-flex"
           title={t`Open in osu! client`}
         >
-          <OsuLogo className="h-[14px] w-[14px]" />
+          <OsuLogo className="h-3.5 w-3.5" />
           <span><Trans>Open in osu!</Trans></span>
         </a>
       </div>
@@ -2916,41 +2721,29 @@ function MapDetailsContent({
   );
 }
 
-function StatItem({
-  label,
-  value,
-  accent = "neutral",
-}: {
-  label: string;
-  value: string;
-  accent?: "pink" | "blue" | "yellow" | "neutral";
-}) {
-  const valueColor =
-    accent === "pink"
-      ? "text-osu-pink"
-      : accent === "blue"
-        ? "text-osu-blue"
-        : accent === "yellow"
-          ? "text-osu-yellow"
-          : "text-white";
+// One stat in the modal's plain stats line: "2,739 plays".
+function StatItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex-1 px-3 py-2">
-      <div className={`text-[17px] font-bold leading-none tabular-nums ${valueColor}`} style={{ fontFamily: "Torus" }}>
-        {value}
-      </div>
-      <div className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1 font-semibold">{label}</div>
-    </div>
+    <span className="whitespace-nowrap">
+      <span className="font-bold tabular-nums text-white">{value}</span> {label}
+    </span>
   );
 }
 
-function StatRow({ children }: { children: React.ReactNode }) {
+// The stats as one line split by hairlines, like the map detail modal's.
+function StatRow({ children }: { children: ReactNode }) {
+  const items = Children.toArray(children);
   return (
-    <div className="rounded-xl bg-osu-b4 ring-1 ring-osu-b3/55 flex items-stretch divide-x divide-osu-b3/55">
-      {children}
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-osu-l2/70">
+      {items.map((item, index) => (
+        <Fragment key={index}>
+          {index > 0 ? <Hairline className="bg-white/15" /> : null}
+          {item}
+        </Fragment>
+      ))}
     </div>
   );
 }
-
 
 function PlayerRow({
   rank,
@@ -2969,7 +2762,7 @@ function PlayerRow({
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-lg hover:bg-osu-b3/60 transition-colors cursor-pointer text-left"
+      className="group flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-lg hover:bg-white/[0.07] transition-colors cursor-pointer text-left"
     >
       {rank !== undefined && (
         <span className="w-5 text-center text-[10px] text-osu-f1 tabular-nums">{rank}</span>
@@ -2977,7 +2770,7 @@ function PlayerRow({
       <Avatar url={player.avatarUrl} size={26} />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-[12px] text-osu-l2 transition-colors group-hover:text-white">{player.username}</span>
+          <UsernameText username={player.username} userId={player.id} className="truncate text-[12px] text-osu-l2 transition-colors group-hover:text-white" />
           {sublabel ? (
             <span className="shrink-0 text-[10px] text-osu-f1/75">{sublabel}</span>
           ) : null}
@@ -3228,13 +3021,13 @@ function ModalPlayerList<T extends { id: number; username: string; rank?: number
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t`Search player...`}
-          className="mb-1.5 w-full rounded-lg bg-osu-b4 border border-osu-b3/40 px-3 py-1.5 text-[11px] text-osu-c1 placeholder:text-osu-f1 focus:border-osu-h1/40 focus:outline-none transition-colors"
+          className="mb-1.5 w-full rounded-lg bg-white/[0.05] border border-white/10 px-3 py-1.5 text-[11px] text-osu-c1 placeholder:text-osu-f1 focus:border-white/25 focus:outline-none transition-colors"
         />
       )}
       <div
         ref={scrollRef}
         onScroll={serverMode ? onScroll : undefined}
-        className={`rounded-xl bg-osu-b4 ring-1 ring-osu-b3/55 p-1 max-h-[280px] overflow-y-auto ${reserveSpace ? "min-h-[280px]" : ""} ${grid ? "grid grid-cols-1 min-[390px]:grid-cols-2 sm:grid-cols-3 gap-1" : ""}`}
+        className={`rounded-xl bg-white/[0.04] ring-1 ring-white/5 p-1 max-h-[280px] overflow-y-auto ${reserveSpace ? "min-h-[280px]" : ""} ${grid ? "grid grid-cols-1 min-[390px]:grid-cols-2 sm:grid-cols-3 gap-1" : ""}`}
       >
         {!rowsReady ? (
           <MapsPlayerListSkeleton grid={grid} count={grid ? 9 : 8} />
@@ -3253,7 +3046,7 @@ function ModalPlayerList<T extends { id: number; username: string; rank?: number
   );
 }
 
-function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: string }) {
+function FarmedDetails({ entry, country, extraStats }: { entry: MapsFarmedEntry; country: string; extraStats?: ReactNode[] }) {
   const { t } = useLingui();
   const locale = useLocale();
   const enabled = isLiveBackendConfigured() && entry.players.length < entry.playerCount;
@@ -3279,9 +3072,10 @@ function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: st
   return (
     <>
       <StatRow>
-        <StatItem label={t`players`} value={formatNumber(totalPlayers)} accent="blue" />
-        <StatItem label={t`avg pp`} value={`~${Math.round(entry.avgPp)}`} accent="pink" />
-        <StatItem label={t`max pp`} value={Math.round(entry.maxPp).toString()} accent="pink" />
+        <StatItem label={t`players`} value={formatNumber(totalPlayers)} />
+        <StatItem label={t`avg pp`} value={`~${Math.round(entry.avgPp)}`} />
+        <StatItem label={t`max pp`} value={Math.round(entry.maxPp).toString()} />
+        {extraStats}
       </StatRow>
 
       <ModalPlayerList
@@ -3304,14 +3098,12 @@ function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: st
                 {p.mods?.length ? (
                   <div className="flex items-center gap-0.5">
                     {p.mods.map((mod) => (
-                      <span key={mod} className="inline-flex origin-center scale-[0.42] -mx-1.5">
-                        <ModBadge mod={mod} />
-                      </span>
+                      <ModBadge key={mod} mod={mod} size={0.6} />
                     ))}
                   </div>
                 ) : null}
                 {p.pp ? (
-                  <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Torus" }}>
+                  <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Tracker Round" }}>
                     <span className="text-[12px] font-bold">{Math.round(p.pp)}</span>
                     <span className="text-[8px] text-osu-pink/70 font-bold uppercase">pp</span>
                   </span>
@@ -3325,8 +3117,9 @@ function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: st
   );
 }
 
-function PopularDetails({ entry, country }: { entry: MapsAggregatedBeatmap; country: string }) {
+function PopularDetails({ entry, country, extraStats }: { entry: MapsAggregatedBeatmap; country: string; extraStats?: ReactNode[] }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const enabled = isLiveBackendConfigured() && entry.players.length < entry.playerCount;
   const { players: serverPlayers, loadedOnce, total, control } = useMapsDetailsPlayers({
     country,
@@ -3346,9 +3139,10 @@ function PopularDetails({ entry, country }: { entry: MapsAggregatedBeatmap; coun
   return (
     <>
       <StatRow>
-        <StatItem label={t`total plays`} value={formatNumber(entry.totalPlays)} accent="pink" />
-        <StatItem label={t`players`} value={formatNumber(totalPlayers)} accent="blue" />
-        <StatItem label={t`global plays`} value={formatNumber(entry.globalPlayCount)} />
+        <StatItem label={t`total plays`} value={formatNumber(entry.totalPlays)} />
+        <StatItem label={t`players`} value={formatNumber(totalPlayers)} />
+        <StatItem label={t`global plays`} value={formatCompactPlays(entry.globalPlayCount, locale)} />
+        {extraStats}
       </StatRow>
 
       <ModalPlayerList
@@ -3364,7 +3158,7 @@ function PopularDetails({ entry, country }: { entry: MapsAggregatedBeatmap; coun
             onClick={() => window.open(`https://osu.ppy.sh/users/${p.id}/mania`, "_blank", "noopener,noreferrer")}
             meta={
               p.count ? (
-                <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Torus" }}>
+                <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Tracker Round" }}>
                   <span className="text-[12px] font-bold">{formatNumber(p.count)}</span>
                   <span className="text-[8px] text-osu-pink/70 font-bold lowercase">x</span>
                 </span>
@@ -3379,6 +3173,7 @@ function PopularDetails({ entry, country }: { entry: MapsAggregatedBeatmap; coun
 
 function FavouriteDetails({ entry, country }: { entry: MapsAggregatedFavourite; country: string }) {
   const { t } = useLingui();
+  const locale = useLocale();
   const enabled = isLiveBackendConfigured() && entry.players.length < entry.playerCount;
   const { players: serverPlayers, loadedOnce, total, control } = useMapsDetailsPlayers({
     country,
@@ -3391,9 +3186,10 @@ function FavouriteDetails({ entry, country }: { entry: MapsAggregatedFavourite; 
   return (
     <>
       <StatRow>
-        <StatItem label={t`${country.toLowerCase()} favs`} value={formatNumber(totalPlayers)} accent="pink" />
+        {/* On GLOBAL the first count is the tracked players' favourites, not osu!'s global total. */}
+        <StatItem label={country.toUpperCase() === "GLOBAL" ? t`tracked favs` : t`${country.toLowerCase()} favs`} value={formatNumber(totalPlayers)} />
         <StatItem label={t`global favs`} value={formatNumber(entry.globalFavouriteCount)} />
-        <StatItem label={t`global plays`} value={formatNumber(entry.globalPlayCount)} />
+        <StatItem label={t`global plays`} value={formatCompactPlays(entry.globalPlayCount, locale)} />
       </StatRow>
 
       <ModalPlayerList
@@ -3430,73 +3226,81 @@ function FarmedCard({
   const dominantMod = map.dominantMod !== undefined ? map.dominantMod : getDominantSpeedMod(map.players);
   const dominantModFile = dominantMod === "DT" ? "double-time" : dominantMod === "HT" ? "half-time" : null;
   const dominantModColor = dominantMod === "DT" ? "#ff6666" : "#b3d944";
+  const length = Math.round(dominantMod === "DT" ? map.totalLength / 1.5 : dominantMod === "HT" ? map.totalLength / 0.75 : map.totalLength);
 
   return (
-    <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors">
-      <button
-        type="button"
-        onClick={onOpenDetails}
-        className="block w-full text-left relative rounded-t-xl overflow-hidden cursor-pointer focus:outline-none focus-visible:outline-none"
-      >
-        <img src={map.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        {dominantModFile && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none -translate-y-2.5">
-            <div className="relative w-[56px] h-[38px] opacity-70">
-              {/* Colored badge hexagon */}
-              <ModGlyph file="icon" color={dominantModColor} className="absolute inset-0 h-full w-full" />
-              {/* Mod glyph */}
-              <ModGlyph
-                file={dominantModFile}
-                color={`color-mix(in srgb-linear, black, ${dominantModColor} 10%)`}
-                className="absolute inset-0 h-full w-full"
-                style={{ transform: "scale(1.1)" }}
-              />
-            </div>
+    <MapCardFrame
+      coverUrl={map.covers["card@2x"] ?? map.covers.card}
+      keyLabel={`${map.cs}K`}
+      status={map.status}
+      title={map.title}
+      artist={map.artist}
+      onOpen={onOpenDetails}
+      coverOverlay={dominantModFile ? (
+        <div className="pointer-events-none absolute inset-0 flex -translate-y-2.5 items-center justify-center">
+          <div className="relative h-[38px] w-[56px] opacity-75">
+            <ModGlyph file="icon" color={dominantModColor} className="absolute inset-0 h-full w-full" />
+            <ModGlyph
+              file={dominantModFile}
+              color={`color-mix(in srgb-linear, black, ${dominantModColor} 10%)`}
+              className="absolute inset-0 h-full w-full"
+              style={{ transform: "scale(1.1)" }}
+            />
           </div>
-        )}
-        <span className="absolute top-1.5 left-1.5 inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">
-          {map.cs}K
+        </div>
+      ) : null}
+    >
+      <MapTabCardBody
+        line={stripKeymodePrefix(map.version)}
+        stats={[
+          <><MapStatValue>{map.playerCount}</MapStatValue> <Plural value={map.playerCount} one="player" other="players" /></>,
+          <><MapStatValue>~{Math.round(map.avgPp)}</MapStatValue> <Trans>avg pp</Trans></>,
+        ]}
+      />
+      <PlayerAvatars
+        players={map.players}
+        totalCount={map.playerCount}
+        onMoreClick={onOpenDetails}
+        onPlayerClick={(player) => {
+          if (player.scoreUrl) {
+            window.open(player.scoreUrl, "_blank", "noopener,noreferrer");
+            return;
+          }
+          onPlayerClick(player.username);
+        }}
+      />
+      <MapCardFooter>
+        <span className="flex min-w-0 flex-1 items-center gap-2.5 text-[11.5px] text-osu-l2/75">
+          <StarRatingBadge stars={map.difficultyRating} large className="shrink-0" />
+          <Hairline />
+          <span className="tabular-nums">{formatDuration(length)}</span>
         </span>
-        <StarRatingBadge stars={map.difficultyRating} className="absolute top-1.5 right-1.5" />
-        <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-1.5">
-          <div className="text-[12px] font-semibold text-white truncate leading-tight drop-shadow-lg">{map.title}</div>
-          <div className="text-[10px] text-white/70 truncate leading-tight drop-shadow-lg">{map.artist}</div>
-        </div>
-      </button>
+        <OsuDirectButton beatmapsetId={map.beatmapsetId} />
+        <OszButton beatmapsetId={map.beatmapsetId} />
+      </MapCardFooter>
+    </MapCardFrame>
+  );
+}
 
-      <div className="px-2.5 py-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-osu-l2 truncate flex-1">[{map.version}]</span>
-          <span className="text-[9px] text-osu-f1 flex-shrink-0">{formatDuration(Math.round(dominantMod === "DT" ? map.totalLength / 1.5 : dominantMod === "HT" ? map.totalLength / 0.75 : map.totalLength))}</span>
-        </div>
-
-        <div className="flex items-center gap-3 mt-1.5">
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-blue" style={{ fontFamily: "Torus" }}>{map.playerCount}</span>
-            <span className="text-[8px] text-osu-f1 uppercase"><Plural value={map.playerCount} one="player" other="players" /></span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>~{Math.round(map.avgPp)}</span>
-            <span className="text-[8px] text-osu-f1 uppercase"><Trans>avg pp</Trans></span>
-          </div>
-        </div>
-
-        <PlayerAvatars
-          players={map.players}
-          totalCount={map.playerCount}
-          onMoreClick={onOpenDetails}
-          onPlayerClick={(player) => {
-            if (player.scoreUrl) {
-              window.open(player.scoreUrl, "_blank", "noopener,noreferrer");
-              return;
-            }
-            onPlayerClick(player.username);
-          }}
-        />
+// The diff or mapper line and the tab's own counts, split by hairlines.
+function MapTabCardBody({ line, stats }: { line: ReactNode; stats: ReactNode[] }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="truncate text-[12.5px] font-semibold leading-tight text-osu-l1">{line}</div>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-osu-l2/70">
+        {stats.map((stat, index) => (
+          <Fragment key={index}>
+            {index > 0 ? <Hairline /> : null}
+            <span className="whitespace-nowrap">{stat}</span>
+          </Fragment>
+        ))}
       </div>
     </div>
   );
+}
+
+function MapStatValue({ children }: { children: ReactNode }) {
+  return <span className="font-bold tabular-nums text-white">{children}</span>;
 }
 
 // ── Most Played card (from most_played endpoint) ───────────────────────────
@@ -3513,49 +3317,37 @@ function MostPlayedCard({
   const kc = parseKeyCount(map.version);
 
   return (
-    <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors">
-      <button
-        type="button"
-        onClick={onOpenDetails}
-        className="block w-full text-left relative rounded-t-xl overflow-hidden cursor-pointer focus:outline-none focus-visible:outline-none"
-      >
-        <img src={map.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        {kc && (
-          <span className="absolute top-1.5 left-1.5 inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">{kc}K</span>
-        )}
-        <StarRatingBadge stars={map.difficultyRating} className="absolute top-1.5 right-1.5" />
-        <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-1.5">
-          <div className="text-[12px] font-semibold text-white truncate leading-tight drop-shadow-lg">{map.title}</div>
-          <div className="text-[10px] text-white/70 truncate leading-tight drop-shadow-lg">{map.artist}</div>
-        </div>
-      </button>
-
-      <div className="px-2.5 py-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-osu-l2 truncate flex-1">[{map.version}]</span>
-          <span className="text-[9px] text-osu-f1 flex-shrink-0">{formatDuration(map.totalLength)}</span>
-        </div>
-
-        <div className="flex items-center gap-3 mt-1.5">
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>{formatNumber(map.totalPlays)}</span>
-            <span className="text-[8px] text-osu-f1 uppercase"><Trans>plays</Trans></span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-blue" style={{ fontFamily: "Torus" }}>{map.playerCount}</span>
-            <span className="text-[8px] text-osu-f1 uppercase"><Plural value={map.playerCount} one="player" other="players" /></span>
-          </div>
-        </div>
-
-        <PlayerAvatars
-          players={map.players}
-          totalCount={map.playerCount}
-          onMoreClick={onOpenDetails}
-          onPlayerClick={(player) => onPlayerClick(player.username)}
-        />
-      </div>
-    </div>
+    <MapCardFrame
+      coverUrl={map.covers["card@2x"] ?? map.covers.card}
+      keyLabel={kc ? `${kc}K` : null}
+      status={map.status}
+      title={map.title}
+      artist={map.artist}
+      onOpen={onOpenDetails}
+    >
+      <MapTabCardBody
+        line={stripKeymodePrefix(map.version)}
+        stats={[
+          <><MapStatValue>{formatNumber(map.totalPlays)}</MapStatValue> <Trans>plays</Trans></>,
+          <><MapStatValue>{map.playerCount}</MapStatValue> <Plural value={map.playerCount} one="player" other="players" /></>,
+        ]}
+      />
+      <PlayerAvatars
+        players={map.players}
+        totalCount={map.playerCount}
+        onMoreClick={onOpenDetails}
+        onPlayerClick={(player) => onPlayerClick(player.username)}
+      />
+      <MapCardFooter>
+        <span className="flex min-w-0 flex-1 items-center gap-2.5 text-[11.5px] text-osu-l2/75">
+          <StarRatingBadge stars={map.difficultyRating} large className="shrink-0" />
+          <Hairline />
+          <span className="tabular-nums">{formatDuration(map.totalLength)}</span>
+        </span>
+        <OsuDirectButton beatmapsetId={map.beatmapsetId} />
+        <OszButton beatmapsetId={map.beatmapsetId} />
+      </MapCardFooter>
+    </MapCardFrame>
   );
 }
 
@@ -3573,92 +3365,38 @@ function FavouriteCard({
   const selectedCountry = useSelectedCountry();
 
   return (
-    <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors">
-      <button
-        type="button"
-        onClick={onOpenDetails}
-        className="block w-full text-left relative rounded-t-xl overflow-hidden cursor-pointer focus:outline-none focus-visible:outline-none"
-      >
-        <img src={fav.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        <BeatmapStatusBadge status={fav.status} className="absolute top-1.5 left-1.5" />
-        <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-1.5">
-          <div className="text-[12px] font-semibold text-white truncate leading-tight drop-shadow-lg">{fav.title}</div>
-          <div className="text-[10px] text-white/70 truncate leading-tight drop-shadow-lg">{fav.artist}</div>
-        </div>
-      </button>
-
-      <div className="px-2.5 py-2">
-        <div className="text-[10px] text-osu-f1 truncate"><Trans>mapped by {fav.creator}</Trans></div>
-
-        <div className="flex items-center gap-3 mt-1.5">
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>{fav.playerCount}</span>
-            <span className="text-[8px] text-osu-f1 uppercase">{selectedCountry} favs</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(fav.globalFavouriteCount)}</span>
-            <span className="text-[8px] text-osu-f1 uppercase"><Trans>global</Trans></span>
-          </div>
-        </div>
-
-        <PlayerAvatars
-          players={fav.players}
-          totalCount={fav.playerCount}
-          onMoreClick={onOpenDetails}
-          onPlayerClick={(player) => onPlayerClick(player.username)}
-        />
-      </div>
-    </div>
+    <MapCardFrame
+      coverUrl={fav.covers["card@2x"] ?? fav.covers.card}
+      status={fav.status}
+      title={fav.title}
+      artist={fav.artist}
+      onOpen={onOpenDetails}
+    >
+      <MapTabCardBody
+        line={<span className="font-medium text-osu-l2/80"><Trans>mapped by {fav.creator}</Trans></span>}
+        stats={[
+          <><MapStatValue>{fav.playerCount}</MapStatValue> {selectedCountry} favs</>,
+          <><MapStatValue>{formatNumber(fav.globalFavouriteCount)}</MapStatValue> <Trans>global</Trans></>,
+        ]}
+      />
+      <PlayerAvatars
+        players={fav.players}
+        totalCount={fav.playerCount}
+        onMoreClick={onOpenDetails}
+        onPlayerClick={(player) => onPlayerClick(player.username)}
+      />
+      <MapCardFooter>
+        <span className="flex min-w-0 flex-1 items-center gap-2.5 text-[11.5px] text-osu-l2/75">
+          <span className="truncate"><MapStatValue>{formatNumber(fav.globalPlayCount)}</MapStatValue> <Trans>plays</Trans></span>
+        </span>
+        <OsuDirectButton beatmapsetId={fav.beatmapsetId} />
+        <OszButton beatmapsetId={fav.beatmapsetId} />
+      </MapCardFooter>
+    </MapCardFrame>
   );
 }
 
 // ── Random card (hero-sized favourite card for the Random tab) ────────────
-
-// Mobile browsers can briefly report a low readyState while currentTime is
-// already moving; trust recent media-clock progress to avoid startup snaps.
-const REPLAY_AUDIO_CLOCK_PROGRESS_EPSILON_SECONDS = 0.003;
-const REPLAY_AUDIO_CLOCK_PROGRESS_GRACE_MS = 550;
-
-type ReplayAudioClockSample = {
-  seconds: number;
-  advancingUntil: number;
-};
-
-type ReplayAudioClockAnchor = {
-  mediaSeconds: number;
-  startedAtMs: number;
-  playbackRate: number;
-};
-
-function resetReplayAudioClockSample(sampleRef: { current: ReplayAudioClockSample | null }, seconds: number): void {
-  sampleRef.current = {
-    seconds,
-    advancingUntil: 0,
-  };
-}
-
-function getReplayAudioPlaybackRate(audio: HTMLAudioElement, fallbackRate: number): number {
-  const rate = Number.isFinite(audio.playbackRate) && audio.playbackRate > 0
-    ? audio.playbackRate
-    : fallbackRate;
-  return Math.max(0.1, rate);
-}
-
-function hasRecentReplayAudioClockProgress(sampleRef: { current: ReplayAudioClockSample | null }, seconds: number): boolean {
-  const now = performance.now();
-  const previous = sampleRef.current;
-  if (!previous || seconds < previous.seconds - 0.05) {
-    sampleRef.current = { seconds, advancingUntil: 0 };
-    return false;
-  }
-
-  const advancingUntil = seconds > previous.seconds + REPLAY_AUDIO_CLOCK_PROGRESS_EPSILON_SECONDS
-    ? now + REPLAY_AUDIO_CLOCK_PROGRESS_GRACE_MS
-    : previous.advancingUntil;
-  sampleRef.current = { seconds, advancingUntil };
-  return now <= advancingUntil;
-}
 
 function formatStars(bm: MapsFavouriteBeatmapset): string | null {
   const min = typeof bm.starMin === "number" ? bm.starMin : 0;
@@ -3667,102 +3405,6 @@ function formatStars(bm: MapsFavouriteBeatmapset): string | null {
   const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
   if (!min || Math.abs(max - min) < 0.05) return fmt(max);
   return `${fmt(min)}–${fmt(max)}`;
-}
-
-interface RandomPreviewRendererLike {
-  readonly isPlaying: boolean;
-  readonly time: number;
-  readonly duration: number;
-  destroy: () => void;
-  pause: () => void;
-  play: () => void;
-  ready: () => Promise<void>;
-  resize: () => void;
-  seek: (timeMs: number) => void;
-  setPreviewData: (
-    frames: ReplayFrame[],
-    keyCount: number,
-    notes: ManiaNote[],
-    options: { od?: number; scrollVelocities?: ManiaScrollVelocity[]; initialCombo?: number },
-  ) => void;
-  setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
-  setSkinSettings: (settings: ReplaySkinSettings) => void;
-  setScrollSpeed: (value: number) => void;
-}
-
-// Draggable timeline for the chart preview. The handle follows playback, and
-// releasing it anywhere jumps the preview to that point in the map.
-function ChartPreviewTimeline({
-  positionMs,
-  lengthMs,
-  onSeek,
-}: {
-  positionMs: number;
-  lengthMs: number;
-  onSeek: (targetMs: number) => void;
-}) {
-  const trackRef = useRef<HTMLDivElement | null>(null);
-  // Leave a small tail so a scrub never lands right on the final note.
-  const maxStartMs = Math.max(0, lengthMs - 2_000);
-  const [dragMs, setDragMs] = useState<number | null>(null);
-  const activeMs = dragMs ?? Math.min(positionMs, maxStartMs);
-  const ratio = maxStartMs > 0 ? Math.min(1, Math.max(0, activeMs / maxStartMs)) : 0;
-
-  const msFromClientX = useCallback((clientX: number) => {
-    const track = trackRef.current;
-    if (!track) return 0;
-    const rect = track.getBoundingClientRect();
-    const r = rect.width > 0 ? Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) : 0;
-    return r * maxStartMs;
-  }, [maxStartMs]);
-
-  const handlePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setDragMs(msFromClientX(e.clientX));
-  }, [msFromClientX]);
-
-  const handlePointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragMs == null) return;
-    setDragMs(msFromClientX(e.clientX));
-  }, [dragMs, msFromClientX]);
-
-  const handlePointerUp = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragMs == null) return;
-    const target = msFromClientX(e.clientX);
-    setDragMs(null);
-    onSeek(target);
-  }, [dragMs, msFromClientX, onSeek]);
-
-  const dragging = dragMs != null;
-
-  return (
-    <div className="group flex items-center gap-2">
-      <span className="text-[9px] tabular-nums text-osu-f1/60 shrink-0">
-        {formatDuration(Math.floor(activeMs / 1000))}
-      </span>
-      <div
-        ref={trackRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={() => setDragMs(null)}
-        className="relative flex h-3 flex-1 items-center cursor-pointer touch-none select-none"
-      >
-        <div className="absolute inset-x-0 h-px rounded-full bg-osu-f1/20" />
-        <div
-          className={`absolute left-0 h-px rounded-full transition-colors ${dragging ? "bg-osu-pink/70" : "bg-osu-f1/40 group-hover:bg-osu-pink/60"}`}
-          style={{ width: `${ratio * 100}%` }}
-        />
-        <div
-          className={`absolute h-1.5 w-1.5 -translate-x-1/2 rounded-full transition-all ${dragging ? "scale-125 bg-osu-pink" : "bg-osu-f1/70 group-hover:bg-osu-pink"}`}
-          style={{ left: `${ratio * 100}%` }}
-        />
-      </div>
-      <span className="text-[9px] tabular-nums text-osu-f1/60 shrink-0">
-        {formatDuration(Math.floor(lengthMs / 1000))}
-      </span>
-    </div>
-  );
 }
 
 // Canvas fill for the audio-preview progress bar: the played portion is a
@@ -4000,268 +3642,6 @@ function BeatWaveFill({
   );
 }
 
-function RandomReplayPreview({
-  beatmap,
-  startTimeMs,
-  timeScale,
-  windowMs,
-  isPlaying,
-  resetWhenIdle,
-  getClock,
-  onReady,
-  onEnded,
-}: {
-  beatmap: ManiaBeatmap | null;
-  startTimeMs: number;
-  timeScale: number;
-  windowMs: number;
-  isPlaying: boolean;
-  resetWhenIdle: boolean;
-  getClock: () => { time: number; stalled: boolean } | null;
-  onReady: () => void;
-  onEnded: () => void;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const rendererRef = useRef<RandomPreviewRendererLike | null>(null);
-  const isPlayingRef = useRef(isPlaying);
-  const getClockRef = useRef(getClock);
-  const scrollSpeedRef = useRef(readReplayScrollSpeed());
-  const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
-  const skinSettings = useReplaySkinSettings();
-  const [canvasReady, setCanvasReady] = useState(false);
-  const initialCombo = useMemo(() => beatmap ? getPreviewInitialCombo(beatmap, startTimeMs) : 0, [beatmap, startTimeMs]);
-  const notes = useMemo(() => beatmap ? getPreviewNotes(beatmap, startTimeMs, timeScale, windowMs) : [], [beatmap, startTimeMs, timeScale, windowMs]);
-  const scrollVelocities = useMemo(() => beatmap ? getPreviewScrollVelocities(beatmap, startTimeMs, timeScale, windowMs) : [], [beatmap, startTimeMs, timeScale, windowMs]);
-  const frames = useMemo(() => beatmap ? buildAutoplayFrames(notes, beatmap.keyCount, windowMs) : [], [beatmap, notes, windowMs]);
-
-  useEffect(() => {
-    isPlayingRef.current = isPlaying;
-  }, [isPlaying]);
-
-  useEffect(() => {
-    getClockRef.current = getClock;
-  }, [getClock]);
-
-  useEffect(() => {
-    const refreshSharedReplaySettings = () => {
-      setScrollSpeed(readReplayScrollSpeed());
-    };
-    window.addEventListener("storage", refreshSharedReplaySettings);
-    window.addEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
-    window.addEventListener("focus", refreshSharedReplaySettings);
-    return () => {
-      window.removeEventListener("storage", refreshSharedReplaySettings);
-      window.removeEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
-      window.removeEventListener("focus", refreshSharedReplaySettings);
-    };
-  }, []);
-
-  useEffect(() => {
-    scrollSpeedRef.current = scrollSpeed;
-    rendererRef.current?.setScrollSpeed(scrollSpeed);
-  }, [scrollSpeed]);
-
-  // Through a ref, not the effect's closure: the applied skin is rebuilt
-  // asynchronously, so on a reroll it can land while the renderer's dynamic
-  // import is still in flight. The push below then hits a null renderer and
-  // the stage is built from whatever the closure captured, which is the
-  // asset-free copy - a stage with the skin's colors and none of its art.
-  const skinSettingsRef = useRef(skinSettings);
-  skinSettingsRef.current = skinSettings;
-
-  useEffect(() => {
-    rendererRef.current?.setSkinSettings(skinSettings);
-  }, [skinSettings]);
-
-  useEffect(() => {
-    if (!canvasRef.current || !beatmap) return;
-
-    let cancelled = false;
-    let renderer: RandomPreviewRendererLike | null = null;
-    let handleResize: (() => void) | null = null;
-    setCanvasReady(false);
-
-    void loadReplayRenderer().then(({ ManiaReplayRenderer }) => {
-      if (cancelled || !canvasRef.current) return;
-      renderer = new ManiaReplayRenderer(
-        canvasRef.current,
-        frames,
-        beatmap.keyCount,
-        notes,
-        {
-          od: beatmap.od,
-          showInputOverlay: false,
-          transparentBackground: true,
-          hideHud: true,
-          showCombo: true,
-          initialCombo,
-          barePlayfield: true,
-          showHealthBar: false,
-          scrollVelocities,
-          skinSettings: skinSettingsRef.current,
-        },
-      ) as RandomPreviewRendererLike;
-      renderer.setScrollSpeed(scrollSpeedRef.current);
-      renderer.setSkinSettings(skinSettingsRef.current);
-      renderer.setExternalClock(() => getClockRef.current());
-      rendererRef.current = renderer;
-      handleResize = () => renderer?.resize();
-      window.addEventListener("resize", handleResize);
-      void renderer.ready().then(() => {
-        if (cancelled || rendererRef.current !== renderer) return;
-        setCanvasReady(true);
-        onReady();
-        const activeRenderer = rendererRef.current;
-        if (isPlayingRef.current) activeRenderer?.play();
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      if (handleResize) window.removeEventListener("resize", handleResize);
-      rendererRef.current?.destroy();
-      rendererRef.current = null;
-    };
-  }, [beatmap]);
-
-  useEffect(() => {
-    const renderer = rendererRef.current;
-    if (!renderer || !beatmap) return;
-    renderer.setPreviewData(frames, beatmap.keyCount, notes, {
-      od: beatmap.od,
-      scrollVelocities,
-      initialCombo,
-    });
-    if (canvasReady) onReady();
-  }, [beatmap, canvasReady, frames, initialCombo, notes, onReady, scrollVelocities]);
-
-  useEffect(() => {
-    const renderer = rendererRef.current;
-    if (!renderer) return;
-    if (isPlaying) renderer.play();
-    else renderer.pause();
-  }, [isPlaying]);
-
-  useEffect(() => {
-    if (!isPlaying && resetWhenIdle) rendererRef.current?.seek(0);
-  }, [beatmap, isPlaying, resetWhenIdle]);
-
-  useEffect(() => {
-    if (!isPlaying) return;
-    const id = setInterval(() => {
-      const renderer = rendererRef.current;
-      if (!renderer) return;
-      if (!renderer.isPlaying || renderer.time >= renderer.duration) onEnded();
-    }, 50);
-    return () => clearInterval(id);
-  }, [isPlaying, onEnded]);
-
-  return (
-    <div className="absolute inset-0">
-      <canvas
-        ref={canvasRef}
-        className={`relative z-10 h-full w-full transition-opacity duration-75 ${canvasReady ? "opacity-100" : "opacity-0"}`}
-      />
-    </div>
-  );
-}
-
-function DifficultyPicker({
-  beatmaps,
-  selectedId,
-  onChange,
-}: {
-  beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>;
-  selectedId: number | null;
-  onChange: (id: number) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [open]);
-
-  const selected = beatmaps.find((m) => m.id === selectedId) ?? beatmaps[0];
-  if (!selected) return null;
-
-  return (
-    <div className="relative min-w-0 flex-1" ref={containerRef}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className={`flex h-8 w-full items-center justify-between gap-2 rounded-md border py-1 pl-3 pr-2 text-[11px] font-semibold outline-none transition-all cursor-pointer ${
-          open
-            ? "border-osu-pink/50 bg-osu-pink/10 text-white"
-            : "border-osu-b3/70 bg-osu-b5/70 text-osu-l2 hover:border-osu-pink/40 hover:bg-osu-b4 hover:text-white"
-        }`}
-      >
-        <span className="truncate flex items-center gap-1.5">
-          <span className="text-osu-f1">{Math.round(selected.cs)}K</span>
-          <span className="text-osu-yellow">{"\u2605"}{selected.difficultyRating.toFixed(2)}</span>
-          <span className="opacity-80 text-osu-f1">·</span>
-          <span className="truncate">{selected.version}</span>
-        </span>
-        <svg
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className={`h-4 w-4 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${open ? "rotate-180 text-osu-pink-light" : "text-osu-f1"}`}
-          aria-hidden
-        >
-          <path d="M5.25 7.5 10 12.25 14.75 7.5H5.25Z" />
-        </svg>
-      </button>
-
-      <div
-        className={`absolute left-0 right-0 top-full mt-1.5 z-50 overflow-hidden rounded-lg border border-osu-pink/20 bg-osu-b4/95 shadow-xl shadow-black/40 backdrop-blur-md transition-all duration-200 origin-top ${
-          open ? "opacity-100 scale-y-100 translate-y-0 pointer-events-auto" : "opacity-0 scale-y-95 -translate-y-1 pointer-events-none"
-        }`}
-      >
-        <div className="max-h-[220px] overflow-y-auto p-1">
-          {beatmaps.map((map) => {
-            const isSelected = selectedId === map.id;
-            return (
-              <button
-                key={map.id}
-                type="button"
-                onClick={() => {
-                  onChange(map.id);
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[11px] font-semibold transition-all cursor-pointer ${
-                  isSelected
-                    ? "bg-osu-pink/15 text-osu-pink-light"
-                    : "text-osu-l2 hover:bg-osu-b3 hover:text-white"
-                }`}
-                role="option"
-                aria-selected={isSelected}
-              >
-                <span className={`flex h-3 w-3 shrink-0 items-center justify-center transition-all ${isSelected ? 'opacity-100' : 'opacity-0 scale-75'}`}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 text-osu-pink">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                </span>
-                <span className="text-osu-f1 w-[20px]">{Math.round(map.cs)}K</span>
-                <span className="text-osu-yellow w-[36px]">{"\u2605"}{map.difficultyRating.toFixed(2)}</span>
-                <span className="truncate flex-1">{map.version}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const { t } = useLingui();
   const url = `https://osu.ppy.sh/beatmapsets/${bm.id}`;
@@ -4270,17 +3650,11 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const patterns = (bm.patterns ?? []).slice(0, 5);
   const starLabel = formatStars(bm);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const replayAudioRef = useRef<HTMLAudioElement | null>(null);
-  const replayAudioStartSecondsRef = useRef(0);
-  const replayAudioStartPendingRef = useRef(false);
-  const replayAudioReadyRef = useRef(false);
-  const replayAudioClockSampleRef = useRef<ReplayAudioClockSample | null>(null);
-  const replayAudioClockAnchorRef = useRef<ReplayAudioClockAnchor | null>(null);
   const previewPlaybackTokenRef = useRef(0);
-  const replayPlaybackTokenRef = useRef(0);
   const isRandomCardMountedRef = useRef(true);
-  const replayPreviewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const requestedAudioModeRef = useRef<"audio" | "replay" | null>(null);
+  // Whether the set-preview clip is what the user asked to hear (a late play()
+  // after they switched to the chart preview is discarded).
+  const wantsAudioRef = useRef(false);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -4303,84 +3677,14 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     () => [...(bm.maniaBeatmaps ?? [])].sort((a, b) => b.difficultyRating - a.difficultyRating),
     [bm.maniaBeatmaps],
   );
-  const usesSetPreviewForReplayAudio = useMemo(
-    () => shouldUseSetPreviewForReplayAudio(bm.title, maniaBeatmaps),
-    [bm.title, maniaBeatmaps],
-  );
   const [selectedBeatmapId, setSelectedBeatmapId] = useState<number | null>(() => getDefaultRandomBeatmapId(maniaBeatmaps));
   const selectedBeatmap = maniaBeatmaps.find((map) => map.id === selectedBeatmapId) ?? maniaBeatmaps[0] ?? null;
   const mapMetadata = [
     bm.bpm > 0 ? `${Math.round(bm.bpm)} BPM` : null,
     selectedBeatmap && selectedBeatmap.totalLength > 0 ? formatDuration(selectedBeatmap.totalLength) : null,
   ].filter((part): part is string => Boolean(part));
-  const [previewBeatmap, setPreviewBeatmap] = useState<ManiaBeatmap | null>(null);
-  const metadataBeatmapsetId = selectedBeatmap?.beatmapsetId ?? bm.id;
-  const audioBeatmapsetId = previewBeatmap?.beatmapsetId ?? metadataBeatmapsetId;
-  const [replayChartStartMs, setReplayChartStartMs] = useState(0);
-  const [replayChartPlaybackMs, setReplayChartPlaybackMs] = useState(0);
-  const [replayChartTimeScale, setReplayChartTimeScale] = useState(1);
-  const [replayAudioMode, setReplayAudioMode] = useState<"set-preview" | "selected-file">("set-preview");
-  // When the user scrubs the chart preview to a custom point we pin the start
-  // offset here; null means "use whatever getChartPreviewPlaybackPlan picked".
-  // The nonce lets re-scrubbing the same spot still re-trigger the plan effect.
-  const [replayChartScrub, setReplayChartScrub] = useState<{ ms: number; nonce: number } | null>(null);
-  const [replayPreviewRequested, setReplayPreviewRequested] = useState(false);
-  const [isReplayPreviewPlaying, setIsReplayPreviewPlaying] = useState(false);
-  const [isReplayPreviewEnding, setIsReplayPreviewEnding] = useState(false);
-  const [isReplayPreviewReady, setIsReplayPreviewReady] = useState(false);
-  const [replayPreviewLoading, setReplayPreviewLoading] = useState(false);
-  const [replayAudioLoading, setReplayAudioLoading] = useState(false);
-  const [replayAudioSizeBytes, setReplayAudioSizeBytes] = useState<number | null>(null);
-  const [replayPreviewError, setReplayPreviewError] = useState<string | null>(null);
-  const replayAudioFullUrl = previewBeatmap?.audioFilename
-    ? getBeatmapAudioUrl(audioBeatmapsetId, previewBeatmap.audioFilename)
-    : null;
-  // Both audio sources are the same song at the chart's own rate (see
-  // shouldUseSetPreviewForReplayAudio), so the chart and audio share a clock.
-  const replayAudioPlaybackRate = 1;
-  const replayClockRateDivisor = 1;
-  const replayPreviewKeyCount = previewBeatmap?.keyCount ?? Math.round(selectedBeatmap?.cs ?? 0);
-  const replayPreviewWidth = replayPreviewKeyCount >= 7
-    ? 460
-    : replayPreviewKeyCount >= 6
-    ? 390
-    : 300;
-  const replayPreviewGap = replayPreviewKeyCount >= 5 ? 24 : 48;
-  const replayPreviewTopBleed = 52;
-  // Total mapped length, used to bound the scrub timeline. The last note's
-  // endTime is a good proxy for chart length without parsing audio metadata.
-  const replayChartLengthMs = useMemo(() => {
-    if (!previewBeatmap?.notes.length) return 0;
-    let end = 0;
-    for (const note of previewBeatmap.notes) {
-      if (note.endTime > end) end = note.endTime;
-    }
-    return end;
-  }, [previewBeatmap]);
-  // The chart preview plays continuously from its start point: notes flow until
-  // the chart (or audio) ends rather than being clipped to a fixed window. The
-  // set-preview snippet is short and ends on its own, so the window there only
-  // needs to comfortably outlast the snippet, not span a multi-minute chart.
-  const SET_PREVIEW_WINDOW_MS = 40_000;
-  const replayPreviewWindowMs = replayAudioMode === "set-preview"
-    ? Math.min(SET_PREVIEW_WINDOW_MS, Math.max(RANDOM_REPLAY_PREVIEW_MS, replayChartLengthMs))
-    : Math.max(
-      RANDOM_REPLAY_PREVIEW_MS,
-      replayChartLengthMs > 0 ? replayChartLengthMs - replayChartStartMs : RANDOM_REPLAY_PREVIEW_MS,
-    );
-  const replayAudioUrl = replayAudioMode === "set-preview"
-    ? effectivePreviewUrl
-    : replayAudioFullUrl;
-  const replayPreviewStartSeconds = replayAudioMode === "selected-file"
-    ? Math.max(0, replayChartStartMs / 1000)
-    : 0;
-  // Scrubbing needs the full beatmap audio file (the short set-preview snippet
-  // always plays from 0). seekChartPreview forces selected-file mode, but the
-  // timeline must be reachable even before the first scrub, so it only depends
-  // on the chart being longer than the fixed preview window. Without an audio
-  // file to fall back to, scrubbed audio can't follow, so require one.
-  const canScrubChartPreview = replayChartLengthMs > RANDOM_REPLAY_PREVIEW_MS
-    && (replayAudioMode === "selected-file" || Boolean(previewBeatmap?.audioFilename));
+  // The chart preview panel is open (it plays as it opens).
+  const [chartOpen, setChartOpen] = useState(false);
 
   // Some beatmapsets have no background image — the cover URL 404s. Track load
   // failure per URL so a late metadata refresh cannot hide an already-loaded cover.
@@ -4421,111 +3725,25 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   }, [coverUrl]);
   const coverReady = coverUrl !== "" && decodedCover === coverUrl;
 
+  // A new pick starts quiet, on its default diff, with the chart preview
+  // closed. Keyed on the set and its diffs, not the object: a refetch of the
+  // same pick must not close a running preview.
+  const pickKey = `${bm.id}:${maniaBeatmaps.map((map) => map.id).join(",")}`;
+  const maniaBeatmapsRef = useRef(maniaBeatmaps);
+  maniaBeatmapsRef.current = maniaBeatmaps;
   useEffect(() => {
     previewPlaybackTokenRef.current += 1;
-    replayPlaybackTokenRef.current += 1;
+    wantsAudioRef.current = false;
     resetAudioElement(audioRef.current);
-    resetAudioElement(replayAudioRef.current);
-    setSelectedBeatmapId(getDefaultRandomBeatmapId(maniaBeatmaps));
-    setReplayPreviewRequested(false);
-    setIsReplayPreviewPlaying(false);
-    setIsReplayPreviewEnding(false);
-    setIsReplayPreviewReady(false);
-    setReplayAudioLoading(false);
-    setReplayAudioSizeBytes(null);
+    setSelectedBeatmapId(getDefaultRandomBeatmapId(maniaBeatmapsRef.current));
     setIsPreviewPlaying(false);
     setCurrentTime(0);
-    setPreviewBeatmap(null);
-    setReplayChartStartMs(0);
-    setReplayChartPlaybackMs(0);
-    setReplayChartTimeScale(1);
-    setReplayAudioMode("set-preview");
-    setReplayChartScrub(null);
-    replayAudioStartPendingRef.current = false;
-    replayAudioReadyRef.current = false;
-    replayAudioClockSampleRef.current = null;
-    replayAudioClockAnchorRef.current = null;
-    replayAudioStartSecondsRef.current = 0;
-    requestedAudioModeRef.current = null;
-  }, [metadataBeatmapsetId, maniaBeatmaps]);
-
-  useEffect(() => {
-    if (!selectedBeatmap || !replayPreviewRequested) {
-      setPreviewBeatmap(null);
-      setReplayChartStartMs(0);
-      setReplayChartPlaybackMs(0);
-      setReplayChartTimeScale(1);
-      setReplayAudioMode("set-preview");
-      setIsReplayPreviewReady(false);
-      replayAudioReadyRef.current = false;
-      replayAudioClockSampleRef.current = null;
-      replayAudioClockAnchorRef.current = null;
-      return;
-    }
-
-    let cancelled = false;
-    setReplayPreviewLoading(true);
-    setIsReplayPreviewPlaying(false);
-    setIsReplayPreviewReady(false);
-    replayAudioClockSampleRef.current = null;
-    replayAudioClockAnchorRef.current = null;
-    setReplayAudioLoading(false);
-    setReplayAudioSizeBytes(null);
-    setReplayPreviewError(null);
-    getBeatmapFileWithRetry(selectedBeatmap.id, metadataBeatmapsetId)
-      .then((selectedResult) => {
-        if (cancelled) return;
-        const previewPlan = getChartPreviewPlaybackPlan({
-          selectedBeatmap: parseCachedManiaBeatmap(selectedBeatmap.id, selectedResult.content),
-          usesSetPreviewForAudio: usesSetPreviewForReplayAudio,
-        });
-
-        setPreviewBeatmap(previewPlan.beatmap);
-        const scrubMs = replayChartScrub?.ms ?? null;
-        if (scrubMs != null) {
-          // Honour a user-picked scrub point: clamp it to the new chart and
-          // force full-file audio so the audio can follow the chosen offset.
-          let chartEnd = 0;
-          for (const note of previewPlan.beatmap.notes) {
-            if (note.endTime > chartEnd) chartEnd = note.endTime;
-          }
-          // Leave a little chart at the end so a scrub never lands on silence.
-          const maxStart = Math.max(0, chartEnd - 2_000);
-          const nextStartMs = Math.min(Math.max(0, scrubMs), maxStart);
-          setReplayChartStartMs(nextStartMs);
-          setReplayChartPlaybackMs(nextStartMs);
-          setReplayChartTimeScale(1);
-          setReplayAudioMode("selected-file");
-        } else {
-          setReplayChartStartMs(previewPlan.startTimeMs);
-          setReplayChartPlaybackMs(previewPlan.startTimeMs);
-          setReplayChartTimeScale(1);
-          setReplayAudioMode(resolveInitialChartPreviewAudioMode({
-            plannedAudioMode: previewPlan.audioMode,
-            hasSelectedAudioFile: Boolean(previewPlan.beatmap.audioFilename),
-            hasSetPreviewAudio: Boolean(previewUrl),
-          }));
-        }
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setPreviewBeatmap(null);
-        setIsReplayPreviewReady(false);
-        setReplayPreviewError("Couldn't load replay preview");
-      })
-      .finally(() => {
-        if (!cancelled) setReplayPreviewLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [metadataBeatmapsetId, previewUrl, replayChartScrub, replayPreviewRequested, selectedBeatmap, usesSetPreviewForReplayAudio]);
+    setChartOpen(false);
+  }, [pickKey]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
-    if (replayAudioRef.current) replayAudioRef.current.volume = volume;
-  }, [previewUrl, replayAudioUrl, volume]);
+  }, [previewUrl, volume]);
 
   useEffect(() => {
     if (!isPreviewPlaying) return;
@@ -4541,6 +3759,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
 
   const pausePreviewAudio = useCallback((reset = false) => {
     previewPlaybackTokenRef.current += 1;
+    wantsAudioRef.current = false;
     const audio = audioRef.current;
     if (audio) {
       const pausedAt = audio.currentTime;
@@ -4565,83 +3784,16 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     pausePreviewAudio(true);
   }, [pausePreviewAudio]);
 
-  const clearReplayPreviewEndTimer = useCallback(() => {
-    if (replayPreviewEndTimerRef.current) {
-      clearTimeout(replayPreviewEndTimerRef.current);
-      replayPreviewEndTimerRef.current = null;
-    }
-  }, []);
-
   useEffect(() => {
     isRandomCardMountedRef.current = true;
     return () => {
       isRandomCardMountedRef.current = false;
       previewPlaybackTokenRef.current += 1;
-      replayPlaybackTokenRef.current += 1;
-      replayAudioStartPendingRef.current = false;
-      replayAudioReadyRef.current = false;
-      replayAudioClockSampleRef.current = null;
-      replayAudioClockAnchorRef.current = null;
-      requestedAudioModeRef.current = null;
-      clearReplayPreviewEndTimer();
+      wantsAudioRef.current = false;
       releasePreviewAnalyser(audioRef.current);
       resetAudioElement(audioRef.current, true);
-      resetAudioElement(replayAudioRef.current, true);
     };
-  }, [clearReplayPreviewEndTimer]);
-
-  const finishReplayPreview = useCallback(() => {
-    if (replayPreviewEndTimerRef.current) return;
-    const audio = replayAudioRef.current;
-    replayPlaybackTokenRef.current += 1;
-    replayAudioStartPendingRef.current = false;
-    replayAudioReadyRef.current = false;
-    replayAudioClockSampleRef.current = null;
-    replayAudioClockAnchorRef.current = null;
-    replayAudioStartSecondsRef.current = 0;
-    requestedAudioModeRef.current = null;
-    setIsPreviewPlaying(false);
-    setReplayAudioLoading(false);
-    setIsReplayPreviewEnding(true);
-    if (audio) {
-      resetAudioElement(audio);
-    }
-    replayPreviewEndTimerRef.current = setTimeout(() => {
-      replayPreviewEndTimerRef.current = null;
-      setReplayPreviewRequested(false);
-      setIsReplayPreviewPlaying(false);
-      setIsReplayPreviewEnding(false);
-      setIsReplayPreviewReady(false);
-      setReplayAudioLoading(false);
-    }, 220);
   }, []);
-
-  const resetReplayPreview = useCallback(() => {
-    clearReplayPreviewEndTimer();
-    replayPlaybackTokenRef.current += 1;
-    replayAudioStartPendingRef.current = false;
-    replayAudioReadyRef.current = false;
-    replayAudioClockSampleRef.current = null;
-    replayAudioClockAnchorRef.current = null;
-    replayAudioStartSecondsRef.current = 0;
-    setReplayPreviewRequested(false);
-    setIsReplayPreviewPlaying(false);
-    setIsReplayPreviewEnding(false);
-    setIsReplayPreviewReady(false);
-    setReplayAudioLoading(false);
-    setReplayAudioSizeBytes(null);
-    setPreviewBeatmap(null);
-    setReplayChartStartMs(0);
-    setReplayChartPlaybackMs(0);
-    setReplayChartTimeScale(1);
-    setReplayAudioMode("set-preview");
-    setReplayChartScrub(null);
-    setReplayPreviewError(null);
-    resetAudioElement(replayAudioRef.current);
-    if (requestedAudioModeRef.current === "replay") {
-      requestedAudioModeRef.current = null;
-    }
-  }, [clearReplayPreviewEndTimer]);
 
   const togglePreview = useCallback(async () => {
     if (!previewUrl) return;
@@ -4655,10 +3807,11 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       return;
     }
 
-    resetReplayPreview();
+    // One sound at a time: the clip closes the chart preview.
+    setChartOpen(false);
     const token = previewPlaybackTokenRef.current + 1;
     previewPlaybackTokenRef.current = token;
-    requestedAudioModeRef.current = "audio";
+    wantsAudioRef.current = true;
     setPreviewError(null);
     try {
       const resumeTime = currentTime > 0 && (!duration || currentTime < Math.min(duration, RANDOM_REPLAY_PREVIEW_MS / 1000))
@@ -4677,7 +3830,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       if (
         !isRandomCardMountedRef.current ||
         previewPlaybackTokenRef.current !== token ||
-        requestedAudioModeRef.current !== "audio" ||
+        !wantsAudioRef.current ||
         audioRef.current !== audio
       ) {
         resetAudioElement(audio);
@@ -4686,14 +3839,14 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       if (
         isRandomCardMountedRef.current &&
         previewPlaybackTokenRef.current === token &&
-        requestedAudioModeRef.current === "audio" &&
+        wantsAudioRef.current &&
         audioRef.current === audio
       ) {
         setPreviewError("Couldn't play preview");
         setIsPreviewPlaying(false);
       }
     }
-  }, [currentTime, duration, isPreviewPlaying, previewUrl, resetReplayPreview, volume]);
+  }, [currentTime, duration, isPreviewPlaying, previewUrl, volume]);
 
   // After the proxy fallback remounts the audio element on the direct URL,
   // resume the play the user asked for.
@@ -4703,277 +3856,16 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     void togglePreview();
   }, [previewProxyFailed, togglePreview]);
 
-  const startReplayPreviewAudio = useCallback(async (token: number) => {
-    const audio = replayAudioRef.current;
-    const isCurrentRequest = () =>
-      isRandomCardMountedRef.current &&
-      replayPlaybackTokenRef.current === token &&
-      requestedAudioModeRef.current === "replay" &&
-      replayAudioRef.current === audio;
-    if (!replayAudioUrl) {
-      if (replayPlaybackTokenRef.current === token) {
-        replayAudioStartPendingRef.current = false;
-        replayAudioReadyRef.current = false;
-        replayAudioClockSampleRef.current = null;
-        replayAudioClockAnchorRef.current = null;
-        setReplayAudioLoading(false);
-        setReplayPreviewError("Couldn't find chart preview audio");
-      }
-      return;
-    }
-    if (!audio) return;
-    requestedAudioModeRef.current = "replay";
-    replayAudioStartPendingRef.current = false;
-    replayAudioReadyRef.current = false;
-    resetReplayAudioClockSample(replayAudioClockSampleRef, replayPreviewStartSeconds);
-    replayAudioClockAnchorRef.current = null;
-    pausePreviewAudio(false);
-    setPreviewError(null);
-    replayAudioStartSecondsRef.current = replayPreviewStartSeconds;
-    audio.pause();
-    const isSelectedFileAudio = replayAudioMode === "selected-file";
-    audio.volume = volume;
-    audio.playbackRate = replayAudioPlaybackRate;
-    setAudioPreservesPitch(audio, replayAudioMode !== "set-preview");
-    try {
-      setReplayAudioLoading(isSelectedFileAudio);
-      if (isSelectedFileAudio && replayAudioSizeBytes == null) {
-        try {
-          const sizeResponse = await fetch(replayAudioUrl, { method: "HEAD" });
-          if (!isCurrentRequest()) return;
-          if (sizeResponse.ok) {
-            const sizeRaw = sizeResponse.headers.get("x-audio-size-bytes") ?? sizeResponse.headers.get("content-length");
-            const size = sizeRaw ? Number(sizeRaw) : NaN;
-            if (Number.isFinite(size) && size > 0) setReplayAudioSizeBytes(size);
-          }
-        } catch {
-          if (!isCurrentRequest()) return;
-        }
-      }
-      if (!isCurrentRequest()) return;
-      if (isSelectedFileAudio) {
-        audio.preload = "auto";
-        try {
-          audio.load();
-        } catch {
-          // Some browsers may reject load() while React is still swapping sources.
-        }
-      }
-      try {
-        audio.currentTime = replayPreviewStartSeconds;
-      } catch {
-        // The metadata may not be ready yet on mobile; playback will still be clipped.
-      }
-      await seekAudioElement(audio, replayPreviewStartSeconds, isSelectedFileAudio
-        ? {
-          metadataTimeoutMs: SELECTED_AUDIO_METADATA_TIMEOUT_MS,
-          requireMetadata: true,
-          seekSettleTimeoutMs: SELECTED_AUDIO_SEEK_SETTLE_TIMEOUT_MS,
-        }
-        : undefined);
-      // A superseded request leaves the element alone: every token bump
-      // resets or re-seeks it itself, and the newer request may already be
-      // playing on it (see ChartPreviewPanel for the 0:00 restart this caused).
-      if (!isCurrentRequest()) return;
-      if (replayPreviewStartSeconds > 0.25 && Math.abs(audio.currentTime - replayPreviewStartSeconds) > 1) {
-        throw new Error("Chart preview audio seek failed");
-      }
-      await audio.play();
-      if (!isCurrentRequest()) return;
-      resetReplayAudioClockSample(replayAudioClockSampleRef, audio.currentTime);
-      replayAudioClockAnchorRef.current = {
-        mediaSeconds: audio.currentTime,
-        startedAtMs: performance.now(),
-        playbackRate: getReplayAudioPlaybackRate(audio, replayAudioPlaybackRate),
-      };
-      replayAudioReadyRef.current = true;
-      setIsReplayPreviewPlaying(true);
-      setReplayAudioLoading(false);
-    } catch {
-      if (isCurrentRequest()) {
-        replayAudioReadyRef.current = false;
-        replayAudioClockSampleRef.current = null;
-        replayAudioClockAnchorRef.current = null;
-        setReplayAudioLoading(false);
-        setPreviewError("Couldn't play preview audio");
-        setIsReplayPreviewPlaying(false);
-      }
-    }
-  }, [pausePreviewAudio, replayAudioMode, replayAudioPlaybackRate, replayAudioSizeBytes, replayAudioUrl, replayPreviewStartSeconds, volume]);
-
-  const getReplayChartPlaybackMs = useCallback(() => {
-    const baseMs = Math.max(0, replayChartStartMs);
-    const audio = replayAudioRef.current;
-    if (!audio || requestedAudioModeRef.current !== "replay" || !replayAudioReadyRef.current) {
-      return Math.min(baseMs, Math.max(0, replayChartLengthMs));
-    }
-
-    const elapsedMediaMs = Math.max(0, (audio.currentTime - replayAudioStartSecondsRef.current) * 1000);
-    const displayMs = elapsedMediaMs / Math.max(0.1, replayClockRateDivisor);
-    const chartMs = baseMs + (displayMs * Math.max(0.1, replayChartTimeScale));
-    return Math.min(Math.max(0, chartMs), Math.max(0, replayChartLengthMs));
-  }, [replayChartLengthMs, replayChartStartMs, replayChartTimeScale, replayClockRateDivisor]);
-
-  useEffect(() => {
-    if (!replayPreviewRequested || isReplayPreviewEnding) return;
-
-    let frameId: number | null = null;
-    const update = () => {
-      const nextMs = getReplayChartPlaybackMs();
-      setReplayChartPlaybackMs((currentMs) => (
-        Math.abs(currentMs - nextMs) >= 16 ? nextMs : currentMs
-      ));
-
-      if (isReplayPreviewPlaying) {
-        frameId = window.requestAnimationFrame(update);
-      }
-    };
-
-    update();
-    return () => {
-      if (frameId != null) window.cancelAnimationFrame(frameId);
-    };
-  }, [getReplayChartPlaybackMs, isReplayPreviewEnding, isReplayPreviewPlaying, replayPreviewRequested]);
-
-  const getReplayPreviewClock = useCallback(() => {
-    const audio = replayAudioRef.current;
-    if (!audio || requestedAudioModeRef.current !== "replay") {
-      return { time: 0, stalled: true };
-    }
-    if (!replayAudioReadyRef.current || audio.paused || audio.seeking) {
-      return { time: 0, stalled: true };
-    }
-    const rate = Math.max(0.1, replayClockRateDivisor);
-    const now = performance.now();
-    const rawMediaSeconds = audio.currentTime;
-    const anchor = replayAudioClockAnchorRef.current;
-    let mediaSeconds = rawMediaSeconds;
-    if (anchor) {
-      const predictedSeconds = anchor.mediaSeconds + ((now - anchor.startedAtMs) / 1000) * anchor.playbackRate;
-      if (rawMediaSeconds > predictedSeconds + 0.12) {
-        replayAudioClockAnchorRef.current = {
-          mediaSeconds: rawMediaSeconds,
-          startedAtMs: now,
-          playbackRate: getReplayAudioPlaybackRate(audio, replayAudioPlaybackRate),
-        };
-        mediaSeconds = rawMediaSeconds;
-      } else {
-        mediaSeconds = Math.max(rawMediaSeconds, predictedSeconds);
-      }
-    }
-    const elapsedSeconds = Math.max(0, mediaSeconds - replayAudioStartSecondsRef.current);
-    const lowReadyState = audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA;
-    const audioClockIsMoving = anchor != null || hasRecentReplayAudioClockProgress(replayAudioClockSampleRef, mediaSeconds);
-    return {
-      time: Math.min(replayPreviewWindowMs, (elapsedSeconds * 1000) / rate),
-      stalled: lowReadyState && !audioClockIsMoving,
-    };
-  }, [replayAudioPlaybackRate, replayClockRateDivisor, replayPreviewWindowMs]);
-
-  const markReplayPreviewReady = useCallback(() => {
-    setIsReplayPreviewReady(true);
-  }, []);
-
-  // Jump the chart preview to an arbitrary point in the map. Pins the scrub
-  // offset and restarts the playback pipeline: the plan effect re-resolves the
-  // chart, the renderer re-keys, and the pending-audio effect starts playback.
-  const seekChartPreview = useCallback((targetMs: number) => {
-    clearReplayPreviewEndTimer();
-    const token = replayPlaybackTokenRef.current + 1;
-    replayPlaybackTokenRef.current = token;
-    requestedAudioModeRef.current = "replay";
-    replayAudioReadyRef.current = false;
-    replayAudioStartPendingRef.current = true;
-    replayAudioClockSampleRef.current = null;
-    replayAudioClockAnchorRef.current = null;
-    resetAudioElement(replayAudioRef.current);
-    pausePreviewAudio(false);
-    setIsReplayPreviewPlaying(false);
-    setIsReplayPreviewReady(false);
-    setIsReplayPreviewEnding(false);
-    setReplayPreviewError(null);
-    setReplayPreviewRequested(true);
-    const nextMs = Math.max(0, Math.round(targetMs));
-    setReplayChartPlaybackMs(nextMs);
-    setReplayChartScrub((prev) => ({
-      ms: nextMs,
-      nonce: (prev?.nonce ?? 0) + 1,
-    }));
-  }, [clearReplayPreviewEndTimer, pausePreviewAudio]);
-
-  // Pause or resume the running chart preview (clicking the playfield toggles
-  // it). The audio is the master clock, so resuming re-anchors the dead-reckon
-  // clock to the audio's current position to avoid a time jump.
-  const toggleChartPreviewPlayback = useCallback(() => {
-    const audio = replayAudioRef.current;
-    if (!audio || requestedAudioModeRef.current !== "replay" || !replayAudioReadyRef.current) return;
-    if (isReplayPreviewPlaying) {
-      setReplayChartPlaybackMs(getReplayChartPlaybackMs());
-      audio.pause();
-      replayAudioClockAnchorRef.current = null;
-      setIsReplayPreviewPlaying(false);
-      return;
-    }
-    resetReplayAudioClockSample(replayAudioClockSampleRef, audio.currentTime);
-    replayAudioClockAnchorRef.current = {
-      mediaSeconds: audio.currentTime,
-      startedAtMs: performance.now(),
-      playbackRate: getReplayAudioPlaybackRate(audio, replayAudioPlaybackRate),
-    };
-    audio.volume = volume;
-    void audio.play()
-      .then(() => {
-        if (replayAudioRef.current !== audio || requestedAudioModeRef.current !== "replay") return;
-        setIsReplayPreviewPlaying(true);
-      })
-      .catch(() => {
-        replayAudioClockAnchorRef.current = null;
-      });
-  }, [getReplayChartPlaybackMs, isReplayPreviewPlaying, replayAudioPlaybackRate, volume]);
-
-  const startReplayPreview = useCallback(() => {
-    const audio = replayAudioRef.current;
-    clearReplayPreviewEndTimer();
-    const token = replayPlaybackTokenRef.current + 1;
-    replayPlaybackTokenRef.current = token;
-    requestedAudioModeRef.current = "replay";
-    replayAudioReadyRef.current = false;
-    resetReplayAudioClockSample(replayAudioClockSampleRef, replayPreviewStartSeconds);
-    replayAudioClockAnchorRef.current = null;
-    setIsReplayPreviewPlaying(false);
-    setIsReplayPreviewEnding(false);
-    pausePreviewAudio(false);
-    if (audio) {
-      audio.pause();
-      try {
-        audio.currentTime = replayPreviewStartSeconds;
-      } catch {
-        // The audio element may still be resolving its source on mobile.
-      }
-      audio.volume = volume;
-      audio.playbackRate = replayAudioPlaybackRate;
-      setAudioPreservesPitch(audio, replayAudioMode !== "set-preview");
-    }
-    replayAudioStartSecondsRef.current = replayPreviewStartSeconds;
-    setReplayChartPlaybackMs(replayChartStartMs);
-    setReplayPreviewRequested(true);
-    replayAudioStartPendingRef.current = true;
-    if (previewBeatmap && isReplayPreviewReady) {
-      void startReplayPreviewAudio(token);
-    }
-  }, [clearReplayPreviewEndTimer, isReplayPreviewReady, pausePreviewAudio, previewBeatmap, replayAudioMode, replayAudioPlaybackRate, replayChartStartMs, replayPreviewStartSeconds, startReplayPreviewAudio, volume]);
-
-  useEffect(() => {
-    if (replayPreviewRequested && previewBeatmap && isReplayPreviewReady && !replayPreviewLoading && replayAudioStartPendingRef.current) {
-      void startReplayPreviewAudio(replayPlaybackTokenRef.current);
-    }
-  }, [isReplayPreviewReady, previewBeatmap, replayPreviewLoading, replayPreviewRequested, startReplayPreviewAudio]);
+  const toggleChartPreview = useCallback(() => {
+    // One sound at a time: opening the chart preview stops the clip.
+    if (!chartOpen) pausePreviewAudio(false);
+    setChartOpen((open) => !open);
+  }, [chartOpen, pausePreviewAudio]);
 
   const applyVolume = useCallback((v: number) => {
     const clamped = Math.min(1, Math.max(0, v));
     setVolume(clamped);
     if (audioRef.current) audioRef.current.volume = clamped;
-    if (replayAudioRef.current) replayAudioRef.current.volume = clamped;
     if (clamped > 0) lastNonZeroVolumeRef.current = clamped;
     writeReplayVolume(clamped);
   }, []);
@@ -4986,7 +3878,6 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         setVolume(next);
         if (next > 0) lastNonZeroVolumeRef.current = next;
         if (audioRef.current) audioRef.current.volume = next;
-        if (replayAudioRef.current) replayAudioRef.current.volume = next;
       }),
     [],
   );
@@ -5001,36 +3892,19 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
 
   const displayDuration = duration > 0 ? Math.min(duration, RANDOM_REPLAY_PREVIEW_MS / 1000) : 0;
   const getPreviewAudio = useCallback(() => audioRef.current, []);
-  // Paused == the preview is live and ready but the user stopped it; that is
-  // distinct from "preparing" (still spinning up), which keeps the spinner.
-  // replayAudioReadyRef is true only once audio playback has been established,
-  // so it cleanly excludes the brief ready-but-not-yet-playing startup gap.
-  const isReplayPreviewPaused = replayPreviewRequested
-    && isReplayPreviewReady
-    && replayAudioReadyRef.current
-    && !isReplayPreviewPlaying
-    && !isReplayPreviewEnding
-    && !replayAudioLoading
-    && !previewError
-    && !replayPreviewError;
-  const isReplayPreviewPreparing = replayPreviewRequested
-    && !isReplayPreviewEnding
-    && !isReplayPreviewPlaying
-    && !isReplayPreviewPaused
-    && !replayAudioLoading
-    && !previewError
-    && !replayPreviewError;
-  // The playfield itself is clickable to pause/resume once a preview is live.
-  const canToggleChartPreview = replayPreviewRequested
-    && !isReplayPreviewEnding
-    && !replayAudioLoading
-    && (isReplayPreviewPlaying || isReplayPreviewReady);
+
+  const diffTabs = [...maniaBeatmaps]
+    .sort((a, b) => a.cs - b.cs || a.difficultyRating - b.difficultyRating)
+    .map((map) => ({ beatmapId: map.id, stars: map.difficultyRating, version: map.version, keyCount: Math.round(map.cs), length: map.totalLength }));
 
   return (
     <div className="relative w-[640px] max-w-full">
-      <div className="rounded-2xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/40 transition-colors">
+      <div
+        className="relative isolate rounded-2xl bg-osu-b4 ring-1 ring-white/5 transition-shadow hover:ring-white/15"
+      >
         <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-2xl overflow-hidden">
-        <div className="relative w-full h-[220px] bg-osu-b6 overflow-hidden">
+        {/* The cover dissolves into the body; the title's shade fades with it. */}
+        <div className="relative w-full h-[220px] overflow-hidden [mask-image:linear-gradient(to_bottom,black_45%,transparent)]">
           {!coverReady && coverUrl !== "" && (
             <Skeleton className="absolute inset-0 rounded-none" />
           )}
@@ -5041,51 +3915,45 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               aria-hidden="true"
             />
           )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-black/15" />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-        <BeatmapStatusBadge status={bm.status} className="absolute top-3 left-3" />
-        <div className="absolute top-3 right-3 flex max-w-[calc(100%-5.5rem)] flex-wrap items-center justify-end gap-1">
-          {keys.map((k) => (
-            <span key={k} className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">
-              {k}K
+        <div className="absolute left-4 right-4 top-3.5 flex items-center justify-between gap-2">
+          {keys.length > 0 ? (
+            <span className="rounded-md bg-black/55 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-white backdrop-blur-sm">
+              {keys.length > 2 ? `${keys[0]}K–${keys[keys.length - 1]}K` : keys.map((k) => `${k}K`).join(" ")}
             </span>
-          ))}
-          {starLabel && (
-            <StarRatingBadge stars={typeof bm.starMax === "number" ? bm.starMax : 0} label={starLabel} />
-          )}
+          ) : <span />}
+          <BeatmapStatusBadge status={bm.status} />
         </div>
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-3">
-          <div className="text-[18px] font-semibold text-white truncate leading-tight drop-shadow-lg">{bm.title}</div>
-          <div className="text-[13px] text-white/75 truncate leading-tight drop-shadow-lg">{bm.artist}</div>
+        <div className="absolute bottom-1.5 left-0 right-0 px-5">
+          <div className="text-[24px] font-extrabold text-white truncate leading-tight drop-shadow-md">{bm.title}</div>
+          <div className="text-[14px] text-white/75 truncate leading-tight">{bm.artist}</div>
         </div>
         </a>
 
-        <div className="px-4 py-3 space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[11px] text-osu-f1 truncate"><Trans>mapped by {bm.creator}</Trans></div>
-            {mapMetadata.length > 0 && (
-              <div className="text-[10px] text-osu-f1/80 truncate">{mapMetadata.join(" / ")}</div>
-            )}
-          </div>
-          <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-start flex-shrink-0">
-            <div className="flex items-center gap-1">
-              <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalFavouriteCount)}</span>
-              <span className="text-[9px] text-osu-f1 uppercase"><Trans>favs</Trans></span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalPlayCount)}</span>
-              <span className="text-[9px] text-osu-f1 uppercase"><Trans>plays</Trans></span>
-            </div>
-            <a
-              href={`osu://dl/${bm.id}`}
-              className="hidden sm:flex items-center gap-1.5 text-osu-pink/80 hover:text-osu-pink hover:scale-105 transition-all cursor-pointer focus:outline-none focus-visible:outline-none"
-              title={t`Open in osu!`}
-            >
-              <span className="text-[11px] font-semibold"><Trans>Open in</Trans></span>
-              <OsuLogo className="h-[26px] w-[26px]" />
-            </a>
-          </div>
+        <div className="space-y-3.5 px-5 pb-4 pt-3">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2 text-[12.5px] text-osu-l2/70">
+          {starLabel ? (
+            <StarRatingBadge
+              stars={typeof bm.starMax === "number" ? bm.starMax : 0}
+              range={typeof bm.starMin === "number" && bm.starMin > 0 ? [bm.starMin, bm.starMax ?? 0] : undefined}
+              digits={2}
+              label={starLabel}
+              large
+              className="shrink-0"
+            />
+          ) : null}
+          <span className="truncate"><Trans>mapped by {bm.creator}</Trans></span>
+          {mapMetadata.map((part) => (
+            <Fragment key={part}>
+              <Hairline />
+              <span className="tabular-nums">{part}</span>
+            </Fragment>
+          ))}
+          <Hairline />
+          <span className="whitespace-nowrap"><MapStatValue>{formatNumber(bm.globalFavouriteCount)}</MapStatValue> <Trans>favs</Trans></span>
+          <Hairline />
+          <span className="whitespace-nowrap"><MapStatValue>{formatNumber(bm.globalPlayCount)}</MapStatValue> <Trans>plays</Trans></span>
         </div>
 
         {patterns.length > 0 && (
@@ -5093,7 +3961,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
             {patterns.map((p) => (
               <span
                 key={p}
-                className="px-2 py-0.5 rounded-full bg-osu-pink/15 border border-osu-pink/25 text-[10px] font-semibold text-osu-pink-light tracking-wide"
+                className="rounded bg-white/[0.07] px-2 py-1 text-[10.5px] font-semibold leading-none text-osu-l2"
               >
                 {MANIA_PATTERN_LABELS[p] ?? p}
               </span>
@@ -5101,23 +3969,13 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           </div>
         )}
 
-        {maniaBeatmaps.length > 1 ? (
-          <div className="flex items-center gap-2">
-            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-osu-f1/80">
-              Diff
-            </span>
-            <DifficultyPicker
-              beatmaps={maniaBeatmaps}
-              selectedId={selectedBeatmap?.id ?? null}
-              onChange={(id) => {
-                resetReplayPreview();
-                setSelectedBeatmapId(id);
-              }}
-            />
-            <span className="shrink-0 rounded-md bg-osu-b3/50 px-2 py-1 text-[10px] font-semibold text-osu-f1">
-              {maniaBeatmaps.length} diffs
-            </span>
-          </div>
+        {diffTabs.length > 1 ? (
+          <DiffTabs
+            diffs={diffTabs}
+            activeId={selectedBeatmap?.id ?? diffTabs[0].beatmapId}
+            mixedKeys={keys.length > 1}
+            onSelect={setSelectedBeatmapId}
+          />
         ) : null}
 
         {previewUrl ? (
@@ -5125,18 +3983,18 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
             <button
               onClick={togglePreview}
               aria-label={isPreviewPlaying ? "Pause preview" : "Play preview"}
-              className="w-8 h-8 rounded-full bg-osu-pink/90 hover:bg-osu-pink transition-colors flex items-center justify-center cursor-pointer shrink-0 shadow-sm shadow-osu-pink/30"
+              className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-lg bg-white/[0.07] text-osu-l1 transition-colors hover:bg-white/[0.12] hover:text-white"
             >
               {isPreviewPlaying ? (
-                <svg viewBox="0 0 24 24" fill="white" className="w-[14px] h-[14px]">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-[14px] h-[14px]">
                   <rect x="6.5" y="5" width="4" height="14" rx="1.4" />
                   <rect x="13.5" y="5" width="4" height="14" rx="1.4" />
                 </svg>
               ) : (
                 <svg
                   viewBox="0 0 24 24"
-                  fill="white"
-                  stroke="white"
+                  fill="currentColor"
+                  stroke="currentColor"
                   strokeWidth="2"
                   strokeLinejoin="round"
                   strokeLinecap="round"
@@ -5151,7 +4009,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               <div
                 onClick={(e) => {
                   const audio = audioRef.current;
-                  if (!audio || !displayDuration || requestedAudioModeRef.current !== "audio") return;
+                  if (!audio || !displayDuration || !wantsAudioRef.current) return;
                   const rect = e.currentTarget.getBoundingClientRect();
                   const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
                   try {
@@ -5161,7 +4019,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                   }
                   setCurrentTime(audio.currentTime);
                 }}
-                className="flex-1 h-1 bg-osu-b3/60 rounded-full cursor-pointer relative group"
+                className="flex-1 h-1 bg-white/[0.08] rounded-full cursor-pointer relative group"
               >
                 <BeatWaveFill getAudio={getPreviewAudio} bpm={bm.bpm} maxSeconds={displayDuration} analysable={usePreviewProxy} />
               </div>
@@ -5221,7 +4079,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               }}
               onTimeUpdate={(e) => {
                 const audio = e.currentTarget;
-                if (requestedAudioModeRef.current !== "audio") return;
+                if (!wantsAudioRef.current) return;
                 const maxSeconds = RANDOM_REPLAY_PREVIEW_MS / 1000;
                 setCurrentTime(Math.min(audio.currentTime, maxSeconds));
                 if (audio.currentTime >= maxSeconds) {
@@ -5229,19 +4087,19 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                 }
               }}
               onEnded={() => {
-                if (requestedAudioModeRef.current === "audio") {
+                if (wantsAudioRef.current) {
                   stopPreview();
                 }
               }}
               onPause={() => setIsPreviewPlaying(false)}
-              onPlay={() => setIsPreviewPlaying(requestedAudioModeRef.current === "audio")}
+              onPlay={() => setIsPreviewPlaying(wantsAudioRef.current)}
               onError={() => {
                 if (usePreviewProxy) {
                   // Proxy unavailable (older backend, transient error): fall
                   // back to the direct b.ppy.sh clip and resume if a play was
                   // in flight. The key remount discards this element.
                   releasePreviewAnalyser(audioRef.current);
-                  retryPreviewAfterProxyFailRef.current = requestedAudioModeRef.current === "audio";
+                  retryPreviewAfterProxyFailRef.current = wantsAudioRef.current;
                   setPreviewProxyFailed(true);
                   setIsPreviewPlaying(false);
                   return;
@@ -5250,133 +4108,61 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                 setIsPreviewPlaying(false);
               }}
             />
-            {replayAudioUrl ? (
-              <audio
-                ref={replayAudioRef}
-                src={replayAudioUrl}
-                preload={replayAudioMode === "set-preview" ? "metadata" : "none"}
-                onCanPlay={(e) => {
-                  e.currentTarget.volume = volume;
-                  setReplayAudioLoading(false);
-                }}
-                onPlaying={(e) => {
-                  e.currentTarget.volume = volume;
-                  setReplayAudioLoading(false);
-                }}
-                onTimeUpdate={(e) => {
-                  const audio = e.currentTarget;
-                  const maxSeconds = replayAudioStartSecondsRef.current + ((replayPreviewWindowMs / 1000) * replayAudioPlaybackRate);
-                  if (audio.currentTime >= maxSeconds) {
-                    finishReplayPreview();
-                  }
-                }}
-                onEnded={finishReplayPreview}
-                onError={() => {
-                  setReplayAudioLoading(false);
-                  setPreviewError("Couldn't load chart preview audio");
-                  setIsReplayPreviewPlaying(false);
-                  replayAudioStartPendingRef.current = false;
-                  replayAudioReadyRef.current = false;
-                  replayAudioClockSampleRef.current = null;
-                  replayAudioClockAnchorRef.current = null;
-                }}
-              />
-            ) : null}
           </div>
         ) : null}
         {previewError ? (
           <div className="text-[10px] text-rose-300">{previewError}</div>
         ) : null}
-        </div>
-      </div>
 
-      <div
-        className="relative mt-4 min-h-[420px] overflow-visible md:absolute md:left-[calc(100%_+_var(--replay-preview-gap))] md:top-[calc(var(--replay-preview-top-bleed)*-1)] md:mt-0 md:h-[calc(100%+var(--replay-preview-top-bleed))] md:w-[var(--replay-preview-width)] md:min-h-[calc(100%+var(--replay-preview-top-bleed))]"
-        style={{
-          "--replay-preview-gap": `${replayPreviewGap}px`,
-          "--replay-preview-top-bleed": `${replayPreviewTopBleed}px`,
-          "--replay-preview-width": `${replayPreviewWidth}px`,
-        } as CSSProperties}
-      >
-        <div
-          onClick={canToggleChartPreview ? toggleChartPreviewPlayback : undefined}
-          className={`absolute inset-x-0 top-0 transition-opacity duration-200 ${
-            canScrubChartPreview ? "bottom-7" : "bottom-0"
-          } ${
-            previewBeatmap && !isReplayPreviewEnding ? "opacity-100" : "opacity-0"
-          } ${canToggleChartPreview ? "cursor-pointer" : ""}`}
-        >
-          {previewBeatmap ? (
-            <RandomReplayPreview
-              key={selectedBeatmap?.id ?? "preview"}
-              beatmap={previewBeatmap}
-              startTimeMs={replayChartStartMs}
-              timeScale={replayChartTimeScale}
-              windowMs={replayPreviewWindowMs}
-              isPlaying={isReplayPreviewPlaying}
-              resetWhenIdle={!replayPreviewRequested || isReplayPreviewEnding}
-              getClock={getReplayPreviewClock}
-              onReady={markReplayPreviewReady}
-              onEnded={finishReplayPreview}
-            />
-          ) : null}
-        </div>
-        {replayPreviewRequested && !isReplayPreviewEnding && canScrubChartPreview ? (
-          <div className="absolute inset-x-2 bottom-1.5 z-30">
-            <ChartPreviewTimeline
-              positionMs={replayChartPlaybackMs}
-              lengthMs={replayChartLengthMs}
-              onSeek={seekChartPreview}
-            />
-          </div>
+        {/* The chart preview opens inside the card: the same player as the map
+            detail modal, sized to the card, so it never spills past it. */}
+        {chartOpen && selectedBeatmap ? (
+          <ChartPreviewPanel
+            key={selectedBeatmap.id}
+            beatmapset={bm}
+            selectedBeatmapId={selectedBeatmap.id}
+            className="h-[360px] rounded-lg"
+            flatBackdrop
+            autoStart
+          />
         ) : null}
-        {replayAudioLoading ? (
-          <div className="absolute inset-0 z-30 grid place-items-center bg-osu-b5/45 backdrop-blur-[1px]">
-            <div className="grid h-8 w-8 place-items-center rounded-md border border-osu-b3/50 bg-osu-b5/85 shadow-lg">
-              <div className="h-4 w-4 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
-            </div>
-          </div>
-        ) : null}
-        {isReplayPreviewPreparing ? (
-          <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
-            <div className="grid h-7 w-7 place-items-center rounded-md border border-osu-b3/40 bg-osu-b5/65 shadow-lg shadow-black/20 backdrop-blur-[1px]">
-              <div className="h-3.5 w-3.5 rounded-full border-2 border-osu-f1/25 border-t-osu-pink/90 animate-spin" />
-            </div>
-          </div>
-        ) : null}
-        {isReplayPreviewPaused ? (
-          <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
-            <div className="grid h-10 w-10 place-items-center rounded-full border border-osu-f1/30 bg-osu-b5/70 shadow-lg shadow-black/20 backdrop-blur-[1px]">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-4 w-4 text-osu-l2" aria-hidden>
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </div>
-          </div>
-        ) : null}
-        {selectedBeatmap ? (
-          <button
-            type="button"
-            onClick={startReplayPreview}
-            className={`absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-md border border-osu-f1/35 bg-osu-b5/70 px-3 py-1.5 text-[11px] font-semibold text-osu-l2 backdrop-blur-sm transition-all duration-200 hover:border-osu-l2/70 hover:bg-osu-b4/80 hover:text-white cursor-pointer md:left-[150px] ${
-              replayPreviewRequested && !isReplayPreviewEnding ? "pointer-events-none opacity-0 scale-95" : "opacity-100 scale-100"
-            }`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className="h-3 w-3"
-              aria-hidden
+
+        {/* Actions: chart preview beside the links. */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-white/5 pt-3.5">
+          {selectedBeatmap ? (
+            <button
+              type="button"
+              onClick={toggleChartPreview}
+              aria-pressed={chartOpen}
+              aria-expanded={chartOpen}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors cursor-pointer ${
+                chartOpen ? "bg-white/[0.12] text-white" : "bg-white/[0.07] text-osu-l2 hover:bg-white/[0.12] hover:text-white"
+              }`}
             >
-              <path d="M8 5v14l11-7z" />
-            </svg>
-            <span><Trans>chart preview</Trans></span>
-          </button>
-        ) : null}
-        {replayPreviewError ? (
-          <div className="absolute inset-x-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[10px] text-rose-300">
-            {replayPreviewError}
-          </div>
-        ) : null}
+              {chartOpen ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="h-3 w-3" aria-hidden>
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3" aria-hidden>
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              )}
+              <span><Trans>chart preview</Trans></span>
+            </button>
+          ) : null}
+          <span className="flex-1" />
+          <a
+            href={`osu://dl/${bm.id}`}
+            className="hidden items-center gap-1.5 rounded-lg bg-white/[0.07] px-3 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-white/[0.12] hover:text-white sm:inline-flex"
+            title={t`Open in osu!`}
+          >
+            <OsuLogo className="h-3.5 w-3.5" />
+            {t`Open in osu!`}
+          </a>
+          <OszButton beatmapsetId={bm.id} />
+        </div>
+        </div>
       </div>
     </div>
   );

@@ -28,6 +28,7 @@ import {
   mergeServerPackWallet,
   mintServerPackCollectionCard,
   recycleServerPackCollection,
+  releaseServerPackCardCopy,
 } from "#/lib/pack-wallet-sync";
 import type { PackCost } from "#/lib/packs";
 
@@ -58,6 +59,9 @@ export interface PackWalletApi {
   recycleCard: (cardKey: string) => number | Promise<number>;
   /* Recycles every copy; the card leaves the collection. */
   recycleWhole: (cardKey: string) => number | Promise<number>;
+  /* Puts one numbered copy back in the pool, paid like recycling it. Synced
+     wallets only; null when the server could not be reached. */
+  releaseCopy: (cardKey: string, serial: number) => Promise<{ released: boolean; gained: number } | null>;
   /* Whole-recycles a batch of cards in one server round-trip. */
   recycleWholeMany: (cardKeys: string[]) => number | Promise<number>;
   /* Hands back a set number of copies per card, keeping the rest. The pull
@@ -417,6 +421,17 @@ export function usePackWallet(): PackWalletApi {
       const result = recycleDuplicates(current, cardKey);
       if (result.gained > 0) commit(result.wallet);
       return result.gained;
+    },
+    releaseCopy: async (cardKey, serial) => {
+      if (!syncRef.current.enabled) return null;
+      try {
+        const result = await releaseServerPackCardCopy({ data: { cardKey, serial } });
+        if (!result) return null;
+        if (result.payload) commitServerWallet(result.payload, result.rev);
+        return { released: result.released, gained: result.gained };
+      } catch {
+        return null;
+      }
     },
     recycleWhole: (cardKey) => {
       if (syncRef.current.enabled) {

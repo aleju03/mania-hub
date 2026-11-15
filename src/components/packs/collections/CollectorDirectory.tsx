@@ -17,6 +17,7 @@ import { getI18n } from "#/lib/i18n";
 import { CountryFlag } from "../../ui/CountryFlag";
 import { HeadingCount, ListSurface, RowSkeleton, SectionHeading } from "./chrome";
 import { useDebounced } from "./useDebounced";
+import { UsernameText } from "../../ui/UsernameText";
 
 /* Everyone who has ever opened a pack, searchable. The boards are the ten
    people worth a headline; this is how you find the other few thousand,
@@ -128,7 +129,7 @@ function DirectoryRow({ collector, sort }: { collector: LivePackCollector; sort:
       {collector.countryCode ? (
         <CountryFlag code={collector.countryCode} size="xs" decorative className="shrink-0" />
       ) : null}
-      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-osu-l2">{collector.username}</span>
+      <UsernameText username={collector.username} userId={collector.userId} className="min-w-0 flex-1 truncate text-[13px] font-medium text-osu-l2" />
       {sort !== "goats" && collector.goats > 0 && (
         <span translate="no" className="hidden shrink-0 text-[11px] font-semibold text-amber-200 tabular-nums sm:block">
           <Trans>{collector.goats} GOAT</Trans>

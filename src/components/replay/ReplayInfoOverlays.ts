@@ -24,7 +24,7 @@ export interface ReplayInfoTextures {
 
 interface Size { width: number; height: number }
 
-const TORUS = "Torus, sans-serif";
+const TORUS = "Tracker Round, sans-serif";
 const OSU_YELLOW = 0xffcc22;
 const GUEST_AVATAR = LAZER_LEADERBOARD.guestAvatar;
 

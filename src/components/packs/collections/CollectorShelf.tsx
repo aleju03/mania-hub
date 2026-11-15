@@ -1,4 +1,7 @@
 import { packCompletionCounts } from "#/lib/pack-completion";
+import { useSupporterPackStyle } from "#/lib/use-supporter-pack-style";
+import type { SupporterBinderId } from "#/lib/supporter-pack-style";
+import { BinderPages } from "../BinderPages";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useLocale } from "#/lib/locale-context";
 import { Link } from "@tanstack/react-router";
@@ -39,6 +42,7 @@ import {
 } from "./chrome";
 import { useDebounced } from "./useDebounced";
 import { ShowcaseCards } from "./ShowcaseCards";
+import { UsernameText } from "../../ui/UsernameText";
 
 /* Somebody else's collection. Read-only by construction: the same tiles the
    owner sees, with none of the actions, since nothing here is yours to recycle
@@ -48,7 +52,8 @@ import { ShowcaseCards } from "./ShowcaseCards";
    Their cards are a public read, cached on the backend, so this page never
    goes near the owner-scoped collection routes. */
 
-const PAGE_SIZE = 24;
+/* Three rows of six, or one binder spread of two 3x3 pages. */
+const PAGE_SIZE = 18;
 type CardPool = "all" | "players" | "teams";
 
 /* Pages of somebody else's shelf, held for as long as the tab is open and
@@ -60,6 +65,10 @@ type CardPool = "all" | "players" | "teams";
    nothing else. Bounded because a long session with a search box can key a
    lot of them. */
 const SHELF_PAGE_CACHE_LIMIT = 60;
+
+/* Rarity, or the cards this collector has held most over time first. */
+const SHELF_SORTS = ["rarity", "mastery"] as const;
+type ShelfSort = (typeof SHELF_SORTS)[number];
 const shelfPageCache = new Map<string, LivePackCommunityCollectionPage>();
 
 function shelfPageKey(
@@ -69,8 +78,9 @@ function shelfPageKey(
   mark: PackCardMark | null,
   query: string,
   pool: CardPool,
+  sort: ShelfSort,
 ) {
-  return `${userId}:${page}:${tier}:${mark ?? ""}:${pool}:${query}`;
+  return `${userId}:${page}:${tier}:${mark ?? ""}:${pool}:${sort}:${query}`;
 }
 
 /* Pages already on the wire, so a turn taken before the warm behind it lands
@@ -84,13 +94,14 @@ function loadShelfPage(
   mark: PackCardMark | null,
   query: string,
   pool: CardPool,
+  sort: ShelfSort,
 ): Promise<LivePackCommunityCollectionPage> {
-  const key = shelfPageKey(userId, page, tier, mark, query, pool);
+  const key = shelfPageKey(userId, page, tier, mark, query, pool, sort);
   const held = shelfPageCache.get(key);
   if (held) return Promise.resolve(held);
   const inFlight = shelfPageRequests.get(key);
   if (inFlight) return inFlight;
-  const request = fetchLivePackCollectorCards(userId, { page, pageSize: PAGE_SIZE, tier, mark, query, pool })
+  const request = fetchLivePackCollectorCards(userId, { page, pageSize: PAGE_SIZE, tier, mark, query, pool, sort: sort === "mastery" ? "mastery" : null })
     .then((next) => {
       rememberShelfPage(key, next);
       return next;
@@ -174,10 +185,10 @@ function CollectorHeader({ profile }: { profile: LivePackCollectorProfile }) {
                 preload="intent"
                 className="truncate text-xl font-black text-white transition-colors hover:text-osu-pink-light"
               >
-                {collector.username}
+                <UsernameText username={collector.username} userId={collector.userId} />
               </Link>
             ) : (
-              <span className="truncate text-xl font-black text-white">{collector.username}</span>
+              <UsernameText username={collector.username} userId={collector.userId} className="truncate text-xl font-black text-white" />
             )}
           </div>
           <div className="mt-0.5 text-[11px] text-osu-f1">
@@ -252,7 +263,13 @@ function CardGrid({
   liftedCardKey,
   collectorUserId,
   onSpotlight,
+  binder = null,
+  pageIndex = 0,
 }: {
+  /* Which page of the shelf this is, so the binder turns a page between them. */
+  pageIndex?: number;
+  /* The collector's binder cover, when they are a supporter who picked one. */
+  binder?: SupporterBinderId | null;
   page: LivePackCommunityCollectionPage | null;
   loading: boolean;
   /* Whose shelf this is, for the mark on a card of the collector themselves. */
@@ -280,9 +297,7 @@ function CardGrid({
     return <div className="py-12 text-center text-[12px] text-osu-f1">{t`No cards match that.`}</div>;
   }
 
-  return (
-    <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-6">
-      {cards.map((card) => {
+  const tiles = cards.map((card) => {
         const cardKey = packCardKeyOf(card);
         const thumbnail = getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card));
         return (
@@ -315,19 +330,30 @@ function CardGrid({
               />
               <CardMarks card={card} collectorUserId={collectorUserId} />
             </div>
-            <div className="mt-1 truncate text-center text-[11px] text-osu-f1">{card.username}</div>
+            <div className="mt-1 truncate text-center text-[11px] text-osu-f1"><UsernameText username={card.username} userId={card.userId} /></div>
           </button>
         );
-      })}
-    </div>
-  );
+      });
+  return binder
+    ? (
+      <BinderPages
+        binder={binder}
+        page={pageIndex}
+        ready={!loading}
+        settled={cards.every((card) => !card.skills || Boolean(getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card))))}
+        className="mt-4"
+      >
+        {tiles}
+      </BinderPages>
+    )
+    : <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-6">{tiles}</div>;
 }
 
 export function CollectorShelf({ collector, tab }: {
   collector: string;
   /* Which tab this shelf was opened from, so leaving it goes back there
      instead of to the default one. */
-  tab?: "showcase" | "stats" | "collectors";
+  tab?: "showcase" | "stats" | "board" | "collectors";
 }) {
   const { t } = useLingui();
   const [profile, setProfile] = useState<LivePackCollectorProfile | null>(null);
@@ -339,6 +365,7 @@ export function CollectorShelf({ collector, tab }: {
      an "all" because none of them is the resting state. */
   const [mark, setMark] = useState<PackCardMark | null>(null);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ShelfSort>("rarity");
   const [page, setPage] = useState(0);
   const [cardPage, setCardPage] = useState<LivePackCommunityCollectionPage | null>(null);
   const [cardsLoading, setCardsLoading] = useState(true);
@@ -396,7 +423,7 @@ export function CollectorShelf({ collector, tab }: {
      new filter is paired with the old page index, and the read below would
      spend a request (and a warm behind it) on a page that is already on its
      way out. */
-  const filterKey = `${tier}:${mark ?? ""}:${pool}:${debounced}`;
+  const filterKey = `${tier}:${mark ?? ""}:${pool}:${sort}:${debounced}`;
   const [pagedFilter, setPagedFilter] = useState(filterKey);
   if (pagedFilter !== filterKey) {
     setPagedFilter(filterKey);
@@ -404,7 +431,9 @@ export function CollectorShelf({ collector, tab }: {
   }
 
   const ownerUserId = profile?.collector.userId ?? null;
-  const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, mark, debounced, pool) : null;
+  // A supporter's shelf is their binder.
+  const binder = useSupporterPackStyle(ownerUserId).binder;
+  const requestKey = ownerUserId ? shelfPageKey(ownerUserId, page, tier, mark, debounced, pool, sort) : null;
   /* Read during the render that the click causes, so a page already in hand
      paints in the same commit instead of a frame later. */
   const cachedPage = requestKey ? shelfPageCache.get(requestKey) ?? null : null;
@@ -422,7 +451,7 @@ export function CollectorShelf({ collector, tab }: {
         setPrefetched([]);
         return;
       }
-      loadShelfPage(ownerUserId, nextPage, tier, mark, debounced, pool)
+      loadShelfPage(ownerUserId, nextPage, tier, mark, debounced, pool, sort)
         .then((next) => {
           if (!cancelled) setPrefetched(next.cards as CollectedCard[]);
         })
@@ -443,7 +472,7 @@ export function CollectorShelf({ collector, tab }: {
     setCardsLoading(true);
     // Whatever was warmed sat next to a page that is no longer on screen.
     setPrefetched([]);
-    loadShelfPage(ownerUserId, page, tier, mark, debounced, pool)
+    loadShelfPage(ownerUserId, page, tier, mark, debounced, pool, sort)
       .then((next) => {
         if (cancelled) return;
         setCardPage(next);
@@ -456,7 +485,7 @@ export function CollectorShelf({ collector, tab }: {
     return () => {
       cancelled = true;
     };
-  }, [ownerUserId, requestKey, page, tier, mark, debounced, pool]);
+  }, [ownerUserId, requestKey, page, tier, mark, debounced, pool, sort]);
 
   /* Mints the next page's faces into the shared thumbnail cache while this
      one is being read, so a turn lands on cards rather than on sketches. */
@@ -671,7 +700,28 @@ export function CollectorShelf({ collector, tab }: {
           ))}
         </div>
 
+        {/* Ordering, kept off the chip rows like the owner's own grid: plain
+            text, so a sort never reads as one more filter. */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55"><Trans>Sort by</Trans></span>
+          {SHELF_SORTS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setSort(option)}
+              aria-pressed={sort === option}
+              className={`cursor-pointer text-[12.5px] font-semibold transition-colors ${
+                sort === option ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
+              }`}
+            >
+              {option === "mastery" ? t`Card level` : t`Rarity`}
+            </button>
+          ))}
+        </div>
+
         <CardGrid
+          binder={binder}
+          pageIndex={page}
           page={shownPage}
           loading={cachedPage ? false : cardsLoading}
           liftedCardKey={liftedCardKey}
@@ -761,7 +811,7 @@ function ShowcasedBinders({ userId }: { userId: number }) {
   );
 }
 
-function BackLink({ tab }: { tab?: "showcase" | "stats" | "collectors" }) {
+function BackLink({ tab }: { tab?: "showcase" | "stats" | "board" | "collectors" }) {
   const { t } = useLingui();
   return (
     <Link

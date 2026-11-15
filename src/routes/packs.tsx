@@ -1,10 +1,12 @@
 import { GiftInbox } from "../components/packs/GiftInbox";
+import { useSupporterPackStyle } from "#/lib/use-supporter-pack-style";
+import type { SupporterWrapperId } from "#/lib/supporter-pack-style";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUpDown, Recycle } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Recycle } from "lucide-react";
+import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { AlbumView } from "../components/packs/album/AlbumView";
@@ -12,7 +14,7 @@ import { CollectionPanel } from "../components/packs/CollectionPanel";
 import { SetsView, packBinderActions, notifyPackBindersChanged } from "../components/packs/SetsView";
 import { WishlistLine } from "../components/packs/WishlistLine";
 import { useWishlist } from "../components/packs/useWishlist";
-import { GoatHoldersButton } from "../components/packs/GoatHoldersButton";
+import { GamePacks } from "../components/packs/GamePacks";
 import { GoatPoll } from "../components/packs/GoatPoll";
 import {
   getCachedCardBackDataUrl,
@@ -20,9 +22,16 @@ import {
   packArtStyleFor,
   PACK_ASPECT,
 } from "../components/packs/packArt";
+import { useWrapperArtVersion, wrapperArtPending } from "../components/packs/wrapperArt";
 import { PackStage } from "../components/packs/PackStage";
 import { StreakGame } from "../components/packs/StreakGame";
 import { PackSummary } from "../components/packs/PackSummary";
+import { ChainTable } from "../components/packs/run/chain/ChainTable";
+import { ChainTutorial } from "../components/packs/run/chain/tutorial/ChainTutorial";
+import { useGuestChainRun } from "../components/packs/run/chain/useGuestChainRun";
+import { useChainRun } from "../components/packs/run/chain/useChainRun";
+import { usePackRun } from "../components/packs/run/usePackRun";
+import type { PackRunOpenPayload } from "../lib/pack-run";
 import {
   RevealStage,
   type FlightRect,
@@ -40,18 +49,21 @@ import {
   packCardKey,
   type PackWallet,
 } from "../lib/pack-collection";
-import { isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
+import { fetchLiveChainRunBoard, fetchLiveChainRunSheet, isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
+import type { ChainBoardPeriod, ChainRunMode, ChainRunSnapshot } from "../lib/chain-run";
 import type { PackDamage } from "../lib/pack-damage";
 import {
   clearPendingPack,
   consumePendingPackCard,
+  effectivePackSpell,
+  type PackSpell,
   effectivePackDamage,
   readPendingPack,
   writePendingPack,
 } from "../lib/pack-pending";
 import { mintServerPackCollectionCards, recordServerPackPulls } from "../lib/pack-wallet-sync";
 import { recycleServerPackTeamCards, releaseServerTeamPackPulls } from "../lib/pack-teams";
-import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
+import { PackPulse, PackPulseTicker, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
   drawPackPlayersFromServer,
@@ -70,15 +82,20 @@ import { getI18n } from "../lib/i18n";
 import { intlLocaleTag } from "../lib/format";
 import type { AppLocale } from "../lib/locale";
 import { usePacksRevealAll, usePacksSkipAnimations } from "../store";
+import type { PulledCard } from "../lib/pack-collection";
 import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
 
+/* The chain run's boards and run sheets, stable for the table's effects. */
+const loadChainBoard = (period: ChainBoardPeriod, user: number | null) => fetchLiveChainRunBoard(period, user);
+const loadChainSheet = (userId: number, period: ChainBoardPeriod) => fetchLiveChainRunSheet<ChainRunSnapshot>(userId, period);
+
 export const Route = createFileRoute("/packs")({
-  validateSearch: (search: Record<string, unknown>): { view?: "album" | "streak" | "sets"; album?: string } => {
+  validateSearch: (search: Record<string, unknown>): { view?: "album" | "streak" | "sets" | "run"; album?: string } => {
     const view =
       search.view === "folders"
         ? "sets"
-        : search.view === "album" || search.view === "streak" || search.view === "sets"
+        : search.view === "album" || search.view === "streak" || search.view === "sets" || search.view === "run"
           ? search.view
           : undefined;
     /* Which album is open on the shelf, so one can be linked to. Album codes
@@ -103,7 +120,7 @@ export const Route = createFileRoute("/packs")({
       imageTitle: "Card Packs",
       // The game initially renders a loading board; only the packs landing
       // page should be a search result, not an interactive session entry.
-      noindex: match.search.view === "streak",
+      noindex: match.search.view === "streak" || match.search.view === "run",
     });
   },
   component: PacksPage,
@@ -116,6 +133,24 @@ type PackPhase = "pack" | "reveal" | "summary";
    usePackWallet's action callbacks are identity-stable for this. */
 const MemoAlbumView = memo(AlbumView);
 const MemoCollectionPanel = memo(CollectionPanel);
+
+/* Dev only: `/packs?view=run&runFixture=<moment>` plays the chain run's
+   table from fixture data (components/packs/run/dev/chainFixtures.tsx). Vite
+   turns import.meta.env.DEV into false in a production build, so the branch
+   and the dynamic import behind it are dropped and the fixtures never ship. */
+const RunFixtureHost = import.meta.env.DEV ? lazy(() => import("../components/packs/run/dev/chainFixtures")) : null;
+
+function useRunFixtureMoment(view: string | undefined): string | null {
+  const [moment, setMoment] = useState<string | null>(null);
+  useEffect(() => {
+    if (!import.meta.env.DEV || view !== "run") {
+      setMoment(null);
+      return;
+    }
+    setMoment(new URLSearchParams(window.location.search).get("runFixture"));
+  }, [view]);
+  return moment;
+}
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -307,15 +342,23 @@ function getDuplicateProtectionOwned(
    and kept across route visits. Each full-size foil draw costs ~20ms, so the
    types render in separate idle tasks instead of competing with the 3D pack's
    setup or interaction frames. */
-const packThumbCache = new Map<PackTypeId, string>();
+const packThumbCache = new Map<string, string>();
+const packThumbKey = (type: PackTypeId, wrapper: SupporterWrapperId | null) => `${type}:${wrapper ?? ""}`;
 
-function usePackArtThumbs(enabled: boolean): Partial<Record<PackTypeId, string>> {
-  const [thumbs, setThumbs] = useState<Partial<Record<PackTypeId, string>>>(() =>
-    Object.fromEntries(packThumbCache),
-  );
+/* The viewer's wrapper prints on every type, so the shelf shows their packs as they will open. */
+function usePackArtThumbs(enabled: boolean, wrapper: SupporterWrapperId | null): Partial<Record<PackTypeId, string>> {
+  const cachedFor = () => Object.fromEntries(
+    PACK_TYPES.flatMap((type) => {
+      const url = packThumbCache.get(packThumbKey(type.id, wrapper));
+      return url ? [[type.id, url]] : [];
+    }),
+  ) as Partial<Record<PackTypeId, string>>;
+  const [thumbs, setThumbs] = useState<Partial<Record<PackTypeId, string>>>(cachedFor);
+  const wrapperArtVersion = useWrapperArtVersion();
   useEffect(() => {
+    setThumbs(cachedFor());
     if (!enabled) return;
-    const pending = PACK_TYPES.filter((type) => !packThumbCache.has(type.id));
+    const pending = PACK_TYPES.filter((type) => !packThumbCache.has(packThumbKey(type.id, wrapper)));
     if (pending.length === 0) return;
     let cancelled = false;
     const idleWindow = window as WindowWithIdleCallback;
@@ -334,7 +377,7 @@ function usePackArtThumbs(enabled: boolean): Partial<Record<PackTypeId, string>>
       if (cancelled) return;
       const type = pending.shift();
       if (!type) return;
-      const full = getCachedPackFrontCanvas(packArtStyleFor(type));
+      const full = getCachedPackFrontCanvas({ ...packArtStyleFor(type), wrapper });
       const small = document.createElement("canvas");
       small.width = 256;
       small.height = Math.round(256 / PACK_ASPECT);
@@ -342,7 +385,7 @@ function usePackArtThumbs(enabled: boolean): Partial<Record<PackTypeId, string>>
       if (context) {
         context.drawImage(full, 0, 0, small.width, small.height);
         const url = small.toDataURL("image/png");
-        packThumbCache.set(type.id, url);
+        if (!wrapperArtPending(wrapper)) packThumbCache.set(packThumbKey(type.id, wrapper), url);
         setThumbs((current) => ({ ...current, [type.id]: url }));
       }
       if (pending.length > 0) {
@@ -363,7 +406,7 @@ function usePackArtThumbs(enabled: boolean): Partial<Record<PackTypeId, string>>
       if (idleHandle !== null) idleWindow.cancelIdleCallback?.(idleHandle);
       if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
     };
-  }, [enabled]);
+  }, [enabled, wrapper, wrapperArtVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   return thumbs;
 }
 
@@ -533,16 +576,21 @@ function PacksPage() {
      it is not reduced motion, so the cards still deal and turn one after
      another, and the pack keeps the tear people came for. */
   const auth = useAuth();
+  // The viewer's own packs cosmetics: the case their cards land in and their pack wrapper.
+  const viewerPackStyle = useSupporterPackStyle(auth.viewer?.id, { own: true });
   const { view, album: openAlbumCode } = Route.useSearch();
   /* Local first, URL second: mounting the game must land in the click's own
      render. Waiting for the router to rematch the whole packs route let idle
      foil/card-back canvas work run ahead of the interaction for hundreds of
      milliseconds. The URL still follows after that paint for sharing/back. */
   const [streakOpen, setStreakOpen] = useState(view === "streak");
+  /* The pack run's page (components/packs/run), shown in place of the pack
+     stage between opens. */
+  const [runOpen, setRunOpen] = useState(view === "run");
   const { countryFeatures } = Route.useRouteContext();
   const navigate = useNavigate();
   const walletApi = usePackWallet();
-  const packThumbs = usePackArtThumbs(!streakOpen);
+  const packThumbs = usePackArtThumbs(!streakOpen, viewerPackStyle.wrapper);
   const [phase, setPhase] = useState<PackPhase>("pack");
   const [packId, setPackId] = useState(0);
   const [packTypeId, setPackTypeId] = useState<PackTypeId>("standard");
@@ -564,6 +612,12 @@ function PacksPage() {
      perforation: the cards were cut with it, so the reveal deals them in
      halves and the summary hands the whole ruined hand back for shards. */
   const [damage, setDamage] = useState<PackDamage | null>(null);
+  /* Ember set the pack alight or Frost froze it before it was cut
+     (PackStage): the hand shows burnt or frozen. Looks only. */
+  const [spell, setSpell] = useState<PackSpell | null>(null);
+  // read when the opened pack is reported, which can run from an older render
+  const spellRef = useRef<PackSpell | null>(null);
+  spellRef.current = spell;
   const [revealed, setRevealed] = useState<RevealedCard[]>([]);
   /* Reveal-all handoff: the rects every card tile occupied when the reveal
      finished. Non-null means the viewer already saw the whole grid, so the
@@ -623,6 +677,21 @@ function PacksPage() {
      the missing half of. */
   const wishlistEnabled = Boolean(auth.viewer) && walletApi.syncStatus !== "local";
   const wishlistApi = useWishlist(wishlistEnabled);
+  /* The pack run, for a synced collection the backend has released runs to;
+     the view stays null otherwise and nothing of it renders. */
+  const runApi = usePackRun(wishlistEnabled, walletApi.applyServerWallet);
+  /* The chain run (?view=run): a signed-in viewer's lives on the server, a
+     signed-out visitor plays a guest run in the browser. */
+  /* The player's own run, or the daily run (same cards for everyone that day). */
+  const [chainMode, setChainMode] = useState<ChainRunMode>("normal");
+  /* Overjoy's tutorial, in place of the run while it plays. */
+  const [chainTutorial, setChainTutorial] = useState(false);
+  // a met Wallet contract pays the pack wallet on the server
+  const ownChainApi = useChainRun(Boolean(auth.viewer) && isLiveBackendConfigured(), chainMode, walletApi.refreshServerWallet);
+  const guestChainApi = useGuestChainRun(!auth.viewer && isLiveBackendConfigured());
+  const chainApi = auth.viewer ? ownChainApi : guestChainApi;
+  /* The run's side of the pack on screen: the tally the summary plays. */
+  const [packRun, setPackRun] = useState<PackRunOpenPayload | null>(null);
   const [collectionPanelReady, setCollectionPanelReady] = useState(!streakOpen);
   const [collectionPanelMounted, setCollectionPanelMounted] = useState(!streakOpen);
   // Holds the last wallet the visible collection rendered. Spending a pack
@@ -658,6 +727,7 @@ function PacksPage() {
   };
   useEffect(() => {
     setStreakOpen(view === "streak");
+    setRunOpen(view === "run");
     setAlbumOpen(albumRequested);
     if (albumRequested) setAlbumMounted(true);
     setBindersOpen(bindersRequested);
@@ -673,6 +743,15 @@ function PacksPage() {
           search: open ? { view: "streak" } : {},
           resetScroll: false,
         });
+      }, 0);
+    });
+  };
+
+  const showRunView = (open: boolean) => {
+    setRunOpen(open);
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        void navigate({ to: "/packs", search: open ? { view: "run" } : {}, resetScroll: false });
       }, 0);
     });
   };
@@ -750,8 +829,10 @@ function PacksPage() {
     preparedPackKeyRef.current = null;
     setCards(null);
     setDamage(null);
+    setSpell(null);
     setCutCommitted(false);
     setDealError(null);
+    setPackRun(null);
     serverIsNewRef.current = null;
     serverPaidRef.current = false;
     drawIdRef.current = undefined;
@@ -769,6 +850,7 @@ function PacksPage() {
         // The one-time Eternal reward overrides the cut-pack joke: it always
         // resumes as a normal reveal and can never be auto-recycled unseen.
         setDamage(effectivePackDamage(pending.players, pending.damage));
+        setSpell(effectivePackSpell(pending.players, pending.spell ?? null));
         setPhase("reveal");
         return;
       }
@@ -786,6 +868,7 @@ function PacksPage() {
       // somebody sliced through, forgive the cut entirely so Eternal gets its
       // full ceremony and stays in the album.
       setDamage((current) => effectivePackDamage(players, current));
+      setSpell((current) => effectivePackSpell(players, current));
       setCards(buildCardStates(players, seededScores));
       /* A pack opened straight from the summary pays here rather than at the
          slash, because there is no slash: charging only once the draw
@@ -837,6 +920,12 @@ function PacksPage() {
             serverIsNewRef.current = dealt.isNewByCardKey;
             serverPaidRef.current = true;
             if (dealt.wallet) walletApi.applyServerWallet(dealt.wallet.payload, dealt.wallet.rev);
+            /* Only the run table's own opens send `run: true`; a pack stage
+               open never carries a run, but keep the tally if one did. */
+            if (dealt.run) {
+              setPackRun(dealt.run);
+              runApi.applyView(dealt.run.view);
+            }
             track("pack_open", { pack_type: type.id });
             finishDeal(devApplyForcedEternal(dealt.draw.players), dealt.draw.poolTotal, dealt.scoresByUserId);
             return;
@@ -895,8 +984,8 @@ function PacksPage() {
      one as cards flip into the wallet. */
   useEffect(() => {
     if (phase !== "reveal" || !cards) return;
-    writePendingPack(cards.map((card) => card.player), damage, drawIdRef.current);
-  }, [phase, cards, damage]);
+    writePendingPack(cards.map((card) => card.player), damage, drawIdRef.current, spell);
+  }, [phase, cards, damage, spell]);
 
   useEffect(() => {
     if (streakOpen) {
@@ -932,6 +1021,7 @@ function PacksPage() {
        this same render, so the reveal would otherwise remount for one commit
        still holding the last pack's cut, and deal its ruined hand again. */
     setDamage(null);
+    setSpell(null);
     setCutCommitted(false);
     autoOpenRef.current = false;
     // Keep the chosen pack type across packs while it stays affordable.
@@ -949,11 +1039,135 @@ function PacksPage() {
     setSummaryFlyFrom(null);
     setSerials(null);
     setDamage(null);
+    setSpell(null);
     setCutCommitted(false);
     autoOpenRef.current = true;
     setPhase("reveal");
     setPackId((id) => id + 1);
   };
+
+  /* A dealt card turning face up, from the reveal or the run table: it is in
+     the wallet now, so no longer owed by the pending pack. Returns whether it
+     is a first copy. */
+  const recordOpenedCard = (pull: PulledCard, isNewByCardKey: Map<string, boolean> | null): boolean => {
+    consumePendingPackCard(pull.userId, pull.cardKey?.startsWith("team:") ? pull.cardKey : undefined);
+    /* A team card went into the team collection at the draw; the player
+       wallet never holds one. */
+    if (pull.cardKey?.startsWith("team:")) return isNewByCardKey?.get(pull.cardKey) ?? false;
+    const localIsNew = walletApi.recordPull(pull);
+    // The synced collection lives server-side, so the draw's own answer wins;
+    // the local wallet only speaks for anonymous (and resumed) packs.
+    return isNewByCardKey?.get(pull.cardKey ?? packCardKey(pull.userId, pull.tier)) ?? localIsNew;
+  };
+
+  /* What an opened pack owes the collection once every card is face up, for
+     the reveal and the run table alike: the pending pack cleared, the
+     labelling pass, the pull feed (and the serials it answers with), the team
+     cards released, and the wishlist re-read. */
+  const settleOpenedPack = (pulls: RevealedCard[], drawId: string | undefined, packTypeIdOpened: PackTypeId) => {
+    clearPendingPack();
+    /* The labelling pass: the server wrote the dealt
+       rows at draw time, and this hands it the tier and
+       skills the reveal just computed for each card.
+       Fire-and-forget - a lost call costs a stat bar
+       until the collection's repair path re-mints it,
+       never a card. */
+    /* Team cards are already complete on the server:
+       no mint pass or player pull report. Their release
+       call also acknowledges the draw receipt. */
+    const playerPulls = pulls.filter((pull) => !pull.player.team);
+    // A team card's serial came with the draw, so its
+    // "Nth to pull this" line is there from the start.
+    const teamMints = pulls.flatMap((pull) =>
+      pull.player.team && pull.player.teamMint && pull.player.cardKey
+        ? [[pull.player.cardKey, pull.player.teamMint] as const]
+        : [],
+    );
+    if (teamMints.length > 0) setSerials(new Map(teamMints));
+    /* The server logged the team cards at the draw but
+       held them off the pull feed until now, the moment
+       a player card's report would put it there. */
+    const teamPullEventIds = pulls.flatMap((pull) =>
+      pull.player.team && pull.player.teamPullEventId ? [pull.player.teamPullEventId] : [],
+    );
+    if (auth.viewer && (teamPullEventIds.length > 0 || (drawId && pulls.some((pull) => pull.player.team)))) {
+      void releaseServerTeamPackPulls({ data: { eventIds: teamPullEventIds, drawId } })
+        .then((result) => {
+          if (result && result.released > 0) refreshPackPulseFeed();
+        })
+        .catch(() => {});
+    }
+    if (auth.viewer && playerPulls.length > 0) {
+      const mints = playerPulls
+        .filter((pull) => pull.skills)
+        .map((pull) => ({
+          cardKey: pull.player.cardKey ?? packCardKey(pull.player.user.id, pull.tier),
+          tier: pull.tier,
+          tierLabel: pull.tierLabel,
+          skills: pull.skills,
+          pp: pull.player.pp,
+          globalRank: pull.player.globalRank,
+        }));
+      if (mints.length > 0) {
+        mintPassRef.current = mintServerPackCollectionCards({ data: { cards: mints } }).catch(() => {});
+      }
+    }
+    /* Log the opened pack into the community pull feed.
+       Fire-and-forget: the reveal is already done and
+       the wallet is the source of truth either way. */
+    if (auth.viewer && playerPulls.length > 0) {
+      void recordServerPackPulls({
+        data: {
+          drawId,
+          packType: packTypeIdOpened,
+          ...(spellRef.current ? { spell: spellRef.current } : {}),
+          cards: playerPulls.map((pull) => ({
+            userId: pull.player.user.id,
+            ...(pull.player.cardKey ? { cardKey: pull.player.cardKey } : {}),
+            username: pull.player.user.username,
+            countryCode: pull.player.user.country_code,
+            tier: pull.tier,
+            isNew: pull.isNew,
+          })),
+        },
+      })
+        // Once they are logged, pull the ticker forward
+        // so your own pack lands in the rail alongside
+        // the summary instead of on the next poll.
+        .then((result) => {
+          if (!result) return;
+          if (result.recorded > 0) refreshPackPulseFeed();
+          // Serials come back with the log write, so the
+          // summary can print them without asking again.
+          if (result.mints.length > 0) {
+            setSerials(
+              new Map([
+                ...teamMints,
+                ...result.mints.map((mint) => [
+                  mint.cardKey,
+                  {
+                    serial: mint.serial,
+                    mintedTotal: mint.mintedTotal,
+                    isFirstGlobal: mint.isFirstGlobal,
+                  },
+                ] as const),
+              ]),
+            );
+          }
+        })
+        .catch(() => {});
+    }
+    // The open may have spent a wish or pulled one of them anyway, and it
+    // moved the pity counter either way, so the line re-reads itself.
+    wishlistApi.refresh();
+  };
+
+  /* A pack opened on the run table: the same server draw the pack stage
+     makes, with `run: true`, and the same bookkeeping a server deal gets
+     there (wallet, run, pending pack, the open in analytics). The table
+     deals, turns and scores the cards itself and hands them back through
+     recordOpenedCard and settleOpenedPack. Its own refs, so the pack stage's
+     deal effect never resets an open in flight. */
 
   /* The instant the blade commits: for a signed-in wallet the slash is the
      purchase and the purchase IS the server draw, so the deal leaves the
@@ -964,13 +1178,14 @@ function PacksPage() {
     if (serverDeals()) dealTriggerRef.current?.();
   };
 
-  const handleOpened = (cutDamage: PackDamage | null) => {
+  const handleOpened = (cutDamage: PackDamage | null, cutSpell: PackSpell | null = null) => {
     /* A refused server deal reset the stage while the rip was still playing;
        this delayed callback belongs to that dead pack, and firing it would
        consume the next pack's freshly armed trigger. */
     if (packId !== packIdRef.current) return;
     const effectiveDamage = effectivePackDamage(dealtPlayersRef.current ?? [], cutDamage);
     setDamage(effectiveDamage);
+    setSpell(effectivePackSpell(dealtPlayersRef.current ?? [], cutSpell));
     setCutCommitted(false);
     /* Its own line in the feed, next to the open: the blade went past the foil
        and through the cards, so the whole hand came out in two pieces. */
@@ -1007,14 +1222,70 @@ function PacksPage() {
   /* The game owns the page's middle while it is open, so the collection does
      not sit under it: the point of hosting it here is the ticker and the
      wallet, not a second screen's worth of grid to scroll past. */
-  const showCollectionPanel = !streakOpen && (phase === "pack" || (phase === "summary" && collectionPanelReady));
+  const showCollectionPanel = !streakOpen && !(runOpen && chainApi.available) && (phase === "pack" || (phase === "summary" && collectionPanelReady));
   const collectionWallet = collectionWalletRef.current;
+  /* The run is a game table that takes the whole viewport below the nav, in
+     place of the page's chrome, the pack stage and the collection. A pack
+     resumed from an earlier visit still reveals on the stage first. */
+  const runTableActive = runOpen && !streakOpen && chainApi.available === true && phase === "pack";
+  const runFixtureMoment = useRunFixtureMoment(view);
+  /* The run's pack, with the viewer's best round if they have one. It shows
+     while the run is still loading, so it lands with Higher or lower instead
+     of a beat later; the best round fills in when it arrives. */
+  const chainEntry = chainApi.available !== false ? { best: chainApi.best?.round ?? null } : null;
+
+  if (import.meta.env.DEV && RunFixtureHost && runFixtureMoment) {
+    return (
+      <Suspense fallback={null}>
+        <RunFixtureHost moment={runFixtureMoment} reducedMotion={reducedMotion} />
+      </Suspense>
+    );
+  }
 
   return (
     <div className="relative flex min-h-screen flex-col">
       {/* WebKit can flash missing backing-store tiles when transformed descendants
           animate below overflow:clip. The open-pack sequence owns several such
           transitions, so let the viewport own clipping until it returns home. */}
+      {runTableActive && chainTutorial && (
+        <div className="ui-scale-fixed contents">
+          <ChainTutorial
+            reducedMotion={reducedMotion}
+            packThumbs={packThumbs}
+            onExit={() => setChainTutorial(false)}
+            onPlay={() => setChainTutorial(false)}
+          />
+        </div>
+      )}
+      {runTableActive && !chainTutorial && (
+        // The game lays itself out at fixed sizes, so UI Scaling leaves it at 1x.
+        <div className="ui-scale-fixed contents">
+        <ChainTable
+          onTutorial={() => setChainTutorial(true)}
+          // The own run and the daily run are separate tables: switching
+          // starts the other one fresh, with nothing of this one on screen.
+          key={auth.viewer ? chainMode : "guest"}
+          blade={viewerPackStyle.blade}
+          view={chainApi.view}
+          best={chainApi.best}
+          busy={chainApi.busy}
+          act={chainApi.act}
+          guest={!auth.viewer}
+          reducedMotion={reducedMotion}
+          packThumbs={packThumbs}
+          loadBoard={loadChainBoard}
+          loadSheet={loadChainSheet}
+          onExit={() => {
+            setChainMode("normal");
+            showRunView(false);
+            // the run may have paid the pack wallet (a Wallet prize)
+            if (auth.viewer) walletApi.refreshServerWallet();
+          }}
+          mode={auth.viewer ? chainMode : "normal"}
+          onMode={auth.viewer ? setChainMode : undefined}
+        />
+        </div>
+      )}
       <div
         className={`relative z-10 flex flex-1 flex-col bg-osu-b5 ${phase === "pack" ? "overflow-clip" : ""}`}
       >
@@ -1024,7 +1295,7 @@ function PacksPage() {
           {/* Ambient side rails: the live pull ticker runs through every
               phase (including the reveal), only the your-card fun fact hides
               while cards are flipping. */}
-          <PackPulse viewerId={auth.viewer?.id ?? null} revealing={phase === "reveal"} />
+          {!runTableActive && <PackPulse viewerId={auth.viewer?.id ?? null} revealing={phase === "reveal"} />}
 
           {/* The game brings a leaderboard with it, so the page makes room for
               the rail rather than squeezing the board it sits beside. */}
@@ -1033,7 +1304,7 @@ function PacksPage() {
               streakOpen ? "max-w-[1320px]" : "max-w-[960px]"
             }`}
           >
-            {wallet && phase !== "reveal" && (
+            {wallet && phase !== "reveal" && !runTableActive && (
               // The two numbers that decide what you can open are the point of
               // this strip, so they carry the weight and everything else sits
               // at caption size around them.
@@ -1072,27 +1343,11 @@ function PacksPage() {
                   </span>
                   <span><Trans>shards</Trans></span>
                 </div>
-                <GoatHoldersButton />
-                {/* The solo game, played right here rather than on a page of
-                    its own: the pull ticker, the charges and the shard count
-                    are half of why the arcade is on the packs page at all. */}
-                {/* Toggles: the same chip that opens the game closes it, so
-                    the way out is where the way in was. */}
-                <button
-                  type="button"
-                  onClick={() => showStreakView(!streakOpen)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${
-                    streakOpen
-                      ? "border-osu-pink bg-osu-pink/15 text-white"
-                      : "border-osu-b3/40 text-osu-f1 hover:border-osu-pink/50 hover:text-white"
-                  }`}
-                  aria-pressed={streakOpen}
-                >
-                  <ArrowUpDown className="h-3 w-3" />
-                  {streakOpen ? t`Leave the game` : t`Higher or lower`}
-                </button>
               </div>
             )}
+            {/* Narrower than the pulls rail (PackPulse, 1450px): the newest
+                pull on one line, opening the recent ones as a sheet. */}
+            {wallet && phase !== "reveal" && !runTableActive && <PackPulseTicker className="-mt-6 mb-7 flex justify-center px-4 min-[1450px]:hidden" />}
             {/* Temporary GOAT vote. It owns its own placement (RAIL_LAYOUT in
                 GoatPoll.tsx): once the viewport has room for a rail beside the
                 centred 960px column it floats out of flow into the right
@@ -1103,7 +1358,7 @@ function PacksPage() {
                 a phone screen with. It yields to the game (which widens the
                 column into the gutter) and to the reveal, exactly as the rest
                 of the page does. */}
-            {!streakOpen && phase !== "reveal" && <GoatPoll />}
+            {!streakOpen && phase !== "reveal" && !runTableActive && <GoatPoll />}
 
             {streakOpen ? (
               <StreakGame
@@ -1141,7 +1396,7 @@ function PacksPage() {
               </div>
             ) : (
               <AnimatePresence mode="wait">
-                {phase === "pack" && (
+                {phase === "pack" && !runTableActive && (
                   // packTypeId is NOT part of this key: switching pack types
                   // swaps the stage instantly instead of fading the whole
                   // section out and back in.
@@ -1173,26 +1428,53 @@ function PacksPage() {
                       // No packTypeId key: the stage stays mounted across
                       // type switches and swaps its cached foil texture
                       // instead of remounting a fresh WebGL scene.
-                      <PackStage
-                        reducedMotion={reducedMotion}
-                        onOpened={handleOpened}
-                        onCut={handleCut}
-                        /* Grab-time dealing is the free-draw head start; a
-                           server deal spends, so it waits for the slash. */
-                        onGrab={() => {
-                          if (!serverDeals()) dealTriggerRef.current?.();
-                        }}
-                        packType={selectedType}
-                        controls={
-                          selectedType.keys ? (
-                            <KeyModeToggle
-                              wallet={wallet}
-                              selectedId={packTypeId}
-                              locked={cutCommitted}
-                              onSelect={selectPackType}
-                            />
-                          ) : undefined
-                        }
+                      <div className="relative">
+                        <PackStage
+                          wrapper={viewerPackStyle.wrapper}
+                          blade={viewerPackStyle.blade}
+                          reducedMotion={reducedMotion}
+                          onOpened={handleOpened}
+                          onCut={handleCut}
+                          /* Grab-time dealing is the free-draw head start; a
+                             server deal spends, so it waits for the slash. */
+                          onGrab={() => {
+                            if (!serverDeals()) dealTriggerRef.current?.();
+                          }}
+                          packType={selectedType}
+                          controls={
+                            selectedType.keys ? (
+                              <KeyModeToggle
+                                wallet={wallet}
+                                selectedId={packTypeId}
+                                locked={cutCommitted}
+                                onSelect={selectPackType}
+                              />
+                            ) : undefined
+                          }
+                        />
+                        {/* The games, as doodles in a column right of the pack
+                            being opened, where the page is wide enough for
+                            them; they step aside while a pack is torn. */}
+                        {!cutCommitted && (
+                          <GamePacks
+                            layout="side"
+                            className="hidden xl:block"
+                            chain={chainEntry}
+                            onStreak={() => showStreakView(true)}
+                            onChain={() => showRunView(true)}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {/* Narrow pages (and no pack on the stage) put the games
+                        right under the stage, above the pack picker. */}
+                    {wallet && (
+                      <GamePacks
+                        layout="row"
+                        className={`mt-6 ${shouldKeepPackStageMounted(canOpen, cutCommitted) ? "xl:hidden" : ""}`}
+                        chain={chainEntry}
+                        onStreak={() => showStreakView(true)}
+                        onChain={() => showRunView(true)}
                       />
                     )}
                     {wallet && (
@@ -1231,6 +1513,7 @@ function PacksPage() {
                     {phase === "summary" ? (
                       <PackSummary
                         cards={revealed}
+                        run={packRun}
                         reducedMotion={reducedMotion}
                         flyFrom={summaryFlyFrom}
                         onOpenAnother={openAnother}
@@ -1241,6 +1524,7 @@ function PacksPage() {
                         }
                         serials={serials}
                         damage={damage}
+                        spell={spell}
                         onRecycleCopies={async (entries) => {
                           await mintPassRef.current;
                           const teamEntries = entries.filter((entry) => entry.cardKey.startsWith("team:"));
@@ -1271,118 +1555,13 @@ function PacksPage() {
                         autoRevealAll={revealAllPreferred}
                         compactReveal={skipAnimations}
                         damage={damage}
-                        onCardRevealed={(pull) => {
-                          // In the wallet now, so no longer owed by the pending pack.
-                          consumePendingPackCard(pull.userId, pull.cardKey?.startsWith("team:") ? pull.cardKey : undefined);
-                          /* A team card went into the team collection at the
-                             draw; the player wallet never holds one. */
-                          if (pull.cardKey?.startsWith("team:")) return serverIsNewRef.current?.get(pull.cardKey) ?? false;
-                          const localIsNew = walletApi.recordPull(pull);
-                          // The synced collection lives server-side, so the
-                          // draw's own answer wins; the local wallet only
-                          // speaks for anonymous (and resumed) packs.
-                          return (
-                            serverIsNewRef.current?.get(pull.cardKey ?? packCardKey(pull.userId, pull.tier)) ?? localIsNew
-                          );
-                        }}
+                        spell={spell}
+                        sleeve={viewerPackStyle.sleeve}
+                        onCardRevealed={(pull) => recordOpenedCard(pull, serverIsNewRef.current)}
                         onComplete={(pulls, handoff) => {
-                          clearPendingPack();
-                          /* The labelling pass: the server wrote the dealt
-                             rows at draw time, and this hands it the tier and
-                             skills the reveal just computed for each card.
-                             Fire-and-forget - a lost call costs a stat bar
-                             until the collection's repair path re-mints it,
-                             never a card. */
-                          /* Team cards are already complete on the server:
-                             no mint pass or player pull report. Their release
-                             call also acknowledges the draw receipt. */
-                          const playerPulls = pulls.filter((pull) => !pull.player.team);
-                          // A team card's serial came with the draw, so its
-                          // "Nth to pull this" line is there from the start.
-                          const teamMints = pulls.flatMap((pull) =>
-                            pull.player.team && pull.player.teamMint && pull.player.cardKey
-                              ? [[pull.player.cardKey, pull.player.teamMint] as const]
-                              : [],
-                          );
-                          if (teamMints.length > 0) setSerials(new Map(teamMints));
-                          /* The server logged the team cards at the draw but
-                             held them off the pull feed until now, the moment
-                             a player card's report would put it there. */
-                          const teamPullEventIds = pulls.flatMap((pull) =>
-                            pull.player.team && pull.player.teamPullEventId ? [pull.player.teamPullEventId] : [],
-                          );
-                          if (auth.viewer && (teamPullEventIds.length > 0 || (drawIdRef.current && pulls.some((pull) => pull.player.team)))) {
-                            void releaseServerTeamPackPulls({ data: { eventIds: teamPullEventIds, drawId: drawIdRef.current } })
-                              .then((result) => {
-                                if (result && result.released > 0) refreshPackPulseFeed();
-                              })
-                              .catch(() => {});
-                          }
-                          if (auth.viewer && playerPulls.length > 0) {
-                            const mints = playerPulls
-                              .filter((pull) => pull.skills)
-                              .map((pull) => ({
-                                cardKey: pull.player.cardKey ?? packCardKey(pull.player.user.id, pull.tier),
-                                tier: pull.tier,
-                                tierLabel: pull.tierLabel,
-                                skills: pull.skills,
-                                pp: pull.player.pp,
-                                globalRank: pull.player.globalRank,
-                              }));
-                            if (mints.length > 0) {
-                              mintPassRef.current = mintServerPackCollectionCards({ data: { cards: mints } }).catch(() => {});
-                            }
-                          }
-                          /* Log the opened pack into the community pull feed.
-                             Fire-and-forget: the reveal is already done and
-                             the wallet is the source of truth either way. */
-                          if (auth.viewer && playerPulls.length > 0) {
-                            void recordServerPackPulls({
-                              data: {
-                                drawId: drawIdRef.current,
-                                packType: selectedType.id,
-                                cards: playerPulls.map((pull) => ({
-                                  userId: pull.player.user.id,
-                                  ...(pull.player.cardKey ? { cardKey: pull.player.cardKey } : {}),
-                                  username: pull.player.user.username,
-                                  countryCode: pull.player.user.country_code,
-                                  tier: pull.tier,
-                                  isNew: pull.isNew,
-                                })),
-                              },
-                            })
-                              // Once they are logged, pull the ticker forward
-                              // so your own pack lands in the rail alongside
-                              // the summary instead of on the next poll.
-                              .then((result) => {
-                                if (!result) return;
-                                if (result.recorded > 0) refreshPackPulseFeed();
-                                // Serials come back with the log write, so the
-                                // summary can print them without asking again.
-                                if (result.mints.length > 0) {
-                                  setSerials(
-                                    new Map([
-                                      ...teamMints,
-                                      ...result.mints.map((mint) => [
-                                        mint.cardKey,
-                                        {
-                                          serial: mint.serial,
-                                          mintedTotal: mint.mintedTotal,
-                                          isFirstGlobal: mint.isFirstGlobal,
-                                        },
-                                      ] as const),
-                                    ]),
-                                  );
-                                }
-                              })
-                              .catch(() => {});
-                          }
+                          settleOpenedPack(pulls, drawIdRef.current, selectedType.id);
                           setRevealed(pulls);
                           setSummaryFlyFrom(handoff?.sourceRects ?? null);
-                          // The open may have spent a wish or pulled one of
-                          // them anyway, and it moved the pity counter either
-                          // way, so the line re-reads itself.
-                          wishlistApi.refresh();
                           setPhase("summary");
                         }}
                       />
@@ -1481,6 +1660,7 @@ function PacksPage() {
                       showLoginNudge={!auth.viewer && auth.loginAvailable}
                       syncStatus={walletApi.syncStatus}
                       onRecycleCard={walletApi.recycleCard}
+                      onReleaseCopy={walletApi.releaseCopy}
                       onRecycleWhole={walletApi.recycleWhole}
                       onRecycleWholeMany={walletApi.recycleWholeMany}
                       onRecycleWholeMatching={walletApi.recycleWholeMatching}
@@ -1489,6 +1669,7 @@ function PacksPage() {
                       collectionRevision={collectionRevision}
                       onGiftSent={refreshAfterGift}
                       wishlist={wishlistEnabled ? wishlistApi : undefined}
+                      editionsVersion={runApi.view ? `${runApi.view.state.runId}:${runApi.view.state.packs}` : null}
                     />
                   </div>
                 </div>

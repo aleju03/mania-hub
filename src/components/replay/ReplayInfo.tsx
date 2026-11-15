@@ -12,6 +12,7 @@ import { computeManiaRulesetWhatIf } from "#/lib/replay-what-if";
 import type { ManiaBeatmap } from "#/lib/beatmap-parser";
 import type { ServerReplay } from "#/lib/replay-types";
 import type { OsuMod, OsuScore } from "#/lib/types";
+import { scaledPx } from "#/lib/ui-scale-values";
 
 // Avatar + banner resolved from the replay's player so the info bar carries the
 // player's identity instead of a bare name. Seeded from the score's embedded
@@ -459,7 +460,7 @@ function PlayerAvatar({ src, name, size }: { src?: string; name: string; size: n
         width={size}
         height={size}
         className="flex-shrink-0 rounded-full object-cover ring-2 ring-white/10"
-        style={{ width: size, height: size }}
+        style={{ width: scaledPx(size), height: scaledPx(size) }}
         loading="lazy"
         onError={() => setFailed(true)}
       />
@@ -469,7 +470,7 @@ function PlayerAvatar({ src, name, size }: { src?: string; name: string; size: n
   return (
     <div
       className="flex flex-shrink-0 items-center justify-center rounded-full bg-osu-b6 font-bold text-osu-f1 ring-2 ring-white/10"
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
+      style={{ width: scaledPx(size), height: scaledPx(size), fontSize: scaledPx(Math.round(size * 0.42)) }}
       aria-hidden="true"
     >
       {name.trim().charAt(0).toUpperCase() || "?"}

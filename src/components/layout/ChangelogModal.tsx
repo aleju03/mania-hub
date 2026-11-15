@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion, stagger, useAnimate, useReducedMotion } from "framer-motion";
 import { Bell, BellRing, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 
-import { UPDATES, WIP, type ChangelogUpdate } from "#/data/changelog";
+import { CELEBRATIONS, UPDATES, WIP, type ChangelogUpdate } from "#/data/changelog";
 import {
   changelogKind,
   formatReleaseAge,
@@ -19,6 +19,8 @@ import type { AppLocale } from "#/lib/locale";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useAppStore, useChangelogNotify } from "#/store";
 
+const ChangelogCelebration = lazy(() => import("./ChangelogCelebration"));
+
 const DAYS = groupUpdatesByDay(UPDATES);
 const NEWEST_DATE = DAYS[0]?.date ?? "";
 const KINDS: ChangelogKind[] = ["new", "change", "fix"];
@@ -30,11 +32,14 @@ const KIND_DOT: Record<ChangelogKind, string> = {
 
 /** Oldest first, so the strip reads left to right like time does. */
 const STRIP = [...DAYS].reverse();
-const BIGGEST_DAY = Math.max(1, ...DAYS.map((day) => day.updates.length));
+/** A bar counts every line a day printed, an update's extra lines included,
+    so one big release reads as big as it is. */
+const lineCount = (update: (typeof DAYS)[number]["updates"][number]) => 1 + (update.more?.length ?? 0);
+const BIGGEST_DAY = Math.max(1, ...DAYS.map((day) => day.updates.reduce((sum, update) => sum + lineCount(update), 0)));
 const KIND_COUNTS = new Map(
   DAYS.map((day) => [
     day.date,
-    KINDS.map((kind) => day.updates.filter((update) => changelogKind(update) === kind).length),
+    KINDS.map((kind) => day.updates.reduce((sum, update) => sum + (changelogKind(update) === kind ? lineCount(update) : 0), 0)),
   ]),
 );
 
@@ -496,6 +501,11 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
             <div ref={detailRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-white/[0.07] px-5 pb-8 pt-5 md:px-8 md:pt-6">
               {current ? (
                 <>
+                  {CELEBRATIONS[current.date] && !needle ? (
+                    <Suspense fallback={<div className="mb-6 h-24 sm:h-32" />}>
+                      <ChangelogCelebration celebration={CELEBRATIONS[current.date]} />
+                    </Suspense>
+                  ) : null}
                   <div className="flex items-baseline gap-2 text-[12px] text-osu-f1">
                     <span suppressHydrationWarning>{formatReleaseAge(current.date, Date.now(), locale)}</span>
                     {current.date === NEWEST_DATE ? (
@@ -536,7 +546,7 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
                                 {update.more?.map((part) => (
                                   <div key={part.text}>
                                     <p className="py-1.5 text-[14.5px] leading-relaxed text-osu-c2/90">{part.text}</p>
-                                    {picture(part.image)}
+                                    {part.image ? picture(part.image) : null}
                                   </div>
                                 ))}
                               </>

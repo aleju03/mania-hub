@@ -49,6 +49,24 @@ it.each(["write_pressure", "rate_limited"] as const)("preserves a signed-in %s r
   expect(await drawPackPlayersFromServer("legend")).toEqual({ kind: "busy", reason });
 });
 
+it("carries a supporter's look onto the dealt card and parses it", () => {
+  const { draw } = mapServerPackDraw({
+    players: [
+      { userId: 11, username: "a", supporterLook: { motif: "petals" as "none", foil: "aurora" } },
+      { userId: 12, username: "b" },
+      { userId: 13, username: "c", supporterLook: { motif: "unknown" as "none", foil: "holo" } },
+    ],
+    cards: [],
+    poolTotal: 0,
+    wallet: null,
+  });
+  expect(draw.players.map((player) => player.supporterLook ?? null)).toEqual([
+    { motif: "none", foil: "aurora" },
+    null,
+    { motif: "none", foil: "holo" },
+  ]);
+});
+
 it("carries the server draw receipt through the reveal mapper", () => {
   expect(mapServerPackDraw({ drawId: "receipt-for-this-pack", players: [], cards: [], poolTotal: 0, wallet: null }).drawId)
     .toBe("receipt-for-this-pack");

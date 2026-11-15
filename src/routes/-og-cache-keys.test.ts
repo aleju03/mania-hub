@@ -5,7 +5,7 @@
    junk string is a guaranteed cache miss, an osu! lookup and a render. */
 import { describe, expect, it } from "vitest";
 import { OgRenderGate } from "../lib/og-render";
-import { ogUsernameKey } from "./api/og";
+import { ogUsernameKey, pulledCardLookKeySegment } from "./api/og";
 
 describe("ogUsernameKey", () => {
   it("accepts real osu! usernames and folds case and padding into one key", () => {
@@ -63,5 +63,22 @@ describe("OG render concurrency", () => {
     releases.shift()?.();
     await Promise.all([second, coldFallback]);
     expect(gate.activeCount).toBe(0);
+  });
+});
+
+describe("pull OG cache key", () => {
+  it("leaves ordinary cards on the keys already in R2 and moves a supporter's with their look", () => {
+    expect(pulledCardLookKeySegment({ card: {} })).toBe("");
+    expect(pulledCardLookKeySegment({ card: { supporterLook: null } })).toBe("");
+    const holo = pulledCardLookKeySegment({ card: { supporterLook: { motif: "none", foil: "holo" } } });
+    const ice = pulledCardLookKeySegment({ card: { supporterLook: { motif: "none", foil: "cracked-ice" } } });
+    expect(holo).toBe(":sl-none-holo");
+    expect(ice).toBe(":sl-none-cracked-ice");
+    // the retired preset doodles read as no art, on the same key as "none"
+    expect(pulledCardLookKeySegment({ card: { supporterLook: { motif: "stars", foil: "holo" } } })).toBe(":sl-none-holo");
+    const hash = "a".repeat(64);
+    const custom = { motif: "custom", foil: "holo", url: `https://cdn.mania-tracker.com/supporter-motifs/${hash}.webp`, scale: 1.5, opacity: 0.9 };
+    expect(pulledCardLookKeySegment({ card: { supporterLook: custom } })).toBe(`:sl-custom.${hash.slice(0, 16)}.1.5.0.9-holo`);
+    expect(pulledCardLookKeySegment({ team: {}, card: { supporterLook: { motif: "none", foil: "holo" } } })).toBe("");
   });
 });

@@ -30,6 +30,8 @@ import { avatarImageSrc } from "#/components/ui/Avatar";
 import { CountryFlag } from "#/components/ui/CountryFlag";
 import { SearchInput } from "#/components/ui/SearchInput";
 import { GoatPollVotersModal } from "./GoatPollVoters";
+import { UsernameText } from "../ui/UsernameText";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 /* The temporary community vote for the next GOAT card: a timed window where
    players put names up and vote them up or down.
@@ -102,7 +104,7 @@ const STATUS_MESSAGES: Partial<Record<GoatPollWriteStatus, ReturnType<typeof msg
 function useRailWidth(): boolean {
   const [wide, setWide] = useState(false);
   useEffect(() => {
-    const query = window.matchMedia(`(min-width: ${RAIL_MIN_WIDTH}px)`);
+    const query = window.matchMedia(scaledMediaQuery(`(min-width: ${RAIL_MIN_WIDTH}px)`));
     const sync = () => setWide(query.matches);
     sync();
     query.addEventListener("change", sync);
@@ -253,7 +255,7 @@ function NomineeRow({
      nesting one inside the other is invalid and would swallow the link's click. */
   const nameLine = (
     <>
-      <span className="truncate text-[11px] font-semibold text-osu-c1/85">{nominee.username}</span>
+      <UsernameText username={nominee.username} userId={nominee.id} className="truncate text-[11px] font-semibold text-osu-c1/85" />
       {nominee.countryCode && <CountryFlag code={nominee.countryCode} size="xs" />}
     </>
   );

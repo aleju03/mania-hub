@@ -40,6 +40,7 @@ import {
   type SkinSummary,
 } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 // All fields optional at the type level so links can target /skins without a
 // search object; validateSearch still normalizes every field on read.
@@ -396,7 +397,7 @@ function SkinsPage() {
   // rail layout, where the drawer has nothing left to do.
   useEffect(() => {
     if (!filtersOpen) return;
-    const wide = window.matchMedia("(min-width: 64rem)");
+    const wide = window.matchMedia(scaledMediaQuery("(min-width: 64rem)"));
     const close = () => setFiltersOpen(false);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
@@ -716,7 +717,7 @@ function SkinsPage() {
   const scrollRestoreRef = useScrollRestoreRef();
 
   return (
-    <div ref={scrollRestoreRef} className="relative flex min-h-screen flex-col">
+    <div ref={scrollRestoreRef} className="relative flex min-h-screen flex-col [&_.bg-osu-b4]:bg-[color-mix(in_srgb,var(--color-osu-b3)_80%,var(--color-osu-b5))]">
       <div className="relative z-10 flex flex-1 flex-col overflow-clip">
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/skins.svg" title={t`osu!mania skins`} right={headerAction} />

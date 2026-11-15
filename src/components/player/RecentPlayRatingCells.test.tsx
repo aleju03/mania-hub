@@ -15,7 +15,7 @@ function draw(rating?: RecentPlayRatingView, options: { hideDan?: boolean; compa
 
 it("distinguishes the initial lookup from queued analysis", () => {
   draw();
-  expect(screen.getByLabelText("MSD: Loading…")).toBeTruthy();
+  expect(screen.getByLabelText("Rating: Loading…")).toBeTruthy();
   expect(screen.getByLabelText("Dan: Loading…")).toBeTruthy();
   expect(screen.queryByText("Pending")).toBeNull();
 });
@@ -23,15 +23,15 @@ it("distinguishes the initial lookup from queued analysis", () => {
 it("keeps an available dan beside pending MSD and explains the wait on tap", () => {
   draw({ msd: null, dan: { rawDan: 5.5, label: "5th", side: "rc" }, pending: true, missing: { msd: "pending" } });
   expect(screen.getByText("5th dan")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "MSD: Pending" }));
+  fireEvent.click(screen.getByRole("button", { name: "Rating: Pending" }));
   expect(screen.getByRole("tooltip").textContent).toContain("update here automatically");
-  fireEvent.keyDown(screen.getByRole("button", { name: "MSD: Pending" }), { key: "Escape" });
+  fireEvent.keyDown(screen.getByRole("button", { name: "Rating: Pending" }), { key: "Escape" });
   expect(screen.queryByRole("tooltip")).toBeNull();
 });
 
 it("explains unavailable repeats without promising they will be analyzed", () => {
   draw({ msd: null, dan: null, missing: { msd: "not_retained", dan: "not_analyzed" } }, { compact: true });
-  fireEvent.click(screen.getByRole("button", { name: "MSD: Unavailable" }));
+  fireEvent.click(screen.getByRole("button", { name: "Rating: Unavailable" }));
   expect(screen.getByRole("tooltip").textContent).toContain("weaker repeat");
   expect(screen.queryByText("Pending")).toBeNull();
 });
@@ -42,7 +42,7 @@ it("retries a failed lookup without opening the score row", () => {
   render(<I18nProvider i18n={getI18n("en")}><div onClick={rowClick}>
     <RecentPlayRatingCells rating={{ msd: null, dan: null, loadError: true, onRetry }} keyCount={4} hideDan />
   </div></I18nProvider>);
-  fireEvent.click(screen.getByRole("button", { name: "MSD: Retry" }));
+  fireEvent.click(screen.getByRole("button", { name: "Rating: Retry" }));
   expect(onRetry).toHaveBeenCalledOnce();
   expect(rowClick).not.toHaveBeenCalled();
   expect(screen.queryByText("Dan")).toBeNull();

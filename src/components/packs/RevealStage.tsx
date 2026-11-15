@@ -1,3 +1,4 @@
+import { spellSeed } from "#/lib/pack-spell-art";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -30,8 +31,14 @@ import { playCardDraw, playCardSlice, playEternalFanfare, playFlipWhoosh, playGo
 import { EternalBurst, ETERNAL_CEREMONY_MS, ETERNAL_WINDUP_S } from "./EternalBurst";
 import { MilestoneBurst, MILESTONE_CEREMONY_MS, MILESTONE_IMPACT_S } from "./MilestoneBurst";
 import { GoatBurst } from "./GoatBurst";
+import type { PackSpell } from "#/lib/pack-pending";
+import { SpellFace } from "./SpellFace";
 import { SlicedFace } from "./SlicedFace";
 import { TierBurst } from "./TierBurst";
+import type { SupporterCardSleeveId } from "#/lib/supporter-pack-style";
+import { UsernameText } from "../ui/UsernameText";
+import { EDITION_COPY, EDITION_TINT } from "#/lib/pack-run";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 export interface PackCardState {
   player: PackPlayer;
@@ -59,6 +66,10 @@ interface RevealStageProps {
      the cards too, so the whole hand deals out at once, in halves, with none
      of the ceremony a card nobody ruined would get. */
   damage?: PackDamage | null;
+  /* Ember set the pack alight or Frost froze it before it was opened: the
+     whole hand deals out at once, every face burnt or frozen (looks only;
+     the cards are kept). */
+  spell?: PackSpell | null;
   /* The viewer asked for reveal-all in settings: the hand deals itself out
      the moment the reveal mounts, with no stack to tap through first. */
   autoRevealAll?: boolean;
@@ -74,6 +85,8 @@ interface RevealStageProps {
      summary should skip its enter ceremony and fly each card from its
      handed-off rect into the grid. */
   onComplete: (revealed: RevealedCard[], handoff?: RevealHandoff) => void;
+  /* The viewer's card case, put on each card once it lands face up. */
+  sleeve?: SupporterCardSleeveId | null;
 }
 
 type RevealPhase = "stack" | "preparing" | "flipping" | "shown";
@@ -169,26 +182,28 @@ function cascadeLayout(count: number, rowWidth: number, heightBudget: number) {
 
 /* A dealt card's face. A team card draws from the numbers the server dealt
    it with; every other card from the player's plays, at an awarded tier for
-   an Eternal. */
-function buildPackCardRenderData(player: PackPlayer, scores: OsuScore[]) {
-  if (player.team) {
-    return buildManiaCardRenderDataFromSkills({
-      user: player.user,
-      skills: teamCardSkills(player.team),
-      tierOverride: player.team.tier,
-      team: teamCardFace(player.team),
-    });
-  }
-  return buildManiaCardRenderData({
-    user: player.user,
-    scores,
-    tierOverride: player.eternal ? "eternal" : undefined,
-    labelOverride: player.customLabel,
-    motifOverride: player.motif,
-  });
+   an Eternal. Exported for the run table, which deals the same faces. */
+export function buildPackCardRenderData(player: PackPlayer, scores: OsuScore[]) {
+  const data = player.team
+    ? buildManiaCardRenderDataFromSkills({
+        user: player.user,
+        skills: teamCardSkills(player.team),
+        tierOverride: player.team.tier,
+        team: teamCardFace(player.team),
+      })
+    : buildManiaCardRenderData({
+        user: player.user,
+        scores,
+        tierOverride: player.eternal ? "eternal" : undefined,
+        labelOverride: player.customLabel,
+        motifOverride: player.motif,
+        supporterLook: player.supporterLook,
+      });
+  // The copy's edition rides on the render data for the overlay shader only.
+  return data.status === "ready" && player.edition ? { ...data, edition: player.edition } : data;
 }
 
-async function resolveCardScores(card: PackCardState): Promise<OsuScore[] | null> {
+export async function resolveCardScores(card: PackCardState): Promise<OsuScore[] | null> {
   const deadline = Date.now() + CARD_SCORE_WAIT_TIMEOUT_MS;
   const wait = (promise: Promise<OsuScore[] | null>) => {
     const remaining = deadline - Date.now();
@@ -205,7 +220,7 @@ function isMobileViewport() {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
-    window.matchMedia("(max-width: 640px)").matches
+    window.matchMedia(scaledMediaQuery("(max-width: 640px)")).matches
   );
 }
 
@@ -374,6 +389,9 @@ interface CascadeTileProps {
   reducedMotion: boolean;
   /* The cut this card took in the pack, or null for an intact one. */
   damage?: PackDamage | null;
+  /* Ember burnt or Frost froze the pack: the face shows it (SpellFace). `seed` varies it per card. */
+  spell?: PackSpell | null;
+  seed?: number;
   onLanded: () => void;
   /* Fires the moment the flip swings past edge-on and the face becomes
      readable, which is halfway through the animation. Flips overlap, so the
@@ -412,6 +430,8 @@ export function CascadeTile({
   mobile,
   reducedMotion,
   damage = null,
+  spell = null,
+  seed = 0,
   onLanded,
   onFaceVisible,
 }: CascadeTileProps) {
@@ -553,7 +573,8 @@ export function CascadeTile({
       <span className="break-all text-[9px] font-semibold text-osu-f1">{flipped ? username : ""}</span>
     </div>
   );
-  const faceContent = damage ? <SlicedFace damage={damage}>{face}</SlicedFace> : face;
+  const spellFace = spell ? <SpellFace spell={spell} seed={seed}>{face}</SpellFace> : face;
+  const faceContent = damage ? <SlicedFace damage={damage}>{spellFace}</SlicedFace> : spellFace;
 
   return (
     <div className="relative h-full w-full" style={mobile ? undefined : { perspective: 700 }}>
@@ -608,12 +629,16 @@ export function RevealStage({
   cards,
   reducedMotion,
   damage = null,
+  spell = null,
   autoRevealAll = false,
   compactReveal = false,
   onCardRevealed,
   onComplete,
+  sleeve = null,
 }: RevealStageProps) {
-  const { t } = useLingui();
+  const sleeveRef = useRef(sleeve);
+  sleeveRef.current = sleeve;
+  const { t, i18n } = useLingui();
   const windowActive = useWindowActive();
   const mobileViewport = isMobileViewport();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -771,6 +796,9 @@ export function RevealStage({
           reducedMotion,
           devicePixelRatio: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
           startFaceDown: true,
+          // Its back is the stack's (setBackOverride), so the card's own is
+          // painted only once the browser is idle.
+          lazyBack: true,
           // Pack reveals want a steady card; tilting the phone should not
           // swing it around (touch drag still works).
           gyro: false,
@@ -783,6 +811,7 @@ export function RevealStage({
         rendererRef.current.resize();
       } else {
         rendererRef.current.setFaceDown();
+        rendererRef.current.setSleeve(null);
         void rendererRef.current.setData(data);
       }
     });
@@ -817,6 +846,20 @@ export function RevealStage({
       position === cardIndex ? { ...entry, thumbnail } : entry,
     );
     setRevealed(revealedRef.current);
+  };
+
+  /* Paints the next card while this one is being looked at, from the scores
+     the pack already prefetched, so "Next card" only has to swap it in. */
+  const prepareAhead = (position: number) => {
+    const next = cards[position];
+    if (!next || !rendererRef.current) return;
+    void Promise.resolve(next.scoresPromise)
+      .catch(() => null)
+      .then((scores) => {
+        if (cancelledRef.current || (scores === null && !next.player.eternal)) return;
+        const nextData = buildPackCardRenderData(next.player, scores ?? []);
+        if (nextData.status === "ready") rendererRef.current?.prepare(nextData);
+      });
   };
 
   const reveal = async (position: number) => {
@@ -868,7 +911,7 @@ export function RevealStage({
     try {
       await ensureRendererReady(data);
       if (cancelledRef.current) return;
-      // PNG encoding is synchronous. Snapshot while the UI is still in its
+      // Encoding is synchronous. Snapshot while the UI is still in its
       // preparing beat so the reveal flip and tier landing stay animation-only.
       const thumbnail = rendererRef.current?.snapshotFrontCanvas(COLLECTION_CARD_THUMB_WIDTH) ?? null;
       setActiveData(data);
@@ -881,6 +924,8 @@ export function RevealStage({
       const flipMs = reducedMotion ? 240 : compactReveal ? 420 : 980;
       playFlipWhoosh(flipMs);
       await rendererRef.current?.playRevealFlip(flipMs);
+      // The card goes into the viewer's case once it is face up.
+      if (sleeveRef.current) rendererRef.current?.setSleeve(sleeveRef.current);
       if (cancelledRef.current) return;
       // Tray thumbnail comes from the front texture the renderer already
       // drew; rebuilding it through the full texture pipeline used to run
@@ -890,6 +935,7 @@ export function RevealStage({
         void rememberCardThumbnailDataUrl(data, thumbnail, COLLECTION_CARD_THUMB_WIDTH);
       }
       setPhase("shown");
+      prepareAhead(position + 1);
       if (!reducedMotion) {
         setBurst({
           key: position,
@@ -1255,7 +1301,7 @@ export function RevealStage({
      read as the reveal-all button being pressed for you. The ref keeps
      that to one run: StrictMode's mount -> cleanup -> mount would otherwise start a
      second pass that records every pull twice. */
-  const autoDeal = damage !== null || autoRevealAll;
+  const autoDeal = damage !== null || spell !== null || autoRevealAll;
   const autoDealtRef = useRef(false);
   useLayoutEffect(() => {
     if (!autoDeal || autoDealtRef.current) return;
@@ -1462,6 +1508,8 @@ export function RevealStage({
                   mobile={mobileViewport || compactReveal}
                   reducedMotion={reducedMotion}
                   damage={damage}
+                  spell={spell}
+                  seed={spellSeed(cards[position]?.player.user.id ?? 0)}
                   onLanded={() => handleCascadeLanded(position)}
                   onFaceVisible={() => handleCascadeFaceVisible(position)}
                 />
@@ -1655,7 +1703,7 @@ export function RevealStage({
                     className="h-7 w-7 rounded-full object-cover"
                     draggable={false}
                   />
-                  <span className="text-lg font-bold text-white">{current.player.user.username}</span>
+                  <UsernameText username={current.player.user.username} userId={current.player.user.id} className="text-lg font-bold text-white" />
                   <CountryFlag code={current.player.user.country_code} size="sm" decorative />
                 </Link>
               )}
@@ -1672,6 +1720,20 @@ export function RevealStage({
                 {current.player.wished && (
                   <span className="text-[10px] font-bold uppercase tracking-wide text-osu-pink-light">
                     <Trans>wishlist</Trans>
+                  </span>
+                )}
+                {/* The pack run's roll on this copy, in its own colour. */}
+                {current.player.edition && (
+                  <span
+                    className="text-[12px] font-black uppercase tracking-[0.14em]"
+                    style={{ color: EDITION_TINT[current.player.edition] }}
+                  >
+                    {i18n._(EDITION_COPY[current.player.edition].name)}
+                  </span>
+                )}
+                {current.player.chained && (
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-[#ffd36b]">
+                    <Trans>chain</Trans>
                   </span>
                 )}
                 {current.tierLabel && (
@@ -1701,6 +1763,10 @@ export function RevealStage({
             >
               {damage ? (
                 <Trans>Every card came out in two pieces</Trans>
+              ) : spell === "burnt" ? (
+                <Trans>The fire got to every card</Trans>
+              ) : spell === "frozen" ? (
+                <Trans>The frost got to every card</Trans>
               ) : phase === "preparing" ? (
                 slowDraw ? (
                   <Trans>Warming this player up... first draws can take a moment</Trans>

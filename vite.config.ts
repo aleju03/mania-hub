@@ -11,6 +11,7 @@ import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { nitro } from 'nitro/vite'
+import { uiScalePostcss } from './scripts/ui-scale-postcss'
 
 function staticCacheHeaders(): Plugin {
   const middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
@@ -89,9 +90,20 @@ const NATIVE_IMAGE_PACKAGES = ['@resvg/resvg-js', 'sharp']
 
 const config = defineConfig({
   server: devServerOptions(),
+  css: {
+    postcss: {
+      // The UI Scaling setting: px lengths in the app's own CSS follow
+      // --ui-scale (scripts/ui-scale-postcss.ts). Tailwind generates its
+      // utilities before this runs, so they are covered too.
+      plugins: [uiScalePostcss({ include: (file) => file.includes('/src/') && !file.includes('/node_modules/') })],
+    },
+  },
   // Dev only: the dependency pre-bundler would otherwise try to bundle resvg's
   // .node binary and stop the dev server; Node loads both packages as-is.
-  optimizeDeps: { exclude: NATIVE_IMAGE_PACKAGES },
+  // The theme editor's GLSL parser is only imported once the editor opens; found
+  // that late, Vite re-bundles mid-session and the reload runs two Reacts
+  // ("reading 'useContext'" of null) until a manual refresh.
+  optimizeDeps: { exclude: NATIVE_IMAGE_PACKAGES, include: ["@shaderfrog/glsl-parser", "@shaderfrog/glsl-parser/preprocessor"] },
   ssr: { external: NATIVE_IMAGE_PACKAGES, optimizeDeps: { exclude: NATIVE_IMAGE_PACKAGES } },
   build: {
     chunkSizeWarningLimit: 1500,

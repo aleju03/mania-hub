@@ -33,7 +33,11 @@ vi.mock("./packSfx", () => sfx);
 const fetchLiveGlobalRankings = vi.hoisted(() => vi.fn());
 const fetchLiveStreakMetrics = vi.hoisted(() => vi.fn());
 const fetchLiveStreakBoard = vi.hoisted(() => vi.fn());
+// Supporter cases come from the live look cache this file does not mock.
+vi.mock("#/lib/use-supporter-pack-style", () => ({ useSupporterSleeve: () => null, useSupporterPackStyle: () => ({ sleeve: null, binder: null, wrapper: null, blade: null }) }));
 vi.mock("#/lib/live-backend", () => ({
+  // Player names read the supporter name styles; no player here has one.
+  ensureSupporterNameStyles: () => {}, getSupporterNameStyle: () => null, getSupporterNameFont: () => null, getSupporterNameOutline: () => null, subscribeSupporterNameStyles: () => () => {},
   fetchLiveGlobalRankings,
   fetchLiveStreakMetrics,
   fetchLiveStreakBoard,
@@ -244,7 +248,7 @@ describe("dealing the first board", () => {
 
     const question = await screen.findByText(/have more or fewer/);
     await waitFor(() => {
-      const names = question.querySelectorAll("span");
+      const names = question.querySelectorAll(":scope > span");
       expect(names.length).toBe(2);
       for (const name of names) {
         expect((name as HTMLElement).style.color).toBe("rgb(34, 197, 94)");

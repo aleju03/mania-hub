@@ -23,8 +23,8 @@ export function RecentPlayRatingCells({ rating, keyCount, hideDan, compact = fal
     <div className={cell}>
       {rating?.msd != null ? <>
         <span className={`${compact ? "text-xs" : "text-sm"} font-bold leading-none tabular-nums`} style={{ color: OVERALL_AXIS_META.color }}>{rating.msd.toFixed(2)}</span>
-        <span className="text-[10px] font-semibold leading-none text-osu-f1">MSD</span>
-      </> : <RatingStatus axis="MSD" reason={rating?.missing?.msd} rating={rating} compact={compact} />}
+        <span className="text-[10px] font-semibold leading-none text-osu-f1">{t`Rating`}</span>
+      </> : <RatingStatus axis={t`Rating`} reason={rating?.missing?.msd} rating={rating} compact={compact} />}
     </div>
   </>;
 }
@@ -51,10 +51,10 @@ function RatingStatus({ axis, dan = false, reason, rating, compact }: {
       : t`This chart's OD is under the dan minimum.`)
     : dan && reason === "excluded" ? t`This play does not count toward dan.`
     : dan && reason === "failed_play" ? t`Failed plays do not credit a dan.`
-    : reason === "not_retained" ? t`This attempt has no saved MSD. Skill ratings keep selected plays, so a weaker repeat may have no rating.`
-    : reason === "below_floor" ? t`This play is below the accuracy needed for an MSD rating.`
+    : reason === "not_retained" ? t`This attempt has no saved rating. Skill ratings keep selected plays, so a weaker repeat may have none.`
+    : reason === "below_floor" ? t`This play is below the accuracy needed for a rating.`
     : reason === "excluded" ? t`This play is excluded from skill ratings.`
-    : reason === "failed_play" ? t`Failed plays do not receive an MSD rating.`
+    : reason === "failed_play" ? t`Failed plays do not receive a rating.`
     : reason === "chart_changed" ? t`The chart changed after this play, so its rating cannot be verified.`
     : reason === "chart_disabled" ? t`This chart does not count toward skill or dan ratings for now.`
     : reason === "unsupported" ? t`A rating is not supported for this chart or mod combination.`

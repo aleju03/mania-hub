@@ -1,3 +1,5 @@
+import { scaledPx } from "#/lib/ui-scale-values";
+
 // osu-web's difficulty colour spectrum and the badge drawn from it. Lives in
 // ui/ rather than next to the map search card so score panels can show a star
 // pill without pulling the search card's audio-preview machinery into their
@@ -38,6 +40,18 @@ export function starRatingColor(stars: number): string {
   return `rgb(${last[1]}, ${last[2]}, ${last[3]})`;
 }
 
+// osu!'s spectrum turns navy then black past 7.7 stars, which vanishes as text
+// on a dark card; those numbers lift toward a pale violet instead.
+export function starTextColor(stars: number): string {
+  const rgb = starRatingColor(stars).match(/\d+/g)?.map(Number) ?? [255, 255, 255];
+  const [r, g, b] = rgb;
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  if (luminance >= 0.3) return `rgb(${r}, ${g}, ${b})`;
+  const k = Math.min(0.75, (0.3 - luminance) / 0.3);
+  const mix = (from: number, to: number) => Math.round(from + (to - from) * k);
+  return `rgb(${mix(r, 200)}, ${mix(g, 196)}, ${mix(b, 255)})`;
+}
+
 // CSS gradient of the spectrum across [lo, hi] stars, for painting slider
 // tracks. Stops past the last defined star (9.0) stay black, like osu-web.
 // `position` maps a star value to its 0..1 spot in the gradient, for tracks
@@ -55,23 +69,62 @@ export function starSpectrumGradient(lo: number, hi: number, position?: (stars: 
 }
 
 // osu-web's difficulty-badge: pill filled with the spectrum colour, dark text
-// that flips to the expert-plus yellow at 6.5★ and above.
-export function StarRatingBadge({ stars, label, className = "", size = 1 }: { stars: number; label?: string; className?: string; size?: number }) {
-  const textColor = stars >= 6.5 ? "hsl(45, 100%, 70%)" : "hsl(200, 10%, 10%)";
+// that flips to the expert-plus yellow at 6.5★ and above. Given a range, the
+// fill runs the spectrum from the low end to the high end and each number
+// takes its own end's text colour.
+function starBadgeText(stars: number): string {
+  return stars >= 6.5 ? "hsl(45, 100%, 70%)" : "hsl(200, 10%, 10%)";
+}
+
+export function StarRatingBadge({
+  stars,
+  label,
+  range,
+  digits,
+  className = "",
+  size = 1,
+  large = false,
+}: {
+  stars: number;
+  /** Replaces the number; ignored when a range draws its own two numbers. */
+  label?: string;
+  /** [lo, hi]: a spectrum-blended pill reading "lo–hi". Equal ends draw one value. */
+  range?: [number, number];
+  /** Decimals for a range's numbers (default 1). */
+  digits?: number;
+  className?: string;
+  size?: number;
+  /** The taller pill for card footers and modal headers: 12px type, bigger star. */
+  large?: boolean;
+}) {
+  const font = (large ? 12 : 10) * size;
+  const padY = (large ? 4 : 2) * size;
+  const padX = (large ? 9 : 8) * size;
+  const icon = (large ? 11 : 9) * size;
+  const spread = range && range[1] - range[0] >= 0.05 ? range : null;
+  const iconStars = spread ? spread[0] : stars;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full font-bold leading-none tabular-nums ${className}`}
+      className={`inline-flex items-center ${large ? "gap-1.5" : "gap-1"} rounded-full font-bold leading-none tabular-nums ${className}`}
       style={{
-        background: starRatingColor(stars),
-        color: textColor,
-        fontSize: 10 * size,
-        padding: `${2 * size}px ${8 * size}px`,
+        background: spread ? starSpectrumGradient(spread[0], spread[1]) : starRatingColor(stars),
+        color: starBadgeText(iconStars),
+        fontSize: scaledPx(font),
+        padding: `${scaledPx(padY)} ${scaledPx(padX)}`,
       }}
     >
-      <svg viewBox="0 0 24 24" style={{ width: 9 * size, height: 9 * size }} fill="currentColor" aria-hidden="true">
+      <svg viewBox="0 0 24 24" style={{ width: scaledPx(icon), height: scaledPx(icon) }} fill="currentColor" aria-hidden="true">
         <path d="M12 1.7l3.1 6.9 7.2.8-5.4 5 1.5 7.2L12 17.9l-6.4 3.7 1.5-7.2-5.4-5 7.2-.8L12 1.7z" />
       </svg>
-      {label ?? stars.toFixed(2)}
+      {spread ? (
+        <span>
+          {spread[0].toFixed(digits ?? 1)}
+          <span style={{ color: starBadgeText((spread[0] + spread[1]) / 2) }}>–</span>
+          <span style={{ color: starBadgeText(spread[1]) }}>{spread[1].toFixed(digits ?? 1)}</span>
+        </span>
+      ) : (
+        label ?? stars.toFixed(2)
+      )}
     </span>
   );
 }

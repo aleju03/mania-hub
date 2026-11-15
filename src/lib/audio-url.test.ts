@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getBeatmapAudioUrl } from "./audio-url";
 
 const backend = vi.hoisted(() => ({ url: "http://localhost:7227" as string | null }));
-vi.mock("./live-backend", () => ({ getLiveBackendUrl: () => backend.url }));
+vi.mock("./live-backend", () => ({ getLiveBackendUrl: () => backend.url, getAssetsBaseUrl: () => backend.url }));
 
 describe("beatmap playback audio URLs", () => {
   it("bypasses immutable Ogg responses from before the seek fix", () => {

@@ -1,11 +1,10 @@
+import { spellSeed } from "#/lib/pack-spell-art";
 import { useCardContextMenu } from "./useCardContextMenu";
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Check, Recycle } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import { formatOrdinal } from "#/lib/format";
-import { useLocale } from "#/lib/locale-context";
 import {
   copiesShardValue,
   duplicateShardValueForTier,
@@ -20,8 +19,14 @@ import { CountryFlag } from "../ui/CountryFlag";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import { playRecycleClink } from "./packSfx";
 import type { FlightRect, RevealedCard } from "./RevealStage";
+import type { PackSpell } from "#/lib/pack-pending";
+import { SpellFace } from "./SpellFace";
 import { SlicedFace } from "./SlicedFace";
 import { rememberTeamName } from "../../lib/analytics-teams";
+import { UsernameText } from "../ui/UsernameText";
+import type { PackRunOpenPayload } from "#/lib/pack-run";
+import { EditionSheen } from "./run/EditionSheen";
+import { HandScore } from "./run/HandScore";
 
 interface PackSummaryProps {
   cards: RevealedCard[];
@@ -44,12 +49,17 @@ interface PackSummaryProps {
   /* Set when the pack was cut open through its middle. The hand is in halves
      and nothing in it is worth keeping, so it recycles itself on arrival. */
   damage?: PackDamage | null;
+  /* Ember burnt or Frost froze the pack: every face shows it (looks only). */
+  spell?: PackSpell | null;
   reducedMotion: boolean;
   /* Reveal-all handoff: where each card's tile sat when the reveal finished,
      keyed by card position. Present = the viewer already saw every card, so
      the grid renders in place (no enter stagger) and each tile flies from
      its handed-off rect into its slot. */
   flyFrom?: Map<number, FlightRect> | null;
+  /* The pack run's side of this open (live-backend pack-run.ts): the tally
+     plays between the figures and the grid. Null without a run. */
+  run?: PackRunOpenPayload | null;
 }
 
 /* One card's journey from its reveal rect into its summary slot. */
@@ -95,6 +105,7 @@ function toSpotlightCard(
   card: RevealedCard,
   mint: { serial: number; mintedTotal: number } | undefined,
   pulledAt: number,
+  spell: PackSpell | null,
 ): CollectedCard {
   return {
     userId: card.player.user.id,
@@ -108,6 +119,7 @@ function toSpotlightCard(
     tierLabel: card.tierLabel,
     customLabel: card.player.customLabel ?? null,
     motif: card.player.motif ?? null,
+    ...(card.player.supporterLook ? { supporterLook: card.player.supporterLook } : {}),
     skills: card.skills,
     pp: card.player.pp,
     globalRank: card.player.globalRank,
@@ -116,6 +128,7 @@ function toSpotlightCard(
     firstPulledAt: pulledAt,
     lastPulledAt: pulledAt,
     ...(mint ? { serial: mint.serial, mintedTotal: mint.mintedTotal } : {}),
+    ...(spell && !card.player.team ? { spell } : {}),
   };
 }
 
@@ -128,11 +141,12 @@ export function PackSummary({
   serials,
   onRecycleCopies,
   damage = null,
+  spell = null,
   reducedMotion,
   flyFrom = null,
+  run = null,
 }: PackSummaryProps) {
   const { t } = useLingui();
-  const locale = useLocale();
   const instant = flyFrom !== null;
   /* The ring marks the best card in the hand, which is a tier question before
      it is a rank one: an honorary card carries no meaningful global rank, so
@@ -464,11 +478,13 @@ export function PackSummary({
       const dy = flight.to.top - flight.from.top;
       const sx = flight.to.width / flight.from.width;
       const sy = flight.to.height / flight.from.height;
+      // drawn at the size it lands at and shrunk to where it starts: a tray
+      // thumbnail scaled up four times would blur and swell its corners
       animations.push(
         el.animate(
           [
+            { transform: `translate(${-dx}px, ${-dy}px) scale(${1 / sx}, ${1 / sy})` },
             { transform: "translate(0px, 0px) scale(1, 1)" },
-            { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
           ],
           { duration: 420, easing: "cubic-bezier(0.3, 0.7, 0.2, 1)", fill: "forwards" },
         ),
@@ -545,6 +561,8 @@ export function PackSummary({
         )}
       </div>
 
+      {run && <HandScore run={run} cardCount={cards.length} reducedMotion={reducedMotion} startDelayMs={flyFrom ? 900 : 650 + cards.length * 70} />}
+
       <div ref={gridRef} className="mt-7 flex flex-wrap items-start justify-center gap-4 sm:gap-5">
         {cards.map((card, position) => {
           const isBest = position === bestPosition;
@@ -619,9 +637,13 @@ export function PackSummary({
                       card,
                       serials?.get(card.player.cardKey ?? packCardKey(card.player.user.id, card.tier)),
                       Date.now(),
+                      spell,
                     ),
                     thumbnail: card.thumbnail,
                     rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+                    edition: card.player.edition ?? null,
+                    // the tile's thumbnail is plain under its SpellFace; the 3D card bakes it in
+                    ...(spell && !card.player.team ? { spellOverStill: spell } : {}),
                   });
                   setLiftedPosition(position);
                 }}
@@ -710,11 +732,13 @@ export function PackSummary({
                         }`}
                         style={turnDelayStyle}
                       >
-                        <span className="text-[12px] font-semibold text-white">{card.player.user.username}</span>
+                        <UsernameText username={card.player.user.username} userId={card.player.user.id} className="text-[12px] font-semibold text-white" />
                       </div>
                     );
-                    return damage ? <SlicedFace damage={damage}>{face}</SlicedFace> : face;
+                    const shown = spell ? <SpellFace spell={spell} seed={spellSeed(card.player.user.id)}>{face}</SpellFace> : face;
+                    return damage ? <SlicedFace damage={damage}>{shown}</SlicedFace> : shown;
                   })()}
+                  {!isRecycled && !damage && <EditionSheen edition={card.player.edition} />}
                   {selecting && !isRecycled && !card.player.milestone && (
                     <>
                       <span
@@ -769,7 +793,7 @@ export function PackSummary({
                     aria-label={t`Open ${card.player.user.username}'s profile`}
                   >
                     <CountryFlag code={card.player.user.country_code} size="xs" decorative />
-                    <span className="truncate text-[13px] font-bold text-white">{card.player.user.username}</span>
+                    <UsernameText username={card.player.user.username} userId={card.player.user.id} className="truncate text-[13px] font-bold text-white" />
                   </Link>
                 )}
                 <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[11px]">
@@ -784,16 +808,12 @@ export function PackSummary({
                 </div>
                 {(() => {
                   const mint = serials?.get(card.player.cardKey ?? packCardKey(card.player.user.id, card.tier));
-                  // "First ever" is the server's call, not serial 1: a repull
-                  // of a card you already hold hands back your old serial, so
-                  // a serial-1 holding resurfacing months later must not read
-                  // as if this pull were the card's first anywhere. Everything
-                  // short of first-global renders as a plain ordinal with the
-                  // pull count ("1st of 97 to pull this"), so being an early
-                  // number never masquerades as being the only one.
+                  // "First ever" is the server's call: the pull log knows
+                  // whether anyone had this card before. Everything else is
+                  // the number of the copy just pulled.
                   const first = mint?.isFirstGlobal ?? false;
-                  // Being the newest holder makes the count repeat the serial
-                  // ("61st of 61"), so drop the total in that case.
+                  // The newest copy makes the count repeat the number
+                  // ("#61 of 61"), so drop the total in that case.
                   const latest = mint ? mint.serial === mint.mintedTotal : false;
                   return (
                     <div
@@ -810,8 +830,8 @@ export function PackSummary({
                         ? first
                           ? t`first ever to pull this`
                           : latest
-                            ? t`${formatOrdinal(mint.serial, locale)} to pull this`
-                            : t`${formatOrdinal(mint.serial, locale)} of ${mint.mintedTotal.toLocaleString("en-US")} to pull this`
+                            ? t`copy #${mint.serial.toLocaleString("en-US")}`
+                            : t`copy #${mint.serial.toLocaleString("en-US")} of ${mint.mintedTotal.toLocaleString("en-US")}`
                         : null}
                     </div>
                   );
@@ -933,7 +953,7 @@ export function PackSummary({
             >
               <div className="flex items-center gap-2 px-3 py-1.5">
                 <CountryFlag code={card.player.user.country_code} size="xs" decorative />
-                <span className="truncate text-[12px] font-bold text-white">{card.player.user.username}</span>
+                <UsernameText username={card.player.user.username} userId={card.player.user.id} className="truncate text-[12px] font-bold text-white" />
               </div>
               <div className="mx-2 my-1 h-px bg-osu-b3/40" />
               {card.player.team ? (
@@ -1050,16 +1070,21 @@ export function PackSummary({
             }}
             className="pointer-events-none absolute z-40"
             style={{
-              left: flight.from.left,
-              top: flight.from.top,
-              width: flight.from.width,
-              height: flight.from.height,
+              left: flight.to.left,
+              top: flight.to.top,
+              width: flight.to.width,
+              height: flight.to.height,
+              // starts where the reveal left it, before the first frame paints
+              transform: `translate(${flight.from.left - flight.to.left}px, ${flight.from.top - flight.to.top}px) scale(${flight.from.width / flight.to.width}, ${flight.from.height / flight.to.height})`,
               transformOrigin: "top left",
               willChange: "transform",
             }}
             aria-hidden="true"
           >
-            {damage ? <SlicedFace damage={damage}>{face}</SlicedFace> : face}
+            {(() => {
+              const shown = spell ? <SpellFace spell={spell} seed={spellSeed(cards[flight.position]?.player.user.id ?? 0)}>{face}</SpellFace> : face;
+              return damage ? <SlicedFace damage={damage}>{shown}</SlicedFace> : shown;
+            })()}
           </div>
         );
       })}

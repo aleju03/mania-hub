@@ -95,6 +95,11 @@ function skeletonGradient(tier: ManiaCardTier | null, motif: SkeletonPalette): s
   return tier ? resolveManiaTierStyle(tier, motif).badgeGradient : NEUTRAL_SKELETON_GRADIENT;
 }
 
+/* Sketches by tier, width, palette and shape: a full-size paint and an encode
+   each, asked for again on every render of the card spotlight. */
+const skeletonCache = new Map<string, string>();
+const SKELETON_CACHE_MAX = 48;
+
 export function renderCardSkeletonThumbnail(
   tier: ManiaCardTier | null,
   width = 240,
@@ -104,6 +109,18 @@ export function renderCardSkeletonThumbnail(
   team = false,
 ): string | null {
   if (typeof document === "undefined") return null;
+  const key = `${tier ?? "neutral"}:${width}:${motif?.palette ? JSON.stringify(motif.palette) : ""}:${team ? 1 : 0}`;
+  const cached = skeletonCache.get(key);
+  if (cached) return cached;
+  const made = paintCardSkeletonThumbnail(tier, width, motif, team);
+  if (made) {
+    if (skeletonCache.size >= SKELETON_CACHE_MAX) skeletonCache.delete(skeletonCache.keys().next().value!);
+    skeletonCache.set(key, made);
+  }
+  return made;
+}
+
+function paintCardSkeletonThumbnail(tier: ManiaCardTier | null, width: number, motif: SkeletonPalette, team: boolean): string | null {
 
   const source = document.createElement("canvas");
   source.width = CARD_TEXTURE_WIDTH;
@@ -190,7 +207,7 @@ function drawSkeletonTeamFace(context: CanvasRenderingContext2D, tier: ManiaCard
   roundedRect(context, TEAM_COLUMN.x, nameY - 40, 300, 40, 12);
   context.fill();
   if (tier) {
-    context.font = "italic 900 52px Torus, Arial, sans-serif";
+    context.font = "italic 900 52px Tracker Round, Arial, sans-serif";
     context.textAlign = "left";
     context.fillStyle = "rgba(255,255,255,0.82)";
     context.shadowColor = "rgba(0,0,0,0.65)";
@@ -333,7 +350,7 @@ function drawSkeletonNamePlate(context: CanvasRenderingContext2D) {
 
 function drawSkeletonTierLabel(context: CanvasRenderingContext2D, tier: ManiaCardTier) {
   context.save();
-  context.font = "italic 900 56px Torus, Arial, sans-serif";
+  context.font = "italic 900 56px Tracker Round, Arial, sans-serif";
   context.textAlign = "right";
   context.fillStyle = "rgba(255,255,255,0.82)";
   context.shadowColor = "rgba(0,0,0,0.65)";
@@ -368,7 +385,7 @@ function drawSkeletonStats(context: CanvasRenderingContext2D) {
   context.shadowColor = "rgba(0,0,0,0.6)";
   context.shadowBlur = 6;
   context.shadowOffsetY = 4;
-  context.font = "800 40px Torus, Arial, sans-serif";
+  context.font = "800 40px Tracker Round, Arial, sans-serif";
   context.fillStyle = "rgba(255,255,255,0.72)";
   const labels = ["Control:", "Speed:", "Precision:"];
   for (let index = 0; index < labels.length; index += 1) {

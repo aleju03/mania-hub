@@ -442,7 +442,7 @@ export function TeamProfilePage({
                       params={{ username: leader.username }}
                       className="font-semibold text-white/80 hover:text-white"
                     >
-                      {leader.username}
+                      <UsernameText username={leader.username} userId={leader.id} />
                     </Link>
                   </span>
                 ) : null}

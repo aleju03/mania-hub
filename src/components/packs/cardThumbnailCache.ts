@@ -1,3 +1,4 @@
+import { spellSeed } from "#/lib/pack-spell-art";
 import { cardMotifSignature } from "#/lib/card-motif";
 import { collectedCardTier, type CollectedCard } from "#/lib/pack-collection";
 import {
@@ -344,8 +345,8 @@ async function uploadThumbnailToR2(key: string, blob: Blob): Promise<void> {
     }
     activeRemoteUploads += 1;
     holdsUploadSlot = true;
-    await uploadR2PackCardThumbnail({ data: { key, dataUrl: await blobToDataUrl(blob), probedMissing } });
-    markThumbnailPresent(key);
+    const { url } = await uploadR2PackCardThumbnail({ data: { key, dataUrl: await blobToDataUrl(blob), probedMissing } });
+    if (url) markThumbnailPresent(key);
   } catch {
     // Best-effort: local caches still cover this browser.
   } finally {
@@ -392,9 +393,17 @@ function getCardThumbnailRenderSignature(data: ManiaCardReadyData): string {
      but a handful of cards. The leading token is the scatter's own version:
      bump it when drawMotifPattern changes, and only cards with art re-render. */
   if (data.motif) parts.push(`motif4:${cardMotifSignature(data.motif)}`);
+  /* The supporter foil, appended on the same terms: only a supporter's cards
+     change address, and they change back when the status lapses. A supporter's
+     chosen motif and palette already ride the motif segment above. The leading
+     token is the baked foil's version: bump it when drawSupporterFoil (or the
+     shared foil art it draws) changes. */
+  if (data.supporterFoil) parts.push("foil1");
   // A team card's face (the flag rides as avatarUrl already). The leading
   // token is the face's version: bump it when the team face's drawing changes.
   if (data.team) parts.push(`team3:${data.team.tag}:${data.team.coverUrl ?? ""}`);
+  // Ember's burn or Frost's ice on the copy; bump the token when pack-spell-art.ts changes.
+  if (data.spell) parts.push(`spell1:${data.spell.kind}:${data.spell.seed}`);
   const avatarRepair = AVATAR_REPAIR_REVISIONS[data.user.id];
   if (avatarRepair) parts.push(`avatar-repair:${avatarRepair}`);
   return parts.join("|");
@@ -453,7 +462,7 @@ export function collectedCardRenderData(card: CollectedCard, skills: NonNullable
       team: teamCardFace(card.team),
     });
   }
-  return buildManiaCardRenderDataFromSkills({
+  const data = buildManiaCardRenderDataFromSkills({
     user: {
       id: card.userId,
       username: card.username,
@@ -465,7 +474,9 @@ export function collectedCardRenderData(card: CollectedCard, skills: NonNullable
     tierOverride: collectedCardTier(card),
     labelOverride: card.customLabel,
     motifOverride: card.motif,
+    supporterLook: card.supporterLook,
   });
+  return card.spell && data.status === "ready" ? { ...data, spell: { kind: card.spell, seed: spellSeed(card.userId) } } : data;
 }
 
 export function getMemoryCardThumbnail(key: string | null): string | null {

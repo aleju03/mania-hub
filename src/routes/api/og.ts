@@ -29,6 +29,7 @@ import { bridgeAuthHeaders } from "../../lib/live-backend-tokens";
 import { parsePackCardKey } from "../../lib/pack-collection";
 import { getCountryName, isGlobalScope, isSupportedCountryCode, isSupportedCountryScope } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
+import { OVERJOY_RUN_OG_LAYOUT, renderOverjoyRunOg } from "../../lib/og-overjoy-run";
 import { drawPlayBanner, fetchPlayBannerSources, type PlayBannerStats } from "../../lib/play-banner";
 import { liveBridgeToken } from "../../lib/live-backend-tokens";
 import { drawRankingsBoard, fetchRankingsBoardAvatars, fetchRankingsBoardFlags, readRankingsBoard, type RankingsBoardRow } from "../../lib/rankings-board";
@@ -50,6 +51,7 @@ import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../l
 import { honoraryAvatarUrl } from "../../lib/honorary-players";
 import type { ManiaCardTier } from "../../lib/maniacard";
 import { parseCardMotif } from "../../lib/card-motif";
+import { effectiveCardLook, parseSupporterLook, supporterLookSignature } from "../../lib/supporter-card-looks";
 import { getCosmicTierPalette } from "../../lib/maniacard-cosmic";
 import {
   cardMotifDataUrl,
@@ -350,7 +352,7 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
           position: "relative",
           overflow: "hidden",
           background: "#0b070a",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -818,7 +820,7 @@ async function renderReplayOgCard(
     + (extraMods ? MOD_BADGE_GAP + extraModsWidth : 0);
   const resultWidth = GRADE_W + (modsWidth > 0 ? modsWidth + HERO_GAP : 0);
   const nameRoom = WIDTH - CONTENT_PAD_X * 2 - AVATAR_SIZE - HERO_GAP - resultWidth - 36;
-  // 0.62em per character is Torus Heavy's average advance, measured off the
+  // 0.62em per character is Tracker Round Heavy's average advance, measured off the
   // rendered card. The name gives up size first and characters only once the
   // smallest size it may take still would not fit.
   const NAME_CHAR_EM = 0.62;
@@ -846,7 +848,7 @@ async function renderReplayOgCard(
             style: { display: "flex", flexDirection: "row", alignItems: "center", gap: "7px" },
           },
           [
-            // Torus has no ★ glyph (it rasterizes as tofu), so the star is
+            // Tracker Round has no ★ glyph (it rasterizes as tofu), so the star is
             // the same inline svg the other cards use.
             h("img", {
               key: "icon",
@@ -874,7 +876,7 @@ async function renderReplayOgCard(
           position: "relative",
           overflow: "hidden",
           background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -1331,8 +1333,8 @@ function playerRankGraph(history: number[] | null | undefined): ReactNode {
 async function renderPlayerOg(request: Request, rawUsername: string): Promise<Response> {
   const username = rawUsername.trim().slice(0, 64);
   const [regularFont, heavyFont, user] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
+    getFont(request, "TrackerRound-Regular.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
     resolveOgPlayer(request, username),
   ]);
 
@@ -1388,7 +1390,7 @@ async function renderPlayerOg(request: Request, rawUsername: string): Promise<Re
           position: "relative",
           overflow: "hidden",
           background: panel,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -1613,6 +1615,10 @@ interface SharedPackCardPayload {
     customLabel?: string | null;
     /* And the background art it floats, for the same reason. */
     motif?: unknown;
+    /* The player's supporter look, present only while they are an active
+       supporter: the foil, and the motif and palette when the holding has
+       no motif of its own. */
+    supporterLook?: unknown;
     skills?: {
       fingerControl?: number;
       speed?: number;
@@ -1623,6 +1629,26 @@ interface SharedPackCardPayload {
   };
 }
 
+/* The pulled card's payload, read before the cache key is: a supporter's look
+   lives on the player rather than in the pull, so the key has to carry it or a
+   look changed after the first render would keep the old image forever. */
+async function fetchPulledCardPayload(ownerId: number, cardKey: string): Promise<SharedPackCardPayload> {
+  const base = getServerLiveBackendUrl();
+  if (!base) throw new OgFallbackError("live backend not configured");
+  const payloadResponse = await fetch(`${base}/api/packs/pulled-card/${ownerId}/${encodeURIComponent(cardKey)}`);
+  if (payloadResponse.status === 404) throw new OgFallbackError(`no pulled card ${ownerId}/${cardKey}`);
+  if (!payloadResponse.ok) throw new OgFallbackError(`pulled card ${payloadResponse.status}`);
+  return (await payloadResponse.json()) as SharedPackCardPayload;
+}
+
+/* The cache key's supporter segment: empty for every ordinary card, so their
+   keys are the ones already in R2. Dashes, not colons, like the card key. */
+export function pulledCardLookKeySegment(payload: Pick<SharedPackCardPayload, "card" | "team">): string {
+  if (payload.team) return "";
+  const signature = supporterLookSignature(parseSupporterLook(payload.card?.supporterLook ?? null));
+  return signature ? `:sl-${signature.replace(":", "-")}` : "";
+}
+
 async function renderPulledCardOg(
   request: Request,
   ownerId: number,
@@ -1630,17 +1656,13 @@ async function renderPulledCardOg(
   /* Dev-only: render this pull's art at another rarity so the admin OG preview
      can show every tier without hunting for a real pull of each one. */
   tierOverride?: ManiaCardTier,
+  /* Already read by the caller to build the cache key; fetched here otherwise. */
+  knownPayload?: SharedPackCardPayload,
 ): Promise<Response> {
-  const base = getServerLiveBackendUrl();
-  if (!base) throw new OgFallbackError("live backend not configured");
-
-  const [[regularFont, heavyFont], payloadResponse] = await Promise.all([
+  const [[regularFont, heavyFont], payload] = await Promise.all([
     loadOgFonts(request),
-    fetch(`${base}/api/packs/pulled-card/${ownerId}/${encodeURIComponent(cardKey)}`),
+    knownPayload ? Promise.resolve(knownPayload) : fetchPulledCardPayload(ownerId, cardKey),
   ]);
-  if (payloadResponse.status === 404) throw new OgFallbackError(`no pulled card ${ownerId}/${cardKey}`);
-  if (!payloadResponse.ok) throw new OgFallbackError(`pulled card ${payloadResponse.status}`);
-  const payload = (await payloadResponse.json()) as SharedPackCardPayload;
   // The OG card art has no team banner face, so a team pull shares the
   // default image rather than a player card with an empty portrait.
   if (payload.team) throw new OgFallbackError(`pulled card ${ownerId}/${cardKey} is a team card`);
@@ -1678,7 +1700,11 @@ async function renderPulledCardOg(
   /* Re-parsed rather than trusted: this payload crossed a network hop, and the
      numbers drive how large each copy is drawn. A motif whose image cannot be
      fetched simply leaves the tier's own pattern in place. */
-  const motif = parseCardMotif(card.motif);
+  /* The holding's own motif wins; a supporter's look fills in when it has
+     none, and its foil applies either way (effectiveCardLook). */
+  const look = effectiveCardLook(parseCardMotif(card.motif), card.supporterLook);
+  const motif = look.motif;
+  if (look.foil) art.foil = true;
   const inlinedMotif = motif ? await cardMotifDataUrl(motif, request) : null;
   // The palette rides the motif and applies whether or not the image could
   // be fetched; the sprites need the image (maniaTierCardElement checks both).
@@ -1699,7 +1725,7 @@ async function renderPulledCardOg(
           display: "flex",
           flexDirection: "column",
           background: "#120d15",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
         },
       },
       [
@@ -2256,8 +2282,8 @@ function sticker(props: StickerProps) {
    surface; no gradients, glows, or radial decorations. */
 async function renderHomeOg(request: Request, country: string): Promise<Response> {
   const [regularFont, heavyFont, rankings] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
+    getFont(request, "TrackerRound-Regular.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
     getRankings({ data: { type: "performance", page: 1, country } }),
   ]);
 
@@ -2316,7 +2342,7 @@ async function renderHomeOg(request: Request, country: string): Promise<Response
           position: "relative",
           overflow: "hidden",
           background: "#1a1620",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -2378,8 +2404,8 @@ async function renderRankingsOg(
   country: string,
 ): Promise<Response> {
   const [regularFont, heavyFont, rankings] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
+    getFont(request, "TrackerRound-Regular.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
     getRankings({ data: { type: "performance", page: 1, country } }),
   ]);
 
@@ -2431,7 +2457,7 @@ async function renderRankingsOg(
           position: "relative",
           overflow: "hidden",
           background: "#1a1620",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -2545,8 +2571,8 @@ function pickSnipesOgHero(events: SnipeEvent[]): SnipeEvent | null {
 
 async function renderSnipesOg(request: Request, scope: string): Promise<Response> {
   const [regularFont, heavyFont, events] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
+    getFont(request, "TrackerRound-Regular.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
     fetchSnipesOgEvents(scope),
   ]);
   const hero = pickSnipesOgHero(events);
@@ -2578,7 +2604,7 @@ async function renderSnipesOg(request: Request, scope: string): Promise<Response
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -2758,8 +2784,8 @@ async function renderCountryOg(
   rawTitle: string,
 ): Promise<Response> {
   const [regularFont, heavyFont, rankings] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
+    getFont(request, "TrackerRound-Regular.ttf"),
+    getFont(request, "TrackerRound-Heavy-v2.ttf"),
     getRankings({ data: { type: "performance", page: 1, country } }),
   ]);
 
@@ -2784,7 +2810,7 @@ async function renderCountryOg(
           position: "relative",
           overflow: "hidden",
           background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -3072,7 +3098,7 @@ function laneNote(props: {
 }
 
 /* The lockup as the site header draws it: the mania mode glyph from the
-   osu-extra font in pink, then the lowercase Torus wordmark with the
+   osu-extra font in pink, then the lowercase Tracker Round wordmark with the
    second word in pink. The whole group is what flex centres, as in the
    header; centring the words alone left the glyph hanging too far out. */
 function brandLockup(key: string, top: number, fontSize: number) {
@@ -3226,7 +3252,7 @@ async function renderDefaultBrandOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: DEFAULT_OG_SURFACE,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -3386,7 +3412,7 @@ async function renderCollectionOg(request: Request, id: string): Promise<Respons
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -3586,7 +3612,7 @@ async function renderFarmHelperOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -3828,7 +3854,7 @@ async function renderMapsSearchOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -4055,7 +4081,7 @@ async function renderMapsCollectionsOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -4249,7 +4275,7 @@ async function renderPacksOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -4439,7 +4465,7 @@ async function renderSkinsOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -4613,7 +4639,7 @@ async function renderBBCodeOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -4941,7 +4967,7 @@ async function renderDiscordOg(request: Request): Promise<Response> {
           position: "relative",
           overflow: "hidden",
           background: SURFACE_COLOR,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -5186,7 +5212,7 @@ async function renderDefaultOg(request: Request, url: URL): Promise<Response> {
           overflow: "hidden",
           background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
           padding: "80px",
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -5316,6 +5342,18 @@ export const Route = createFileRoute("/api/og")({
           }
         }
 
+        // An Overjoy run's share link. A share never changes once made.
+        if (kind === "overjoy-run") {
+          const shareId = (url.searchParams.get("id") ?? "").trim();
+          if (/^[a-zA-Z0-9]{6,16}$/.test(shareId)) {
+            try {
+              return await serveOg(request, `overjoy-run:${shareId}:l${OVERJOY_RUN_OG_LAYOUT}:v${version}`, () => renderOverjoyRunOg(request, shareId));
+            } catch (err) {
+              if (!isOgFallbackError(err)) console.warn("[og] overjoy run render failed, falling back", err);
+            }
+          }
+        }
+
         // Pull permalink route: owner + card ids, art from the stored mint.
         if (kind === "pull") {
           const ownerId = Number(url.searchParams.get("owner"));
@@ -5333,12 +5371,21 @@ export const Route = createFileRoute("/api/og")({
                 preview.headers.set("Cache-Control", "private, no-store");
                 return preview;
               }
+              /* A backend that is down must not cost the cached image: without
+                 the payload the key falls back to the plain one, which is what
+                 every ordinary card's key is anyway. A missing card still
+                 falls back to the default image. */
+              const payload = await fetchPulledCardPayload(ownerId, cardKey).catch((err: unknown) => {
+                if (isOgFallbackError(err) && /^no pulled card/.test(err.message)) throw err;
+                return undefined;
+              });
               return await serveOg(
                 request,
                 // The key's own colon would read as another field of the cache
-                // key, so it travels as a dash here.
-                `pull:${ownerId}:${cardKey.replace(":", "-")}:v${version}`,
-                () => renderPulledCardOg(request, ownerId, cardKey),
+                // key, so it travels as a dash here. A supporter's look is
+                // appended, so changing it (or the status lapsing) renders anew.
+                `pull:${ownerId}:${cardKey.replace(":", "-")}:v${version}${payload ? pulledCardLookKeySegment(payload) : ""}`,
+                () => renderPulledCardOg(request, ownerId, cardKey, undefined, payload),
               );
             } catch (err) {
               if (!isOgFallbackError(err)) console.warn("[og] pull render failed, falling back", err);

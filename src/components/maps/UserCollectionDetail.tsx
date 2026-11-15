@@ -8,7 +8,7 @@ import { useLocale } from "../../lib/locale-context";
 import { avatarImageSrc } from "../ui/Avatar";
 import { MapDetailModal } from "./MapDetailModal";
 import { MapPreviewPlayerBar, useMapPreviewAudio } from "./MapPreviewAudio";
-import { SearchCard, toPreviewTrack } from "./SearchCard";
+import { SearchCardGrid, toPreviewTrack } from "./SearchCard";
 import { UserCollectionEditor } from "./UserCollectionEditor";
 import { useHoldToConfirm } from "../../lib/use-hold-to-confirm";
 import type { LiveMapSearchEntry } from "../../lib/live-backend";
@@ -21,6 +21,7 @@ import {
   userCollectionKeyLabel,
   type UserMapCollectionDetail as CollectionDetail,
 } from "../../lib/user-map-collections";
+import { UsernameText } from "../ui/UsernameText";
 
 /* One posted collection on its own page (/collections/<slug>). Loaded on the
    server so the link a player shares carries a real title, blurb and card
@@ -169,7 +170,7 @@ export function UserCollectionDetailView({ collection }: { collection: Collectio
                   className="h-4 w-4 rounded-full object-cover"
                   loading="lazy"
                 />
-                <span className="font-semibold text-osu-l2">{detail.owner.username}</span>
+                <UsernameText username={detail.owner.username} userId={detail.owner.userId} className="font-semibold text-osu-l2" />
               </Link>
               <span>
                 · {formatNumber(detail.memberCount)} <Plural value={detail.memberCount} one="map" other="maps" />
@@ -251,21 +252,16 @@ export function UserCollectionDetailView({ collection }: { collection: Collectio
         {cards.length === 0 ? (
           <div className="py-16 text-center text-[13px] text-osu-f1">{t`This collection has no maps in it yet.`}</div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-            {cards.map((entry) => (
-              <SearchCard
-                key={entry.beatmapId}
-                entry={entry}
-                onOpen={(opened) => {
-                  // The detail modal has its own chart-preview audio; don't
-                  // leave the card's song preview playing over it.
-                  stopPreview();
-                  setMapEntry(opened);
-                }}
-                preview={preview}
-              />
-            ))}
-          </div>
+          <SearchCardGrid
+            items={cards}
+            preview={preview}
+            onOpen={(opened) => {
+              // The detail modal has its own chart-preview audio; don't
+              // leave the card's song preview playing over it.
+              stopPreview();
+              setMapEntry(opened);
+            }}
+          />
         )}
 
         <UserCollectionEditor

@@ -38,7 +38,15 @@ vi.mock("../../lib/my-data", () => ({
 }));
 vi.mock("../../lib/roster-self-track", () => ({ removeSelfFromRoster: mocks.stopTracking }));
 vi.mock("../../lib/self-deletion", () => ({ requestSelfDeletion: mocks.requestDeletion, cancelSelfDeletion: mocks.cancelDeletion }));
-vi.mock("../../lib/live-backend", () => ({ openLiveEventSource: () => null }));
+vi.mock("../../lib/live-backend", () => ({
+  openLiveEventSource: () => null,
+  fetchLiveSupporterProfileLook: () => Promise.resolve({ frame: null, nameStyle: null, nameFont: null, profileTheme: null, customTheme: null }),
+  peekLiveSupporterCustomTheme: () => undefined,
+  peekLiveSupporterFrame: () => undefined,
+  peekLiveSupporterNameFont: () => undefined,
+  peekLiveSupporterNameStyle: () => undefined,
+  peekLiveSupporterProfileTheme: () => undefined,
+}));
 vi.mock("../layout/PageHeader", () => ({ PageHeader: () => null }));
 vi.mock("../ui/Avatar", () => ({ Avatar: () => null }));
 vi.mock("../ui/CountryFlag", () => ({ CountryFlag: () => null }));
@@ -99,7 +107,7 @@ afterEach(cleanup);
 
 it("opens the shared explorer only on selection and preserves it between MSD and Dan", async () => {
   render(panel());
-  const msd = await screen.findByRole("button", { name: "MSD plays" });
+  const msd = await screen.findByRole("button", { name: "Rated plays" });
   expect(mocks.explorer).not.toHaveBeenCalled();
   fireEvent.click(msd);
   expect(mocks.explorer).toHaveBeenLastCalledWith({ userId: 123, username: "player", modes: [mode], view: "msd" });
@@ -114,10 +122,10 @@ it("opens the shared explorer only on selection and preserves it between MSD and
 
 it("preserves tracked filters across skills views without refetching the feed", async () => {
   render(panel());
-  await screen.findByRole("button", { name: "MSD plays" });
+  await screen.findByRole("button", { name: "Rated plays" });
   fireEvent.change(screen.getByRole("textbox", { name: "Search maps" }), { target: { value: "query" } });
   await waitFor(() => expect(mocks.feed).toHaveBeenCalledTimes(1));
-  fireEvent.click(screen.getByRole("button", { name: "MSD plays" }));
+  fireEvent.click(screen.getByRole("button", { name: "Rated plays" }));
   fireEvent.click(screen.getByRole("button", { name: "Tracked" }));
   expect((screen.getByRole("textbox", { name: "Search maps" }) as HTMLInputElement).value).toBe("query");
   expect(mocks.feed).toHaveBeenCalledTimes(1);
@@ -138,7 +146,7 @@ it.each([
   mocks.dashboard.mockResolvedValue({ ...dashboard, skills });
   render(panel());
   await screen.findByRole("button", { name: "Tracked" });
-  expect(screen.queryByRole("button", { name: "MSD plays" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Rated plays" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Dan plays" })).toBeNull();
   expect(mocks.explorer).not.toHaveBeenCalled();
 });
@@ -151,19 +159,19 @@ it("hides Dan and returns to the feed when the no-dans preference changes", asyn
   expect(screen.queryByRole("button", { name: "Dan plays" })).toBeNull();
   expect(screen.queryByTestId("skills-explorer")).toBeNull();
   expect(screen.getByRole("textbox", { name: "Search maps" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "MSD plays" }));
+  fireEvent.click(screen.getByRole("button", { name: "Rated plays" }));
   expect(screen.getByTestId("skills-explorer").textContent).toBe("msd");
 });
 
 it("resets the selected skills view when the signed-in viewer changes", async () => {
   const { rerender } = render(panel());
-  fireEvent.click(await screen.findByRole("button", { name: "MSD plays" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Rated plays" }));
   mocks.viewer = { id: 456, username: "another-player", countryCode: "CR", avatarUrl: null };
   mocks.dashboard.mockResolvedValue({ ...dashboard, summary: { ...summary, userId: 456, username: "another-player" } });
   rerender(panel());
-  await screen.findByRole("button", { name: "MSD plays" });
+  await screen.findByRole("button", { name: "Rated plays" });
   expect(screen.queryByTestId("skills-explorer")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "MSD plays" }));
+  fireEvent.click(screen.getByRole("button", { name: "Rated plays" }));
   expect(mocks.explorer).toHaveBeenLastCalledWith({ userId: 456, username: "another-player", modes: [mode], view: "msd" });
 });
 
@@ -177,7 +185,7 @@ it("keeps the signed-out and untracked entry states unchanged", async () => {
   mocks.dashboard.mockResolvedValue({ ...dashboard, summary: { ...summary, tracked: false } });
   render(panel());
   await screen.findByText("Opt in");
-  expect(screen.queryByRole("button", { name: "MSD plays" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Rated plays" })).toBeNull();
   expect(mocks.explorer).not.toHaveBeenCalled();
 });
 
@@ -253,7 +261,7 @@ it("lets a top-100 player pick plays to remove and stop tracking", async () => {
     trackedPage: { items: [trackedPlay("official:1"), trackedPlay("official:2", false)], total: 2, limit: 50, offset: 0 },
   });
   render(panel());
-  await screen.findByRole("button", { name: "MSD plays" });
+  await screen.findByRole("button", { name: "Rated plays" });
   expect(screen.getByRole("button", { name: "select official:1" })).toBeTruthy();
   // Ranked plays have no remove button; only "Remove all" reaches them.
   expect(screen.queryByRole("button", { name: "select official:2" })).toBeNull();

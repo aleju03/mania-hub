@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { BarChart3, Bug, ChevronDown, ChevronRight, Globe, Image as ImageIcon, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
+import { BarChart3, Brush, Bug, ChevronDown, ChevronRight, Globe, Heart, Image as ImageIcon, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { GuestAvatar } from "../ui/GuestAvatar";
 import { Avatar } from "../ui/Avatar";
@@ -14,6 +14,7 @@ import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
 import { useBugReportAlert } from "../../lib/bug-report-alert";
 import { useReplyAlert } from "../../lib/reply-alert";
+import { useViewerIsSupporter } from "../../lib/viewer-supporter";
 import { searchPlayers, searchPlayersOnOsu } from "../../lib/player-search";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
@@ -26,6 +27,8 @@ import { useDynamicFavicon } from "../../lib/favicon";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg, plural } from "@lingui/core/macro";
 import { useLocale } from "../../lib/locale-context";
+import { UsernameText } from "../ui/UsernameText";
+import { scaledPx } from "#/lib/ui-scale-values";
 
 // The crest arrow shows the flag mirrored, except where that reads as another
 // country (IE/CI, ML/GN) or reverses writing on the flag.
@@ -271,14 +274,19 @@ export function Nav() {
   // The other direction: an answer the owner chose to notify the viewer about.
   // It rides their own avatar, and /report is what clears it.
   const replyAlert = useReplyAlert(Boolean(auth.viewer));
+  // supporters manage their look there; for everyone else it is the way in, so it says what is inside
+  const viewerIsSupporter = useViewerIsSupporter(auth.viewer?.id);
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
-  // When the server is off, Snipes is always shown. Otherwise show it for
-  // Global and once the tier is known to be live or snipes - while the tier is
-  // still unknown (first-ever visit) the tab stays hidden rather than flashing in.
+  // When the server is off, Snipes is always shown. Otherwise it shows for
+  // Global and for a live or snipes country, and also while the tier is still
+  // unknown: the server render and the hydration render never know it (it is
+  // cached in this browser), and most countries visited are live, so it stays
+  // put there and only leaves for a country known not to be live.
   const showSnipesLink = !liveBackendConfigured
     || isGlobalScope(selectedCountry)
+    || selectedCountryFeatureTier == null
     || selectedCountryFeatureTier === "live"
     || selectedCountryFeatureTier === "snipes";
   const navLabel = (id: NavLeafId) => (devMode && DEV_NAV_LABELS[id]) || NAV_LABELS[id];
@@ -314,6 +322,7 @@ export function Nav() {
   const linkRefs = useRef<Map<string, HTMLElement>>(new Map());
   const closeGroupTimer = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const dimRef = useRef<HTMLDivElement | null>(null);
   const [dimHeight, setDimHeight] = useState(0);
   const [barRect, setBarRect] = useState<{ left: number; width: number } | null>(null);
 
@@ -360,8 +369,14 @@ export function Nav() {
     if (!openGroup) return;
     const el = dropdownRef.current;
     if (!el) return;
-    setDimHeight(Math.max(0, Math.ceil(el.getBoundingClientRect().bottom) - 60 + 22));
-  }, [openGroup]);
+    // Measured from the band's own top, which is the navbar's height at the
+    // current UI scale.
+    const bandTop = dimRef.current?.getBoundingClientRect().top ?? 60;
+    // An open Discord flyout can reach below the menu's last row.
+    const flyout = el.querySelector("[data-nav-flyout]");
+    const bottom = Math.max(el.getBoundingClientRect().bottom, flyout?.getBoundingClientRect().bottom ?? 0);
+    setDimHeight(Math.max(0, Math.ceil(bottom - bandTop) + 22));
+  }, [openGroup, discordBranchOpen]);
 
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const selectedIsRegion = isRegionScope(selectedCountry);
@@ -663,9 +678,11 @@ export function Nav() {
       {/* osu!-style dim behind an open nav dropdown: a band only as tall as the
           menu, dark under the navbar and fading to transparent, capped by a
           themed accent line marking its end. Sits below the header (z-50) so the
-          bar and dropdown stay bright. */}
+          bar and dropdown stay bright, and above the full-viewport game tables
+          (z-40) so it blurs them too. */}
       <div
-        className={`fixed inset-x-0 top-[60px] z-40 bg-gradient-to-b from-black/25 via-black/40 to-black/55 backdrop-blur-md transition-opacity duration-150 ${
+        ref={dimRef}
+        className={`fixed inset-x-0 top-[60px] z-[45] bg-gradient-to-b from-black/25 via-black/40 to-black/55 backdrop-blur-md transition-opacity duration-150 ${
           openGroup ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         style={{ height: dimHeight }}
@@ -772,7 +789,7 @@ export function Nav() {
           </motion.div>
 
           {/* Desktop nav links */}
-          <div ref={linksContainerRef} className="relative hidden md:flex items-center gap-1">
+          <div ref={linksContainerRef} className="relative hidden lg:flex items-center gap-1">
             {NAV_TOP.map((top) => {
               if (top.kind === "link") {
                 const leaf = NAV_LEAVES[top.id];
@@ -822,7 +839,7 @@ export function Nav() {
                           return (
                             <div
                               key={leaf.id}
-                              className="flex flex-col items-start"
+                              className="relative self-start"
                               onMouseEnter={() => setDiscordBranchOpen(true)}
                               onMouseLeave={() => setDiscordBranchOpen(false)}
                               onFocus={() => setDiscordBranchOpen(true)}
@@ -838,12 +855,11 @@ export function Nav() {
                                 {i18n._(navLabel(leaf.id))}
                                 <ChevronRight className="h-3.5 w-3.5 opacity-70" strokeWidth={2.5} />
                               </Link>
-                              {/* Bot and Servers branch off past the menu's right edge
-                                  (the menu is the positioned parent), ending on this
-                                  row so they stay inside the dimmed band. The row is
-                                  full width so the pointer can cross to them. */}
+                              {/* Bot and Servers branch off right next to the
+                                  Discord row and run downward; the dim band grows
+                                  to cover them. */}
                               {discordBranchOpen ? (
-                              <div className="absolute bottom-2 left-full flex flex-col" role="menu">
+                              <div data-nav-flyout className="absolute left-full top-0 -ml-2 flex flex-col" role="menu">
                                 {DISCORD_BRANCHES.map((branch) => (
                                   <Link
                                     key={branch.to}
@@ -892,8 +908,10 @@ export function Nav() {
           </div>
         </div>
 
-        {/* Desktop search + dev tools */}
-        <div className="hidden md:flex items-center gap-2 ml-3">
+        {/* Desktop search + dev tools. The bar needs about 1,170px with the
+            full-width picker and search, so the desktop layout starts at lg
+            and the two stay narrow until xl. */}
+        <div className="hidden lg:flex items-center gap-2 ml-3">
           {devMode && (
             <>
               <div ref={adminMenuRef} className="relative">
@@ -947,6 +965,7 @@ export function Nav() {
               <button
                 type="button"
                 onClick={() => setUserMenuOpen((open) => !open)}
+                data-supporter-welcome-target
                 className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60 text-osu-pink-light transition hover:ring-osu-pink/60 cursor-pointer"
                 title={
                   replyAlert.count
@@ -975,7 +994,7 @@ export function Nav() {
                       <div className="px-3 py-2 border-b border-osu-b3/30">
                         <div className="text-[10px] font-medium text-osu-l3 leading-tight"><Trans>Signed in as</Trans></div>
                         <div className="flex items-center gap-1.5">
-                          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white">{auth.viewer.username}</span>
+                          <UsernameText username={auth.viewer.username} userId={auth.viewer.id} className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white" />
                           {viewerCountryTracked && viewerCountryCode ? (
                             <button
                               type="button"
@@ -1029,6 +1048,24 @@ export function Nav() {
                         <ImageIcon className="h-3.5 w-3.5" />
                         <Trans>Dynamic Renders</Trans>
                       </Link>
+                      <Link
+                        to="/supporter"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                        role="menuitem"
+                      >
+                        <Heart className={`h-3.5 w-3.5 ${viewerIsSupporter ? "" : "fill-osu-pink text-osu-pink"}`} />
+                        {viewerIsSupporter ? <Trans>Supporter</Trans> : <Trans>Supporter perks</Trans>}
+                      </Link>
+                      <Link
+                        to="/workshop"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                        role="menuitem"
+                      >
+                        <Brush className="h-3.5 w-3.5" />
+                        <Trans>Workshop</Trans>
+                      </Link>
                       {/* Logout is a POST (the route rejects GET), so it needs a
                           form; `contents` keeps the button laid out as if it
                           were still a direct child of the menu. */}
@@ -1080,9 +1117,9 @@ export function Nav() {
               )}
             </div>
           ) : null}
-          <CountrySelector className="w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
+          <CountrySelector className="max-w-36 xl:max-w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
           <SearchInput
-            className="w-52"
+            className="w-32 xl:w-52"
             placeholder={t`find player...`}
             onSearch={handleSearch}
             onSearchOsu={searchPlayersOnOsu}
@@ -1117,7 +1154,7 @@ export function Nav() {
 
         {/* Mobile hamburger button */}
         <button
-          className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg hover:bg-osu-b3/50 transition-colors cursor-pointer"
+          className="lg:hidden flex items-center justify-center w-9 h-9 rounded-lg hover:bg-osu-b3/50 transition-colors cursor-pointer"
           onClick={() => {
             restoreMenuAfterSettingsCloseRef.current = false;
             setMenuOpen(!menuOpen);
@@ -1144,16 +1181,16 @@ export function Nav() {
       {/* Mobile drawer — pure CSS transitions for compositor-thread animation */}
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 z-[55] bg-black/60 md:hidden transition-opacity duration-200 ease-out ${
+        className={`fixed inset-0 z-[55] bg-black/60 lg:hidden transition-opacity duration-200 ease-out ${
           menuOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setMenuOpen(false)}
-        style={{ top: 60 }}
+        style={{ top: scaledPx(60) }}
         aria-hidden={!menuOpen}
       />
       {/* Drawer panel */}
       <div
-        className={`fixed top-[60px] right-0 h-[calc(100dvh-60px)] w-64 bg-osu-b5 z-[60] md:hidden border-l border-osu-b3/30 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] transform-gpu will-change-transform transition-transform duration-250 ease-out ${
+        className={`fixed top-[60px] right-0 h-[calc(100dvh-60px)] w-64 bg-osu-b5 z-[60] lg:hidden border-l border-osu-b3/30 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] transform-gpu will-change-transform transition-transform duration-250 ease-out ${
           menuOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
         }`}
         aria-hidden={!menuOpen}
@@ -1271,9 +1308,8 @@ export function Nav() {
                             <UnreadBadge count={replyAlert.count} className="-right-1.5 -top-1.5" />
                           ) : null}
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold">
-                          {auth.viewer.username}
-                        </span>
+                        {/* the name truncates itself: a clipping wrapper cut a name style's glow off its first letter */}
+                        <UsernameText username={auth.viewer.username} userId={auth.viewer.id} className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold" />
                         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${mobileAccountOpen ? "rotate-180" : ""}`} strokeWidth={2.2} />
                       </button>
                       {viewerCountryTracked && viewerCountryCode ? (
@@ -1342,6 +1378,28 @@ export function Nav() {
                         >
                           <ImageIcon className="h-3.5 w-3.5 shrink-0 opacity-75" />
                           <Trans>Dynamic Renders</Trans>
+                        </Link>
+                        <Link
+                          to="/supporter"
+                          onClick={() => {
+                            setMobileAccountOpen(false);
+                            setMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
+                        >
+                          <Heart className={`h-3.5 w-3.5 shrink-0 ${viewerIsSupporter ? "opacity-75" : "fill-osu-pink text-osu-pink"}`} />
+                          {viewerIsSupporter ? <Trans>Supporter</Trans> : <Trans>Supporter perks</Trans>}
+                        </Link>
+                        <Link
+                          to="/workshop"
+                          onClick={() => {
+                            setMobileAccountOpen(false);
+                            setMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
+                        >
+                          <Brush className="h-3.5 w-3.5 shrink-0 opacity-75" />
+                          <Trans>Workshop</Trans>
                         </Link>
                         <form method="post" action={logoutHref} className="contents">
                           <button

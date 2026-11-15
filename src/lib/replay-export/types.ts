@@ -39,7 +39,10 @@ export const ACTIVE_EXPORT_PHASES: ReadonlySet<ReplayExportPhase> = new Set<Repl
 export type ReplayExportWarningCode =
   | "audio-decode-skipped"
   | "hidden-while-exporting"
-  | "container-fallback";
+  | "container-fallback"
+  /* The picked file could not be written, so the video was built in memory
+     and is offered as a download instead (runners/local.ts). */
+  | "file-save-fallback";
 
 /**
  * What the UI subscribes to. Deliberately free of Blobs, handles, renderers,
@@ -71,6 +74,12 @@ export type ReplayExportJobView = {
   /** Replay label for the panel; no identifiers beyond what the page shows. */
   title: string;
   filename: string;
+  /** The /replay URL (path and query) the export came from, for a shared clip
+      to link back to; absent for a replay that only exists on this device. */
+  replayPath?: string | null;
+  /** Output frame size, for a shared clip's embed. */
+  width?: number;
+  height?: number;
 };
 
 export type ReplayExportResultView = {
@@ -128,6 +137,7 @@ export type ReplayExportStartRequest = {
   capture: ReplayExportCapture;
   target: ReplayExportDestinationTarget;
   title: string;
+  replayPath?: string | null;
 };
 
 export type ReplayExportSubscriber = (view: ReplayExportJobView | null) => void;

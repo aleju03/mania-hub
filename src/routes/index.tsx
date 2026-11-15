@@ -16,6 +16,7 @@ import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { Avatar } from "../components/ui/Avatar";
+import { supporterRowBackground, useSupporterRowThemes } from "../components/supporter/SupporterRowBanner";
 import { ScoreVideoMark, VideoMark } from "../components/ui/CompanellaMark";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { GradeImg } from "../components/ui/GradeImg";
@@ -159,6 +160,7 @@ const HOME_GLOBAL_POPOFFS_WINDOW_MS = 24 * 60 * 60 * 1000;
 // fade-in animation every time another fetch resolves.
 function GlobalRankingRow({ entry, index, delayStep }: { entry: LiveGlobalRankingEntry; index: number; delayStep: number }) {
   const presence = usePlayerPresence(entry.user.id);
+  const theme = useSupporterRowThemes()(entry.user.id);
   const navigate = useNavigate();
   const seedPlayerShell = () => {
     if (
@@ -189,13 +191,14 @@ function GlobalRankingRow({ entry, index, delayStep }: { entry: LiveGlobalRankin
       animate={{ opacity: 1 }}
       transition={{ delay: index * delayStep }}
       className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
+      style={supporterRowBackground(theme)}
       onClick={() => {
         seedPlayerShell();
         navigate({ to: "/player/$username", params: { username: entry.user.username } });
       }}
     >
       <span className="w-6 shrink-0 text-center text-sm font-bold text-osu-f1 tabular-nums">#{entry.rank}</span>
-      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
+      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} framed />
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         <UsernameText username={entry.user.username} avatarUrl={entry.user.avatar_url} accent={entry.user.avatar_accent} className="min-w-0 truncate text-sm font-medium" />
         {presence ? <PresenceDot presence={presence} /> : null}
@@ -715,7 +718,7 @@ function HomePage() {
         <div className="max-w-[1200px] mx-auto text-center">
           <div className="flex items-center justify-center gap-3">
             <span className="mode-icon text-osu-pink text-3xl sm:text-5xl">{"\ue802"}</span>
-            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">{selectedIsGlobal ? <Trans>Global</Trans> : selectedIsRegion ? countryName : selectedCountry}</span></h1>
+            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Tracker Round" }}>mania <span className="text-osu-pink">{selectedIsGlobal ? <Trans>Global</Trans> : selectedIsRegion ? countryName : selectedCountry}</span></h1>
           </div>
         </div>
       </section>
@@ -773,7 +776,7 @@ function HomePage() {
                         navigate({ to: "/player/$username", params: { username: entry.user.username } });
                       }}>
                       <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
-                      <Avatar url={entry.user.avatar_url} size={30} />
+                      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} framed />
                       <span className="flex min-w-0 flex-1 items-center gap-1.5">
                         <UsernameText
                           username={entry.user.username}
@@ -795,7 +798,7 @@ function HomePage() {
                         navigate({ to: "/player/$username", params: { username: entry.user.username } });
                       }}>
                       <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
-                      <Avatar url={entry.user.avatar_url} size={30} />
+                      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} framed />
                       <span className="flex min-w-0 flex-1 items-center gap-1.5">
                         <UsernameText
                           username={entry.user.username}
@@ -881,12 +884,12 @@ function HomePage() {
                       />
                     </>
                   )}
-                  <div className="text-3xl font-bold text-osu-pink leading-none" style={{ fontFamily: "Torus" }}>
+                  <div className="text-3xl font-bold text-osu-pink leading-none" style={{ fontFamily: "Tracker Round" }}>
                     {Math.round(p.score.pp ?? 0)}pp
                   </div>
                   <div className="mt-3 flex items-center justify-center gap-2 max-w-full">
                     <GradeImg grade={p.score.displayRank} size={18} />
-                    <Avatar url={p.user.avatar_url} size={24} />
+                    <Avatar url={p.user.avatar_url} size={24} framed />
                     <UsernameText
                       username={p.user.username}
                       avatarUrl={p.user.avatar_url}
@@ -944,10 +947,10 @@ function HomePage() {
                     ...(boardScope ? { state: showPlayerCountryFlagState } : {}),
                   })}>
                     <GradeImg grade={s.displayRank} size={22} />
-                  <Avatar url={s.user.avatar_url} size={26} />
+                  <Avatar url={s.user.avatar_url} userId={s.user.id} size={26} framed />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <div className="text-xs truncate">
+                      <div className="glow-room text-xs truncate">
                         <Trans>
                           <UsernameText
                             username={s.user.username}

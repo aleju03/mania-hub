@@ -1,12 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Plus, Undo2, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { avatarImageSrc } from "../../ui/Avatar";
 import { SearchInput } from "../../ui/SearchInput";
+import { SelectMenu, type SelectMenuOption } from "../../ui/SelectMenu";
 import {
+  clearAdminSupporterMotif,
+  setAdminSupporterRank,
   grantAdminSupporterDays,
+  importAdminGoogleExport,
   importAdminKofiCsv,
   linkAdminDonation,
   loadAdminSupporters,
@@ -17,9 +21,10 @@ import {
   type DonationLinkMethod,
 } from "../../../lib/admin-supporters";
 import { searchPlayers, searchPlayersOnOsu } from "../../../lib/player-search";
+import { SUPPORTER_RANKS } from "../../../lib/supporter-ranks";
 
 /* The Supporters tab of /admin/players (backend features/supporters.ts). The wall is every
- * supporter, the ring around each avatar the time they have left ($3 buys 30
+ * supporter, the ring around each avatar the time they have left ($4 buys 30
  * days; a full ring is 90 days or more). Click an avatar to add time. Below it,
  * donations the webhooks could not link wait in Needs linking: pick the player
  * and the card moves onto the wall. A Ko-fi CSV can be dropped anywhere on the
@@ -33,9 +38,18 @@ const METHOD_LABEL: Record<DonationLinkMethod, string> = {
   lava_link: "lava.top link",
   email_match: "same email",
   name_match: "name match",
+  message_match: "message match",
   manual: "linked by hand",
   unlinked: "unlinked by hand",
+  claim: "claimed by them",
+  email_claim: "claimed by email",
 };
+
+const PROVIDER_LABEL: Record<string, string> = { kofi: "Ko-fi", lava: "lava.top", google: "Google" };
+
+function providerLabel(provider: string): string {
+  return PROVIDER_LABEL[provider] ?? provider;
+}
 
 const CHIP_CLASS =
   "inline-flex items-center gap-1 rounded-full bg-white/[0.07] px-3 py-1 text-[12px] font-medium text-osu-l2 transition hover:bg-white/[0.12] hover:text-white disabled:opacity-50 cursor-pointer disabled:cursor-default";
@@ -58,6 +72,16 @@ function timeLeft(row: AdminSupporterRow, now: number): string {
   if (days < 60) return days === 1 ? "1 day left" : `${days} days left`;
   return `${Math.floor(days / 30)} months left`;
 }
+
+/* Pinning a rank: by months (no pin), or one of the gems, each with its swatch. */
+const RANK_PIN_OPTIONS: SelectMenuOption<string>[] = [
+  { value: "months", label: "By months" },
+  ...SUPPORTER_RANKS.map((rank, index) => ({
+    value: String(index),
+    label: rank.name,
+    leading: <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: `linear-gradient(135deg, ${rank.stops.join(", ")})` }} />,
+  })),
+];
 
 export function SupportersPanel() {
   const [view, setView] = useState<AdminSupportersView | null>(null);
@@ -105,10 +129,27 @@ export function SupportersPanel() {
     return `${days > 0 ? "Added" : "Took"} ${Math.abs(days)} days ${days > 0 ? "to" : "from"} ${result.username ?? label}.`;
   });
 
+  const pinRank = (row: AdminSupporterRow, rank: number | null) => run(async () => {
+    await setAdminSupporterRank({ data: { userId: row.userId, rank } });
+    const name = row.username ?? `#${row.userId}`;
+    return rank === null ? `${name} counts months again.` : `${name} shows ${SUPPORTER_RANKS[rank].id[0].toUpperCase() + SUPPORTER_RANKS[rank].id.slice(1)} now.`;
+  });
+
+  const clearMotif = (row: AdminSupporterRow) => run(async () => {
+    await clearAdminSupporterMotif({ data: { userId: row.userId } });
+    return `Removed ${row.username ?? `#${row.userId}`}'s card image.`;
+  });
+
   const importFile = (file: File) => run(async () => {
     const result = await importAdminKofiCsv({ data: { csv: await file.text() } });
     return `Imported ${result.inserted} of ${result.rows} rows, ${result.linked} linked to a player.`;
   });
+
+  const importGoogle = (file: File) => run(async () => {
+    const result = await importAdminGoogleExport({ data: { csv: await file.text() } });
+    return `Read ${result.rows} Google orders: ${result.confirmed} claims confirmed, ${result.added} new, ${result.revoked} claims revoked, ${result.pending} still waiting.`;
+  });
+  const pendingClaims = (view?.donations ?? []).filter((row) => row.claimStatus === "pending").length;
 
   const supporters = view?.supporters ?? [];
   const activeCount = supporters.filter((row) => row.active).length;
@@ -146,7 +187,27 @@ export function SupportersPanel() {
               </div>
               <div className="mt-1 text-[12px] text-osu-f1">need linking</div>
             </div>
+            <div>
+              <div className={`text-[44px] font-semibold leading-none tabular-nums ${pendingClaims > 0 ? "text-osu-yellow" : "text-white/30"}`}>
+                {view ? pendingClaims : "–"}
+              </div>
+              <div className="mt-1 text-[12px] text-osu-f1">Google claims to check</div>
+            </div>
             <label className={`${CHIP_CLASS} ml-auto ${busy ? "pointer-events-none opacity-50" : ""}`}>
+              <Upload size={13} />
+              Import Google export
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void importGoogle(file);
+                }}
+              />
+            </label>
+            <label className={`${CHIP_CLASS} ${busy ? "pointer-events-none opacity-50" : ""}`}>
               <Upload size={13} />
               Import Ko-fi CSV
               <input
@@ -174,6 +235,8 @@ export function SupportersPanel() {
                     busy={busy}
                     onToggle={() => setOpenUser(openUser === row.userId ? null : row.userId)}
                     onGrant={(days) => grant(`#${row.userId}`, days, row.username ?? `#${row.userId}`)}
+                    onClearMotif={() => clearMotif(row)}
+                    onPinRank={(rank) => pinRank(row, rank)}
                   />
                 ))}
               </AnimatePresence>
@@ -274,6 +337,8 @@ function SupporterTile({
   busy,
   onToggle,
   onGrant,
+  onClearMotif,
+  onPinRank,
 }: {
   row: AdminSupporterRow;
   now: number;
@@ -281,12 +346,28 @@ function SupporterTile({
   busy: boolean;
   onToggle: () => void;
   onGrant: (days: number) => void;
+  onClearMotif: () => void;
+  onPinRank: (rank: number | null) => void;
 }) {
   const daysLeft = row.active ? (row.expiresAt - now) / DAY_MS : 0;
   const fill = Math.min(1, daysLeft / FULL_RING_DAYS);
   const radius = 36;
   const circumference = 2 * Math.PI * radius;
   const name = row.username ?? `#${row.userId}`;
+  // the menu centres under the avatar, then slides back inside the screen when that runs off an edge
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuShift, setMenuShift] = useState(0);
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!open || !menu) {
+      setMenuShift(0);
+      return;
+    }
+    const rect = menu.getBoundingClientRect();
+    const left = rect.left - menuShift;
+    const margin = 8;
+    setMenuShift(Math.max(margin - left, Math.min(0, window.innerWidth - margin - (left + rect.width))));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <motion.div
@@ -326,11 +407,13 @@ function SupporterTile({
       <AnimatePresence>
         {open ? (
           <motion.div
+            ref={menuRef}
             initial={{ opacity: 0, y: -4, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.96 }}
             transition={{ duration: 0.14 }}
             className="absolute top-full z-20 mt-2 w-[200px] rounded-xl bg-osu-b3 p-3 shadow-xl"
+            style={{ left: "50%", marginLeft: -100 + menuShift }}
           >
             <div className="flex flex-wrap gap-1.5">
               <button type="button" disabled={busy} onClick={() => onGrant(30)} className={CHIP_CLASS}>+30 days</button>
@@ -339,6 +422,26 @@ function SupporterTile({
                 <button type="button" disabled={busy} onClick={() => onGrant(-30)} className={CHIP_CLASS}>-30 days</button>
               ) : null}
             </div>
+            {row.active ? (
+              <div className="mt-2.5 flex items-center gap-2 text-[12px] text-osu-l2">
+                Rank
+                <SelectMenu
+                  value={row.rankPin == null ? "months" : String(row.rankPin)}
+                  options={RANK_PIN_OPTIONS}
+                  disabled={busy}
+                  onChange={(value) => onPinRank(value === "months" ? null : Number(value))}
+                  ariaLabel="Rank"
+                  className="min-w-0 flex-1"
+                  block
+                />
+              </div>
+            ) : null}
+            {row.customMotifUrl ? (
+              <div className="mt-2.5 flex items-center gap-2">
+                <img src={row.customMotifUrl} alt="" className="h-10 w-10 rounded-md bg-osu-b5 object-contain" />
+                <button type="button" disabled={busy} onClick={onClearMotif} className={CHIP_CLASS}>Remove image</button>
+              </div>
+            ) : null}
             <div className="mt-2.5 space-y-0.5 text-[11px] text-osu-f1">
               <div>{row.active ? `Until ${formatDate(row.expiresAt)}` : `Lapsed ${formatDate(row.expiresAt)}`}</div>
               <div>Supporting since {formatDate(row.firstSupportedAt)}</div>
@@ -366,9 +469,9 @@ function InboxCard({ row, busy, run }: { row: AdminDonationRow; busy: boolean; r
     >
       <div className="w-[96px] shrink-0 text-[22px] font-semibold tabular-nums text-white">{formatMoney(row.amount, row.currency)}</div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[14px] text-white">{row.donorName ?? (row.provider === "lava" ? "lava.top buyer" : "No name given")}</div>
+        <div className="truncate text-[14px] text-white">{row.donorName ?? (row.provider === "lava" ? "lava.top buyer" : row.provider === "google" ? "Google contributor" : "No name given")}</div>
         <div className="text-[11px] text-osu-f1">
-          {formatShortDate(row.occurredAt)} on {row.provider === "kofi" ? "Ko-fi" : "lava.top"}
+          {formatShortDate(row.occurredAt)} on {providerLabel(row.provider)}
           {row.imported ? ", imported" : ""}
           {row.linkMethod === "unlinked" ? ", unlinked by hand" : ""}
         </div>
@@ -412,9 +515,10 @@ function HistoryRow({ row, busy, run }: { row: AdminDonationRow; busy: boolean; 
           </span>
         </div>
         <div className="truncate text-[11px] text-osu-f1">
-          {formatShortDate(row.occurredAt)} on {row.provider === "kofi" ? "Ko-fi" : "lava.top"}
+          {formatShortDate(row.occurredAt)} on {providerLabel(row.provider)}
           {row.donorName && row.donorName !== row.linkedUsername ? `, as ${row.donorName}` : ""}
           {row.linkMethod ? `, ${METHOD_LABEL[row.linkMethod]}` : ""}
+          {row.claimStatus === "pending" ? ", not in a Google export yet" : row.claimStatus === "revoked" ? ", revoked: not in Google's export" : ""}
           {row.message ? `, "${row.message}"` : ""}
         </div>
       </div>

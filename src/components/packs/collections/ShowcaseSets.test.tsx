@@ -10,7 +10,11 @@ import { ShowcaseTab } from "./ShowcaseTab";
 const api = vi.hoisted(() => ({ viewer: { id: 7 }, list: vi.fn(), mutate: vi.fn(), wall: vi.fn(), collection: vi.fn() }));
 vi.mock("#/lib/auth-context", () => ({ useAuth: () => ({ viewer: api.viewer }) }));
 vi.mock("#/lib/analytics", () => ({ track: () => {} }));
+// Supporter cases come from the live look cache this file does not mock.
+vi.mock("#/lib/use-supporter-pack-style", () => ({ useSupporterSleeve: () => null, useSupporterPackStyle: () => ({ sleeve: null, binder: null, wrapper: null, blade: null }) }));
 vi.mock("#/lib/live-backend", () => ({
+  // Player names read the supporter name styles; no player here has one.
+  ensureSupporterNameStyles: () => {}, getSupporterNameStyle: () => null, getSupporterNameFont: () => null, getSupporterNameOutline: () => null, subscribeSupporterNameStyles: () => () => {},
   isLiveBackendConfigured: () => true,
   fetchLivePackShowcaseCards: async () => [],
   fetchLivePackShowcaseWall: api.wall,

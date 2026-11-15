@@ -9,6 +9,7 @@ import { formatTimeAgo } from "#/lib/format";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { CountryFlag } from "#/components/ui/CountryFlag";
 import { useLocale } from "#/lib/locale-context";
+import { UsernameText } from "../ui/UsernameText";
 
 /* Who voted for one nominee, and which way.
  *
@@ -167,7 +168,7 @@ export function GoatPollVotersModal({
                 </span>
               )}
               <span className="flex min-w-0 flex-col leading-tight">
-                <span translate="no" className="truncate text-sm font-bold text-white">{nominee.username}</span>
+                <span translate="no" className="truncate text-sm font-bold text-white"><UsernameText username={nominee.username} userId={nominee.id} /></span>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
                   <Trans>
                     {nominee.up} up · {nominee.down} down

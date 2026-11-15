@@ -1,4 +1,6 @@
+import type { PackSpell } from "#/lib/pack-pending";
 import type { CardMotif } from "./card-motif";
+import type { SupporterLook } from "./supporter-card-looks";
 import type { PackTeamCard } from "./team-cards";
 import { AWARDED_TIERS, getManiaCardTier, type ManiaCardTier, type ManiaSkills } from "./maniacard";
 
@@ -14,9 +16,20 @@ export const PACK_CHARGE_REGEN_MS = 20_000;
    just playing - duplicates only speed it up. */
 export const PACK_OPEN_SHARD_REWARD = 2;
 
+export interface PackSerialOrigin { userId: number; username: string; pulledAt: number; pulled: boolean }
+
+/* Whether the copy a holding shows was won in a pull: its puller's history
+   when it came from someone else, the holding's otherwise. */
+export function serialWasPulled(card: Pick<CollectedCard, "grantedAt" | "serialFrom">): boolean {
+  return card.serialFrom ? card.serialFrom.pulled : !card.grantedAt;
+}
+
 export interface CollectedCard {
   /* False for the exclusive milestone card, as reported by the server. */
   recyclable?: boolean;
+  /* Ember burnt or Frost froze a copy in this holding before its pack was
+     opened (server-reported, like serial). Baked into the card's face. */
+  spell?: PackSpell;
   userId: number;
   /* The key this holding lives under, when it cannot be derived from the tier:
      a card /admin/collections handed out is its own collectible ("<id>:v<n>")
@@ -38,6 +51,11 @@ export interface CollectedCard {
      floats this image instead of its tier's triangle flecks or starfield.
      Server-side only, exactly like customLabel, so sanitizeCard drops it. */
   motif?: CardMotif | null;
+  /* The player's supporter look (foil, motif, palette), present only while
+     they are an active supporter. It belongs to the player, not the holding,
+     so the server attaches it at read time and sanitizeCard drops it: a
+     lapsed supporter's card must not keep shining out of localStorage. */
+  supporterLook?: SupporterLook | null;
   /* Skills snapshot from the pull, enough to redraw the real card front
      offline (the texture pipeline needs no scores). Null for failed mints
      and cards collected before snapshots existed. */
@@ -50,21 +68,24 @@ export interface CollectedCard {
   recycledCopies: number;
   firstPulledAt: number;
   lastPulledAt: number;
-  /* Mint order: #1 is whoever pulled this card first, anywhere, and
-     mintedTotal is how many serials it has handed out. Both come from the
-     server's mint registry, so they are only present on a synced collection;
-     sanitizeCard deliberately drops them rather than persisting a server fact
-     into localStorage. */
+  /* The lowest copy number this holding has (every copy is numbered: #1 is
+     the first copy of the card anyone pulled), and how many numbers the card
+     has handed out. Both come from the server, so they are only present on a
+     synced collection; sanitizeCard deliberately drops them rather than
+     persisting a server fact into localStorage. */
   serial?: number | null;
   mintedTotal?: number;
   /* When this card was granted or gifted to its holder, null or absent for
-     one that was pulled. A granted card is minted a serial like any other, so
-     this is the only thing stopping a surface calling its holder the Nth
-     person to pull it. Server-only, like the two above. */
+     one that was pulled. Server-only, like the two above. */
   grantedAt?: number | null;
   /* The collector who gave it, when the card arrived as an accepted gift
      rather than from the grant desk. Server-only like grantedAt. */
   giftedBy?: { userId: number; username: string } | null;
+  /* Set when the copy shown was pulled by someone else and reached its holder
+     as a gift: who pulled it, when, and whether it came out of a pack at all.
+     The medal belongs to that pull, not to the holding's own grant stamp.
+     Absent on a copy the holder pulled or was granted themselves. */
+  serialFrom?: PackSerialOrigin | null;
   /* Set on a team card (the team collection, live-backend pack-teams.ts),
      which lives outside the wallet and is only ever shaped like this for the
      spotlight and a showcase: it draws the team's banner face instead of a
@@ -399,9 +420,30 @@ export function applyCardMint(
   return { ...wallet, cards: { ...wallet.cards, [key]: minted } };
 }
 
+/* Spare copies of a mastered card recycle for a little more: +3% for each
+   mastery level (a doubling of the copies ever held) up to +12% at level 4.
+   Capped so a collection mastered across the board still pays back under 96%
+   of an Elite pack's price (see DUPLICATE_RECYCLE_RATE). Whole shards, rounded
+   down, in the same integer arithmetic as the server's
+   (MASTERY_RECYCLE_BONUS_PERCENT in the backend's pack-wallets.ts). */
+export const MASTERY_RECYCLE_BONUS_PERCENT = 3;
+export const MASTERY_RECYCLE_BONUS_MAX_LEVEL = 4;
+
+export function masteryRecycleBonusPercent(everHeld: number): number {
+  const held = Math.floor(Number(everHeld) || 0);
+  const level = held < 2 ? 0 : Math.min(MASTERY_RECYCLE_BONUS_MAX_LEVEL, Math.floor(Math.log2(held)));
+  return MASTERY_RECYCLE_BONUS_PERCENT * level;
+}
+
+/* What `count` spare copies recycle for, mastery included. */
+export function sparesShardValue(tier: ManiaCardTier | null, count: number, everHeld: number): number {
+  const spares = Math.max(0, Math.floor(count));
+  return Math.floor((spares * duplicateShardValueForTier(tier) * (100 + masteryRecycleBonusPercent(everHeld))) / 100);
+}
+
 export function duplicateShardValue(card: CollectedCard): number {
   if (card.recyclable === false) return 0;
-  return Math.max(0, card.copies - 1) * duplicateShardValueForTier(card.tier);
+  return sparesShardValue(card.tier, card.copies - 1, card.copies + (card.recycledCopies ?? 0));
 }
 
 /* What letting the whole card go pays: the copy you were keeping at full tier
@@ -409,6 +451,16 @@ export function duplicateShardValue(card: CollectedCard): number {
    has to price the duplicates the same way recycling only the duplicates does,
    or "recycle all" would be a strictly better way to cash in duplicates than
    the button that exists for it. */
+/* What putting one copy back in the pool pays: what recycling that copy
+   would, the full tier value for the last copy and the duplicate rate for a
+   spare (backend releasePackCardCopy). */
+export function releaseShardValue(card: CollectedCard): number {
+  if (card.recyclable === false || card.copies <= 0) return 0;
+  return card.copies === 1
+    ? shardValueForTier(card.tier)
+    : sparesShardValue(card.tier, 1, card.copies + (card.recycledCopies ?? 0));
+}
+
 export function wholeCardShardValue(card: CollectedCard): number {
   if (card.recyclable === false || card.copies <= 0) return 0;
   return shardValueForTier(card.tier) + duplicateShardValue(card);
@@ -470,14 +522,15 @@ export function copiesShardValue(
   tier: ManiaCardTier | null,
   copies: number,
   heldCopies: number,
+  /* Copies ever held, recycled ones included, for the mastery bonus. */
+  everHeld = heldCopies,
 ): number {
   const held = Math.max(0, Math.floor(heldCopies));
   const taken = Math.min(Math.max(0, Math.floor(copies)), held);
   if (taken <= 0) return 0;
-  const duplicateValue = duplicateShardValueForTier(tier);
   return taken >= held
-    ? shardValueForTier(tier) + (taken - 1) * duplicateValue
-    : taken * duplicateValue;
+    ? shardValueForTier(tier) + sparesShardValue(tier, taken - 1, everHeld)
+    : sparesShardValue(tier, taken, everHeld);
 }
 
 /* Recycles a set number of copies, keeping the rest. What the pull summary
@@ -493,7 +546,7 @@ export function recycleCopies(
   if (!card || card.recyclable === false || card.copies <= 0) return { wallet, gained: 0 };
   const taken = Math.min(Math.max(0, Math.floor(copies)), card.copies);
   if (taken <= 0) return { wallet, gained: 0 };
-  const gained = copiesShardValue(card.tier, taken, card.copies);
+  const gained = copiesShardValue(card.tier, taken, card.copies, card.copies + card.recycledCopies);
   return {
     wallet: {
       ...wallet,

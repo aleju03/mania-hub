@@ -13,6 +13,17 @@ precision highp float;
 uniform float uTime;
 uniform float uIntensity;
 uniform float uFoil;
+// An active supporter's card: the holo turns into a fine holographic foil,
+// on every tier including common (whose uFoil is 0).
+uniform float uSupporter;
+// Which supporter foil (SUPPORTER_FOILS order in supporter-foils.ts): 0 holo
+// lattice, 1 cracked ice, 2 glitter, 3 sunburst, 4 caustics, 5 note rain,
+// 6 scanline, 7 aurora. Every one is light laid over the card, white or a
+// pale spectrum, so no foil recolours a card.
+uniform float uFoilStyle;
+// 0 leaves out the tier's own sparkle (triangles or stars), for the /supporter
+// swatches that show a foil on its own; 1 on every card.
+uniform float uTierLayer;
 uniform float uStarfield;
 uniform vec2 uLight;
 uniform vec3 uTierColor;
@@ -34,6 +45,12 @@ uniform float uAvatarRadius;
 // on every other card.
 uniform vec4 uFlagMask;
 uniform float uFlagRadius;
+// The pack run's edition on this copy: 0 none, 1 foil, 2 holo, 3 polychrome.
+// Laid over everything, the portrait included, and lit even on a common card.
+uniform float uEdition;
+// Ember's char (alpha), where no foil plays: burnt card is not shiny.
+uniform sampler2D uSpellMask;
+uniform float uSpellMaskOn;
 varying vec2 vUv;
 
 float roundedRectMaskPx(vec2 uv, vec4 rectUv, float radiusPx, vec2 textureSize) {
@@ -161,7 +178,8 @@ vec4 motifCell(vec2 p, vec2 id) {
    a neighbour's shape. */
 vec4 motifWave(vec2 uv, vec2 grid, float offset) {
   vec2 p = uv * grid;
-  p.y -= offset;
+  // up and to the right, the way the painted layer drifts
+  p -= vec2(offset * 0.55, offset);
   vec2 id = floor(p);
   vec4 best = vec4(0.0);
   for (int dy = -1; dy <= 1; dy += 1) {
@@ -192,6 +210,134 @@ vec2 beam(vec2 uv, vec2 axis, float center, float sharpFalloff, float wideFallof
   return vec2(exp(-d * d * sharpFalloff), exp(-d * d * wideFalloff));
 }
 
+/* The supporter foil's surface: a fine diamond lattice (the embossed grid a
+   real holo sheet has) whose facets each catch the light at their own angle,
+   so a few of them flash as the card tilts while the rest stay matte. Cells
+   are square in card pixels. Returns vec2(lattice lines, facet glint). */
+vec2 foilSurface(vec2 uv, vec2 light) {
+  vec2 px = uv * uTextureSize / 14.0;
+  vec2 diag = vec2(px.x + px.y, px.x - px.y) * 0.70710678;
+  vec2 cell = floor(diag);
+  vec2 f = abs(fract(diag) - 0.5);
+  float line = smoothstep(0.40, 0.5, max(f.x, f.y));
+  float facet = random(cell);
+  float angle = facet * 6.28318 + light.x * 7.0 - light.y * 5.0;
+  float glint = pow(max(0.0, cos(angle)), 40.0) * step(0.86, random(cell + vec2(3.1, 7.7)));
+  return vec2(line, glint);
+}
+
+/* Cracked ice: the sheet is shattered into shards, each tilted its own way,
+   so as the card turns whole shards flash at once and the cracks between
+   them catch a thin line of light. Returns vec3(flash, edge, shard hue). */
+vec3 crackedIce(vec2 uv, vec2 light) {
+  vec2 p = uv * uTextureSize / 110.0;
+  vec2 id = floor(p);
+  float f1 = 8.0;
+  float f2 = 8.0;
+  vec2 best = id;
+  for (int dy = -1; dy <= 1; dy += 1) {
+    for (int dx = -1; dx <= 1; dx += 1) {
+      vec2 cell = id + vec2(float(dx), float(dy));
+      vec2 point = cell + 0.15 + 0.7 * vec2(random(cell), random(cell + vec2(4.1, 1.7)));
+      float d = length(p - point);
+      if (d < f1) {
+        f2 = f1;
+        f1 = d;
+        best = cell;
+      } else if (d < f2) {
+        f2 = d;
+      }
+    }
+  }
+  float tilt = random(best + vec2(9.3, 2.2)) * 6.28318;
+  float flash = pow(max(0.0, cos(tilt + light.x * 6.5 - light.y * 4.5)), 5.0);
+  float edge = 1.0 - smoothstep(0.0, 0.06, f2 - f1);
+  return vec3(flash, edge, random(best + vec2(1.3, 6.6)));
+}
+
+/* Glitter: a fine flake per 7px cell, each angled at random, so a scatter of
+   points flares as the light crosses their angle and twinkles at rest. */
+float glitter(vec2 uv, vec2 light, float time) {
+  vec2 p = uv * uTextureSize / 7.0;
+  vec2 id = floor(p);
+  float angle = random(id) * 6.28318;
+  float facing = cos(angle + light.x * 9.0 - light.y * 7.0 + sin(time * 0.6 + random(id + 3.3) * 6.28) * 0.35);
+  float flare = smoothstep(0.94, 1.0, facing);
+  vec2 local = fract(p) - 0.5;
+  float point = 1.0 - smoothstep(0.1, 0.48, length(local));
+  return flare * point * step(0.25, random(id + vec2(7.7, 0.4)));
+}
+
+/* Sunburst: rays fanning out from a point that follows the light, turning
+   slowly, brightest near the source. */
+float sunburst(vec2 uv, vec2 light, float time) {
+  vec2 source = mix(vec2(0.5, 0.64), light, 0.55);
+  vec2 rel = (uv - source) * vec2(1.0, 1.4);
+  float angle = atan(rel.y, rel.x);
+  float rays = pow(0.5 + 0.5 * cos(angle * 18.0 + time * 0.25 + light.x * 2.0), 5.0);
+  float fine = pow(0.5 + 0.5 * cos(angle * 46.0 - time * 0.4), 9.0) * 0.5;
+  float reach = exp(-length(rel) * 1.9);
+  return (rays + fine) * reach;
+}
+
+/* Caustics: the rippling light at the bottom of a pool, run through a few
+   rounds of warped sines. */
+float caustics(vec2 uv, vec2 light, float time) {
+  vec2 p = mod((uv + (light - 0.5) * 0.12) * vec2(1.0, 1.4) * 6.28318 * 1.1, 6.28318) - 250.0;
+  vec2 i = p;
+  float c = 1.0;
+  for (int n = 0; n < 4; n += 1) {
+    float t = time * 0.32 * (1.0 - (3.5 / float(n + 1)));
+    i = p + vec2(cos(t - i.x) + sin(t + i.y), sin(t - i.y) + cos(t + i.x));
+    c += 1.0 / length(vec2(p.x / (sin(i.x + t) / 0.005), p.y / (cos(i.y + t) / 0.005)));
+  }
+  c /= 4.0;
+  c = 1.17 - pow(c, 1.4);
+  return clamp(pow(abs(c), 8.0), 0.0, 1.0);
+}
+
+/* Note rain: osu!mania notes falling down seven lanes, each catching the light
+   as it passes through the beam. Returns vec2(note, lane). */
+vec2 noteRain(vec2 uv, float time) {
+  vec2 grid = vec2(7.0, 9.0);
+  vec2 p = uv * grid;
+  float lane = floor(p.x);
+  p.y += time * (0.55 + random(vec2(lane, 3.0)) * 0.5);
+  vec2 id = vec2(lane, floor(p.y));
+  vec2 local = fract(p) - 0.5;
+  float on = step(0.6, random(id + vec2(2.4, 8.1)));
+  vec2 halfSize = vec2(0.36, 0.11);
+  vec2 q = abs(local) - halfSize + 0.06;
+  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.06;
+  float note = (1.0 - smoothstep(0.0, 0.03, d)) * on;
+  float across = fract(uv.x * grid.x);
+  float rail = 1.0 - smoothstep(0.0, 0.025, min(across, 1.0 - across));
+  return vec2(note, rail);
+}
+
+/* Scanline: fine CRT lines, a bright band rolling down the card, and now and
+   then a slice of the band jumping sideways. Returns vec3(lines, band, slip). */
+vec3 scanline(vec2 uv, float time) {
+  float lines = 0.5 + 0.5 * sin(uv.y * uTextureSize.y * 1.5708);
+  float head = 1.0 - fract(time * 0.11);
+  float band = exp(-pow((uv.y - head) * 9.0, 2.0)) + exp(-pow((uv.y - head + 1.0) * 9.0, 2.0));
+  float row = floor(uv.y * 46.0);
+  float slip = step(0.965, random(vec2(row, floor(time * 7.0)))) * band;
+  return vec3(lines, band, slip);
+}
+
+/* Aurora: soft curtains hanging from the top of the card, folding as they
+   sway. */
+float aurora(vec2 uv, float time) {
+  float x = uv.x * 3.0 + sin(uv.y * 2.2 + time * 0.22) * 0.55;
+  float folds = 0.5 + 0.5 * sin(x * 3.1 + time * 0.31) * sin(x * 1.7 - time * 0.17 + 1.3);
+  float curtain = smoothstep(0.4, 0.95, folds);
+  // Fine vertical rays along each fold, the way an aurora hangs in streaks.
+  float streaks = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(x * 38.0 + sin(uv.y * 4.0 + time * 0.5) * 2.5), 2.0);
+  float drape = smoothstep(0.02, 0.8, uv.y);
+  return curtain * streaks * drape;
+}
+
 void main() {
   vec2 light = clamp(uLight, vec2(0.0), vec2(1.0));
   vec2 lightOffset = light - 0.5;
@@ -207,25 +353,33 @@ void main() {
      for a palette card that keeps its stars: the ones it keeps are painted
      into the texture, and this layer on top of them read as blooming bubbles
      around every copy of the emblem rather than as dust behind it. */
-  float patternGain = 1.0 - uMotifOn;
+  float patternGain = (1.0 - uMotifOn) * uTierLayer;
 
+  /* A card shows triangles or stars, never both, and neither under a motif:
+     the branches are uniform across the draw, so the hidden layer is skipped
+     rather than computed and multiplied by zero. */
+  bool showTriangles = patternGain > 0.0 && uStarfield < 0.5;
+  bool showStars = patternGain > 0.0 && uStarfield >= 0.5;
+  float triangles = 0.0;
+  float stars = 0.0;
 #if MC_MEDIUM
-  float triangles = triangleWave(vUv, vec2(6.0, 8.0), uTime * 0.07) * (1.0 - uStarfield) * patternGain;
-  float stars = starLayer(vUv, vec2(6.0, 8.0), uTime * 0.065, uTime) * uStarfield * patternGain;
+  if (showTriangles) triangles = triangleWave(vUv, vec2(6.0, 8.0), uTime * 0.07) * (1.0 - uStarfield) * patternGain;
+  if (showStars) stars = starLayer(vUv, vec2(6.0, 8.0), uTime * 0.065, uTime) * uStarfield * patternGain;
 #else
   // Twinkling sparkle layer (drifts slowly upward).
-  float triangles = (triangleWave(vUv, vec2(7.0, 9.0), uTime * 0.09) * 0.58
-                  + triangleWave(vUv + vec2(0.19, 0.11), vec2(5.0, 7.0), uTime * 0.052) * 0.42)
-                  * (1.0 - uStarfield);
+  if (showTriangles) {
+    triangles = (triangleWave(vUv, vec2(7.0, 9.0), uTime * 0.09) * 0.58
+              + triangleWave(vUv + vec2(0.19, 0.11), vec2(5.0, 7.0), uTime * 0.052) * 0.42)
+              * (1.0 - uStarfield) * patternGain;
+  }
 
   // Two star depths: the larger near layer drifts faster than the finer far
   // layer for a slow parallax.
-  float stars = (starLayer(vUv, vec2(6.0, 8.0), uTime * 0.085, uTime)
-              + starLayer(vUv + vec2(0.37, 0.21), vec2(10.0, 14.0), uTime * 0.04, uTime) * 0.65)
-              * uStarfield;
-
-  triangles *= patternGain;
-  stars *= patternGain;
+  if (showStars) {
+    stars = (starLayer(vUv, vec2(6.0, 8.0), uTime * 0.085, uTime)
+          + starLayer(vUv + vec2(0.37, 0.21), vec2(10.0, 14.0), uTime * 0.04, uTime) * 0.65)
+          * uStarfield * patternGain;
+  }
 #endif
 
   /* Drifts upward at the triangles' own pace on a coarser grid, because one
@@ -245,19 +399,24 @@ void main() {
   float centerA = restA + lightOffset.y * 0.55 + lightOffset.x * 0.20 + drift1;
   vec2 beamA = beam(vUv, axisA, centerA, 24.0, 5.0);
 
+  /* The tier's beams. The holo lattice foil rides on them, so it switches
+     them on for a supporter's common card too; every other foil brings its
+     own light and leaves the beams to the tier. */
+  float foilOn = max(uFoil, uSupporter * step(uFoilStyle, 0.5));
+
 #if MC_MEDIUM
-  float bandSharp = beamA.x * uFoil;
-  float bandWide = beamA.y * uFoil;
+  float bandSharp = beamA.x * foilOn;
+  float bandWide = beamA.y * foilOn;
 #else
   // Secondary beam at a contrasting angle so the two cross when the card moves.
   float restB = 0.5 * (axisB.x + axisB.y);
   float centerB = restB + lightOffset.x * 0.55 - lightOffset.y * 0.25 + drift2;
   vec2 beamB = beam(vUv, axisB, centerB, 22.0, 4.5);
 
-  float bandSharp = max(beamA.x, beamB.x * 0.7) * uFoil;
-  float bandWide = max(beamA.y, beamB.y * 0.85) * uFoil;
+  float bandSharp = max(beamA.x, beamB.x * 0.7) * foilOn;
+  float bandWide = max(beamA.y, beamB.y * 0.85) * foilOn;
 #endif
-  glare *= uFoil;
+  glare *= foilOn;
 
   // Hue scrolls along each beam direction so the rainbow visibly shifts as
   // the bands move - that's the Pokemon holo "color flow".
@@ -269,9 +428,89 @@ void main() {
   // otherwise the rainbow reads as a color cast over the tier's own palette.
   rainbow = mix(uTierColor * 1.5 + 0.12, rainbow, uRainbow);
 
+  /* Supporter foil, in the style the supporter picked. The holo lattice (0)
+     is not more holo but a finer one: inside the same beams the one broad
+     rainbow is swapped for a pastel spectrum several bands per card width that
+     slides with the light, and the sheet gets a texture, the lattice plus the
+     odd facet glinting at its own angle. The others (the functions above main)
+     leave the tier's beams as they are and add their own light, brightest
+     where the sheen follows the light. Spared on every other card by the
+     uniforms, which are constant per draw. */
+  float foilGrain = 1.0;
+  vec3 supporterFoil = vec3(0.0);
+  float supporterAlpha = 0.0;
+  if (uSupporter > 0.5) {
+    vec2 sheenBeam = beam(vUv, axisA, centerA, 24.0, 1.4);
+    float sheen = 0.12 + 0.88 * sheenBeam.y;
+    float fineHue = coordA * 4.2 - coordB * 1.6 + light.x * 1.5 - light.y * 1.1 + uTime * 0.03;
+    vec3 spectrum = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + fineHue));
+    spectrum = mix(vec3(0.94), spectrum, 0.62);
+    // Pale light for the foils that are not a spectrum: white with a little colour, so it reads on every tier, gold included.
+    vec3 paleLight = mix(vec3(1.0), spectrum, 0.35);
+    if (uFoilStyle < 0.5) {
+      vec2 surface = foilSurface(vUv, light);
+      rainbow = spectrum;
+      foilGrain = 0.74 + 0.26 * surface.x;
+      supporterFoil = spectrum * sheen * foilGrain * 0.16 + vec3(surface.y * (0.25 + 0.75 * sheen) * 0.55);
+      supporterAlpha = sheen * foilGrain * 0.05 + surface.y * (0.25 + 0.75 * sheen) * 0.14;
+    } else if (uFoilStyle < 1.5) {
+      vec3 ice = crackedIce(vUv, light);
+      vec3 shardHue = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + ice.z + fineHue * 0.35));
+      shardHue = mix(vec3(0.95), shardHue, 0.5);
+      float lit = ice.x * (0.45 + 0.55 * sheen);
+      supporterFoil = shardHue * lit * 0.9 + vec3(ice.y * (0.4 + 0.6 * sheen) * 0.8);
+      supporterAlpha = lit * 0.32 + ice.y * (0.3 + 0.7 * sheen) * 0.22;
+    } else if (uFoilStyle < 2.5) {
+      float flake = glitter(vUv, light, uTime);
+      supporterFoil = mix(vec3(1.0), spectrum, 0.45) * flake * 1.4;
+      supporterAlpha = flake * (0.55 + 0.45 * sheen);
+    } else if (uFoilStyle < 3.5) {
+      float rays = sunburst(vUv, light, uTime);
+      vec2 rel = (vUv - mix(vec2(0.5, 0.64), light, 0.55)) * vec2(1.0, 1.4);
+      vec3 rayHue = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + atan(rel.y, rel.x) * 0.32 + uTime * 0.02));
+      rayHue = mix(vec3(0.96), rayHue, 0.4);
+      supporterFoil = rayHue * rays * 1.1;
+      supporterAlpha = rays * 0.42;
+    } else if (uFoilStyle < 4.5) {
+      float ripple = caustics(vUv, light, uTime);
+      supporterFoil = paleLight * ripple * (0.8 + 0.5 * sheen);
+      supporterAlpha = ripple * (0.3 + 0.2 * sheen);
+    } else if (uFoilStyle < 5.5) {
+      vec2 rain = noteRain(vUv, uTime);
+      float lit = rain.x * (0.45 + 0.55 * sheen);
+      supporterFoil = mix(paleLight, spectrum, 0.5) * lit * 1.1 + vec3(rain.y * 0.3);
+      supporterAlpha = lit * 0.42 + rain.y * 0.06;
+    } else if (uFoilStyle < 6.5) {
+      vec3 scan = scanline(vUv, uTime);
+      float split = scan.y * 0.012 + scan.z * 0.03;
+      vec3 fringe = vec3(
+        0.5 + 0.5 * sin((vUv.y + split) * uTextureSize.y * 1.5708),
+        scan.x,
+        0.5 + 0.5 * sin((vUv.y - split) * uTextureSize.y * 1.5708)
+      );
+      float lines = scan.x * (0.45 + 0.55 * sheen);
+      supporterFoil = mix(vec3(1.0), fringe, 0.6) * (lines * 0.35 + scan.y * 0.7 + scan.z * 0.8);
+      supporterAlpha = lines * 0.09 + scan.y * 0.22 + scan.z * 0.3;
+    } else {
+      float veil = aurora(vUv, uTime);
+      vec3 veilHue = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + vUv.x * 0.6 + vUv.y * 0.25 + uTime * 0.015));
+      veilHue = mix(vec3(1.0), veilHue, 0.55);
+      supporterFoil = veilHue * veil * (0.9 + 0.4 * sheen);
+      supporterAlpha = veil * (0.34 + 0.14 * sheen);
+    }
+    // Every foil but the lattice (which has the tier's beams) also gets a
+    // soft pale sheen following the light, since a foil sheet is foil edge to edge.
+    if (uFoilStyle > 0.5) {
+      float glow = sheenBeam.y;
+      supporterFoil += mix(vec3(1.0), spectrum, 0.5) * glow * 0.35;
+      supporterAlpha += glow * 0.07;
+    }
+  }
+
   // Holo: tier-tinted rainbow, lit only where the bands pass.
   vec3 holo = screen(uTierColor * 0.42, rainbow * 0.85)
-              * (triangles * 0.32 + stars * 0.30 + motif * 0.30 + bandWide * 0.75 + 0.10);
+              * (triangles * 0.32 + stars * 0.30 + motif * 0.30 + bandWide * 0.75 + 0.10)
+              * foilGrain;
 
   // Specular streak (white core along the beam).
   vec3 sweep = vec3(bandSharp * 0.62 + glare * 0.22);
@@ -289,14 +528,98 @@ void main() {
     roundedRectMaskPx(vUv, uFlagMask, uFlagRadius, uTextureSize)
   );
   float foilGain = mix(1.0, 0.30, inAvatar);
+  // The supporter's foil stops at the picture: rays or notes over a face read as a smudge on it.
+  float supporterGain = 1.0 - inAvatar;
   float mask = roundedCardMask(vUv);
 
-  vec3 color = (holo + sweep + starGlow + motifGlow) * foilGain;
+  vec3 color = (holo + sweep + starGlow + motifGlow) * foilGain + supporterFoil * supporterGain;
   float alpha = clamp(
-    (triangles * 0.12 + stars * 0.40 + motif * 0.34 + bandWide * 0.30 + bandSharp * 0.26 + glare * 0.12) * foilGain * uIntensity,
+    (triangles * 0.12 + stars * 0.40 + motif * 0.34 + bandWide * 0.30 + bandSharp * 0.26 + glare * 0.12) * foilGain * uIntensity
+      + supporterAlpha * supporterGain * uIntensity,
     0.0,
-    0.55
+    0.55 + uSupporter * 0.05
   ) * mask;
+
+  if (uEdition > 0.5) {
+    // Read off the unscaled beam so a common card's edition still moves.
+    float edBand = beamA.y;
+    vec3 edColor;
+    float edAlpha;
+    if (uEdition < 1.5) {
+      // Foil: a cold metallic wash with fine brushed lines that catch the beam.
+      float brushed = 0.5 + 0.5 * sin(coordA * 220.0 + coordB * 14.0);
+      float sheen = 0.22 + edBand * 0.95 + beamA.x * 0.6 + brushed * 0.10;
+      edColor = mix(vec3(0.62, 0.74, 0.95), vec3(1.0), clamp(beamA.x, 0.0, 1.0)) * sheen;
+      edAlpha = 0.16 + sheen * 0.24;
+    } else if (uEdition < 2.5) {
+      // Holo: a full spectrum in fine diagonal stripes, whatever the tier.
+      vec3 spectrum = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + hueShift * 1.6));
+      float stripes = 0.5 + 0.5 * sin(coordA * 110.0 + hueShift * 9.0);
+      edColor = spectrum * (0.55 + stripes * 0.55);
+      edAlpha = 0.12 + stripes * 0.18 + edBand * 0.30;
+    } else {
+      // Polychrome: the whole card cycles through hues in broad soft bands.
+      vec3 poly = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + vUv.x * 0.9 - vUv.y * 0.7 + uTime * 0.12 + light.x * 0.3));
+      edColor = mix(poly, vec3(1.0), edBand * 0.35);
+      edAlpha = 0.28 + edBand * 0.22;
+    }
+    float edWeight = clamp(edAlpha * 1.4, 0.0, 1.0);
+    color = mix(color, edColor, edWeight);
+    alpha = max(alpha, clamp(edAlpha * uIntensity, 0.0, 0.62) * mask);
+  }
+  if (uSpellMaskOn > 0.5) alpha *= 1.0 - texture2D(uSpellMask, vUv).a;
   gl_FragColor = vec4(color, alpha);
+}
+`;
+
+/* A supporter's painted doodles, drifting between the card's background and
+   everything printed on it (ManiaCardRenderer stacks the meshes). The same
+   jittered grid and drift as the overlay's motifWave, but drawn as paint: the
+   sprite's own colour at its own alpha, not light. */
+export const cardMotifPaintFragmentShader = `
+precision highp float;
+
+uniform float uTime;
+uniform sampler2D uMotif;
+uniform vec2 uMotifSize;
+uniform float uMotifOpacity;
+varying vec2 vUv;
+
+float random(vec2 value) {
+  return fract(sin(dot(value, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+vec4 paintCell(vec2 p, vec2 id) {
+  float variant = random(id);
+  vec2 center = id + 0.5 + (vec2(random(id + vec2(7.1, 2.9)), random(id + vec2(3.7, 9.4))) - 0.5) * 0.78;
+  vec2 halfSize = uMotifSize * (0.76 + random(id + vec2(11.2, 5.8)) * 0.48) * 0.5;
+  // a slow sway on top of each copy's own tilt, so the drift is not rigid
+  float angle = (random(id + vec2(4.3, 8.9)) - 0.5) * 0.62 + sin(uTime * 0.6 + variant * 6.28) * 0.08;
+  vec2 rel = p - center;
+  vec2 turned = vec2(rel.x * cos(angle) + rel.y * sin(angle), rel.y * cos(angle) - rel.x * sin(angle));
+  vec2 local = turned / max(halfSize, vec2(0.0001));
+  if (abs(local.x) > 1.0 || abs(local.y) > 1.0) return vec4(0.0);
+  vec4 texel = texture2D(uMotif, local * 0.5 + 0.5);
+  return vec4(texel.rgb, texel.a * mix(0.85, 1.0, variant));
+}
+
+float roundedCardMask(vec2 uv) {
+  vec2 p = abs(uv - 0.5) - vec2(0.5) + vec2(0.055);
+  float d = length(max(p, 0.0)) + min(max(p.x, p.y), 0.0) - 0.055;
+  return 1.0 - smoothstep(0.0, 0.006, d);
+}
+
+void main() {
+  float offset = uTime * 0.05;
+  vec2 p = vUv * vec2(3.0, 4.2) - vec2(offset * 0.55, offset);
+  vec2 id = floor(p);
+  vec4 best = vec4(0.0);
+  for (int dy = -1; dy <= 1; dy += 1) {
+    for (int dx = -1; dx <= 1; dx += 1) {
+      vec4 sampled = paintCell(p, id + vec2(float(dx), float(dy)));
+      if (sampled.a > best.a) best = sampled;
+    }
+  }
+  gl_FragColor = vec4(best.rgb, best.a * uMotifOpacity * roundedCardMask(vUv));
 }
 `;

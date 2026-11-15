@@ -55,6 +55,10 @@ it("expires retained buffers and rejects paths outside the team image namespace"
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
+// Captured before any test fakes the clock, so the loop below can let real
+// image work finish between fake ticks.
+const realSetImmediate = globalThis.setImmediate;
+
 it("bounds active downloads and the waiting backlog", async () => {
   vi.useFakeTimers();
   let active = 0;
@@ -69,8 +73,15 @@ it("bounds active downloads and the waiting backlog", async () => {
   const cache = new TeamImageCache(limits);
   const pending = Array.from({ length: 8 }, (_, i) => cache.get(path(i + 1)));
   await expect(cache.get(path(9))).rejects.toThrow("busy");
-  await vi.advanceTimersByTimeAsync(100);
-  await Promise.all(pending);
+  // Later downloads only start once earlier ones finish their (real, not
+  // faked) image work, so keep the clock moving until every one has settled.
+  let settled = false;
+  const all = Promise.all(pending).finally(() => { settled = true; });
+  while (!settled) {
+    await vi.advanceTimersByTimeAsync(20);
+    await new Promise((resolve) => realSetImmediate(resolve));
+  }
+  await all;
   expect(peak).toBe(2);
 });
 

@@ -45,7 +45,7 @@ it("opens with stored judgments and the play's own MSD vector, without a dan rai
   expect(screen.getByText("3,228")).toBeTruthy();
   expect(screen.getByText("1,173x")).toBeTruthy();
   expect(screen.getByText("895,710")).toBeTruthy();
-  expect(screen.getByText("MSD skill rating")).toBeTruthy();
+  expect(screen.getByText("Skill rating")).toBeTruthy();
   expect(screen.getByText("23.62")).toBeTruthy();
   expect(screen.queryByText("39.00")).toBeNull();
   expect(screen.queryByText("Dan credit")).toBeNull();
@@ -98,7 +98,7 @@ it("gives a local chart's play a Map info tab without anything osu! supplies", (
   render(wrap(<MapDetailModal entry={localEntry} play={localPlay} onClose={() => {}} />));
   fireEvent.click(screen.getByRole("tab", { name: "Map info" }));
   expect(screen.getByText("BPM")).toBeTruthy();
-  expect(screen.getByText("LN notes")).toBeTruthy();
+  expect(screen.getByText("Long Notes")).toBeTruthy();
   expect(screen.getByText("40.00")).toBeTruthy();
   expect(screen.queryByText("Plays")).toBeNull();
   expect(screen.queryByText(/local/i)).toBeNull();

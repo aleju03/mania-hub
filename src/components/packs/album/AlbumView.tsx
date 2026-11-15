@@ -68,6 +68,7 @@ import {
   type AlbumSection,
 } from "./albumModel";
 import { FlipBook, type FlipBookApi } from "./FlipBook";
+import { UsernameText } from "../../ui/UsernameText";
 
 const PAGE_WIDTH = 380;
 const PAGE_HEIGHT = 560;
@@ -220,6 +221,7 @@ async function renderAlbumThumbnail(card: CollectedCard): Promise<string | null>
     tierOverride: collectedCardTier(card),
     labelOverride: card.customLabel,
     motifOverride: card.motif,
+    supporterLook: card.supporterLook,
   });
   const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
   const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));
@@ -789,7 +791,7 @@ function PlayerPeek({ target, onClose }: { target: PlayerPeekTarget | null; onCl
         </div>
         <div className="px-4 pb-4 pt-8">
           <div className="flex items-center gap-2">
-            <span className="truncate text-[15px] font-bold text-white">{entry.user.username}</span>
+            <UsernameText username={entry.user.username} userId={entry.user.id} className="truncate text-[15px] font-bold text-white" />
             <CountryFlag code={entry.user.country_code} size="sm" decorative />
           </div>
           <div className="mt-0.5 text-[11px] text-osu-f1 tabular-nums">
@@ -869,8 +871,13 @@ function CollectedCardFace({
           onLoad={(event) => noteCardThumbnailStored(card, event.currentTarget.src)}
           onError={(event) => {
             /* Only a remote pool URL can 404 (skeletons and local renders
-               are data/blob URLs); fall back to rendering this card. */
-            if (/^https?:/.test(event.currentTarget.src)) onThumbnailError(card);
+               are data/blob URLs); fall back to rendering this card, with
+               the tier skeleton in the slot until it arrives rather than a
+               broken image and its alt text. */
+            if (!/^https?:/.test(event.currentTarget.src)) return;
+            onThumbnailError(card);
+            const fallback = tierSkeletonThumb(cardTier(card));
+            if (fallback) event.currentTarget.src = fallback;
           }}
         />
       ) : (
@@ -962,7 +969,7 @@ const AlbumSlot = memo(function AlbumSlot({
           draggable={false}
         />
         <span className="mt-1.5 w-full truncate text-center text-[9px] font-semibold text-white">
-          {entry.user.username}
+          <UsernameText username={entry.user.username} userId={entry.user.id} />
         </span>
       </button>
     );
@@ -985,7 +992,7 @@ const AlbumSlot = memo(function AlbumSlot({
         draggable={false}
       />
       <span className="mt-1.5 w-full truncate text-center text-[9px] text-osu-f1/80">
-        {entry.user.username}
+        <UsernameText username={entry.user.username} userId={entry.user.id} />
       </span>
     </button>
   );

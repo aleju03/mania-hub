@@ -20,6 +20,7 @@ import {
   type UserCollectionsListResult,
   type UserMapCollectionSummary,
 } from "../../lib/user-map-collections";
+import { UsernameText } from "../ui/UsernameText";
 
 /*
  * The community half of the /maps Collections tab: collections players built
@@ -166,7 +167,7 @@ function CollectionTile({
             className="h-4 w-4 shrink-0 rounded-full object-cover"
             loading="lazy"
           />
-          <span className="truncate">{collection.owner.username}</span>
+          <UsernameText username={collection.owner.username} userId={collection.owner.userId} className="truncate" />
         </Link>
         <FavouriteButton collection={collection} onChange={onFavouriteChange} />
       </div>

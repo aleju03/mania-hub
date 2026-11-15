@@ -82,7 +82,9 @@ it("browses both card kinds, resets pages on pool changes and keeps their cached
   await screen.findByText("Eternal Team 1");
   expect(screen.getByPlaceholderText("Find a player or team")).toBeTruthy();
   expect(screen.getByText("1 / 3")).toBeTruthy();
-  expect(new URL(fetchPage.mock.calls[0][0]).searchParams.get("teams")).toBe("1");
+  // The first page request (a supporter look lookup may go out before it).
+  const firstPage = fetchPage.mock.calls.map(([input]) => new URL(input).searchParams).find((params) => params.has("teams"));
+  expect(firstPage?.get("teams")).toBe("1");
 
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
   await screen.findByText("Player 1");

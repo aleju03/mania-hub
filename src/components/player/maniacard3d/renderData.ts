@@ -1,5 +1,6 @@
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { cardMotifSignature, type CardMotif } from "#/lib/card-motif";
+import { effectiveCardLook, type SupporterLook } from "#/lib/supporter-card-looks";
 import { honoraryAvatarUrl, honoraryPlayerById } from "#/lib/honorary-players";
 import {
   computeManiaSkills,
@@ -46,7 +47,7 @@ export function maniaCardAvatarUrl(user: { id: number; avatar_url?: string }): s
   return avatarImageSrc(user.avatar_url, user.id, { proxy: true }) ?? `/api/avatar?u=${user.id}`;
 }
 
-export function buildManiaCardRenderData({ user, scores, tierOverride, labelOverride, motifOverride }: ManiaCardRenderInput): ManiaCardRenderData {
+export function buildManiaCardRenderData({ user, scores, tierOverride, labelOverride, motifOverride, supporterLook }: ManiaCardRenderInput): ManiaCardRenderData {
   const skills = computeManiaSkills(
     scores.map((score) => ({
       ...score,
@@ -67,12 +68,13 @@ export function buildManiaCardRenderData({ user, scores, tierOverride, labelOver
         tierOverride,
         labelOverride,
         motifOverride,
+        supporterLook,
       });
     }
     return { status: "empty", message: EMPTY_CARD_MESSAGE };
   }
 
-  return buildManiaCardRenderDataFromSkills({ user, skills, scores, tierOverride, labelOverride, motifOverride });
+  return buildManiaCardRenderDataFromSkills({ user, skills, scores, tierOverride, labelOverride, motifOverride, supporterLook });
 }
 
 /* Rebuilds renderable card data from an already computed skills snapshot.
@@ -86,6 +88,7 @@ export function buildManiaCardRenderDataFromSkills({
   tierOverride,
   labelOverride,
   motifOverride,
+  supporterLook,
   team,
 }: {
   user: ManiaCardRenderInput["user"];
@@ -103,10 +106,15 @@ export function buildManiaCardRenderDataFromSkills({
      override as the badge text above: it belongs to this collector's copy, so
      it is passed in per card rather than read off the tier. */
   motifOverride?: CardMotif | null;
+  /* The player's supporter look, on every copy of their card. It supplies the
+     motif and palette only when the holding has no motif of its own, and the
+     foil whenever it is present (effectiveCardLook). Never on a team card. */
+  supporterLook?: SupporterLook | null;
 }): ManiaCardReadyData {
   const honoraryTier = getHonoraryTier(user.id);
   const tier = tierOverride ?? honoraryTier ?? getManiaCardTier(skills.cardPower);
-  const baseStyle = resolveManiaTierStyle(tier, motifOverride);
+  const look = effectiveCardLook(motifOverride, team || user.id <= 0 ? null : supporterLook);
+  const baseStyle = resolveManiaTierStyle(tier, look.motif);
   // Card-art overrides for the honorary roster: a name the community knows the
   // player by, and a personalised badge. They apply to the card only - the
   // profile link keeps the real username - and never to a forced tier.
@@ -139,7 +147,8 @@ export function buildManiaCardRenderDataFromSkills({
     edgeColor: parseCssRgba(tierStyle.edgeFill),
     glowColor: parseCssRgba(tierStyle.glowColor),
     badgeGradientStops: parseGradientStops(tierStyle.badgeGradient),
-    motif: motifOverride ?? null,
+    motif: look.motif,
+    ...(look.foil ? { supporterFoil: look.foil } : {}),
     team: team ? { tag: team.tag, coverUrl: team.coverUrl } : null,
   };
 }
@@ -165,6 +174,7 @@ export function getManiaCardRenderDataSignature(data: ManiaCardRenderData): stri
     signatureColor(data.glowColor),
     data.badgeGradientStops.map((stop) => `${stop.color}:${signatureNumber(stop.offset)}`).join(","),
     cardMotifSignature(data.motif),
+    data.supporterFoil ? `foil:${data.supporterFoil}` : "",
     data.team ? `team:${data.team.tag}:${data.team.coverUrl ?? ""}` : "",
   ].join("|");
 }

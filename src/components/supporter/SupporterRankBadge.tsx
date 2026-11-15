@@ -1,0 +1,282 @@
+import { useEffect, useId, useRef, useState } from "react";
+import { plural } from "@lingui/core/macro";
+import { useLingui } from "@lingui/react/macro";
+
+import { useWebGlSlot } from "../../lib/gl-budget";
+import { mountRankFire, RANK_FIRE_BLEED, type RankFire } from "../../lib/rank-fire";
+import { SUPPORTER_RANKS, supporterRank, type SupporterRankDef } from "../../lib/supporter-ranks";
+import { Switch } from "../ui/Switch";
+import { Stagger, StaggerItem } from "./SupportMotion";
+
+/* The supporter mark (public/images/icons/supporter-gem.svg): a heart in a
+   flat-topped hexagon, its corners rounded, filled with a rank's material.
+   Drawn for this site from a regular hexagon (circumradius 48, corners of
+   radius 16), which is wider and lower than the hexagon of osu!'s icons. */
+const HEX = "M93.4 42A16 16 0 0 1 93.4 58L78.6 83.6A16 16 0 0 1 64.8 91.6L35.2 91.6A16 16 0 0 1 21.4 83.6L6.6 58A16 16 0 0 1 6.6 42L21.4 16.4A16 16 0 0 1 35.2 8.4L64.8 8.4A16 16 0 0 1 78.6 16.4Z";
+const HEART = "M50 69L33.6 53.2C28.4 48.2 28.2 40.2 33.2 35.6C38 31.2 45.4 32 50 38C54.6 32 62 31.2 66.8 35.6C71.8 40.2 71.6 48.2 66.4 53.2L50 69Z";
+const DAY_MS = 24 * 60 * 60 * 1000;
+/* How long the /support demo shows each rank burning before the next catches. */
+const RANK_FIRE_DEMO_MS = 3200;
+
+export function SupporterRankIcon({ rank, className }: { rank: SupporterRankDef; className?: string }) {
+  const fill = useId();
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id={fill} x1="0" y1="0" x2="1" y2="1">
+          {rank.stops.map((color, i) => <stop key={i} offset={[0, 0.45, 0.7, 1][i]} stopColor={color} />)}
+        </linearGradient>
+      </defs>
+      <path d={HEX} fill={`url(#${fill})`} />
+      <path d={HEART} fill={rank.ink} />
+    </svg>
+  );
+}
+
+/* The supporter mark in the text colour: the hexagon outlined, the heart filled. */
+export function SupporterMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="-3 -3 106 106" fill="none" className={className} aria-hidden="true">
+      <path d={HEX} stroke="currentColor" strokeWidth="7" />
+      <path d={HEART} fill="currentColor" />
+    </svg>
+  );
+}
+
+/* The rank gem, burning when a monthly subscription keeps it renewing
+   (lib/rank-fire.ts): the fire canvas sits behind the gem, the licks over its
+   face are screened on top. Still under reduced motion, and while the page
+   has no WebGL slot to spare, a soft glow in the rank's colour stands in. */
+export function RankGem({ rank, renewing, className }: { rank: SupporterRankDef; renewing: boolean; className?: string }) {
+  const hostRef = useRef<HTMLSpanElement>(null);
+  const backRef = useRef<HTMLCanvasElement>(null);
+  const frontRef = useRef<HTMLCanvasElement>(null);
+  const [reduced, setReduced] = useState(true);
+  useEffect(() => setReduced(window.matchMedia("(prefers-reduced-motion: reduce)").matches), []);
+  const slot = useWebGlSlot(hostRef, { enabled: renewing && !reduced, low: true });
+  const live = renewing && !reduced && slot;
+  // one fire for as long as it's live; a new rank only recolours it
+  const fireRef = useRef<RankFire | null>(null);
+  const colorsRef = useRef(rank.fire);
+  colorsRef.current = rank.fire;
+  useEffect(() => {
+    const back = backRef.current, front = frontRef.current;
+    if (!live || !back || !front) return;
+    const fire = mountRankFire(back, front, colorsRef.current);
+    fireRef.current = fire;
+    return () => {
+      fire?.dispose();
+      fireRef.current = null;
+    };
+  }, [live]);
+  useEffect(() => {
+    fireRef.current?.setColors(rank.fire);
+  }, [rank]);
+  const bleed = RANK_FIRE_BLEED;
+  const box = { left: `${-bleed.x * 100}%`, top: `${-bleed.top * 100}%`, width: `${(1 + 2 * bleed.x) * 100}%`, height: `${(1 + bleed.top + bleed.bottom) * 100}%` };
+  return (
+    <span
+      ref={hostRef}
+      className={`relative inline-block shrink-0 ${className ?? ""}`}
+      style={renewing && !live ? { filter: `drop-shadow(0 0 0.18em ${rank.fire[0]})` } : undefined}
+    >
+      {live ? <canvas ref={backRef} aria-hidden className="pointer-events-none absolute" style={box} /> : null}
+      <SupporterRankIcon rank={rank} className="relative block h-full w-full" />
+      {live ? <canvas ref={frontRef} aria-hidden className="pointer-events-none absolute mix-blend-screen" style={box} /> : null}
+    </span>
+  );
+}
+
+/* A supporter's rank beside their name, with how long they have kept it up
+   and when the next one comes on hover or tap. Nothing for a run that
+   isn't active (`runStartedAt` null). A renewing rank burns unless its
+   supporter turned the fire off (`fire` false); the tip still says it renews.
+   On their own profile (`onFireChange` set) the tip holds that switch, so it
+   stays open while the pointer or focus is inside it. A Gold supporter (a renewing
+   subscription of $10 or more) is named in the tip. */
+export function SupporterRankBadge({ runStartedAt, renewing = false, patron = false, shownRank = null, own = false, fire = true, onFireChange, className = "h-7 w-7" }: { runStartedAt: number | null; renewing?: boolean; patron?: boolean; /* an earlier rank they chose to show */ shownRank?: number | null; /* the viewer's own badge: only they are told which rank it shows */ own?: boolean; fire?: boolean; onFireChange?: (fire: boolean) => void; className?: string }) {
+  const { t } = useLingui();
+  const [open, setOpen] = useState(false);
+  if (runStartedAt == null) return null;
+  const rank = supporterRank(runStartedAt);
+  const gem = shownRank != null && SUPPORTER_RANKS[shownRank] ? SUPPORTER_RANKS[shownRank] : rank.def;
+  /* Visitors see the gem shown, named as shown; only the owner hears it is an
+     earlier rank and how far the next one is. */
+  const earlier = gem !== rank.def;
+  const headline = own ? rank.def : gem;
+  const name = headline.name;
+  const inARow = `${name}. ${t`Supporter for ${plural(rank.months, { one: "# month", other: "# months" })} in a row`}`;
+  const label = `${inARow}${renewing ? `. ${t`Renews every month`}` : ""}${patron ? `. ${t`Gold supporter`}` : ""}`;
+  const fireSwitch = renewing && onFireChange ? onFireChange : undefined;
+  return (
+    <span
+      className="relative inline-flex shrink-0"
+      onPointerEnter={(event) => event.pointerType === "mouse" && setOpen(true)}
+      onPointerLeave={(event) => event.pointerType === "mouse" && setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
+      <button
+        type="button"
+        className="inline-flex items-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink-light"
+        aria-label={label}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <RankGem rank={gem} renewing={renewing && fire} className={className} />
+      </button>
+      {/* only while open: the day count would differ between the server render and hydration */}
+      {open ? <RankTip rank={rank} headline={headline} showNext={own || !earlier} patron={patron} shown={own && earlier ? gem : null} fire={fire} onFireChange={fireSwitch} /> : null}
+    </span>
+  );
+}
+
+function RankTip({ rank, headline, showNext, patron, shown, fire, onFireChange }: { rank: ReturnType<typeof supporterRank>; headline: SupporterRankDef; showNext: boolean; patron: boolean; shown: SupporterRankDef | null; fire: boolean; onFireChange?: (fire: boolean) => void }) {
+  const { t } = useLingui();
+  const months = rank.months;
+  const next = rank.nextAt == null ? null : SUPPORTER_RANKS[rank.index + 1];
+  const days = rank.nextAt == null ? 0 : Math.max(1, Math.ceil((rank.nextAt - Date.now()) / DAY_MS));
+  const nextName = next ? next.name : "";
+  return (
+    // the padding, not a margin, bridges the gap under the gem, so the pointer
+    // can cross it to the switch without the tip closing
+    <span
+      role={onFireChange ? undefined : "tooltip"}
+      className={`absolute left-1/2 top-full z-30 w-max max-w-[16rem] -translate-x-1/2 pt-2 ${onFireChange ? "" : "pointer-events-none"}`}
+    >
+      <span className="block rounded-lg border border-white/10 bg-black/90 px-3 py-2 text-left text-[13px] font-normal leading-snug text-white shadow-xl">
+        <span className="block font-semibold" style={{ color: headline.accent }}>{headline.name}</span>
+        <span className="block">{t`Supporter for ${plural(months, { one: "# month", other: "# months" })} in a row`}</span>
+        {showNext ? (
+          <span className="block text-white/60">
+            {next ? t`${nextName} in ${plural(days, { one: "# day", other: "# days" })}` : t`The top rank`}
+          </span>
+        ) : null}
+        {shown ? (
+          <span className="block text-white/60">
+            {t`Showing`} <span className="font-semibold" style={{ color: shown.accent }}>{shown.name}</span>
+          </span>
+        ) : null}
+        {patron ? <span className="block font-semibold text-[#ffd56b]">{t`Gold supporter`}</span> : null}
+        {onFireChange ? (
+          <label className="mt-2 flex cursor-pointer items-center gap-2 border-t border-white/10 pt-2 text-white/80">
+            <Switch checked={fire} onChange={onFireChange} label={t`Show the fire on your rank`} />
+            <span>{t`Show the fire on your rank`}</span>
+          </label>
+        ) : null}
+      </span>
+    </span>
+  );
+}
+
+/* All twelve ranks in a row on /supporter: the ones reached in colour, the
+   current one larger, the rest still to come faded. Client-only (the page
+   loads the viewer's state after mount), so the day count is safe here. */
+export function SupporterRankLadder({ runStartedAt, renewing = false, fire = true, bestRank, shownRank = null, onShow }: {
+  runStartedAt: number;
+  renewing?: boolean;
+  fire?: boolean;
+  /* The highest rank ever reached: gems up to it are unlocked and, with
+     `onShow`, can be picked to show instead of the current one. */
+  bestRank?: number;
+  shownRank?: number | null;
+  onShow?: (rank: number | null) => void;
+}) {
+  const { t } = useLingui();
+  const rank = supporterRank(runStartedAt);
+  const name = rank.def.name;
+  const next = rank.nextAt == null ? null : SUPPORTER_RANKS[rank.index + 1];
+  const nextName = next ? next.name : "";
+  const days = rank.nextAt == null ? 0 : Math.max(1, Math.ceil((rank.nextAt - Date.now()) / DAY_MS));
+  const unlocked = Math.max(rank.index, bestRank ?? rank.index);
+  const shown = shownRank != null && shownRank <= unlocked ? shownRank : rank.index;
+  return (
+    <div className="mt-4">
+      <p className="text-[13px] text-osu-l2">
+        <span className="font-semibold" style={{ color: rank.def.accent }}>{name}</span>
+        <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />
+        {t`Supporter for ${plural(rank.months, { one: "# month", other: "# months" })} in a row`}
+        <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />
+        {next ? t`${nextName} in ${plural(days, { one: "# day", other: "# days" })}` : t`The top rank`}
+        {renewing ? (
+          <>
+            <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />
+            {t`Renews every month`}
+          </>
+        ) : null}
+      </p>
+      <ol className="mt-2 flex items-center gap-1 sm:gap-1.5" aria-label={t`Supporter ranks`}>
+        {SUPPORTER_RANKS.map((def, i) => {
+          const open = i <= unlocked;
+          const gem = (
+            <RankGem rank={def} renewing={renewing && fire && i === shown} className={i === shown ? "h-8 w-8 sm:h-9 sm:w-9" : "h-5 w-5 sm:h-6 sm:w-6"} />
+          );
+          return (
+            <li key={def.id} title={def.name} className={open ? undefined : "opacity-25 grayscale transition-[opacity,filter] duration-200 hover:opacity-100 hover:grayscale-0"}>
+              {open && onShow ? (
+                <button
+                  type="button"
+                  aria-pressed={i === shown}
+                  aria-label={t`Show ${def.name}`}
+                  onClick={() => onShow(i === rank.index ? null : i)}
+                  className="cursor-pointer rounded-md transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink-light"
+                >
+                  {gem}
+                </button>
+              ) : gem}
+            </li>
+          );
+        })}
+      </ol>
+      {onShow && unlocked > 0 ? (
+        <p className="mt-1.5 text-[12px] text-osu-f1">
+          {shown !== rank.index
+            ? t`Showing ${SUPPORTER_RANKS[shown].name} on your profile. Pick ${name} to go back to your current rank.`
+            : t`Every rank you have reached stays yours. Pick one to show it on your profile instead.`}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/* The twelve ranks for /support, each with the month it is reached in, and
+   under them what a monthly subscription does to one. */
+export function SupporterRankShowcase() {
+  const { t } = useLingui();
+  return (
+    <>
+      <Stagger className="grid grid-cols-4 gap-3 sm:grid-cols-6">
+        {SUPPORTER_RANKS.map((def, i) => {
+          const month = i + 1;
+          return (
+            <StaggerItem key={def.id} className="flex flex-col items-center gap-2 rounded-xl bg-osu-b4/60 px-2 py-4">
+              <SupporterRankIcon rank={def} className="h-12 w-12 sm:h-14 sm:w-14" />
+              <span className="text-[13px] font-semibold text-white">{def.name}</span>
+              <span className="-mt-1.5 text-[11px] text-osu-l2">{t`Month ${month}`}</span>
+            </StaggerItem>
+          );
+        })}
+      </Stagger>
+      <RankFireDemo />
+    </>
+  );
+}
+
+/* One burning rank that steps through all twelve, so a visitor sees what a
+   monthly subscription does to theirs. One live fire, not twelve: each is a
+   WebGL context, and a phone's budget is five. Each rank catches fresh. */
+function RankFireDemo() {
+  const [index, setIndex] = useState(SUPPORTER_RANKS.length - 1);
+  useEffect(() => {
+    const timer = setInterval(() => setIndex((value) => (value + 1) % SUPPORTER_RANKS.length), RANK_FIRE_DEMO_MS);
+    return () => clearInterval(timer);
+  }, []);
+  const rank = SUPPORTER_RANKS[index];
+  return (
+    <div className="mt-3 flex flex-col items-center gap-2 rounded-xl bg-osu-b4/60 pt-20 pb-5">
+      <RankGem rank={rank} renewing className="h-16 w-16 sm:h-20 sm:w-20" />
+      <span className="text-[13px] font-semibold" style={{ color: rank.accent }}>{rank.name}</span>
+    </div>
+  );
+}

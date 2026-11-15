@@ -33,6 +33,7 @@ import {
   type CommunitySummary,
 } from "../lib/communities";
 import { pageSeo } from "../lib/seo";
+import { UsernameText } from "../components/ui/UsernameText";
 
 /*
  * One Discord server's own page.
@@ -459,7 +460,7 @@ function CommunityDetailPage() {
                           className="inline-flex items-center gap-1.5 font-semibold text-osu-l2 transition-colors cursor-pointer hover:text-white"
                         >
                           <Avatar userId={row.ownerUserId} size={16} />
-                          {row.ownerUsername}
+                          <UsernameText username={row.ownerUsername} userId={row.ownerUserId} />
                         </Link>
                       </Fact>
                       <Fact label={t`listed`}>

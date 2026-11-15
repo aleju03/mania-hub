@@ -14,6 +14,10 @@ import {
 } from "./renderData";
 import type { ManiaCardPanelProps, ManiaCardReadyData } from "./types";
 import { isWindowActive, subscribeWindowActivity } from "#/lib/window-activity";
+import { fetchLiveSupporterLook, peekLiveSupporterLook } from "#/lib/live-backend";
+import { parseSupporterLook, supporterLookSignature, type SupporterLook } from "#/lib/supporter-card-looks";
+import { useWebGlSlot } from "../../../lib/gl-budget";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -21,7 +25,7 @@ function useReducedMotion() {
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
 
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const query = window.matchMedia(scaledMediaQuery("(prefers-reduced-motion: reduce)"));
     const update = () => setReduced(query.matches);
     update();
     if (typeof query.addEventListener === "function") {
@@ -39,7 +43,7 @@ function isMobileViewport() {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
-    window.matchMedia("(max-width: 640px)").matches
+    window.matchMedia(scaledMediaQuery("(max-width: 640px)")).matches
   );
 }
 
@@ -101,6 +105,36 @@ function scheduleRendererStart(callback: () => void) {
   };
 }
 
+/* The player's supporter look for the profile card: the override when the
+   caller passes one (the settings preview; null previews the plain card),
+   else the look fetched for this player. Returned by identity of its content,
+   so a preview passing a fresh object each render does not rebuild the card. */
+function useSupporterLook(userId: number, override: SupporterLook | null | undefined): SupporterLook | null {
+  const overridden = override !== undefined;
+  const [fetched, setFetched] = useState<{ userId: number; look: SupporterLook | null } | null>(null);
+  useEffect(() => {
+    if (overridden || userId <= 0) return;
+    let cancelled = false;
+    void fetchLiveSupporterLook(userId).then((look) => {
+      if (!cancelled) setFetched({ userId, look });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [overridden, userId]);
+  const look = overridden
+    ? override
+    : userId <= 0
+      ? null
+      : fetched?.userId === userId
+        ? fetched.look
+        : peekLiveSupporterLook(userId) ?? null;
+  const key = supporterLookSignature(look);
+  // Keyed on the look's content rather than its object identity.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => parseSupporterLook(look), [key]);
+}
+
 export function ManiaCard3DPanel({
   user,
   scores,
@@ -109,6 +143,9 @@ export function ManiaCard3DPanel({
   isOwnProfile = false,
   tierOverride,
   team,
+  supporterLookOverride,
+  showTierProgress = true,
+  sleeve = null,
 }: ManiaCardPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
@@ -121,14 +158,24 @@ export function ManiaCard3DPanel({
   const [ratingModalOpen, setRatingModalOpen] = useState(false);
   const ratingModalOpenRef = useRef(false);
   const reducedMotion = useReducedMotion();
+  const supporterLook = useSupporterLook(team ? 0 : user.id, supporterLookOverride);
   const data = useMemo(
     () => precomputedSkills
-      ? buildManiaCardRenderDataFromSkills({ user, skills: precomputedSkills, scores, tierOverride, team })
-      : buildManiaCardRenderData({ user, scores, tierOverride }),
-    [precomputedSkills, scores, team, tierOverride, user],
+      ? buildManiaCardRenderDataFromSkills({ user, skills: precomputedSkills, scores, tierOverride, team, supporterLook })
+      : buildManiaCardRenderData({ user, scores, tierOverride, supporterLook }),
+    [precomputedSkills, scores, team, tierOverride, user, supporterLook],
   );
   const dataSignature = useMemo(() => getManiaCardRenderDataSignature(data), [data]);
+  /* The same without the supporter foil: two cards that differ only there
+     share every texture, so the renderer swaps the foil in place. */
+  const textureSignature = useMemo(
+    () => (data.status === "ready" ? getManiaCardRenderDataSignature({ ...data, supporterFoil: undefined }) : dataSignature),
+    [data, dataSignature],
+  );
+  const rendererTextureSignatureRef = useRef<string | null>(null);
   const rendererReady = readySignature === dataSignature;
+  // a context only while it holds a slot (gl-budget.ts); the placeholder shows otherwise
+  const glSlot = useWebGlSlot(hostRef, { enabled: !loading && data.status === "ready" && !renderError });
 
   useEffect(() => {
     if (data.status === "ready") {
@@ -143,7 +190,7 @@ export function ManiaCard3DPanel({
 
   useEffect(() => {
     setReadySignature(null);
-    if (loading || data.status !== "ready") return;
+    if (loading || data.status !== "ready" || !glSlot) return;
     const host = hostRef.current;
     const initialData = latestReadyDataRef.current;
     const initialSignature = latestReadySignatureRef.current;
@@ -163,6 +210,7 @@ export function ManiaCard3DPanel({
       renderer?.dispose();
       if (rendererRef.current === renderer) rendererRef.current = null;
       rendererSignatureRef.current = null;
+      rendererTextureSignatureRef.current = null;
       pendingSignatureRef.current = null;
     };
 
@@ -182,12 +230,14 @@ export function ManiaCard3DPanel({
 
         pendingSignatureRef.current = scheduledSignature;
         rendererSignatureRef.current = scheduledSignature;
+        rendererTextureSignatureRef.current = getManiaCardRenderDataSignature({ ...scheduledData, supporterFoil: undefined });
         renderer = new ManiaCardRenderer({
           host,
           data: scheduledData,
           mobile: isMobileViewport(),
           reducedMotion,
           devicePixelRatio: getDevicePixelRatio(),
+          lazyBack: true,
           onReady: () => {
             if (active) setReadySignature(pendingSignatureRef.current);
           },
@@ -198,6 +248,7 @@ export function ManiaCard3DPanel({
           },
         });
         rendererRef.current = renderer;
+        renderer.setSleeve(sleeveRef.current);
         renderer.setWindowActive(isWindowActive() && !ratingModalOpenRef.current);
 
         const resize = () => renderer?.resize();
@@ -216,7 +267,14 @@ export function ManiaCard3DPanel({
     });
 
     return cleanup;
-  }, [data.status, loading, reducedMotion]);
+  }, [data.status, loading, reducedMotion, glSlot]);
+
+  // The case goes on and off without repainting the card.
+  const sleeveRef = useRef(sleeve);
+  sleeveRef.current = sleeve;
+  useEffect(() => {
+    rendererRef.current?.setSleeve(sleeve);
+  }, [sleeve]);
 
   useEffect(() => {
     // The rating modal blurs the page over the card, and the browser redoes
@@ -237,12 +295,23 @@ export function ManiaCard3DPanel({
     const renderer = rendererRef.current;
     if (!renderer || rendererSignatureRef.current === dataSignature) return;
 
+    if (rendererTextureSignatureRef.current === textureSignature) {
+      // Only the foil changed. A card mid-repaint stays not-ready until its
+      // own onReady, which then reports this signature.
+      rendererSignatureRef.current = dataSignature;
+      pendingSignatureRef.current = dataSignature;
+      renderer.setSupporterFoil(data.status === "ready" ? data.supporterFoil ?? null : null);
+      setReadySignature((ready) => (ready === null ? null : dataSignature));
+      return;
+    }
+
     setRenderError(null);
     setReadySignature(null);
     pendingSignatureRef.current = dataSignature;
     rendererSignatureRef.current = dataSignature;
+    rendererTextureSignatureRef.current = textureSignature;
     void renderer.setData(data);
-  }, [data, dataSignature, loading]);
+  }, [data, dataSignature, textureSignature, loading]);
 
   if (loading) return <ManiaCard3DLoading />;
 
@@ -272,7 +341,7 @@ export function ManiaCard3DPanel({
             aria-hidden="true"
           />
         )}
-        {rendererReady && (
+        {rendererReady && showTierProgress && (
           <TierProgress
             nextTier={data.nextTier}
             cardRating={data.skills.cardPower}

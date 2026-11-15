@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { getServerLiveBackendUrl } from "../../lib/live-backend";
 import { pngResponse } from "../../lib/og-render";
 import type { ResolvedSignature } from "../../lib/signature-resolve";
 import { parseSignatureVariant, signatureVariantSlug, type SignatureType } from "../../lib/signature-shared";
@@ -58,6 +59,23 @@ export function resolveSignaturePreviewTarget(
     : "";
   if (!Number.isInteger(userId) || userId <= 0 || !username) return { status: 400 };
   return { userId, username };
+}
+
+/* A supporter's own stat cards and play, as the stored render gets them from
+   its resolve, read here from their public look so the preview matches. */
+async function readPreviewInsightsPicks(userId: number): Promise<ResolvedSignature["insightsPicks"]> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return null;
+  try {
+    const response = await fetch(`${base}/api/supporters/look/${userId}`, { signal: AbortSignal.timeout(3_000) });
+    if (!response.ok) return null;
+    const look = await response.json() as { profileStats?: unknown; profileStatsData?: unknown; profilePlays?: unknown };
+    const play = Array.isArray(look.profilePlays) ? look.profilePlays[0] ?? null : null;
+    if (look.profileStats == null && play == null) return null;
+    return { stats: look.profileStats, data: look.profileStatsData, play };
+  } catch {
+    return null;
+  }
 }
 
 export const Route = createFileRoute("/api/signature-preview")({
@@ -120,6 +138,7 @@ export const Route = createFileRoute("/api/signature-preview")({
           // first visit, before the row has been told the zone at all.
           timeZone: normalizeTimeZone(body.timeZone),
           versions: {} as Record<SignatureType, string>,
+          insightsPicks: variant.type === "insights" ? await readPreviewInsightsPicks(target.userId) : null,
         };
 
         try {

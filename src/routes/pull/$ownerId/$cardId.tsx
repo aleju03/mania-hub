@@ -1,3 +1,4 @@
+import { spellSeed } from "#/lib/pack-spell-art";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { msg } from "@lingui/core/macro";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -8,9 +9,8 @@ import { renderCardSkeletonThumbnail, renderCardThumbnail } from "../../../compo
 import { ManiaCardRenderer } from "../../../components/player/maniacard3d/ManiaCardRenderer";
 import { buildManiaCardRenderDataFromSkills } from "../../../components/player/maniacard3d/renderData";
 import { CountryFlag } from "../../../components/ui/CountryFlag";
-import { formatDate, formatOrdinal } from "../../../lib/format";
+import { formatDate } from "../../../lib/format";
 import { useViewerTimeZone } from "../../../lib/use-viewer-time-zone";
-import { useLocale } from "../../../lib/locale-context";
 import {
   fetchLivePackSharedCard,
   isLiveBackendConfigured,
@@ -24,6 +24,9 @@ import { parsePackTeamCard, parseTeamPackCardKey, teamCardFace, teamCardSkills, 
 import { getI18n } from "../../../lib/i18n";
 import { PACK_TYPE_NAME_LABELS, PACK_TYPES, type PackTypeId } from "../../../lib/packs";
 import { pageSeo, pullOgImagePath } from "../../../lib/seo";
+import { effectiveCardLook } from "../../../lib/supporter-card-looks";
+import { UsernameText } from "../../../components/ui/UsernameText";
+import { scaledMediaQuery } from "#/lib/ui-scale-values";
 
 export const Route = createFileRoute("/pull/$ownerId/$cardId")({
   validateSearch: (search: Record<string, unknown>): { pull?: number } => {
@@ -62,7 +65,7 @@ function isMobileViewport() {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
-    window.matchMedia("(max-width: 640px)").matches
+    window.matchMedia(scaledMediaQuery("(max-width: 640px)")).matches
   );
 }
 
@@ -130,7 +133,7 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
     setStaticImage(null);
     const skills = shared.card.skills as ManiaSkills | null;
     if (!skills || !Number.isFinite(skills.cardPower)) {
-      setStaticImage(renderCardSkeletonThumbnail(tier, 600, shared.card.motif ?? null));
+      setStaticImage(renderCardSkeletonThumbnail(tier, 600, effectiveCardLook(shared.card.motif, shared.card.supporterLook).motif));
       return;
     }
     const team = sharedTeamCard(shared);
@@ -153,15 +156,26 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
           tierOverride: tier,
           labelOverride: shared.card.customLabel,
           motifOverride: shared.card.motif,
+          supporterLook: shared.card.supporterLook,
         });
+    // The copy's number, printed on its back like everywhere else a pulled
+    // copy is shown.
+    const serial = typeof shared.serial === "number" && shared.serial > 0 ? { number: shared.serial, total: shared.mintedTotal > 0 ? shared.mintedTotal : null } : null;
+    if (serial && data.status === "ready") Object.assign(data, { serial });
+    // the copy Ember burnt or Frost froze
+    if (shared.card.spell && data.status === "ready") Object.assign(data, { spell: { kind: shared.card.spell, seed: spellSeed(shared.card.userId) } });
     let cancelled = false;
-    // The 2D front renders first so something card-shaped is visible while
-    // the WebGL pipeline warms up (and stays if it fails).
-    void renderCardThumbnail(data, 600)
-      .then((url) => {
-        if (!cancelled && url) setStaticImage(url);
-      })
-      .catch(() => {});
+    // A sketch in the card's colours holds its place while the 3D card warms
+    // up. The full 2D front is painted only if WebGL fails: painting it
+    // alongside the 3D card built the same card twice.
+    setStaticImage(renderCardSkeletonThumbnail(tier, 600, team ? null : effectiveCardLook(shared.card.motif, shared.card.supporterLook).motif, Boolean(team)));
+    const paintFallback = () => {
+      void renderCardThumbnail(data, 600)
+        .then((url) => {
+          if (!cancelled && url) setStaticImage(url);
+        })
+        .catch(() => {});
+    };
     const timer = window.setTimeout(() => {
       const host = hostRef.current;
       if (!host || cancelled) return;
@@ -173,17 +187,20 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
           reducedMotion: prefersReducedMotion(),
           devicePixelRatio: window.devicePixelRatio || 1,
           gyro: false,
+          lazyBack: true,
           onReady: () => {
             if (!cancelled) setCanvasReady(true);
           },
           onError: () => {
             rendererRef.current?.dispose();
             rendererRef.current = null;
+            if (!cancelled) paintFallback();
           },
         });
         rendererRef.current.resize();
       } catch {
         rendererRef.current = null;
+        paintFallback();
       }
     }, 300);
     return () => {
@@ -304,7 +321,6 @@ function PullPage() {
 
 function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
   const { t, i18n } = useLingui();
-  const locale = useLocale();
   const tier = sharedCardTier(shared);
   const accent = tierAccentRgb(tier);
   const team = shared.team ?? null;
@@ -327,7 +343,7 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           ) : (
             <CountryFlag code={shared.card.countryCode} size="sm" />
           )}
-          <span className="text-[16px] font-bold text-white">{shared.card.username}</span>
+          <UsernameText username={shared.card.username} userId={shared.card.userId} className="text-[16px] font-bold text-white" />
           <span
             className="rounded-full border px-2 py-px text-[10px] font-bold uppercase tracking-wide"
             style={{
@@ -354,19 +370,16 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           )}
         </div>
         {typeof shared.serial === "number" && shared.serial > 0 && (
-          // Pull order, not copy count. Plain ordinal, not "first ever": the
-          // permalink describes a holding, and a serial-1 card may by now sit
-          // in hundreds of collections.
+          // The lowest copy this collector pulled. A plain number, not "first
+          // ever": the permalink describes a holding, and a #1 card may by now
+          // sit in hundreds of collections.
           <div
             className={`text-[13px] tabular-nums ${shared.serial === 1 ? "font-bold text-amber-300" : "text-osu-f1"}`}
           >
-            <Trans>{formatOrdinal(shared.serial, locale)} person to pull this card</Trans>
-            {shared.mintedTotal > 0 && shared.mintedTotal !== shared.serial && (
-              // Skip the total when it just repeats the serial ("61st ... out of 61").
-              <span className="text-osu-f1">
-                {" "}
-                <Trans>out of {shared.mintedTotal.toLocaleString("en-US")}</Trans>
-              </span>
+            {shared.mintedTotal > 0 && shared.mintedTotal !== shared.serial ? (
+              <Trans>Copy #{shared.serial.toLocaleString("en-US")} of {shared.mintedTotal.toLocaleString("en-US")}</Trans>
+            ) : (
+              <Trans>Copy #{shared.serial.toLocaleString("en-US")}</Trans>
             )}
           </div>
         )}
@@ -380,7 +393,7 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
               params={{ username: shared.owner.username }}
               className="font-bold text-white transition-colors hover:text-osu-pink-light"
             >
-              {shared.owner.username}
+              <UsernameText username={shared.owner.username} userId={shared.owner.userId} />
             </Link>
           )}
           {displayedPullAt > 0 && (

@@ -50,6 +50,7 @@ import { fetchLiveGlobalRankings, fetchLiveRankDeltas, fetchLiveRankingsSnapshot
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 import { writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 import { mergeRestrictedPpRanking, useRestrictedPpRankings } from "../lib/restricted-pp-rankings";
+import { supporterRowBackground, useSupporterRowThemes } from "../components/supporter/SupporterRowBanner";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "combined" | "ss" | "s" | "a";
 const GLOBAL_RANKINGS_PAGE_SIZE = 50;
@@ -258,7 +259,7 @@ function RankingsPage() {
     <PageTabs
       items={[
         { id: "pp" as LeaderboardTab, label: t`Performance` },
-        { id: "skills" as LeaderboardTab, label: t`MSD` },
+        { id: "skills" as LeaderboardTab, label: t`Rating` },
         { id: "dan" as LeaderboardTab, label: t`Dan` },
         { id: "clears" as LeaderboardTab, label: t`Clears` },
         { id: "unrated" as LeaderboardTab, label: t`Unrated` },
@@ -341,6 +342,7 @@ function RankingsPage() {
 
 function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => ReactNode }) {
   const { t, i18n } = useLingui();
+  const rowTheme = useSupporterRowThemes();
   const { page = 1, country } = Route.useSearch();
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
@@ -829,13 +831,14 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                       to="/player/$username"
                       params={{ username: entry.user.username }}
                       className="block rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
+                      style={supporterRowBackground(rowTheme(entry.user.id))}
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-bold text-osu-f1 w-8">
                           #{originalRank}
                           <PpRankNote rank={ppRank} />
                         </span>
-                        <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={36} />
+                        <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={36} framed />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 min-w-0">
                             <UsernameText
@@ -912,7 +915,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                       <tr
                         key={entry.user.id}
                         className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
-                        style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
+                        style={{ backgroundColor: i % 2 ? "rgba(255,255,255,0.015)" : "transparent", ...supporterRowBackground(rowTheme(entry.user.id), "strip") }}
                         onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}
                         onAuxClick={(event) => handlePlayerAuxClick(event, entry.user.username)}
                       >
@@ -926,7 +929,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                             params={{ username: entry.user.username }}
                             className="flex items-center gap-3 min-w-0"
                           >
-                            <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
+                            <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} framed />
                             <UsernameText
                               username={entry.user.username}
                               avatarUrl={entry.user.avatar_url}
@@ -1149,10 +1152,11 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                     params={{ username: entry.user.username }}
                     onClick={() => seedRowShell(entry, originalRank)}
                     className="block rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
+                    style={supporterRowBackground(rowTheme(entry.user.id))}
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-osu-f1 w-8">#{originalRank}</span>
-                      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={36} online={entry.user.is_online} />
+                      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={36} online={entry.user.is_online} framed />
                       <div className="flex-1 min-w-0">
                         <UsernameText
                           username={entry.user.username}
@@ -1240,7 +1244,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                       <tr
                         key={entry.user.id}
                         className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
-                        style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
+                        style={{ backgroundColor: i % 2 ? "rgba(255,255,255,0.015)" : "transparent", ...supporterRowBackground(rowTheme(entry.user.id), "strip") }}
                         onClick={() => {
                           seedRowShell(entry, originalRank);
                           navigate({ to: "/player/$username", params: { username: entry.user.username } });
@@ -1258,7 +1262,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                             onClick={() => seedRowShell(entry, originalRank)}
                             className="flex items-center gap-3 min-w-0"
                           >
-                            <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} online={entry.user.is_online} />
+                            <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} online={entry.user.is_online} framed />
                             <UsernameText
                               username={entry.user.username}
                               avatarUrl={entry.user.avatar_url}

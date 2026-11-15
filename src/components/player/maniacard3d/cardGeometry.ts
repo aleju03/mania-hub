@@ -5,6 +5,10 @@ export const CARD_WORLD_HEIGHT = 4.2;
 export const CARD_WORLD_THICKNESS = 0.04;
 export const FACE_Z_OFFSET = CARD_WORLD_THICKNESS / 2 + 0.003;
 export const OVERLAY_Z_OFFSET = CARD_WORLD_THICKNESS / 2 + 0.009;
+/* A card whose painted motif drifts between its background and its printed
+   content stacks two more layers between the face and the overlay. */
+export const MOTIF_Z_OFFSET = CARD_WORLD_THICKNESS / 2 + 0.005;
+export const CONTENT_Z_OFFSET = CARD_WORLD_THICKNESS / 2 + 0.007;
 
 export function createCardBodyGeometry(height = CARD_WORLD_HEIGHT) {
   const width = height * CARD_ASPECT;

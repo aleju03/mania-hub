@@ -18,12 +18,13 @@ import { createElement as h } from "react";
 
 import { formatOgInt } from "./og-render";
 import { getAssetOrigin } from "./origin";
-import { MANIA_TIER_STYLES, resolveManiaTierStyle } from "./maniacard";
+import { MANIA_GLYPH_D, MANIA_TIER_STYLES, maniaTriangleOverlaySvg, resolveManiaTierStyle } from "./maniacard";
 import type { ManiaCardTier } from "./maniacard";
 import { packFinishSvg } from "./card-finish-art";
-import { siteAssetMotifPath, type CardMotif } from "./card-motif";
+import { motifCopyOpacity, siteAssetMotifPath, type CardMotif } from "./card-motif";
 import { readImageSize, sniffImageMime } from "./image-sniff";
 import { getCosmicTierPalette } from "./maniacard-cosmic";
+import { SUPPORTER_FOIL_OPACITY, SUPPORTER_FOIL_TINT_OPACITY, supporterFoilSvg } from "./supporter-foil-art";
 import type { CosmicTierPalette } from "./maniacard-cosmic";
 import {
   CARD_CORNER_RADIUS,
@@ -31,8 +32,7 @@ import {
   CARD_TEXTURE_WIDTH,
 } from "../components/player/maniacard3d/layout";
 
-export const MANIA_GLYPH_D =
-  "M500 48q-21 0-35 15t-15 35v504q0 21 15 36t35 14 36-14 14-36v-504q0-21-14-35t-36-15z m-110 192v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m320 0v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m-210 500q-106 0-197-53-88-52-140-140-53-91-53-197t53-197q52-88 140-140 91-53 197-53t197 53q88 52 140 140 53 91 53 197t-53 197q-52 88-140 140-91 53-197 53z m0 80q97 0 182-36t150-102q64-62 101-148t37-184-36-182-102-150q-62-64-148-101t-184-37-182 36-150 102q-64 62-101 149t-37 183 37 182 101 150q62 64 149 101t183 37v0z";
+export { MANIA_GLYPH_D };
 
 // The mania glyph is authored y-up (the in-app canvas flips it), so flip it for
 // svg's y-down space. Inlined as a data url since Satori rasterizes svg images.
@@ -48,41 +48,10 @@ export function starDataUrl(fill: string): string {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
 
-// Floating osu-style triangles: a jittered grid so positions never line up,
-// varied sizes, up or down but never tilted, overlapping into soft facets.
-// Baked as explicit paths so resvg rasterizes it reliably as an img.
+// The card front's osu! triangles (maniaTriangleOverlaySvg), base64'd because
+// resvg rasterizes it reliably as an img.
 export function triangleOverlayDataUrl(w: number, height: number): string {
-  const sx = w / 1000;
-  const sy = height / 1400;
-  const rand = (n: number) => {
-    const v = Math.sin(n) * 43758.5453123;
-    return v - Math.floor(v);
-  };
-  const poly = (pts: Array<[number, number]>, fill: string) =>
-    `<path d="${pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ")} Z" fill="${fill}"/>`;
-  let paths = "";
-  for (let row = 0; row < 6; row += 1) {
-    for (let col = 0; col < 5; col += 1) {
-      const i = row * 11 + col;
-      if (rand(i * 19.17 + 4.2) < 0.4) continue;
-      const cx = (col * 200 + 100 + (rand(i * 43.91 + 8.5) - 0.5) * 130) * sx;
-      const cy = (row * 233 + 117 + (rand(i * 29.37 + 12.4) - 0.5) * 130) * sy;
-      const side = (230 + rand(i * 13.81 + 2.7) * 300) * sx;
-      const hgt = side * 0.866;
-      const up = rand(i * 7.3 + 3.1) > 0.5;
-      const pts: Array<[number, number]> = up
-        ? [[cx, cy - (hgt * 2) / 3], [cx + side / 2, cy + hgt / 3], [cx - side / 2, cy + hgt / 3]]
-        : [[cx, cy + (hgt * 2) / 3], [cx + side / 2, cy - hgt / 3], [cx - side / 2, cy - hgt / 3]];
-      // Fewer, larger, low-contrast facets (subtle like the reference). Dark
-      // ones stay extra faint since dark-on-light reads strongly; ~50/50
-      // light/dark so the pale top and dark bottom each show some.
-      const dark = rand(i * 3.11 + 6.9) > 0.5;
-      const a = dark ? 0.035 + rand(i * 5.21 + 1.3) * 0.04 : 0.05 + rand(i * 5.21 + 1.3) * 0.06;
-      paths += poly(pts, dark ? `rgba(0,0,0,${a.toFixed(3)})` : `rgba(255,255,255,${a.toFixed(3)})`);
-    }
-  }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${height}">${paths}</svg>`;
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+  return `data:image/svg+xml;base64,${Buffer.from(maniaTriangleOverlaySvg(w, height)).toString("base64")}`;
 }
 
 /* A granted card's background art, inlined so resvg never has to reach the
@@ -180,7 +149,7 @@ function motifSpriteElements(motif: CardMotif, dataUrl: string, aspect: number, 
             top: `${(cy - spriteH / 2).toFixed(1)}px`,
             width: `${spriteW.toFixed(1)}px`,
             height: `${spriteH.toFixed(1)}px`,
-            opacity: motif.opacity * (0.46 + rand(index * 5.21 + 1.3) * 0.32),
+            opacity: motifCopyOpacity(motif, rand(index * 5.21 + 1.3)),
             transform: `rotate(${((rotation * 180) / Math.PI).toFixed(2)}deg)`,
           },
         }),
@@ -386,6 +355,9 @@ export interface ManiaTierCardArt {
   motif?: CardMotif | null;
   motifUrl?: string | null;
   motifAspect?: number;
+  /* An active supporter's card: the still holographic foil over the art, the
+     same one the in-app thumbnails bake (lib/supporter-foil-art.ts). */
+  foil?: boolean;
   /* Rounds the card's own corners, leaving them transparent. Off by default:
      an embed that sits on an unknown background wants the full rectangle, and
      only the callers that know what is behind the card ask for it. The value
@@ -435,7 +407,7 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
           overflow: "hidden",
           borderRadius: `${cornerRadius}px`,
           background: cosmic ? "#000000" : style.badgeGradient,
-          fontFamily: '"Torus OG"',
+          fontFamily: '"Tracker Round OG"',
           color: "#ffffff",
         },
       },
@@ -472,6 +444,21 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
               },
             })
           : null,
+        // The supporter foil, over the art and under everything printed on
+        // it, in the same two passes as the canvas copy: screened so it
+        // lightens without greying, then overlaid so it shows on pale tiers.
+        ...(art.foil
+          ? ([
+              ["foil", SUPPORTER_FOIL_OPACITY, "screen"],
+              ["foilTint", SUPPORTER_FOIL_TINT_OPACITY, "overlay"],
+            ] as const).map(([key, opacity, mixBlendMode]) =>
+              h("img", {
+                key,
+                src: `data:image/svg+xml;base64,${Buffer.from(supporterFoilSvg()).toString("base64")}`,
+                style: { position: "absolute", top: "0", left: "0", width: "100%", height: "100%", opacity, mixBlendMode },
+              }),
+            )
+          : []),
         // Mode badge (top-left).
         h(
           "div",

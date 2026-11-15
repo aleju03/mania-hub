@@ -32,9 +32,9 @@ export interface ChangelogUpdate {
       new name each time, since the service worker serves /images/ cache-first.
       width and height are the display size in CSS pixels. */
   image?: { src: string; alt: string; width: number; height: number };
-  /** More lines, each with its own picture, shown after the first picture so
-      one update can walk through several of them. */
-  more?: { text: string; image: { src: string; alt: string; width: number; height: number } }[];
+  /** More lines, each with its own picture if it has one, shown after the first
+      picture so one update can walk through several of them. */
+  more?: { text: string; image?: { src: string; alt: string; width: number; height: number } }[];
   /** Optional in-app path, which makes the whole row clickable. */
   to?: string;
   /** Query parameters belong in Link.search, never inside its pathname. */
@@ -45,7 +45,118 @@ export interface ChangelogUpdate {
     Leave it empty to hide the section entirely. */
 export const WIP: string[] = [];
 
+/** A heading over one release day's updates, for the milestone the update
+    celebrates, with a spinning mascot on each side. */
+export interface ChangelogCelebration {
+  /** The heading as it was first written, e.g. "WE REACHED 10K USERS!!". */
+  title: string;
+  /** The word in the title the aside follows. */
+  asideAfter: string;
+  /** A quiet note in brackets after it: the number reached since. */
+  aside: string;
+  /** The line under it. */
+  line: string;
+}
+
+/** Keyed by the release day the heading sits over. */
+export const CELEBRATIONS: Record<string, ChangelogCelebration> = {
+  "2026-11-09": { title: "WE REACHED 10K USERS!!", asideAfter: "10K", aside: "now 12K", line: "Here's a big update to celebrate :D" },
+};
+
 export const UPDATES: ChangelogUpdate[] = [
+  {
+    date: "2026-11-14",
+    text: "Dedicated to everyone who supported even when there were no perks in return, there's now a supporter status that unlocks cosmetics for your profile, your name and your cards.",
+    bold: "supporter status",
+    kind: "new",
+    to: "/support",
+    more: [
+      { text: "Supporters get avatar frames, name styles and name fonts that show on their profile and next to their name across the site, profile themes that put a moving backdrop behind their profile, and a stand, a figure that sits next to their profile stats." },
+      { text: "Their pack cards get foils, their own card art, 3D card cases, binders, pack wrappers and blades to slice packs open with." },
+      { text: "They also get a rank badge next to their name that goes up a rank for every month in a row, profile stat cards they can swap, plays they pick to show on their profile, and links for exported replay videos that play in Discord." },
+      { text: "Anyone can try all of it on with Preview on my profile, which shows your own profile wearing what you picked, only to you." },
+      { text: "Gift codes let a supporter gift a friend a week of supporter." },
+    ],
+  },
+  {
+    date: "2026-11-14",
+    text: "There's a new Workshop page where supporters make their own profile themes and avatar frames.",
+    bold: "Workshop",
+    kind: "new",
+    to: "/workshop",
+    more: [
+      { text: "Themes are built from layers like pictures, particles, fog and stars, or written in GLSL. A Shadertoy shader can be pasted in." },
+      { text: "The gallery has the themes other supporters made." },
+    ],
+  },
+  {
+    date: "2026-11-14",
+    text: "Added a new minigame on the Packs page called Overjoy, a card game where you link cards into rows to beat each round's score.",
+    bold: "Overjoy",
+    kind: "new",
+    to: "/packs",
+    search: { view: "run" },
+    image: { src: "/images/changelog/2026-11-09-overjoy-row.webp", alt: "A linked row of six cards in Overjoy", width: 640, height: 300 },
+    more: [
+      { text: "There is a daily run with the same cards for everyone, and All time and This month boards." },
+      { text: "Map cards are real popular charts that score double for players who have the map in their top plays." },
+      { text: "A finished run can be shared as a link." },
+    ],
+  },
+  {
+    date: "2026-11-14",
+    text: "Collections has a new Board tab, one shared table where everyone lays their cards.",
+    bold: "Board",
+    kind: "new",
+    to: "/packs/collections",
+    search: { tab: "board" },
+    image: { src: "/images/changelog/2026-11-09-board-cards.webp", alt: "Cards laid on the Board, with the tools above and your cards on the right", width: 640, height: 348 },
+    more: [
+      { text: "A brush lays your cards along your stroke, and Snap to grid helps with pixel art." },
+    ],
+  },
+  {
+    date: "2026-11-14",
+    text: "There's also a Discord bot. Add it to a server or to your own Discord account from the new Discord page.",
+    bold: "Discord bot",
+    kind: "new",
+    to: "/discord",
+    more: [
+      { text: "/profile, /recent, /top, /skills and /maniacard show a player's plays, dans and skill ratings. /map shows a chart's dan, rating and skillsets at any rate, and /compare shows your best score on the last map posted in the channel." },
+      { text: "/farm finds maps likely to give pp, /challenge picks a random map near your dan with the accuracy you need to clear it, and /rankings shows a country's or the world's rankings." },
+      { text: "Channels can follow top plays, new farm maps and this changelog, set up on the Discord page." },
+      { text: "Link your osu! account with /link or on the Discord page, so commands work without typing a name." },
+    ],
+  },
+  { date: "2026-11-14", text: "Every copy of a card has its own number. A gifted copy keeps its number and who pulled it.", kind: "new", to: "/packs", image: { src: "/images/changelog/2026-11-09-card-back-number.webp", alt: "The back of a card with its copy number, 1 of 1558", width: 240, height: 356 } },
+  { date: "2026-11-14", text: "To reward the most dedicated grinders, cards now have levels. A card levels up every time the copies you have held of it double, and there is a card level sort in collections and a Most card levels board.", kind: "new", to: "/packs/collections", image: { src: "/images/changelog/2026-11-09-card-level.webp", alt: "A card at card level 12", width: 300, height: 481 } },
+  { date: "2026-11-14", text: "Opened cards glow by card level, silver from level 3, gold from 5 and a rainbow from 7.", kind: "new", to: "/packs" },
+  { date: "2026-11-14", text: "The card menu has a new option, Put back in the pool. It recycles one numbered copy for shards, and the next time anyone pulls that card there's a 50% chance it comes with that number instead of a new one.", kind: "new", to: "/packs", image: { src: "/images/changelog/2026-11-09-put-back-in-the-pool.webp", alt: "The Put back in the pool dialog for a card", width: 560, height: 213 } },
+  { date: "2026-11-14", text: "The packs page on phones shows recent pulls. The newest pull sits under your pack count, and tapping it opens the last 20.", kind: "new", to: "/packs", image: { src: "/images/changelog/2026-11-09-recent-pulls-sheet.webp", alt: "The recent pulls sheet on a phone", width: 400, height: 405 } },
+  { date: "2026-11-14", text: "The community showcase filters to players, teams or sets.", kind: "new", to: "/packs/collections" },
+  { date: "2026-11-14", text: "Pack record boards show your own row and rank when you are not in the top ten.", kind: "new", to: "/packs/collections", search: { tab: "stats" }, image: { src: "/images/changelog/2026-11-09-record-board-own-row.webp", alt: "A record board with your own row under the top ten", width: 560, height: 436 } },
+  { date: "2026-11-14", text: "Map leaderboards have a Mods filter with DT, HT, Invert, Hold Off and No Release.", kind: "new", to: "/maps", image: { src: "/images/changelog/2026-11-09-map-leaderboard-mods-filter.webp", alt: "The Mods filter on a map leaderboard", width: 640, height: 219 } },
+  { date: "2026-11-14", text: "A flag next to a chart's rating reports a rating that looks wrong. You say what the chart plays like, the dan it belongs at and whether plays on it should count for ratings.", kind: "new", to: "/maps", image: { src: "/images/changelog/2026-11-09-chart-rating-report.webp", alt: "The chart rating report", width: 640, height: 384 } },
+  { date: "2026-11-14", text: "Goals have two new types, reach a dan (overall or in a skillset) and reach a rating.", kind: "new", to: "/goals" },
+  { date: "2026-11-14", text: "There's a new Main keymode setting that picks the keymode your Skills tab opens on.", kind: "new" },
+  { date: "2026-11-14", text: "There's a new Skill ratings visible to setting, to show your skill ratings to everyone, only you or nobody.", kind: "new", image: { src: "/images/changelog/2026-11-09-skill-ratings-visible-to.webp", alt: "The Skill ratings visible to setting", width: 400, height: 151 } },
+  { date: "2026-11-14", text: "Settings has UI scaling for the size of text and controls across the site.", kind: "new", image: { src: "/images/changelog/2026-11-09-ui-scaling.webp", alt: "The UI scaling setting", width: 400, height: 110 } },
+  {
+    date: "2026-11-14",
+    text: "In replays, the Per-finger stats overlay has a Vertical layout.",
+    kind: "new",
+    to: "/replay",
+    image: { src: "/images/changelog/2026-11-09-replay-per-finger-vertical.webp", alt: "Per-finger stats shown as a vertical column, with Vertical ticked in its menu", width: 261, height: 420 },
+    more: [
+      {
+        text: "Keypresses has Split hands, to move each hand on its own.",
+        image: { src: "/images/changelog/2026-11-09-replay-keypresses-split-hands.webp", alt: "Split hands in the Keypresses menu, and the two hands placed apart", width: 586, height: 256 },
+      },
+    ],
+  },
+  { date: "2026-11-14", text: "Redesigned map cards. They show what the chart is made of and its top three patterns, and MSD is now called Rating.", kind: "change", to: "/maps", image: { src: "/images/changelog/2026-11-09-map-cards.webp", alt: "Three map cards", width: 640, height: 122 } },
+  { date: "2026-11-14", text: "The website's font is now Tracker Round, a rounded font made for it.", kind: "change" },
+  { date: "2026-11-14", text: "Fixed the chart preview on map cards blocking scrolling on phones.", to: "/maps" },
   {
     date: "2026-11-01",
     text: "Major update to Hashi. This is another one of my projects and it's related to Mania Tracker, so might as well put it here since it's a lot of cool new things.",

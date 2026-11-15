@@ -6,6 +6,10 @@ import { collectedCardTier, packCardKeyOf, type CollectedCard } from "#/lib/pack
 import { fetchPackPlayerScores } from "#/lib/packs";
 import { buildManiaCardRenderData } from "../player/maniacard3d/renderData";
 import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnapshot";
+import { effectiveCardLook } from "#/lib/supporter-card-looks";
+import { masteryLevel, type RunEdition } from "#/lib/pack-run";
+import { EditionSheen } from "./run/EditionSheen";
+import { MasteryBadge, MasteryRim } from "./run/MasteryBadge";
 import {
   cardThumbnailKeyForCollectionCard,
   cardThumbnailKeyForData,
@@ -45,8 +49,19 @@ function useHydrated(): boolean {
 
 let activeRenders = 0;
 const renderQueue: Array<() => void> = [];
-export async function throttleRender<T>(task: () => Promise<T>): Promise<T> {
+/* Thrown for a queued render whose page was left before its turn came. */
+export class RenderSkipped extends Error {}
+
+export async function throttleRender<T>(task: () => Promise<T>, isCancelled?: () => boolean): Promise<T> {
   if (activeRenders >= 2) await new Promise<void>((resolve) => renderQueue.push(resolve));
+  /* Paging fast through a big collection queued every page passed through,
+     ahead of the one being looked at: a render whose page is gone gives its
+     turn straight to the next. */
+  if (isCancelled?.()) {
+    const next = renderQueue.shift();
+    if (next) window.setTimeout(next, 0);
+    throw new RenderSkipped();
+  }
   activeRenders += 1;
   try {
     return await task();
@@ -77,11 +92,11 @@ export function cardUserForRender(card: CollectedCard) {
   };
 }
 
-export async function renderCollectionThumbnail(card: CollectedCard): Promise<{ key: string; url: string } | null> {
+export async function renderCollectionThumbnail(card: CollectedCard, isCancelled?: () => boolean): Promise<{ key: string; url: string } | null> {
   if (!card.skills) return null;
   const data = collectedCardRenderData(card, card.skills);
   const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
-  const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));
+  const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH), isCancelled);
   return { key, url: await rememberCardThumbnailBlob(key, blob) };
 }
 
@@ -156,12 +171,13 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier, team: fo
      it: turning a page used to paint a frame of bare gradient first, which read
      as a third state between the old page and the new one. */
   const hydrated = useHydrated();
-  const palette = card?.motif?.palette;
+  const skeletonMotif = card ? effectiveCardLook(card.motif, card.team ? null : card.supporterLook).motif : null;
+  const palette = skeletonMotif?.palette;
   const team = Boolean(card?.team) || forcedTeam === true;
   const skeletonKey = `${tier ?? "neutral"}:${palette ?? ""}${team ? ":team" : ""}`;
   let thumbnail = hydrated ? skeletonThumbnailCache.get(skeletonKey) ?? null : null;
   if (hydrated && !thumbnail) {
-    thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH, card?.motif ?? null, team);
+    thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH, skeletonMotif, team);
     if (thumbnail) skeletonThumbnailCache.set(skeletonKey, thumbnail);
   }
   if (thumbnail) {
@@ -179,7 +195,7 @@ export function CollectionCardFacePlaceholder({ card, tier: forcedTier, team: fo
      only thing left that ever precedes the sketch. It borrows the tier's wash
      but not the tier's border: that one is a near-white rim, far louder than
      anything on the sketch it hands over to. */
-  const style = tier ? resolveManiaTierStyle(tier, card?.motif ?? null) : null;
+  const style = tier ? resolveManiaTierStyle(tier, skeletonMotif) : null;
   return (
     <div
       className={`relative overflow-hidden rounded-[10px] border border-white/8 bg-gradient-to-br ${
@@ -220,9 +236,16 @@ export function CollectionCardTile({
   onApplyMint,
   onThumbnailError,
   showCopies = true,
+  edition = null,
+  mastery = true,
 }: {
   card: CollectedCard;
   thumbnail: string | null;
+  /* The best edition this collector has pulled the card in (the pack run). */
+  edition?: RunEdition | null;
+  /* Draw the mastery gem and rim. Off where the copy counts on the card are
+     not the holder's (a gift still on offer). */
+  mastery?: boolean;
   /* Repairing a card collected before skills snapshots existed is the holder's
      business and costs an osu! read, so a surface showing somebody else's
      shelf passes false and lives with the sketch face. */
@@ -276,6 +299,10 @@ export function CollectionCardTile({
     previousThumbnailRef.current = thumbnail;
   }, [thumbnail]);
 
+  const heldCopies = card.copies + (card.recycledCopies ?? 0);
+  const hasCopyCount = showCopies && card.copies > 1;
+  const hasMastery = mastery && masteryLevel(heldCopies) > 0;
+
   return (
     <div ref={hostRef} className="relative" style={{ aspectRatio: "5 / 7" }}>
       <CollectionCardFacePlaceholder card={card} />
@@ -297,9 +324,17 @@ export function CollectionCardTile({
           }}
         />
       )}
-      {showCopies && card.copies > 1 && (
-        <span className="absolute right-1.5 top-1.5 rounded bg-black/70 px-1 py-px text-[10px] font-bold text-white tabular-nums">
-          x{card.copies}
+      {thumbnail && (
+        <span className="absolute inset-0 overflow-hidden rounded-[10px]">
+          <EditionSheen edition={edition} />
+        </span>
+      )}
+      {mastery && <MasteryRim copies={heldCopies} />}
+      {(hasCopyCount || hasMastery) && (
+        <span className="absolute right-1.5 top-1.5 z-[6] inline-flex items-center gap-1 rounded bg-black/70 px-1 py-px text-[10px] font-bold leading-[14px] text-white tabular-nums">
+          {hasMastery && <MasteryBadge copies={heldCopies} />}
+          {hasMastery && hasCopyCount && <span aria-hidden="true" className="h-2.5 w-px bg-white/25" />}
+          {hasCopyCount && <span>x{card.copies}</span>}
         </span>
       )}
     </div>

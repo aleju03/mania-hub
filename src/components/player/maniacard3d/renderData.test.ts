@@ -204,3 +204,74 @@ describe("style parsing helpers", () => {
     ]);
   });
 });
+
+describe("supporter look", () => {
+  const skills = {
+    starAvg: 5.5,
+    fingerControl: 62,
+    speed: 71,
+    accuracy: 88,
+    stamina: 55,
+    versatility: 44,
+    peak: 6.2,
+    polish: 0,
+    apex: 0,
+    cardPower: 70,
+    mainKeyMode: 4,
+    archetype: "speed",
+    sampleSize: 40,
+  } as const;
+
+  test("floats the supporter's own image and draws their foil in the tier's colours", () => {
+    const data = buildManiaCardRenderDataFromSkills({
+      user,
+      skills,
+      tierOverride: "common",
+      supporterLook: { motif: "custom", url: "https://cdn.mania-tracker.com/supporter-motifs/abababababababababababababababababababababababababababababababab.webp", foil: "caustics" },
+    });
+    expect(data.supporterFoil).toBe("caustics");
+    expect(data.motif?.url).toBe("https://cdn.mania-tracker.com/supporter-motifs/abababababababababababababababababababababababababababababababab.webp");
+    // A foil is light only: the card keeps its tier's colours.
+    expect(data.motif?.palette).toBeUndefined();
+    expect(data.tierStyle.label).toBe("Common");
+  });
+
+  test("lets a holding's own motif win while keeping the foil", () => {
+    const granted = { url: "https://e.com/a.png", scale: 1, opacity: 1 };
+    const data = buildManiaCardRenderDataFromSkills({
+      user,
+      skills,
+      tierOverride: "rare",
+      motifOverride: granted,
+      supporterLook: { motif: "custom", url: "https://cdn.mania-tracker.com/supporter-motifs/abababababababababababababababababababababababababababababababab.webp", foil: "glitter" },
+    });
+    expect(data.motif).toEqual(granted);
+    expect(data.supporterFoil).toBe("glitter");
+  });
+
+  test("leaves ordinary and team cards alone", () => {
+    const plain = buildManiaCardRenderDataFromSkills({ user, skills, tierOverride: "rare" });
+    expect(plain.supporterFoil).toBeUndefined();
+    expect(plain.motif).toBeNull();
+    const team = buildManiaCardRenderDataFromSkills({
+      user: { ...user, id: -42 },
+      skills,
+      tierOverride: "rare",
+      team: { flagUrl: null, coverUrl: null, tag: "TM" },
+      supporterLook: { motif: "none", foil: "holo" },
+    });
+    expect(team.supporterFoil).toBeUndefined();
+    expect(team.motif).toBeNull();
+  });
+
+  test("changes the render signature with the look", () => {
+    const base = { user, skills, tierOverride: "rare" as const };
+    const signatures = new Set([
+      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills(base)),
+      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "none", foil: "holo" } })),
+      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "custom", url: "https://cdn.mania-tracker.com/supporter-motifs/cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd.webp", foil: "holo" } })),
+      getManiaCardRenderDataSignature(buildManiaCardRenderDataFromSkills({ ...base, supporterLook: { motif: "custom", url: "https://cdn.mania-tracker.com/supporter-motifs/cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd.webp", foil: "aurora" } })),
+    ]);
+    expect(signatures.size).toBe(4);
+  });
+});

@@ -36,6 +36,14 @@ interface SelectMenuProps<T extends string> {
   // Fills its container and pushes the chevron to the right, for a select
   // sitting in a form beside full-width inputs rather than in a toolbar.
   block?: boolean;
+  // A see-through button for a select over cover art or a panel, where the
+  // solid fill would sit on it as a grey box.
+  translucent?: boolean;
+  disabled?: boolean;
+  // Replaces the trigger button's own look, for a select drawn inline in a
+  // sentence (the goal builder) where the toolbar chip would sit too small.
+  triggerClassName?: string;
+  triggerStyle?: CSSProperties;
   // Shown on the button in place of the chosen option, for a menu that adds
   // something rather than holding a value.
   triggerLabel?: string;
@@ -56,6 +64,10 @@ export function SelectMenu<T extends string>({
   searchable = false,
   searchPlaceholder,
   block = false,
+  translucent = false,
+  disabled = false,
+  triggerClassName,
+  triggerStyle,
   triggerLabel,
 }: SelectMenuProps<T>) {
   const { t } = useLingui();
@@ -162,11 +174,15 @@ export function SelectMenu<T extends string>({
       <button
         ref={triggerRef}
         type="button"
+        disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`inline-flex items-center gap-1.5 rounded-md border border-osu-b3/50 bg-osu-b4 px-2.5 py-1.5 text-xs font-semibold text-osu-l2 transition-colors hover:border-osu-b3 hover:bg-osu-b4/80 cursor-pointer ${
+        style={triggerStyle}
+        className={triggerClassName ?? `inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold text-osu-l2 transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50 ${
+          translucent ? "border-white/[0.06] bg-white/[0.06] hover:bg-white/[0.1]" : "border-osu-b3/50 bg-osu-b4 hover:border-osu-b3 hover:bg-osu-b4/80"
+        } ${
           block ? "w-full justify-between" : ""
         }`}
       >

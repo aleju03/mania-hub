@@ -26,6 +26,8 @@ export const CommunityReplayCard = memo(function CommunityReplayCard({ upload }:
     ? `https://assets.ppy.sh/beatmaps/${upload.beatmap.beatmapsetId}/covers/cover@2x.jpg`
     : upload.communityBackground && upload.beatmapHash ? getCommunityBeatmapAssetUrl(upload.beatmapHash, "background")
       : upload.standInBeatmapsetId ? `https://assets.ppy.sh/beatmaps/${upload.standInBeatmapsetId}/covers/cover@2x.jpg` : null;
+  // A player's own upload says who played it once.
+  const uploaderPlayed = !!uploader?.username && uploader.username.toLowerCase() === upload.playerName?.toLowerCase();
   return (
     <Link
       to="/replay"
@@ -63,7 +65,7 @@ export const CommunityReplayCard = memo(function CommunityReplayCard({ upload }:
           {upload.beatmap && <p className="mt-1 truncate text-xs text-osu-f1" title={`${upload.beatmap.artist} · ${upload.beatmap.version}`}>{upload.beatmap.artist} · {upload.beatmap.version}</p>}
           <p className="mt-1.5 truncate text-xs font-semibold text-osu-l2"><Trans>Played by {playerName}</Trans></p>
           <p className="mt-0.5 truncate text-[11px] text-osu-f1">
-            {uploader && <><Trans>Uploaded by {uploader.username || String(uploader.userId)}</Trans><span aria-hidden="true"> · </span></>}
+            {uploader && !uploaderPlayed && <><Trans>Uploaded by {uploader.username || String(uploader.userId)}</Trans><span aria-hidden="true"> · </span></>}
             {formatTimeAgo(new Date(upload.uploadedAt).toISOString(), locale)}
           </p>
         </div>

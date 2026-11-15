@@ -11,6 +11,8 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
 }));
 
+// Supporter cases come from the live look cache this file does not mock.
+vi.mock("#/lib/use-supporter-pack-style", () => ({ useSupporterSleeve: () => null, useSupporterPackStyle: () => ({ sleeve: null, binder: null, wrapper: null, blade: null }) }));
 vi.mock("#/lib/live-backend", () => ({
   isLiveBackendConfigured: () => true,
   fetchLiveGlobalRankings: vi.fn(() => new Promise(() => {})),

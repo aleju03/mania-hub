@@ -1627,7 +1627,7 @@ export function LazerResultsScreen({ score, others = [], beatmap, backgroundUrl,
   return (
     <div
       ref={rootRef}
-      className="absolute inset-0 z-[60] overflow-hidden select-none text-white"
+      className="ui-scale-fixed absolute inset-0 z-[60] overflow-hidden select-none text-white"
       // The stage under this toggles playback on clicks and taps; nothing
       // done on the results screen may reach it.
       onPointerDown={(event) => event.stopPropagation()}

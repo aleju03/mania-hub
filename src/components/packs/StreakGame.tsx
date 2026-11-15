@@ -69,6 +69,7 @@ import {
   playStreakWrong,
   warmPackAudio,
 } from "./packSfx";
+import { UsernameText } from "../ui/UsernameText";
 
 // Higher or lower, hosted by the packs page: the board is the page's middle,
 // so the pull ticker, the wallet and the shard count stay where they were
@@ -381,7 +382,7 @@ function ArtlessCardFront({ player }: { player: StreakPlayer }) {
         </div>
       </div>
       <div className="absolute inset-x-3 bottom-4 truncate text-center text-[9px] font-bold uppercase tracking-[0.22em] text-white/45">
-        {player.username}
+        <UsernameText username={player.username} userId={player.userId} />
       </div>
     </div>
   );
@@ -456,7 +457,7 @@ function CardFace({
         <CountryFlag code={player.countryCode} size="xs" decorative />
         {/* Not a link: the answer is one profile visit away, and a mid-round tap
             on a name would either leave the game or hand over the number. */}
-        <span className="truncate text-[14px] font-bold text-white">{player.username}</span>
+        <UsernameText username={player.username} userId={player.userId} className="truncate text-[14px] font-bold text-white" />
         {/* Who they are is never the secret: the read is that rank tells you
             nothing about how much someone has played. */}
         <span className="text-[11px] text-osu-f1 tabular-nums">#{player.globalRank.toLocaleString("en-US")}</span>
@@ -1289,12 +1290,12 @@ export function StreakGame({
                          snapping white to gold under the reader. */
                       hidden: (
                         <span translate="no" className="inline-block font-bold" style={{ ...NAME_TINT, ...round.right.nameStyle }}>
-                          {round.right.player.username}
+                          <UsernameText username={round.right.player.username} userId={round.right.player.userId} />
                         </span>
                       ),
                       shown: (
                         <span translate="no" className="inline-block font-bold" style={{ ...NAME_TINT, ...round.left.nameStyle }}>
-                          {round.left.player.username}
+                          <UsernameText username={round.left.player.username} userId={round.left.player.userId} />
                         </span>
                       ),
                     }}

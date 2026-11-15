@@ -32,6 +32,14 @@
   }
 }
 
+@font-face { font-family: "Tracker Round"; font-weight: 100; src: url("/fonts/TrackerRound-Thin.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 300; src: url("/fonts/TrackerRound-Light.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 400; src: url("/fonts/TrackerRound-Regular.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 600; src: url("/fonts/TrackerRound-SemiBold.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 700; src: url("/fonts/TrackerRound-SemiBold.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 800; src: url("/fonts/TrackerRound-Bold-v2.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Tracker Round"; font-weight: 900; src: url("/fonts/TrackerRound-Heavy-v2.woff2") format("woff2"); font-display: swap; }
+/* Torus only draws the lazer results screen in the replay viewer, which copies osu!. */
 @font-face { font-family: "Torus"; font-weight: 100; src: url("/fonts/Torus-Thin.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "Torus"; font-weight: 300; src: url("/fonts/Torus-Light.woff2") format("woff2"); font-display: swap; }
 @font-face { font-family: "Torus"; font-weight: 400; src: url("/fonts/Torus-Regular.woff2") format("woff2"); font-display: swap; }
@@ -48,7 +56,51 @@
 }
 .mode-icon { font-family: "osu-extra"; -webkit-font-smoothing: antialiased; }
 
-:root { --theme-hue: 333; --theme-sat: 1; }
+/* --theme-surface scales how much of the hue the dark surfaces and secondary
+   text carry. The site keeps them near grey; a supporter profile theme turns
+   it up so the panels and buttons take the theme's colour too. */
+:root { --theme-hue: 333; --theme-sat: 1; --theme-surface: 1; }
+/* Overjoy's accent: its own pink at the default hue, and the site theme's
+   colour otherwise (chainKit.tsx KIT.pink). */
+:root { --overjoy-accent: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 74%); }
+
+/* The UI Scaling setting (src/lib/ui-scale.ts). rem sizes follow the root
+   font size; px sizes in this stylesheet are rewritten at build time to
+   multiply by it (scripts/ui-scale-postcss.ts). Icons sized by their width
+   and height attributes (lucide's size prop) have no CSS length to rewrite,
+   so they take it as a zoom; one with its own size class is already scaled. */
+:root { --ui-scale: 1; --ui-root-scale: var(--ui-scale); }
+html { font-size: calc(100% * var(--ui-scale)); }
+/* A subtree laid out at fixed sizes (the pack-run game, the lazer results
+   screen) stays at 1x: px lengths read --ui-scale, and Tailwind's rem tokens
+   are divided back by the root's scale (--ui-root-scale keeps the value the
+   root computed, since custom properties inherit resolved). */
+.ui-scale-fixed {
+  --ui-scale: 1;
+  font-size: calc(1rem / var(--ui-root-scale));
+  --spacing: calc(0.25rem / var(--ui-root-scale));
+  --text-xs: calc(0.75rem / var(--ui-root-scale)); --text-sm: calc(0.875rem / var(--ui-root-scale));
+  --text-base: calc(1rem / var(--ui-root-scale)); --text-lg: calc(1.125rem / var(--ui-root-scale));
+  --text-xl: calc(1.25rem / var(--ui-root-scale)); --text-2xl: calc(1.5rem / var(--ui-root-scale));
+  --text-3xl: calc(1.875rem / var(--ui-root-scale)); --text-4xl: calc(2.25rem / var(--ui-root-scale));
+  --text-5xl: calc(3rem / var(--ui-root-scale)); --text-6xl: calc(3.75rem / var(--ui-root-scale));
+  --radius-xs: calc(0.125rem / var(--ui-root-scale)); --radius-sm: calc(0.25rem / var(--ui-root-scale));
+  --radius-md: calc(0.375rem / var(--ui-root-scale)); --radius-lg: calc(0.5rem / var(--ui-root-scale));
+  --radius-xl: calc(0.75rem / var(--ui-root-scale)); --radius-2xl: calc(1rem / var(--ui-root-scale));
+  --radius-3xl: calc(1.5rem / var(--ui-root-scale));
+  --container-xs: calc(20rem / var(--ui-root-scale)); --container-sm: calc(24rem / var(--ui-root-scale));
+  --container-md: calc(28rem / var(--ui-root-scale)); --container-lg: calc(32rem / var(--ui-root-scale));
+  --container-xl: calc(36rem / var(--ui-root-scale)); --container-2xl: calc(42rem / var(--ui-root-scale));
+  --container-3xl: calc(48rem / var(--ui-root-scale)); --container-4xl: calc(56rem / var(--ui-root-scale));
+}
+.ui-scale-fixed :is(svg, img) { zoom: 1 !important; }
+svg.lucide:not([class*=" h-"]):not([class*=" w-"]):not([class*=" size-"]) { zoom: var(--ui-scale); }
+/* Same for images and other icons sized only by their attributes: no size
+   class and no inline width (an inline width is already scaled, see scaledPx). */
+:is(img, svg:not(.lucide))[width]:not([class^="h-"], [class*=" h-"], [class^="w-"], [class*=" w-"], [class^="size-"], [class*=" size-"], [style*="width"]) {
+  zoom: var(--ui-scale);
+}
+svg :is(svg, img)[width] { zoom: 1; }
 
 html {
   scrollbar-gutter: stable;
@@ -58,16 +110,16 @@ html {
 }
 
 @theme inline {
-  --font-sans: "Torus", "Inter", "Helvetica Neue", Tahoma, Arial, sans-serif;
-  --color-osu-b6: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-b5: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(15% - 8% * (1 - var(--theme-sat))));
-  --color-osu-b4: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(20% - 8% * (1 - var(--theme-sat)))); --color-osu-b3: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(25% - 8% * (1 - var(--theme-sat))));
-  --color-osu-b2: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(30% - 8% * (1 - var(--theme-sat)))); --color-osu-b1: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(40% - 8% * (1 - var(--theme-sat))));
-  --color-osu-d6: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-d5: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(15% - 8% * (1 - var(--theme-sat)))); --color-osu-d4: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(20% - 8% * (1 - var(--theme-sat))));
+  --font-sans: "Tracker Round", "Inter", "Helvetica Neue", Tahoma, Arial, sans-serif;
+  --color-osu-b6: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-b5: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(15% - 8% * (1 - var(--theme-sat))));
+  --color-osu-b4: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(20% - 8% * (1 - var(--theme-sat)))); --color-osu-b3: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(25% - 8% * (1 - var(--theme-sat))));
+  --color-osu-b2: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(30% - 8% * (1 - var(--theme-sat)))); --color-osu-b1: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), calc(40% - 8% * (1 - var(--theme-sat))));
+  --color-osu-d6: hsl(var(--theme-hue), calc(20% * var(--theme-sat) * var(--theme-surface)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-d5: hsl(var(--theme-hue), calc(20% * var(--theme-sat) * var(--theme-surface)), calc(15% - 8% * (1 - var(--theme-sat)))); --color-osu-d4: hsl(var(--theme-hue), calc(20% * var(--theme-sat) * var(--theme-surface)), calc(20% - 8% * (1 - var(--theme-sat))));
   --color-osu-c1: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 100%); --color-osu-c2: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 90%);
   --color-osu-l1: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 80%); --color-osu-l2: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 75%);
   /* Secondary text. Most of its uses are 9-11px, so it sits higher than a
      "muted gray" normally would: 60% only cleared AA on the darkest rows. */
-  --color-osu-f1: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 70%);
+  --color-osu-f1: hsl(var(--theme-hue), calc(10% * var(--theme-sat) * var(--theme-surface)), 70%);
   --color-osu-h1: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 70%); --color-osu-h2: hsl(var(--theme-hue), calc(50% * var(--theme-sat)), 45%);
   --color-osu-pink: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 70%);
   --color-osu-pink-light: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 80%);
@@ -144,6 +196,19 @@ html[data-custom-cursor="true"] * {
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--color-osu-b6); }
 ::-webkit-scrollbar-thumb { background: var(--color-osu-b2); border-radius: 4px; }
+/* A slim scrollbar of the page's own, for panels that scroll inside a page
+   (the /supporter columns): a pill in the accent on a clear track, no
+   arrows. Chrome drops every ::-webkit-scrollbar rule once scrollbar-width or
+   scrollbar-color is set, so those two are for browsers without them only. */
+.scroll-slim::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll-slim::-webkit-scrollbar-track { background: transparent; }
+.scroll-slim::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--color-osu-pink) 32%, transparent); border-radius: 999px; }
+.scroll-slim::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--color-osu-pink) 60%, transparent); }
+.scroll-slim::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.scroll-slim::-webkit-scrollbar-corner { background: transparent; }
+@supports not selector(::-webkit-scrollbar) {
+  .scroll-slim { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--color-osu-pink) 40%, transparent) transparent; }
+}
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .activity-heatmap-grid {
@@ -186,6 +251,19 @@ html[data-custom-cursor="true"] * {
   box-shadow: none;
 }
 
+/* A /terms#section link's section, lit for a moment on arrival. The glow is a
+   box-shadow, so it reaches past the text without moving it. */
+@keyframes legal-target {
+  0%, 35% {
+    background: color-mix(in srgb, var(--color-osu-pink) 10%, transparent);
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--color-osu-pink) 10%, transparent);
+  }
+}
+.legal-target { animation: legal-target 2.6s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .legal-target { animation-duration: 4s; animation-timing-function: steps(1, end); }
+}
+
 @keyframes detail-in {
   from { opacity: 0; transform: translateY(-6px); }
 }
@@ -217,6 +295,113 @@ html[data-custom-cursor="true"] * {
   from { opacity: 0; transform: translateY(6px); }
 }
 .signature-enter { animation: signature-in 320ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* A frame whose art hangs (the Dan license on its lanyard) and carries a badge
+   laid on top: still most of the time, then a light nudge sets it swinging
+   like a pendulum (about 0.6 s a swing) that dies away. The laminate's sheen
+   runs on the same 14 s clock, sliding with the tilt and gone at rest. */
+@keyframes frame-swing {
+  0%, 10% { transform: rotate(0deg); animation-timing-function: cubic-bezier(0.3, 0, 0.6, 1); }
+  14.4% { transform: rotate(3deg); animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  18.9% { transform: rotate(-2.2deg); animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  23.3% { transform: rotate(1.5deg); animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  27.7% { transform: rotate(-1deg); animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  32.1% { transform: rotate(0.6deg); animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  36.6% { transform: rotate(-0.3deg); animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  41%, 100% { transform: rotate(0deg); }
+}
+.frame-swing { animation: frame-swing 14s infinite; }
+@keyframes frame-sheen {
+  0%, 10% { opacity: 0; background-position: 50% 0; animation-timing-function: cubic-bezier(0.3, 0, 0.6, 1); }
+  14.4% { opacity: 0.85; background-position: 8% 0; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  18.9% { opacity: 0.7; background-position: 81% 0; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  23.3% { opacity: 0.5; background-position: 28% 0; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  27.7% { opacity: 0.35; background-position: 65% 0; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  32.1% { opacity: 0.2; background-position: 41% 0; }
+  38%, 100% { opacity: 0; background-position: 50% 0; }
+}
+.frame-sheen {
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  background-image: linear-gradient(112deg, transparent 32%, rgba(255, 120, 210, 0.9) 41%, rgba(255, 255, 255, 0.95) 47%, rgba(120, 220, 255, 0.9) 53%, rgba(190, 255, 150, 0.8) 59%, transparent 68%);
+  background-size: 320% 100%;
+  animation: frame-sheen 14s infinite;
+}
+/* The Trophy shelf frame (LiveTrophyShelf), on one 6 s clock: a display light
+   glides along the glass from 0.7 s to 2.7 s, a band crossing each plaque as
+   it passes (each plaque's delay is set where it stands); then the last plaque
+   lifts, its light rising, and settles. */
+@keyframes shelf-light {
+  0%, 11.7% { transform: translateX(0); animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  45%, 100% { transform: translateX(196px); }
+}
+@keyframes shelf-light-glow {
+  0%, 11.7% { opacity: 0; }
+  17.5%, 39.2% { opacity: 0.85; }
+  45%, 100% { opacity: 0; }
+}
+@keyframes shelf-band {
+  0% { opacity: 0; transform: translateX(-13px) skewX(-22deg); }
+  2%, 8% { opacity: 0.6; }
+  10%, 100% { opacity: 0; transform: translateX(13px) skewX(-22deg); }
+}
+@keyframes shelf-lift {
+  0%, 42.5% { transform: translateY(0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  50%, 55.8% { transform: translateY(-3.2px); animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1); }
+  65.8%, 100% { transform: translateY(0); }
+}
+@keyframes shelf-proud {
+  0%, 42.5% { opacity: 0.36; }
+  50%, 55.8% { opacity: 0.85; }
+  69%, 100% { opacity: 0.36; }
+}
+.shelf-light { animation: shelf-light 6s infinite; }
+.shelf-light-glow { opacity: 0; animation: shelf-light-glow 6s infinite; }
+.shelf-band { opacity: 0; transform-box: fill-box; transform-origin: center; animation: shelf-band 6s infinite; }
+.shelf-lift { animation: shelf-lift 6s infinite; }
+.shelf-proud { animation: shelf-proud 6s infinite; }
+/* The Desktop icon frame (LiveDesktopIcon), on one 6 s clock: a rubber band
+   drags across, the label and the shortcut arrow take the selection as it
+   lets go, and they drop it again near the end. At rest it stays selected. */
+@keyframes desktop-icon-plate {
+  0% { fill: #008080; }
+  28.3% { fill: #000080; }
+  85% { fill: #008080; }
+}
+@keyframes desktop-icon-mark {
+  0% { opacity: 0; }
+  28.3% { opacity: 1; }
+  85% { opacity: 0; }
+}
+@keyframes desktop-icon-band {
+  0% { visibility: hidden; }
+  15% { visibility: visible; }
+  28.3% { visibility: hidden; }
+}
+@keyframes desktop-icon-drag {
+  0%, 15% { transform: scale(0.01); animation-timing-function: cubic-bezier(0.4, 0, 0.3, 1); }
+  26.3%, 100% { transform: scale(1); }
+}
+.desktop-icon-band { visibility: hidden; }
+.desktop-icon-band rect { transform-box: fill-box; transform-origin: 0 0; }
+.desktop-icon-live .desktop-icon-plate { animation: desktop-icon-plate 6s step-end infinite; }
+.desktop-icon-live .desktop-icon-mark { animation: desktop-icon-mark 6s step-end infinite; }
+.desktop-icon-live .desktop-icon-band { animation: desktop-icon-band 6s step-end infinite; }
+.desktop-icon-live .desktop-icon-band rect { animation: desktop-icon-drag 6s infinite; }
+/* A judgement over the Note highway's playfield (HighwayPlayHud): it pops in and fades. */
+@keyframes highway-judge {
+  0% { transform: translateX(-50%) scale(1.3); opacity: 1; }
+  20% { transform: translateX(-50%) scale(1); }
+  65% { opacity: 1; }
+  100% { transform: translateX(-50%) scale(1); opacity: 0; }
+}
+.highway-judge { animation: highway-judge 600ms ease-out forwards; }
+/* the DFJK frame's hit light, as its video fades it */
+@keyframes dfjk-hit {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.dfjk-hit { animation: dfjk-hit 220ms linear forwards; }
 
 :root[data-window-active="false"] .animate-spin,
 :root[data-window-active="false"] .animate-pulse,
@@ -798,3 +983,2403 @@ html[data-custom-cursor="true"] * {
    containing block for every fixed element (nav, the mascot itself), which snaps
    them out of place for the length of the animation on a scrolled page. */
 :root.mascot-shake main { animation: mascot-shake 600ms ease-in-out; }
+
+/* Supporter name tag styles (src/lib/supporter-name-styles.ts, applied by
+   SupporterStyledName). One element per name, sized by the caller: the hero
+   passes `truncate p-2 -m-2`, so anything drawn as content (text-shadow,
+   strokes) has to fit inside that padding, and glows are drop-shadow filters,
+   which draw past the clipping box. Lengths are in em so a picker tile shows
+   the hero's look at its own size. Gradient fills keep a dark drop-shadow
+   under them so the name reads on a bright cover. Under reduced motion every
+   style holds still on its resting frame. */
+.name-tag--holo,
+.name-tag--chrome,
+.name-tag--ember,
+.name-tag--frost,
+.name-tag--aurora,
+.name-tag--gold,
+.name-tag--rainbow,
+.name-tag--hit-light,
+.name-tag--300g,
+.name-tag--terminal,
+.name-tag--sunset,
+.name-tag--ethereal,
+.name-tag--molten-gold,
+.name-tag--pearl,
+.name-tag--galaxy,
+.name-tag--heatmap,
+.name-tag--note-rain,
+.name-tag--plasma,
+.name-tag--ink,
+.name-tag--caustics,
+.name-tag--lava,
+.name-tag--dither,
+.name-tag--mesh,
+.name-tag--inferno,
+.name-tag--hellfire,
+.name-tag--karaoke,
+.name-tag--wireframe,
+.name-tag--aero {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-repeat: repeat;
+}
+
+/* A text-clipped fill only paints inside the box, and tight line heights
+   leave descenders (j, g, y) hanging below it, so they came out cut off. Pad
+   the box past them and take the room back so layout doesn't move. In the
+   components layer so a caller's own padding utilities (the hero's p-2 -m-2)
+   still win. */
+@layer components {
+  /* For a truncating line (overflow: hidden) that holds a styled name in its
+     text: room past the text on every side for the name's glow, taken back so
+     the layout doesn't move. Without it the line's box cut the halo into a
+     rectangle. */
+  .glow-room {
+    padding: 0.45em 0.7em;
+    margin: -0.45em -0.7em;
+  }
+  .name-tag {
+    padding-block: 0.25em;
+    margin-block: -0.25em;
+    /* the same on the sides: a list name truncates (overflow: hidden), which
+       cut a glow style's halo off flat at the first letter */
+    padding-inline: 0.4em;
+    margin-inline: -0.4em;
+  }
+}
+
+/* One full background width per loop, so a gradient whose ends match wraps
+   without a seam (a 200%-wide image moves by its own width from 0% to 200%). */
+@keyframes name-tag-slide {
+  from { background-position: 0% 50%; }
+  to { background-position: 200% 50%; }
+}
+
+.name-tag--holo {
+  background-image: linear-gradient(100deg, #ffb8e8 0%, #ffeab0 17%, #b5ffe1 34%, #aee0ff 51%, #dcb8ff 68%, #ffb8e8 85%, #ffb8e8 100%);
+  background-size: 200% 100%;
+  filter: drop-shadow(0 0.04em 0.06em rgba(0, 0, 0, 0.55)) drop-shadow(0 0 0.3em rgba(214, 176, 255, 0.4));
+  animation: name-tag-slide 7s linear infinite;
+}
+
+/* Liquid metal, as CSS for small names and until the shader draws (big
+   names run the real shader, see name-tag-shaders.ts): white silver, a dark
+   reflection band low through the letters, and faint red/blue edges. Stops sit
+   from the line's centre, so the band lands on the letters at any size. */
+.name-tag--chrome {
+  /* liquid metal as its shader draws it: bright silver at the start of the
+     name running to dark gunmetal at its end, a sheen across the top, and a
+     glint crossing now and then */
+  background-image:
+    linear-gradient(105deg, transparent 0 44%, rgba(255, 255, 255, 0.85) 50%, transparent 56% 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4) calc(50% - 0.34em), transparent calc(50% - 0.06em), rgba(10, 12, 20, 0.22) calc(50% + 0.5em)),
+    linear-gradient(100deg, #f5f7fc 0%, #dfe3ec 30%, #a9afc0 55%, #6c7284 78%, #4c5264 100%);
+  background-size: 250% 100%, 100% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 150% 50%, 0 0, 0 0;
+  filter: drop-shadow(0 0.06em 0.1em rgba(0, 0, 0, 0.7));
+  animation: name-tag-glint 6s ease-in-out infinite;
+}
+
+/* A white band crossing once, then a long rest. */
+@keyframes name-tag-glint {
+  0% { background-position: 150% 50%, 0 0; }
+  35%, 100% { background-position: -50% 50%, 0 0; }
+}
+
+.name-tag--neon {
+  color: #fff2fb;
+  -webkit-text-fill-color: #fff2fb;
+  text-shadow: 0 0 0.04em #fff, 0 0 0.12em #ff8fd0;
+  filter: drop-shadow(0 0 0.12em rgba(255, 70, 175, 0.95)) drop-shadow(0 0 0.45em rgba(255, 40, 160, 0.65));
+  animation: name-tag-flicker 7s linear infinite;
+}
+
+/* A tube that stutters now and then, never off for long. */
+@keyframes name-tag-flicker {
+  0%, 70%, 71.5%, 73%, 74.6%, 100% { opacity: 1; }
+  70.6% { opacity: 0.45; }
+  72.2% { opacity: 0.7; }
+  73.8% { opacity: 0.35; }
+}
+
+.name-tag--glitch {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  text-shadow: -0.04em 0 rgba(255, 45, 110, 0.85), 0.04em 0 rgba(0, 225, 255, 0.85);
+  animation: name-tag-glitch 4.5s steps(1, end) infinite;
+}
+
+@keyframes name-tag-glitch {
+  0%, 84%, 100% { text-shadow: -0.04em 0 rgba(255, 45, 110, 0.85), 0.04em 0 rgba(0, 225, 255, 0.85); transform: none; }
+  85% { text-shadow: -0.12em 0.02em rgba(255, 45, 110, 0.9), 0.1em -0.02em rgba(0, 225, 255, 0.9); transform: translateX(0.03em) skewX(-8deg); }
+  87% { text-shadow: 0.1em 0 rgba(255, 45, 110, 0.9), -0.1em 0 rgba(0, 225, 255, 0.9); transform: translateX(-0.05em); }
+  89% { text-shadow: -0.06em -0.03em rgba(255, 45, 110, 0.9), 0.14em 0.02em rgba(0, 225, 255, 0.9); transform: skewX(6deg); }
+  91% { text-shadow: -0.04em 0 rgba(255, 45, 110, 0.85), 0.04em 0 rgba(0, 225, 255, 0.85); transform: none; }
+  95% { text-shadow: 0.08em 0 rgba(255, 45, 110, 0.9), -0.06em 0 rgba(0, 225, 255, 0.9); transform: translateX(0.04em); }
+  96% { text-shadow: -0.04em 0 rgba(255, 45, 110, 0.85), 0.04em 0 rgba(0, 225, 255, 0.85); transform: none; }
+}
+
+.name-tag--ember {
+  background-image: linear-gradient(0deg, #ff3b1f 0%, #ff6a1a 22%, #ffa21f 48%, #ffd760 70%, #fff4c4 100%);
+  filter: drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.6)) drop-shadow(0 0 0.22em rgba(255, 110, 30, 0.75));
+  animation: name-tag-burn 2.6s ease-in-out infinite;
+}
+
+/* The glow breathes unevenly, like coals. */
+@keyframes name-tag-burn {
+  0%, 100% { filter: drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.6)) drop-shadow(0 0 0.22em rgba(255, 110, 30, 0.75)); }
+  30% { filter: drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.6)) drop-shadow(0 -0.04em 0.34em rgba(255, 90, 20, 0.95)); }
+  55% { filter: drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.6)) drop-shadow(0 0 0.16em rgba(255, 130, 40, 0.6)); }
+  75% { filter: drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.6)) drop-shadow(0 -0.03em 0.28em rgba(255, 100, 25, 0.85)); }
+}
+
+.name-tag--frost {
+  background-image:
+    linear-gradient(115deg, transparent 0 28%, rgba(255, 255, 255, 0.75) 28% 31%, transparent 31% 58%, rgba(255, 255, 255, 0.55) 58% 60%, transparent 60% 100%),
+    linear-gradient(180deg, #ffffff 0%, #e2f7ff 35%, #8fd4ff 62%, #c9efff 82%, #ffffff 100%);
+  background-size: 200% 100%, 100% 100%;
+  filter: drop-shadow(0 0.04em 0.05em rgba(0, 20, 40, 0.6)) drop-shadow(0 0 0.25em rgba(110, 200, 255, 0.55));
+  animation: name-tag-frost 14s linear infinite;
+}
+
+@keyframes name-tag-frost {
+  from { background-position: 0% 50%, 0 0; }
+  to { background-position: 200% 50%, 0 0; }
+}
+
+.name-tag--aurora {
+  /* curtains of light drifting over a teal sky, violet-blue above and green
+     below, as the shader draws it */
+  background-image:
+    linear-gradient(100deg, transparent 0%, rgba(140, 255, 200, 0.4) 18%, transparent 36%, rgba(170, 140, 255, 0.35) 60%, transparent 80%),
+    linear-gradient(180deg, #7896d8 calc(50% - 0.34em), #4aa0b0 calc(50% - 0.08em), #38bd8e calc(50% + 0.22em), #2c9a88 calc(50% + 0.5em));
+  background-size: 200% 100%, 100% 100%;
+  filter: drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.6)) drop-shadow(0 0 0.32em rgba(80, 230, 200, 0.45));
+  animation: name-tag-slide 12s linear infinite;
+}
+
+.name-tag--gold {
+  background-image:
+    linear-gradient(105deg, transparent 0 44%, rgba(255, 255, 255, 0.95) 50%, transparent 56% 100%),
+    linear-gradient(180deg, #fff8d6 0%, #ffe27a 28%, #f2b52c 50%, #b97a0f 56%, #e3a52a 72%, #ffe89c 100%);
+  background-size: 250% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 150% 50%, 0 0;
+  filter: drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.65)) drop-shadow(0 0 0.25em rgba(255, 190, 60, 0.4));
+  animation: name-tag-glint 5s ease-in-out infinite;
+}
+
+/* An LED board: the name lit on a grid of square pixels (each tile's
+   top-left 78% lit, the gaps a dim amber so the letters stay solid). */
+.name-tag--pixel {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-image: conic-gradient(at 78% 78%, rgba(255, 160, 40, 0.45) 75%, #ffe066 0);
+  background-size: 0.09em 0.09em;
+  filter: drop-shadow(0 0 0.1em rgba(255, 190, 40, 0.95)) drop-shadow(0 0 0.35em rgba(255, 150, 20, 0.5));
+}
+
+.name-tag--sticker {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  -webkit-text-stroke: 0.14em #1d1233;
+  paint-order: stroke fill;
+  filter: drop-shadow(0.08em 0.08em 0 #ff5fae);
+}
+
+.name-tag--rainbow {
+  background-image: linear-gradient(90deg, #ff6b7d 0%, #ffae5c 14%, #ffe45c 28%, #7cf08f 43%, #5cd2ff 57%, #8f7dff 71%, #ff79d8 86%, #ff6b7d 100%);
+  background-size: 200% 100%;
+  filter: drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.65));
+  animation: name-tag-slide 9s linear infinite;
+}
+
+/* osu!mania hit lighting: a cool white name that flares like a pressed key. */
+.name-tag--hit-light {
+  background-image: linear-gradient(0deg, #6fd8ff 0%, #c9f1ff 40%, #ffffff 65%);
+  filter: drop-shadow(0 0 0.1em rgba(120, 215, 255, 0.9)) drop-shadow(0 0 0.3em rgba(40, 170, 255, 0.55));
+  animation: name-tag-hit 2.4s ease-out infinite;
+}
+
+@keyframes name-tag-hit {
+  0%, 100% { filter: drop-shadow(0 0 0.1em rgba(120, 215, 255, 0.9)) drop-shadow(0 0 0.3em rgba(40, 170, 255, 0.55)); }
+  4% { filter: drop-shadow(0 0 0.14em rgba(200, 240, 255, 1)) drop-shadow(0 0 0.6em rgba(60, 190, 255, 0.95)); }
+  30% { filter: drop-shadow(0 0 0.1em rgba(120, 215, 255, 0.9)) drop-shadow(0 0 0.3em rgba(40, 170, 255, 0.55)); }
+  34% { filter: drop-shadow(0 0 0.13em rgba(200, 240, 255, 1)) drop-shadow(0 0 0.5em rgba(60, 190, 255, 0.85)); }
+  58% { filter: drop-shadow(0 0 0.1em rgba(120, 215, 255, 0.9)) drop-shadow(0 0 0.3em rgba(40, 170, 255, 0.55)); }
+}
+
+/* The 300g (MAX) judgement: the vertical rainbow the site draws MAX counts in
+   (ManiaJudgementStats.ts), its stops placed from the line's centre so they
+   land on the letters the same way at any size. Still, like the judgement's
+   colours. */
+.name-tag--300g {
+  background-image:
+    linear-gradient(180deg, #9b2cff calc(50% - 0.3em), #1d65ff calc(50% - 0.15em), #41d9ff calc(50% + 0.04em),
+      #4fdc3a calc(50% + 0.16em), #ffe234 calc(50% + 0.28em), #ff9a1f calc(50% + 0.4em));
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.6));
+}
+
+/* A phosphor screen: scanlines through the letters and a blinking cursor. */
+.name-tag--terminal {
+  font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  letter-spacing: -0.02em;
+  /* Monospace faces sit high in a leading-none line; drawn lower, not laid out lower. */
+  position: relative;
+  top: 0.07em;
+  background-image: repeating-linear-gradient(180deg, #a8ffc4 0 0.06em, #4ad67a 0.06em 0.1em);
+  filter: drop-shadow(0 0 0.1em rgba(80, 255, 150, 0.65)) drop-shadow(0 0 0.3em rgba(40, 220, 110, 0.35));
+}
+
+/* The cursor only on a name standing on its own (the profile hero, the
+   loadout stage, the style picker): mid-sentence ("X on map") its block reads
+   as a gap before the next word. */
+.name-tag--terminal::after {
+  content: "";
+  display: none;
+  width: 0.5em;
+  height: 0.72em;
+  margin-left: 0.08em;
+  background: #7dffa6;
+  animation: name-tag-caret 1.1s steps(1, end) infinite;
+}
+
+.name-tag--terminal.name-tag--hero::after,
+.name-tag-grid .name-tag--terminal::after {
+  display: inline-block;
+}
+
+/* The wearer's choice of no cursor at all. */
+.name-tag--terminal.name-tag--bare::after {
+  display: none;
+}
+
+@keyframes name-tag-caret {
+  50% { opacity: 0; }
+}
+
+/* A slanted plate behind the name, drawn inside the box so `truncate` never
+   cuts it; wider padding with a matching negative margin keeps the name where
+   it was. */
+.name-tag--plate {
+  position: relative;
+  isolation: isolate;
+  padding-inline: 0.42em;
+  margin-inline: -0.42em -0.2em;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  text-shadow: 0 0.04em 0.08em rgba(0, 0, 0, 0.5);
+}
+
+.name-tag--plate::before {
+  content: "";
+  position: absolute;
+  inset: 0.04em 0.16em;
+  z-index: -1;
+  transform: skewX(-12deg);
+  border-radius: 0.12em;
+  border: 0.06em solid transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 55%) padding-box,
+    linear-gradient(180deg, #2a1d45, #160f29) padding-box,
+    linear-gradient(90deg, #ff66b3, #9b7bff) border-box;
+  box-shadow: inset 0.14em 0 0 #ff66b3;
+}
+
+/* Embossing label tape: a strip of glossy red plastic with the letters pressed
+   up through it, white where the plastic stretched. Drawn like the plate. */
+.name-tag--label-tape {
+  position: relative;
+  isolation: isolate;
+  padding-inline: 0.42em;
+  margin-inline: -0.42em -0.2em;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  text-shadow: 0 0.035em 0 rgba(70, 0, 12, 0.75), 0 -0.02em 0 rgba(255, 255, 255, 0.55), 0 0 0.09em rgba(255, 255, 255, 0.55);
+}
+
+.name-tag--label-tape::before {
+  content: "";
+  position: absolute;
+  inset: 0.05em 0.12em;
+  z-index: -1;
+  border-radius: 0.04em;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0 9%, rgba(255, 255, 255, 0) 30%, rgba(0, 0, 0, 0) 72%, rgba(0, 0, 0, 0.24) 100%),
+    #cf1f3a;
+  box-shadow: 0 0.05em 0.08em rgba(0, 0, 0, 0.5), inset 0 0 0 0.02em rgba(255, 255, 255, 0.16);
+  /* the cut ends of the tape, a little off square */
+  clip-path: polygon(0.05em 0, 100% 0, calc(100% - 0.04em) 100%, 0 100%);
+}
+
+/* A highlighter stroke: dark ink under a fat marker line that runs a little
+   uphill and ends unevenly. Still, like a mark on paper. */
+.name-tag--highlighter {
+  position: relative;
+  isolation: isolate;
+  padding-inline: 0.42em;
+  margin-inline: -0.42em -0.2em;
+  color: #17151d;
+  -webkit-text-fill-color: #17151d;
+}
+
+.name-tag--highlighter::before {
+  content: "";
+  position: absolute;
+  inset: 0.17em 0.1em 0.1em;
+  z-index: -1;
+  transform: rotate(-1.1deg);
+  border-radius: 0.3em 0.1em 0.34em 0.12em / 0.2em 0.3em 0.16em 0.34em;
+  background:
+    repeating-linear-gradient(178deg, rgba(255, 255, 255, 0.2) 0 0.05em, rgba(255, 255, 255, 0) 0.05em 0.19em),
+    linear-gradient(90deg, #ffe838, #f9f04a 60%, #ffe22e);
+}
+
+/* A long note lying on its side: the held body, with the light of a hold
+   running along it. */
+.name-tag--long-note {
+  position: relative;
+  isolation: isolate;
+  padding-inline: 0.46em;
+  margin-inline: -0.46em -0.24em;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  text-shadow: 0 0.04em 0.07em rgba(0, 30, 70, 0.75);
+}
+
+.name-tag--long-note::before {
+  content: "";
+  position: absolute;
+  inset: 0.07em 0.12em;
+  z-index: -1;
+  border-radius: 0.14em;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0) 100%) 0% 0 / 45% 100% no-repeat,
+    linear-gradient(180deg, #4fb4ff, #2a7df0);
+  box-shadow: 0 0 0.3em rgba(70, 170, 255, 0.6);
+  animation: name-tag-hold 2.2s linear infinite;
+}
+
+/* the light enters past one end and leaves past the other (a 45%-wide image
+   is fully off either end at these positions) */
+@keyframes name-tag-hold {
+  from { background-position: -82% 0, 0 0; }
+  to { background-position: 182% 0, 0 0; }
+}
+
+/* Karaoke: the name fills with colour from the left as a sung line does,
+   holds a moment and starts over. */
+.name-tag--karaoke {
+  background-image: linear-gradient(90deg, #ff5fa8 0%, #ffb23e 25%, #ffe45c 49.6%, #f4f6ff 50.4%, #f4f6ff 100%);
+  background-size: 200% 100%;
+  background-position: 50% 0;
+  filter: drop-shadow(0 0.05em 0.04em rgba(0, 0, 0, 0.75)) drop-shadow(0 0 0.02em rgba(0, 0, 0, 0.9));
+  animation: name-tag-karaoke 4.2s linear infinite;
+}
+
+@keyframes name-tag-karaoke {
+  0% { background-position: 100% 0; }
+  6% { background-position: 100% 0; }
+  82% { background-position: 0% 0; }
+  100% { background-position: 0% 0; }
+}
+
+/* Wireframe: hollow outlined letters with a band of light passing through. */
+.name-tag--wireframe {
+  -webkit-text-stroke: max(0.05em, 0.8px) #8fe6ff;
+  /* a faint fill under the band keeps small names readable */
+  background-image: linear-gradient(100deg, rgba(143, 230, 255, 0.2) 0 38%, rgba(190, 242, 255, 0.8) 50%, rgba(143, 230, 255, 0.2) 62% 100%);
+  background-size: 200% 100%;
+  filter: drop-shadow(0 0 0.09em rgba(60, 200, 255, 0.7)) drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.6));
+  animation: name-tag-slide 5s linear infinite;
+}
+
+/* Synthwave chrome: a sunset gradient sliced by horizon lines. */
+.name-tag--sunset {
+  background-image: linear-gradient(180deg,
+    #fff1a6 0%, #ffc05c 30%, #ff6f7d 54%, #f4609a 59%,
+    transparent 59% 60.5%, #ea58aa 60.5%, #dc52bc 66.5%,
+    transparent 66.5% 68.5%, #c64fd2 68.5%, #8b4dff 100%);
+  filter: drop-shadow(0 0.05em 0.05em rgba(30, 0, 50, 0.7)) drop-shadow(0 0 0.25em rgba(255, 90, 170, 0.45));
+}
+
+/* Aero: glossy aqua jelly letters (Frutiger Aero), half filled with water.
+   Pale glass above a waterline that sloshes along the name, deep aqua below
+   it with bubbles rising through, and a white gloss over the top. The glass
+   layer is drawn over the bubbles, so they only show in the water and vanish
+   at the surface. Every tile is in em, so a list name and the hero match;
+   one 6 s loop moves each layer a whole number of tiles, so it never jumps. */
+.name-tag--aero {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.3) 34%, rgba(255, 255, 255, 0) 42%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 100' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23f4fdff'/%3E%3Cstop offset='1' stop-color='%23b9eeff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 0H120V50C90 42 90 42 60 50C30 58 30 58 0 50Z' fill='url(%23a)'/%3E%3Cpath d='M0 50C30 58 30 58 60 50C90 42 90 42 120 50' fill='none' stroke='%23fff' stroke-opacity='.95' stroke-width='3.2'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 60'%3E%3Cg fill='%23fff' fill-opacity='.16' stroke='%23fff' stroke-opacity='.85' stroke-width='1.4'%3E%3Ccircle cx='14' cy='12' r='3.6'/%3E%3Ccircle cx='46' cy='40' r='2.6'/%3E%3Ccircle cx='78' cy='18' r='4.4'/%3E%3Ccircle cx='30' cy='54' r='3'/%3E%3C/g%3E%3Cg fill='%23fff' fill-opacity='.85'%3E%3Ccircle cx='12.8' cy='10.7' r='0.9'/%3E%3Ccircle cx='45.2' cy='39.1' r='0.7'/%3E%3Ccircle cx='76.6' cy='16.4' r='1.1'/%3E%3Ccircle cx='29.0' cy='52.9' r='0.7'/%3E%3C/g%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 80'%3E%3Cg fill='%23fff' fill-opacity='.16' stroke='%23fff' stroke-opacity='.65' stroke-width='1.4'%3E%3Ccircle cx='24' cy='30' r='2.4'/%3E%3Ccircle cx='70' cy='66' r='3.2'/%3E%3Ccircle cx='118' cy='44' r='2'/%3E%3Ccircle cx='96' cy='10' r='2.8'/%3E%3C/g%3E%3Cg fill='%23fff' fill-opacity='.65'%3E%3Ccircle cx='23.2' cy='29.1' r='0.7'/%3E%3Ccircle cx='69.0' cy='64.8' r='0.8'/%3E%3Ccircle cx='117.4' cy='43.3' r='0.7'/%3E%3Ccircle cx='95.1' cy='9.0' r='0.7'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(180deg, #7fe4ff 0%, #2bb8f0 45%, #1186d2 70%, #0a5aa0 100%);
+  background-size: 100% 100%, 2.4em 100%, 1.9em 1.14em, 2.66em 1.52em, 100% 100%;
+  background-repeat: no-repeat, repeat-x, repeat, repeat, no-repeat;
+  background-position: 0 0, 0 0, 0 0, 0.7em 0.3em, 0 0;
+  -webkit-text-stroke: 0.02em rgba(225, 250, 255, 0.35);
+  filter: drop-shadow(0 0.05em 0.04em rgba(0, 38, 70, 0.8)) drop-shadow(0 0 0.22em rgba(80, 205, 255, 0.45));
+  animation: name-tag-aero-water 6s linear infinite;
+}
+@keyframes name-tag-aero-water {
+  0% { background-position: 0 0, 0 0, 0 0, 0.7em 0.3em, 0 0; }
+  25% { background-position: 0 0, -1.2em -0.04em, 0 -0.855em, 0.7em -0.46em, 0 0; }
+  50% { background-position: 0 0, -2.4em 0, 0 -1.71em, 0.7em -1.22em, 0 0; }
+  75% { background-position: 0 0, -3.6em 0.04em, 0 -2.565em, 0.7em -1.98em, 0 0; }
+  100% { background-position: 0 0, -4.8em 0, 0 -3.42em, 0.7em -2.74em, 0 0; }
+}
+
+:root[data-window-active="false"] .name-tag,
+:root[data-window-active="false"] .name-tag::after {
+  animation-play-state: paused;
+}
+
+/* The /supporter name style drawer: a tile holds still until it is pointed at
+   or picked, since a grid of animated, drop-shadowed names repaints every frame. */
+.name-tag-grid .name-tag,
+.name-tag-grid .name-tag::after {
+  animation-play-state: paused;
+}
+.name-tag-grid button:is(:hover, :focus-visible, [aria-pressed="true"]) .name-tag,
+.name-tag-grid button:is(:hover, :focus-visible, [aria-pressed="true"]) .name-tag::after {
+  animation-play-state: running;
+}
+
+/* Ethereal Dream, as CSS for small names and until the shader draws:
+   periwinkle letters with warm light drifting through them. */
+.name-tag--ethereal {
+  background-image:
+    radial-gradient(ellipse 30% 70% at 30% 62%, #fff0a8 0, #ff9e5c 35%, rgba(255, 120, 190, 0) 75%),
+    radial-gradient(ellipse 22% 60% at 72% 45%, #ff9ad6 0, rgba(255, 154, 214, 0) 70%),
+    linear-gradient(180deg, #8b93ff, #6870f2);
+  background-size: 200% 100%, 200% 100%, 100% 100%;
+  filter: drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.55));
+  animation: name-tag-ethereal 9s ease-in-out infinite alternate;
+}
+
+@keyframes name-tag-ethereal {
+  from { background-position: 0% 50%, 100% 50%, 0 0; }
+  to { background-position: 100% 50%, 0% 50%, 0 0; }
+}
+
+/* The shader styles' CSS stand-ins, for small names and until the shader
+   draws (name-tag-shaders.ts runs the real thing over big names). */
+.name-tag--molten-gold {
+  /* poured gold as its shader draws it: pale gold at the start of the name
+     running to dark bronze at its end, with a sheen across the top */
+  background-image:
+    linear-gradient(180deg, rgba(255, 250, 220, 0.4) calc(50% - 0.34em), transparent calc(50% - 0.06em), rgba(40, 20, 0, 0.25) calc(50% + 0.5em)),
+    linear-gradient(100deg, #fbf0c4 0%, #ecd27a 26%, #c79a2c 52%, #8a5a10 78%, #5e3606 100%);
+  filter: drop-shadow(0 0.05em 0.07em rgba(0, 0, 0, 0.6));
+}
+.name-tag--pearl {
+  /* an oily film over pearl: lavender, cream and aqua sliding past */
+  background-image: linear-gradient(100deg, #c9a8f4 0%, #f1cfe8 14%, #e2dcae 30%, #a6e8d6 48%, #8fd8ea 64%, #c9a8f4 82%, #f1cfe8 100%);
+  background-size: 200% 100%;
+  filter: drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.55));
+  animation: name-tag-slide 12s linear infinite;
+}
+.name-tag--galaxy {
+  /* the shader's resting look: deep violet with a lavender edge, a faint pink
+     and blue nebula, a couple of stars */
+  background-image:
+    radial-gradient(circle at 22% 38%, #fff 0 0.035em, transparent 0.06em),
+    radial-gradient(circle at 68% 66%, #fff 0 0.03em, transparent 0.055em),
+    radial-gradient(ellipse 34% 70% at 30% 55%, rgba(226, 104, 200, 0.55) 0, transparent 70%),
+    radial-gradient(ellipse 30% 70% at 74% 45%, rgba(110, 150, 245, 0.45) 0, transparent 70%),
+    linear-gradient(180deg, #c4a6f6 calc(50% - 0.42em), #9a5ee8 calc(50% - 0.22em), #6a3ac4 calc(50% + 0.02em),
+      #50349e calc(50% + 0.26em), #8a5ce0 calc(50% + 0.48em));
+  filter: drop-shadow(0 0 0.05em rgba(170, 130, 255, 0.5)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.6));
+}
+.name-tag--heatmap {
+  /* hot through the middle of the strokes, cooling to cyan and blue at the edges */
+  background-image: linear-gradient(180deg, #3f7fe0 calc(50% - 0.36em), #86dcf2 calc(50% - 0.2em), #ffe27c calc(50% - 0.04em),
+    #ffa035 calc(50% + 0.12em), #ffd66e calc(50% + 0.3em), #7ad2ea calc(50% + 0.46em), #3f7fe0 calc(50% + 0.6em));
+  filter: drop-shadow(0 0 0.06em rgba(120, 190, 255, 0.45)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.5));
+}
+.name-tag--note-rain {
+  /* the shader's violet lanes and pale rim (its falling notes need the shader) */
+  background-image: linear-gradient(180deg, #a596ee calc(50% - 0.36em), #6249ad calc(50% - 0.16em), #6a4fb8 calc(50% + 0.2em), #8064d2 calc(50% + 0.5em));
+  filter: drop-shadow(0 0 0.05em rgba(210, 200, 255, 0.6)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.55));
+}
+.name-tag--plasma {
+  /* deep blue run through with electric veins, a pale blue rim */
+  background-image:
+    radial-gradient(ellipse 40% 9% at 30% 45%, rgba(190, 230, 255, 0.9) 0, transparent 100%),
+    radial-gradient(ellipse 35% 8% at 72% 60%, rgba(120, 200, 255, 0.85) 0, transparent 100%),
+    linear-gradient(180deg, #7fb2ff calc(50% - 0.36em), #2a4ca8 calc(50% - 0.18em), #142a72 calc(50% + 0.12em), #2b56b8 calc(50% + 0.5em));
+  filter: drop-shadow(0 0 0.08em rgba(90, 170, 255, 0.85)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.5));
+}
+.name-tag--ink {
+  /* cream paper with navy ink folded through it and a gold thread */
+  background-image: linear-gradient(115deg, #f4efe2 0%, #f4efe2 16%, #2a2c66 22%, #f4efe2 29%, #f4efe2 46%, #c99a3e 49%, #f4efe2 52%,
+    #f4efe2 64%, #1d1d38 70%, #3a3f9a 74%, #f4efe2 80%, #f4efe2 100%);
+  background-size: 200% 100%;
+  filter: drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.6));
+  animation: name-tag-slide 14s linear infinite;
+}
+.name-tag--caustics {
+  /* deep pool teal with pale light on its surface */
+  background-image:
+    radial-gradient(ellipse 30% 12% at 28% 40%, rgba(200, 255, 250, 0.75) 0, transparent 100%),
+    radial-gradient(ellipse 26% 10% at 68% 62%, rgba(200, 255, 250, 0.6) 0, transparent 100%),
+    linear-gradient(180deg, #8ef0ea calc(50% - 0.36em), #1f93ad calc(50% - 0.16em), #0f7690 calc(50% + 0.2em), #1d8ea6 calc(50% + 0.5em));
+  filter: drop-shadow(0 0 0.06em rgba(120, 255, 240, 0.5)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.5));
+}
+.name-tag--lava {
+  /* magenta-red wax with hot orange blobs rising through it */
+  background-image:
+    radial-gradient(ellipse 22% 40% at 22% 55%, #ffb050 0, #ff7a28 45%, transparent 75%),
+    radial-gradient(ellipse 18% 34% at 58% 35%, #ffd27a 0, #ff8a2e 45%, transparent 75%),
+    linear-gradient(180deg, #b0226a calc(50% - 0.3em), #d42b48 calc(50% + 0.1em), #e8443a calc(50% + 0.45em));
+  filter: drop-shadow(0 0 0.06em rgba(255, 90, 40, 0.55)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.5));
+}
+.name-tag--dither {
+  background-image:
+    repeating-conic-gradient(#8bac0f 0 25%, #306230 0 50%),
+    linear-gradient(180deg, #c7dc60, #306230);
+  background-size: 0.12em 0.12em, 100% 100%;
+  background-blend-mode: soft-light;
+  filter: drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.55));
+}
+.name-tag--mesh {
+  background-image:
+    radial-gradient(ellipse 50% 90% at 20% 40%, #ff8cbf 0, transparent 70%),
+    radial-gradient(ellipse 50% 90% at 55% 60%, #7a9cff 0, transparent 70%),
+    radial-gradient(ellipse 50% 90% at 85% 40%, #ffc78c 0, transparent 70%),
+    linear-gradient(90deg, #b47aff, #b47aff);
+  background-size: 200% 100%;
+  filter: drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.55));
+  animation: name-tag-slide 16s linear infinite;
+}
+
+/* Inferno and Hellfire, as CSS for small names and until the shader draws.
+   White-hot letters with the colour in the glow around them, and a thin dark
+   rim so they hold on a bright cover. Every 4.8s the glow flares, then rests. */
+.name-tag--inferno {
+  background-image: linear-gradient(0deg, #ffb35c 0%, #ffe2b0 55%, #fff6e4 100%);
+  filter: drop-shadow(0 0.03em 0.04em rgba(60, 10, 0, 0.7)) drop-shadow(0 0 0.12em rgba(255, 110, 20, 0.85)) drop-shadow(0 0 0.32em rgba(255, 50, 0, 0.45));
+  animation: name-tag-inferno-flare 4.8s ease-in-out infinite;
+}
+@keyframes name-tag-inferno-flare {
+  0%, 32%, 100% { filter: drop-shadow(0 0.03em 0.04em rgba(60, 10, 0, 0.7)) drop-shadow(0 0 0.12em rgba(255, 110, 20, 0.85)) drop-shadow(0 0 0.32em rgba(255, 50, 0, 0.45)); }
+  10% { filter: drop-shadow(0 0.03em 0.04em rgba(60, 10, 0, 0.7)) drop-shadow(0 0 0.14em rgba(255, 140, 40, 1)) drop-shadow(0 -0.04em 0.42em rgba(255, 70, 0, 0.7)); }
+}
+.name-tag--hellfire {
+  background-image: linear-gradient(0deg, #a9b4ff 0%, #e2ecff 55%, #f7fbff 100%);
+  filter: drop-shadow(0 0.03em 0.04em rgba(10, 0, 40, 0.7)) drop-shadow(0 0 0.12em rgba(120, 110, 255, 0.85)) drop-shadow(0 0 0.32em rgba(90, 50, 255, 0.45));
+  animation: name-tag-hellfire-flare 4.8s ease-in-out infinite;
+}
+@keyframes name-tag-hellfire-flare {
+  0%, 32%, 100% { filter: drop-shadow(0 0.03em 0.04em rgba(10, 0, 40, 0.7)) drop-shadow(0 0 0.12em rgba(120, 110, 255, 0.85)) drop-shadow(0 0 0.32em rgba(90, 50, 255, 0.45)); }
+  10% { filter: drop-shadow(0 0.03em 0.04em rgba(10, 0, 40, 0.7)) drop-shadow(0 0 0.14em rgba(150, 170, 255, 1)) drop-shadow(0 -0.04em 0.42em rgba(100, 60, 255, 0.7)); }
+}
+/* Big fire names get room above the letters for the shader's flames, and
+   below them for the dark edge round a descender: a j's tail reached the
+   bottom of the box and its edge was cut into a flat line under it. */
+.name-tag--hero:is(.name-tag--inferno, .name-tag--hellfire) {
+  padding-top: 0.8em;
+  margin-top: -0.8em;
+  padding-bottom: 0.45em;
+  margin-bottom: -0.45em;
+}
+
+/* A big name waiting for its liquid-metal shader: plain metal without the CSS
+   look's hard reflection band, so the real shader takes over without a flash. */
+.name-tag--chrome.name-tag--pending {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4) calc(50% - 0.34em), transparent calc(50% - 0.06em), rgba(10, 12, 20, 0.22) calc(50% + 0.5em)),
+    linear-gradient(100deg, #f5f7fc 0%, #dfe3ec 30%, #a9afc0 55%, #6c7284 78%, #4c5264 100%);
+  background-size: 100% 100%;
+  animation: none;
+}
+.name-tag--molten-gold.name-tag--pending {
+  background-image:
+    linear-gradient(180deg, rgba(255, 250, 220, 0.4) calc(50% - 0.34em), transparent calc(50% - 0.06em), rgba(40, 20, 0, 0.25) calc(50% + 0.5em)),
+    linear-gradient(100deg, #fbf0c4 0%, #ecd27a 26%, #c79a2c 52%, #8a5a10 78%, #5e3606 100%);
+}
+
+/* A live shader over the name: the canvas fills the padding box and the text
+   stays, transparent, for layout, selection and truncation. */
+.name-tag-shader {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.name-tag--chrome > .name-tag-shader {
+  filter: drop-shadow(0 0.04em 0.06em rgba(0, 0, 0, 0.6));
+}
+/* Fire's live canvas draws its own dark edge; the name's box adds the glow,
+   so it escapes the hero's truncation. */
+.name-tag--inferno.name-tag--live {
+  filter: drop-shadow(0 -0.06em 0.3em rgba(255, 90, 20, 0.45)) !important;
+}
+.name-tag--hellfire.name-tag--live {
+  filter: drop-shadow(0 -0.06em 0.3em rgba(110, 90, 255, 0.5)) !important;
+}
+/* Not in a picker tile: there the name's box sits tight around it and the
+   glow came out cut along that box, a faint rectangle round the flames. */
+.name-tag-grid .name-tag--inferno.name-tag--live,
+.name-tag-grid .name-tag--hellfire.name-tag--live {
+  filter: none !important;
+}
+/* A picker tile waiting for its first still of the real look (never shown
+   as the CSS stand-in): a faint pulsing outline of the name. */
+.name-tag--waiting {
+  color: rgba(255, 255, 255, 0.14) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.14) !important;
+  background: none !important;
+  filter: none !important;
+  text-shadow: none !important;
+  animation: name-tag-waiting 1.4s ease-in-out infinite !important;
+}
+@keyframes name-tag-waiting {
+  50% { opacity: 0.45; }
+}
+.name-tag--live {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background: none !important;
+  filter: none !important;
+  animation: none !important;
+}
+
+/* Supporter name fonts (src/lib/supporter-name-fonts.ts): self-hosted open
+   fonts, licences in /fonts/name/licenses/. They come after the name tag
+   styles so a picked font wins over a style's own (terminal's monospace), and
+   font-size-adjust evens out their x-heights so every font fills the same
+   line. Only a font someone uses is downloaded. */
+@font-face {
+  font-family: "Name Press Start 2P";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/pixel.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name VT323";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/vt323.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Orbitron";
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/orbitron.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Unbounded";
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/unbounded.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Bungee";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/bungee.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Bebas Neue";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/bebas.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Righteous";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/righteous.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Monoton";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/monoton.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Permanent Marker";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/marker.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Pacifico";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/pacifico.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Cinzel";
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/cinzel.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Playfair Display";
+  font-weight: 900;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/name/playfair.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Name Silkscreen Heavy";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/silkscreenheavy.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Pixel Operator";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/pixeloperator.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Monocraft";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/monocraft2.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Silkscreen";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/silkscreen.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Audiowide";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/audiowide.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Russo One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/russo.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Black Ops One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/blackops.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Bangers";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/bangers.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Luckiest Guy";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/luckiest.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Creepster";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/creepster.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Lobster";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/lobster.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Rock Salt";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/rocksalt.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name UnifrakturMaguntia";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/unifraktur.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Abril Fatface";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/abril.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Major Mono Display";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/majormono.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Michroma";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/michroma.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Rubik Glitch";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/rubikglitch.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Shrikhand";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/shrikhand.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Zen Dots";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/zendots.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Pixelify Sans";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/pixelify.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Tektur";
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/tektur.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Jersey 10";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/jersey.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Doto";
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/doto.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Dela Gothic One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/delagothic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Rubik Mono One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/rubikmono.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Climate Crisis";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/climatecrisis.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Fredoka";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/fredoka.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Bagel Fat One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/bagel.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Rampart One";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/rampart.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Caveat";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/caveat.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Great Vibes";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/greatvibes.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Sedgwick Ave Display";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/sedgwick.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Yellowtail";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/yellowtail.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Bodoni Moda";
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/bodoni.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Uncial Antiqua";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/uncial.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Name Limelight";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/name/limelight.woff2") format("woff2");
+}
+
+.name-font--pixel {
+  font-family: "Name Press Start 2P", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: -0.06em;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--vt323 {
+  font-family: "Name VT323", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--orbitron {
+  font-family: "Name Orbitron", var(--font-sans, sans-serif);
+  font-weight: 900;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--unbounded {
+  font-family: "Name Unbounded", var(--font-sans, sans-serif);
+  font-weight: 900;
+  font-style: normal;
+  font-size-adjust: 0.46;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--bungee {
+  font-family: "Name Bungee", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--bebas {
+  font-family: "Name Bebas Neue", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: none;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--righteous {
+  font-family: "Name Righteous", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--monoton {
+  font-family: "Name Monoton", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--marker {
+  font-family: "Name Permanent Marker", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--pacifico {
+  font-family: "Name Pacifico", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.5em;
+  margin-block: -0.5em;
+}
+.name-font--cinzel {
+  font-family: "Name Cinzel", var(--font-sans, sans-serif);
+  font-weight: 900;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--playfair {
+  font-family: "Name Playfair Display", var(--font-sans, sans-serif);
+  font-weight: 900;
+  font-style: italic;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.5em;
+  margin-block: -0.5em;
+}
+
+/* Heavy pixel: Silkscreen Bold drawn thicker with a stroke in its own colour,
+   for a chunky game-title look (a gradient name keeps a transparent stroke) */
+.name-font--pixelheavy {
+  font-family: "Name Silkscreen Heavy", var(--font-sans, sans-serif);
+  font-weight: 700;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: 0.08em;
+  -webkit-text-stroke: 0.06em currentColor;
+  paint-order: stroke fill;
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+
+/* Under a style whose colour is clipped into the letters (and under a live
+   shader) the stroke would be the plain text colour: a white outline that
+   showed until the shader drew, which itself draws no stroke. */
+.name-tag:not(.name-tag--solid).name-font--pixelheavy {
+  -webkit-text-stroke-color: transparent;
+}
+
+/* The outline a supporter can put round their name, in their colour: a
+   stroke under the fill, so the letters keep their shape and the outline
+   grows outward. A live shader's canvas covers the fill, and the stroke's
+   outer half shows round its letters. Wins over a font's own stroke. Its
+   width is the supporter's pick (nameOutlineInline), and its corners are
+   rounded: mitred ones grew spikes off a script font's sharp turns. */
+.name-outline {
+  -webkit-text-stroke: var(--name-outline-width, 0.14em) var(--name-outline, #fff) !important;
+  paint-order: stroke fill;
+  stroke-linejoin: round;
+}
+
+/* Pixel Operator: a 16 px pixel face in the RPG dialogue-box style */
+.name-font--pixeloperator {
+  font-family: "Name Pixel Operator", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.52;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: none;
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+
+.name-font--monocraft {
+  font-family: "Name Monocraft", var(--font-sans, sans-serif);
+  font-weight: 700;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--silkscreen {
+  font-family: "Name Silkscreen", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--audiowide {
+  font-family: "Name Audiowide", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--russo {
+  font-family: "Name Russo One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--blackops {
+  font-family: "Name Black Ops One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--bangers {
+  font-family: "Name Bangers", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: none;
+  letter-spacing: 0.02em;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--luckiest {
+  font-family: "Name Luckiest Guy", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: none;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--creepster {
+  font-family: "Name Creepster", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.6;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--lobster {
+  font-family: "Name Lobster", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--rocksalt {
+  font-family: "Name Rock Salt", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.58;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--unifraktur {
+  font-family: "Name UnifrakturMaguntia", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.57;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--abril {
+  font-family: "Name Abril Fatface", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--majormono {
+  font-family: "Name Major Mono Display", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.56;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--michroma {
+  font-family: "Name Michroma", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.46;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--rubikglitch {
+  font-family: "Name Rubik Glitch", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--shrikhand {
+  font-family: "Name Shrikhand", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--zendots {
+  font-family: "Name Zen Dots", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.46;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--pixelify {
+  font-family: "Name Pixelify Sans", var(--font-sans, sans-serif);
+  font-weight: 700;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--tektur {
+  font-family: "Name Tektur", var(--font-sans, sans-serif);
+  font-weight: 800;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--jersey {
+  font-family: "Name Jersey 10", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--doto {
+  font-family: "Name Doto", var(--font-sans, sans-serif);
+  font-weight: 900;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--delagothic {
+  font-family: "Name Dela Gothic One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--rubikmono {
+  font-family: "Name Rubik Mono One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: none;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--climatecrisis {
+  font-family: "Name Climate Crisis", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--fredoka {
+  font-family: "Name Fredoka", var(--font-sans, sans-serif);
+  font-weight: 700;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--bagel {
+  font-family: "Name Bagel Fat One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--rampart {
+  font-family: "Name Rampart One", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--caveat {
+  font-family: "Name Caveat", var(--font-sans, sans-serif);
+  font-weight: 700;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.5em;
+  margin-block: -0.5em;
+}
+.name-font--greatvibes {
+  font-family: "Name Great Vibes", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.5em;
+  margin-block: -0.5em;
+}
+.name-font--sedgwick {
+  font-family: "Name Sedgwick Ave Display", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.56;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.5em;
+  margin-block: -0.5em;
+}
+.name-font--yellowtail {
+  font-family: "Name Yellowtail", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.55;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.5em;
+  margin-block: -0.5em;
+}
+.name-font--bodoni {
+  font-family: "Name Bodoni Moda", var(--font-sans, sans-serif);
+  font-weight: 800;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--uncial {
+  font-family: "Name Uncial Antiqua", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+.name-font--limelight {
+  font-family: "Name Limelight", var(--font-sans, sans-serif);
+  font-weight: 400;
+  font-style: normal;
+  font-size-adjust: 0.5;
+  letter-spacing: normal;
+  /* room for tall swashes and descenders (Script's j), cancelled by the
+     margin so the layout does not move */
+  padding-block: 0.32em;
+  margin-block: -0.32em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .name-tag,
+  .name-tag::before,
+  .name-tag::after {
+    animation: none !important;
+  }
+}
+
+/* --- Supporter binders (components/packs/BinderPages.tsx) -----------------
+   An open binder seen from above. The cover's grain is an SVG lighting
+   filter over noise (each cover sets --grain and its colours); pages are
+   black card stock with a frosted, welded nine-pocket sheet under one static
+   sheen. Everything is painted once: no filters per card, no blend modes
+   over the cards, nothing driven by scroll or pointer, so scrolling past a
+   binder costs nothing; only a page turn animates, as a transform. */
+.bnd,
+.bnd-cover {
+  /* the grain is a tile rendered once from an feTurbulence lighting filter:
+     as an inline SVG the browser re-ran that filter on the CPU every time a
+     cover was rasterized, which dropped frames while scrolling past them */
+  --grain: url("/images/binders/grain-leather.webp");
+  --cover-a: #7a4a32;
+  --cover-b: #2b180f;
+  --stitch: rgba(236, 204, 160, 0.9);
+  --glare-x: 40%;
+  --glare-y: 45%;
+  background-image: var(--grain), radial-gradient(130% 110% at 22% 0%, var(--cover-a), var(--cover-b));
+  background-blend-mode: soft-light, normal;
+}
+.bnd {
+  --spine-w: 72px;
+  position: relative;
+  padding: 28px;
+  border-radius: 26px;
+  box-shadow:
+    0 34px 70px -28px rgba(0, 0, 0, 0.9),
+    0 10px 20px -10px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+/* A small cover for the /supporter drawer and slot (LoadoutSlots BinderBook). */
+.bnd-cover {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 10px -4px rgba(0, 0, 0, 0.7);
+}
+.bnd::before {
+  /* the padded rim */
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 20px;
+  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.14), inset 0 -4px 7px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.bnd::after {
+  /* stitching, with the thread's own shadow */
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border-radius: 18px;
+  border: 2px dashed var(--stitch);
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.7));
+  opacity: 0.85;
+  pointer-events: none;
+}
+.bnd--denim {
+  --grain: url("/images/binders/grain-denim.webp");
+  --cover-a: #5683bd;
+  --cover-b: #1b3459;
+  --stitch: rgba(236, 150, 60, 0.95);
+  background-image:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.07) 0 1.5px, transparent 1.5px 4px),
+    var(--grain),
+    radial-gradient(130% 110% at 22% 0%, var(--cover-a), var(--cover-b));
+  background-blend-mode: overlay, soft-light, normal;
+}
+.bnd--holo {
+  --stitch: rgba(255, 255, 255, 0.9);
+  background-image:
+    var(--grain),
+    radial-gradient(70% 60% at var(--glare-x) var(--glare-y), rgba(255, 255, 255, 0.55), transparent 70%),
+    linear-gradient(115deg, #8fe3ff 0%, #c9a9ff 16%, #ffb3dc 32%, #ffeea0 48%, #a9ffd0 64%, #8fe3ff 80%, #c9a9ff 100%);
+  background-size: auto, auto, 300% 300%;
+  background-position: 0 0, 0 0, var(--glare-x) 50%;
+  background-blend-mode: soft-light, screen, normal;
+}
+.bnd--carbon {
+  --stitch: rgba(232, 70, 78, 0.95);
+  background-color: #141518;
+  background-image:
+    var(--grain),
+    radial-gradient(90% 70% at var(--glare-x) var(--glare-y), rgba(255, 255, 255, 0.12), transparent 70%),
+    linear-gradient(27deg, #131315 5px, transparent 5px),
+    linear-gradient(207deg, #131315 5px, transparent 5px),
+    linear-gradient(27deg, #26262a 5px, transparent 5px),
+    linear-gradient(207deg, #26262a 5px, transparent 5px),
+    linear-gradient(90deg, #1b1b1e 10px, transparent 10px),
+    linear-gradient(#1e1e21 25%, #19191c 25%, #19191c 50%, transparent 50%, transparent 75%, #29292d 75%, #29292d);
+  background-size: auto, auto, 20px 20px, 20px 20px, 20px 20px, 20px 20px, 20px 20px, 20px 20px;
+  background-position: 0 0, 0 0, 0 0, 10px 0, 0 10px, 10px 10px, 0 0, 0 0;
+  background-blend-mode: soft-light, screen, normal, normal, normal, normal, normal, normal;
+}
+/* The zip binder: a padded cover in a fine black weave, a zipper running
+   round it with a pull and its tab on the right, and (below) a soft
+   stitched spine with no rings, unpunched pages and side-loading pockets. */
+.bnd--zip {
+  --spine-w: 30px;
+  --cover-a: #3a3b41;
+  --cover-b: #141518;
+  --stitch: rgba(150, 153, 162, 0.9);
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.3) 0 1px, transparent 1px 3px),
+    var(--grain),
+    radial-gradient(130% 110% at 22% 0%, var(--cover-a), var(--cover-b));
+  background-blend-mode: overlay, multiply, soft-light, normal;
+}
+.bnd.bnd--zip::before {
+  /* the zipper's tape */
+  inset: 8px;
+  border-radius: 21px;
+  border: 9px solid #0b0b0d;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -2px 4px rgba(0, 0, 0, 0.6);
+}
+.bnd.bnd--zip::after {
+  /* its teeth */
+  inset: 11px;
+  border-radius: 18px;
+  border: 3px dashed #9a9da6;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.85));
+  opacity: 0.95;
+}
+.bnd-zip-pull {
+  /* the slider and its lime pull, rendered in Blender (zip-pull.webp, 128x320,
+     the slider centred, its tab hanging below), sat on the tape at the right */
+  position: absolute;
+  right: -2px;
+  top: 58%;
+  z-index: 3;
+  width: 30px;
+  height: 75px;
+  background: url("/images/binders/zip-pull.webp") center / contain no-repeat;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
+  transform: rotate(-4deg);
+  transform-origin: 50% 8%;
+  pointer-events: none;
+}
+@media (max-width: 639px) {
+  .bnd-zip-pull { right: -7px; width: 24px; height: 60px; }
+  .bnd.bnd--zip::before { inset: 3px; border-width: 7px; border-radius: 16px; }
+  .bnd.bnd--zip::after { inset: 5px; border-radius: 14px; }
+}
+.bnd-spread {
+  /* the lining inside the cover, above the stitching so a lifted leaf is too */
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 10px;
+  border-radius: 14px;
+  background: radial-gradient(120% 90% at 50% 0%, #1d1a20, #0f0d11);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.7), inset 0 8px 22px rgba(0, 0, 0, 0.7);
+  perspective: 2400px;
+}
+.bnd-spine,
+.bnd-leaf {
+  display: none;
+}
+@media (min-width: 900px) {
+  .bnd-spread {
+    grid-template-columns: minmax(0, 1fr) var(--spine-w) minmax(0, 1fr);
+    gap: 0;
+  }
+  .bnd-spine {
+    /* no z-index of its own: the plate and the rings stack against the leaf separately */
+    position: relative;
+    display: block;
+    pointer-events: none;
+  }
+  .bnd-leaf {
+    display: block;
+  }
+}
+@media (max-width: 639px) {
+  /* a phone keeps the width for the cards: a thinner cover and stitching */
+  .bnd {
+    padding: 16px;
+    border-radius: 18px;
+  }
+  .bnd::before {
+    inset: 3px;
+    border-radius: 15px;
+  }
+  .bnd::after {
+    inset: 7px;
+    border-radius: 13px;
+  }
+}
+@media (min-width: 1000px) {
+  /* wider than the column it sits in, so a pocket holds a card at a size you can read */
+  .bnd {
+    width: min(1180px, calc(100vw - 80px));
+    margin-left: calc(50% - min(590px, 50vw - 40px));
+    padding: 22px;
+  }
+}
+@media (min-width: 1000px) {
+  /* inside a panel (the /supporter stage) the binder keeps to it */
+  .bnd.bnd--contained {
+    width: auto;
+    margin-left: 0;
+    padding: 16px;
+  }
+}
+/* The plate and rings are renders whose x origin is the spine's centre
+   (plate 44px in, ring 84px in, ring 24px down to the hole line). */
+.bnd-plate {
+  position: absolute;
+  z-index: 4;
+  top: 2%;
+  bottom: 2%;
+  left: calc(50% - 44px);
+  width: 104px;
+  border-style: solid;
+  border-width: 36px 0 40px;
+  border-image: url("/images/binders/plate.png") 108 0 120 0 fill stretch;
+}
+.bnd-rings {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+}
+.bnd-rings--turning {
+  /* The plate is always under a turning leaf (z 4 against its 6). The rings
+     run through the leaf's holes, so they stay over it, except while it
+     stands near upright, riding the ring tops, when it is above them: from
+     38% to 62% of the way over, which on the leaf's easing curve is 33% to
+     43% of the time. */
+  animation: bnd-rings-under var(--turn-ms) linear both;
+}
+@keyframes bnd-rings-under {
+  0%, 33% { z-index: 7; }
+  33.5%, 43% { z-index: 5; }
+  43.5%, 100% { z-index: 7; }
+}
+.bnd-ring {
+  position: absolute;
+  left: calc(50% - 84px);
+  width: 188px;
+  height: 50px;
+  max-width: none;
+  user-select: none;
+}
+.bnd-ring:nth-child(1) { top: calc(18% - 24px); }
+.bnd-ring:nth-child(2) { top: calc(50% - 24px); }
+.bnd-ring:nth-child(3) { top: calc(82% - 24px); }
+.bnd-slot {
+  /* isolated: a card's marks (z 7) stay on their page, under a turning leaf (z 6) */
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+}
+.bnd-page {
+  position: relative;
+  height: 100%;
+  padding: 10px 10px 10px 40px;
+  border-radius: 6px;
+  background-color: #0e0e11;
+  background-image: radial-gradient(120% 100% at 50% 0%, rgba(255, 255, 255, 0.035), transparent 60%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 8px 16px rgba(0, 0, 0, 0.55),
+    2px 2px 0 #0a0a0c,
+    4px 4px 0 #070709;
+}
+@media (max-width: 899px) {
+  .bnd-page {
+    padding-left: 10px;
+  }
+  .bnd-holes {
+    display: none;
+  }
+}
+@media (min-width: 900px) {
+  .bnd-page--left {
+    padding: 10px 40px 10px 10px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 16px rgba(0, 0, 0, 0.55), -2px 2px 0 #0a0a0c, -4px 4px 0 #070709;
+  }
+}
+.bnd-holes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.bnd-holes span {
+  /* punched through the card stock: centred 18px in from the spine edge */
+  position: absolute;
+  left: 10px;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #020203 52%, #141216 100%);
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.95), 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+@media (min-width: 900px) {
+  .bnd-page--left .bnd-holes span {
+    left: auto;
+    right: 10px;
+  }
+}
+.bnd-holes span:nth-child(1) { top: 18%; }
+.bnd-holes span:nth-child(2) { top: 50%; }
+.bnd-holes span:nth-child(3) { top: 82%; }
+.bnd-sheet {
+  /* the frosted plastic: its colour shows only in the welds between pockets */
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(228, 234, 244, 0.15), rgba(228, 234, 244, 0.09));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.bnd-pocket {
+  position: relative;
+  padding: 5px 4px 4px;
+  border-radius: 2px;
+  background: #0b0b0e;
+}
+.bnd-pocket::before {
+  /* the pocket's opening: a faint curved lip a little way down the card */
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 9%;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0 0 50% 50% / 0 0 5px 5px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+  pointer-events: none;
+  z-index: 3;
+}
+.bnd-pocket::after {
+  /* the film over the card */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.01) 45%, rgba(255, 255, 255, 0.03));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 0 12px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  z-index: 3;
+}
+.bnd-pocket--empty .bnd-card {
+  aspect-ratio: 5 / 7;
+}
+.bnd-card {
+  position: relative;
+}
+.bnd-sheet-glare {
+  /* a broad, faint band of light across the plastic */
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 4;
+  background: linear-gradient(112deg, transparent 18%, rgba(255, 255, 255, 0.035) 34%, rgba(255, 255, 255, 0.055) 42%, rgba(255, 255, 255, 0.035) 50%, transparent 66%);
+}
+.bnd-spine--soft {
+  /* the padded spine the sheets are stitched into */
+  background: linear-gradient(90deg, #08080a, #1b1b1f 30%, #2a2a30 50%, #1b1b1f 70%, #08080a);
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.85);
+}
+.bnd-spine--soft::before,
+.bnd-spine--soft::after {
+  content: "";
+  position: absolute;
+  top: 3%;
+  bottom: 3%;
+  border-left: 1px dashed rgba(150, 153, 162, 0.45);
+}
+.bnd-spine--soft::before { left: 26%; }
+.bnd-spine--soft::after { right: 26%; }
+.bnd--zip .bnd-holes {
+  display: none;
+}
+.bnd.bnd--zip .bnd-page {
+  padding: 10px;
+}
+.bnd--zip .bnd-pocket::before {
+  /* side-loading: the opening runs down the pocket's spine-side edge */
+  inset: 0 auto 0 0;
+  width: 8%;
+  height: auto;
+  border-bottom: none;
+  /* kept faint: at the top lip's strength a line down every card read as a seam */
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0 50% 50% 0 / 0 5px 5px 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
+}
+@media (min-width: 900px) {
+  .bnd--zip .bnd-page--left .bnd-pocket::before {
+    inset: 0 0 0 auto;
+    border-right: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 50% 0 0 50% / 5px 0 0 5px;
+    background: linear-gradient(270deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
+  }
+}
+/* The flight case: not a book. An aluminium case lying open, seen from
+   above. Its hardware is Blender renders (3d-modelling/binder-case): the rim
+   with its corner caps is one square picture nine-sliced round the box, the
+   hinge is a tile, and the latches, their strike plates and the folded handle
+   are placed on the rim. Inside, two trays of charcoal foam (a generated
+   tile) with a cut-out for every card and a finger notch under each. A page
+   turn lifts a tray over the hinge. */
+.bnd--case {
+  --spine-w: 32px;
+  --case-rim: 42px;
+  border: var(--case-rim) solid transparent;
+  /* 136 of the picture's 840 px reach from its edge to the inside of a corner cap */
+  border-image: url("/images/binders/case-frame.webp") 136 / var(--case-rim) stretch;
+  border-radius: 0;
+  background: #0b0b0d;
+  background-clip: padding-box;
+  box-shadow: 0 34px 70px -28px rgba(0, 0, 0, 0.9), 0 12px 22px -10px rgba(0, 0, 0, 0.75);
+}
+.bnd.bnd--case,
+.bnd.bnd--case.bnd--contained {
+  padding: 0;
+}
+.bnd.bnd--case::before,
+.bnd.bnd--case::after {
+  display: none;
+}
+.bnd-case-part {
+  position: absolute;
+  z-index: 3;
+  background: center / contain no-repeat;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+}
+.bnd-case-latch {
+  /* across the rim of the base, its hook hanging off the edge */
+  right: calc(var(--case-rim) * -1 - 10px);
+  width: 32px;
+  height: 80px;
+  margin-top: -40px;
+  background-image: url("/images/binders/case-latch.webp");
+  transform: rotate(90deg);
+}
+.bnd-case-strike {
+  /* the plate a latch hooks, on the lid's rim */
+  left: calc(var(--case-rim) * -1 + 6px);
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+  background-image: url("/images/binders/case-strike.webp");
+  transform: rotate(90deg);
+}
+.bnd-case-part--a { top: 19%; }
+.bnd-case-part--b { top: 81%; }
+.bnd-case-handle {
+  /* folded flat along the rim between the latches */
+  right: calc(var(--case-rim) * -1 + 7px);
+  top: 50%;
+  width: 25px;
+  height: 157px;
+  margin-top: -78px;
+  background-image: url("/images/binders/case-handle.webp");
+}
+@media (max-width: 639px) {
+  .bnd--case { --case-rim: 22px; }
+  .bnd-case-handle { display: none; }
+  .bnd-case-latch { right: calc(var(--case-rim) * -1 - 5px); width: 17px; height: 42px; margin-top: -21px; }
+  .bnd-case-strike { left: calc(var(--case-rim) * -1 + 3px); width: 15px; height: 15px; margin-top: -7px; }
+}
+.bnd--case .bnd-spread {
+  border-radius: 0;
+  background: #0b0b0d;
+  box-shadow: inset 0 6px 16px rgba(0, 0, 0, 0.8);
+}
+.bnd--case .bnd-holes,
+.bnd--case .bnd-sheet-glare {
+  display: none;
+}
+.bnd.bnd--case .bnd-page {
+  /* a tray of charcoal foam */
+  padding: 12px;
+  border-radius: 3px;
+  background: #2a2b31 url("/images/binders/case-foam.webp") 0 0 / 128px 128px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 20px rgba(0, 0, 0, 0.45), 0 6px 12px rgba(0, 0, 0, 0.55);
+}
+.bnd--case .bnd-sheet {
+  /* no plastic: the pockets are cut into the foam */
+  gap: 12px 8px;
+  padding: 2px 2px 9px;
+  background: none;
+  box-shadow: none;
+}
+.bnd--case .bnd-pocket {
+  padding: 4px;
+  border-radius: 5px;
+  background: #09090b;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.95), inset 0 0 0 1px rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.bnd--case .bnd-pocket::before {
+  /* the finger notch: a half-round bite out of the foam under the card */
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: -8px;
+  width: 24px;
+  height: 9px;
+  margin-left: -12px;
+  border: none;
+  border-radius: 0 0 12px 12px;
+  background: #09090b;
+  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.bnd--case .bnd-pocket::after {
+  /* the foam wall's shadow on the card */
+  background: none;
+  box-shadow: inset 0 5px 6px -3px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+.bnd-spine--hinge {
+  /* a piano hinge: one rendered knuckle and its screws, tiled */
+  background: url("/images/binders/case-hinge.webp") center top / 32px 20px repeat-y;
+  filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.7));
+}
+.bnd-leaf {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  width: calc((100% - 20px - var(--spine-w)) / 2);
+  transform-style: preserve-3d;
+  will-change: transform;
+  z-index: 6;
+  pointer-events: none;
+}
+.bnd-leaf--next {
+  left: calc(50% + var(--spine-w) / 2);
+  transform-origin: calc(var(--spine-w) / -2) 50%;
+  animation: bnd-turn-next var(--turn-ms) cubic-bezier(0.45, 0.05, 0.25, 1) both;
+}
+.bnd-leaf--prev {
+  left: 10px;
+  transform-origin: calc(100% + var(--spine-w) / 2) 50%;
+  animation: bnd-turn-prev var(--turn-ms) cubic-bezier(0.45, 0.05, 0.25, 1) both;
+}
+.bnd-leaf-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+.bnd-leaf-face--back {
+  transform: rotateY(180deg);
+}
+.bnd-leaf-face .bnd-page {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 24px rgba(0, 0, 0, 0.6);
+}
+.bnd-leaf-face::after {
+  /* light across the leaf as it stands up: the half rising off the page dims
+     toward its free edge, the half coming down brightens out of shadow */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0;
+  animation: bnd-turn-shade var(--turn-ms) ease-in-out both;
+}
+.bnd-leaf--next .bnd-leaf-face--front::after,
+.bnd-leaf--prev .bnd-leaf-face--back::after {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.6));
+}
+.bnd-leaf--next .bnd-leaf-face--back::after,
+.bnd-leaf--prev .bnd-leaf-face--front::after {
+  background: linear-gradient(270deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.6));
+}
+@keyframes bnd-turn-next {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(-180deg); }
+}
+@keyframes bnd-turn-prev {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(180deg); }
+}
+@keyframes bnd-turn-shade {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+
+/* /support: the glint across the gift ticket, once as it lands and again on hover. */
+.gift-ticket-glint {
+  transform: skewX(-18deg) translateX(0);
+  animation: gift-glint 1.4s ease-out 0.6s 1 both;
+}
+.group:hover .gift-ticket-glint {
+  animation: gift-glint 0.9s ease-out 1 both;
+}
+@keyframes gift-glint {
+  from { transform: skewX(-18deg) translateX(0); }
+  to { transform: skewX(-18deg) translateX(520%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gift-ticket-glint { animation: none; opacity: 0; }
+}
+
+/* Pack run editions on a flat card (EditionSheen.tsx). The 3D card draws its
+   own in the overlay shader; these are the same three looks for thumbnails. */
+.edition-sheen { pointer-events: none; position: absolute; inset: 0; border-radius: inherit; }
+.edition-foil {
+  background:
+    repeating-linear-gradient(100deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 3px),
+    linear-gradient(115deg, transparent 25%, rgba(190, 214, 255, 0.55) 42%, rgba(255, 255, 255, 0.85) 50%, rgba(170, 196, 255, 0.5) 58%, transparent 75%);
+  background-size: 100% 100%, 300% 300%;
+  mix-blend-mode: overlay;
+  animation: edition-sweep 3.6s ease-in-out infinite;
+}
+.edition-holo {
+  background:
+    repeating-linear-gradient(125deg, #ff5f9e 0%, #ffd36b 7%, #7cf2b0 14%, #6bc5ff 21%, #b58cff 28%, #ff5f9e 35%);
+  background-size: 400% 400%;
+  mix-blend-mode: color-dodge;
+  opacity: 0.42;
+  animation: edition-sweep 6s linear infinite;
+}
+.edition-polychrome {
+  background: linear-gradient(140deg, #ff6b8b, #ffd36b, #6be0a0, #6bc5ff, #c58cff, #ff6b8b);
+  background-size: 300% 300%;
+  mix-blend-mode: hue;
+  opacity: 0.75;
+  animation: edition-sweep 8s linear infinite, edition-hue 8s linear infinite;
+}
+@keyframes edition-sweep {
+  0% { background-position: 0% 0%, 0% 50%; }
+  50% { background-position: 0% 0%, 100% 50%; }
+  100% { background-position: 0% 0%, 0% 50%; }
+}
+@keyframes edition-hue {
+  from { filter: hue-rotate(0deg); }
+  to { filter: hue-rotate(360deg); }
+}
+/* Chain card finishes (run/chain/ChainCardFace.tsx). Transform and opacity
+   only: up to ~20 faces are on screen while a chain plays. */
+.chain-face-sweep {
+  position: absolute; top: -10%; bottom: -10%; left: -70%; width: 60%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.75) 50%, rgba(255, 255, 255, 0) 70%, transparent 100%);
+  mix-blend-mode: overlay;
+  animation: chain-face-sweep 3.6s cubic-bezier(0.5, 0, 0.4, 1) infinite;
+}
+.chain-face-sweep-cosmic {
+  background: linear-gradient(100deg, transparent 0%, rgba(74, 222, 128, 0) 25%, rgba(74, 222, 128, 0.32) 45%, rgba(6, 182, 212, 0.26) 55%, rgba(190, 242, 100, 0) 75%, transparent 100%);
+  mix-blend-mode: screen;
+  animation-duration: 5s;
+}
+@keyframes chain-face-sweep {
+  0% { transform: translateX(0); }
+  70%, 100% { transform: translateX(300%); }
+}
+/* Full holo: vertical rainbow bands tiled at half the strip's width, the
+   strip slid one tile per loop (seamless), the whole wrapper turned. */
+.chain-face-holo { position: absolute; inset: -30%; transform: rotate(24deg); mix-blend-mode: soft-light; opacity: 0.95; }
+.chain-face-holo > i {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 200%;
+  background: linear-gradient(90deg, #ff8fd0, #ffd36b, #a5f3c4, #7fd3ff, #c4b2ff, #ff8fd0) 0 0 / 25% 100% repeat-x;
+  animation: chain-face-holo 6s linear infinite;
+}
+@keyframes chain-face-holo { to { transform: translateX(-50%); } }
+.chain-face-glint { pointer-events: none; opacity: 0.85; animation: chain-face-glint 2.6s ease-in-out infinite; }
+@keyframes chain-face-glint {
+  0%, 100% { opacity: 0.15; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chain-face-sweep, .chain-face-holo > i, .chain-face-glint { animation: none; }
+}
+/* The pack run's tally, drawn as a mania playfield (run/HandScore.tsx). */
+@keyframes run-lane-flash {
+  0% { opacity: 0.5; }
+  100% { opacity: 0; }
+}
+.run-lane-flash { animation: run-lane-flash 260ms ease-out forwards; }
+@keyframes run-judge {
+  0% { opacity: 0; transform: translate(-50%, 4px) scale(0.6); }
+  18% { opacity: 1; transform: translate(-50%, -4px) scale(1.15); }
+  60% { opacity: 1; transform: translate(-50%, -10px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -18px) scale(1); }
+}
+.run-judge { animation: run-judge 620ms ease-out forwards; }
+@keyframes run-key {
+  0% { transform: translateY(2px); filter: brightness(1.7); }
+  100% { transform: translateY(0); filter: brightness(1); }
+}
+.run-key { animation: run-key 200ms ease-out; }
+@keyframes run-punch {
+  0% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.run-punch { animation: run-punch 180ms cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+@keyframes run-stamp {
+  0% { opacity: 0; transform: scale(1.8); letter-spacing: 0.5em; }
+  60% { opacity: 1; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); letter-spacing: 0.18em; }
+}
+.run-stamp { animation: run-stamp 420ms cubic-bezier(0.2, 0.9, 0.3, 1) forwards; }
+@keyframes run-shake {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, 1px); }
+  50% { transform: translate(2px, -1px); }
+  75% { transform: translate(-1px, 1px); }
+}
+.run-shake { animation: run-shake 160ms linear; }
+@keyframes run-sticker-hop {
+  0% { transform: translateY(0) rotate(0) scale(1); }
+  30% { transform: translateY(-7px) rotate(-8deg) scale(1.15); }
+  60% { transform: translateY(0) rotate(5deg) scale(0.97); }
+  100% { transform: translateY(0) rotate(0) scale(1); }
+}
+.run-sticker-hop { animation: run-sticker-hop 360ms cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+@media (prefers-reduced-motion: reduce) {
+  .edition-foil, .edition-holo, .edition-polychrome { animation: none; }
+  .run-lane-flash, .run-judge, .run-key, .run-punch, .run-stamp, .run-shake, .run-sticker-hop { animation: none; }
+}
+@keyframes run-charm-pulse {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.14) rotate(-3deg); }
+  100% { transform: scale(1); }
+}
+
+/* Pack run table (components/packs/run/RunCard.tsx, RunTable.tsx): the idle
+   life of hand cards and charms, a rotation sway and a slower bob on their
+   own clocks (each element sets the periods, phases and --sway-* amounts
+   inline), and the unopened pack's bob. The individual rotate/translate
+   properties keep the two from fighting over transform. */
+@keyframes run-sway-rotate {
+  0%, 100% { rotate: calc(var(--sway-r, 1deg) * -1); }
+  50% { rotate: var(--sway-r, 1deg); }
+}
+@keyframes run-sway-bob {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 calc(var(--sway-y, 3px) * -1); }
+}
+.run-card-sway { animation: run-sway-rotate 3140ms ease-in-out infinite, run-sway-bob 9400ms ease-in-out infinite; }
+@keyframes run-pack-bob {
+  0%, 100% { translate: 0 0; rotate: -0.6deg; }
+  50% { translate: 0 -5px; rotate: 0.6deg; }
+}
+.run-pack-bob { animation: run-pack-bob 2600ms ease-in-out infinite; }
+/* The chain run's ink flame: each layer sways and breathes on its own clock. */
+@keyframes chain-flame-sway {
+  0%, 100% { transform: skewX(-7deg) scaleY(0.9) translateX(-2px); }
+  50% { transform: skewX(7deg) scaleY(1.1) translateX(2px); }
+}
+@keyframes chain-flame-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  30% { transform: scale(1.04, 0.94); }
+  65% { transform: scale(0.97, 1.08); }
+}
+@keyframes chain-ember {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(6px, -110px) rotate(140deg); opacity: 0; }
+}
+.chain-flame-a { animation: chain-flame-sway 1300ms ease-in-out infinite; }
+.chain-flame-b { animation: chain-flame-sway 900ms ease-in-out infinite reverse; }
+.chain-flame-c { animation: chain-flame-sway 620ms ease-in-out infinite; }
+.chain-flame-breathe { animation: chain-flame-breathe 1700ms ease-in-out infinite; }
+.chain-ember { animation: chain-ember 1800ms ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .run-card-sway, .run-pack-bob, .chain-flame-a, .chain-flame-b, .chain-flame-c, .chain-flame-breathe, .chain-ember { animation: none; }
+}
+
+/* A supporter's image companion (supporter/Companion.tsx), breathing gently. */
+@keyframes companion-bob {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-3px) rotate(1deg); }
+}
+.companion-bob { animation: companion-bob 3.2s ease-in-out infinite; transform-origin: 50% 100%; }
+@media (prefers-reduced-motion: reduce) {
+  .companion-bob { animation: none; }
+}
+
+/* /support's entrances (SupportMotion.tsx): sections rise, a perk's items pop
+   in one after another. Keyframes on opacity and transform only, so they run
+   on the compositor; `backwards` holds the start until each one's delay is up
+   and then lets go, so the hover lift's transform works afterwards. */
+@keyframes sm-rise {
+  from { opacity: 0; transform: translateY(36px); }
+}
+@keyframes sm-pop {
+  0% { opacity: 0; transform: translateY(18px) scale(0.86); }
+  60% { opacity: 1; transform: translateY(-2px) scale(1.02); }
+  100% { opacity: 1; transform: none; }
+}
+.sm-rise:not(.is-in),
+.sm-stagger:not(.is-in) > .sm-pop {
+  opacity: 0;
+}
+.sm-rise.is-in {
+  animation: sm-rise 0.7s cubic-bezier(0.2, 0.9, 0.25, 1.04) var(--sm-delay, 0s) backwards;
+}
+.sm-stagger.is-in > .sm-pop {
+  animation: sm-pop 0.5s cubic-bezier(0.3, 0.8, 0.4, 1) calc(0.1s + var(--sm-i, 0) * 0.055s) backwards;
+}
+.sm-lift {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sm-lift:hover {
+    transform: translateY(-5px) scale(1.05);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sm-rise.is-in,
+  .sm-stagger.is-in > .sm-pop {
+    animation: none;
+  }
+}
+
+/* Overjoy's shard gem: one turn of its 36-frame sprite sheet. */
+.kit-gem-turn { animation: kit-gem-turn 1s steps(36) 1 forwards; }
+@keyframes kit-gem-turn { from { background-position: 0 0; } to { background-position: var(--gem-end) 0; } }
+
+/* Solid colour name style: the supporter's own colour (set inline), flat */
+.name-tag--solid {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}

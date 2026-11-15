@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import viteReact from "@vitejs/plugin-react";
 
 // Without this file vitest loads vite.config.ts, and the tanstackStart plugin
@@ -11,14 +11,15 @@ import viteReact from "@vitejs/plugin-react";
 // imports that uses @lingui/*/macro would otherwise fail to parse. The babel
 // plugin list must stay aligned with vite.config.ts.
 //
-// "#dan/*", "#leoblack/*" and "#replay-judge/*" reach the dan estimator, the
-// vendored LeoBlack tree and the replay judge, which are single copies owned
+// "#dan/*", "#leoblack/*", "#replay-judge/*" and "#custom-themes/*" reach the dan
+// estimator, the vendored LeoBlack tree, the replay judge and the custom theme checker, which are single copies owned
 // by backend/ (the backend compiles with rootDir "src", so shared sources
 // cannot live outside it without moving the dist layout prod runs from). vite.config.ts picks these up through
 // vite-tsconfig-paths; this file has to spell them out because it deliberately
 // does not load that config.
 const src = fileURLToPath(new URL("./src", import.meta.url));
 const dan = fileURLToPath(new URL("./backend/src/dan", import.meta.url));
+const customThemes = fileURLToPath(new URL("./backend/src/custom-themes", import.meta.url));
 const leoblack = fileURLToPath(new URL("./backend/vendor/leoblack", import.meta.url));
 const replayJudge = fileURLToPath(new URL("./backend/src/replay-judge", import.meta.url));
 
@@ -27,11 +28,18 @@ export default defineConfig({
   // Restrict discovery so gitignored investigation copies never run as tests.
   test: {
     include: ["{src,scripts}/**/*.{test,spec}.?(c|m)[jt]s?(x)"],
+    // A full run otherwise starts a worker per CPU thread and holds the whole
+    // machine flat out (84C on the 16-thread dev PC); VITEST_MAX_WORKERS
+    // raises or lowers it for one run.
+    maxWorkers: Number(process.env.VITEST_MAX_WORKERS) || 6,
+    // A route whose URL ends in /spec (the theme spec page), not a test.
+    exclude: [...configDefaults.exclude, "src/routes/workshop.themes.spec.tsx"],
   },
   plugins: [viteReact({ babel: { plugins: ["@lingui/babel-plugin-lingui-macro"] } })],
   resolve: {
     alias: [
       { find: /^#dan\//, replacement: `${dan}/` },
+      { find: /^#custom-themes\//, replacement: `${customThemes}/` },
       { find: /^#leoblack\//, replacement: `${leoblack}/` },
       { find: /^#replay-judge\//, replacement: `${replayJudge}/` },
       { find: /^#\//, replacement: `${src}/` },

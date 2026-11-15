@@ -148,18 +148,37 @@ export async function runLocalExport(options: LocalExportRunOptions): Promise<Re
     }
     throwIfAborted(signal);
 
-    destination = target.kind === "file"
-      ? await createFileDestination({
+    let bytePolicy = policy;
+    if (target.kind === "file") {
+      try {
+        destination = await createFileDestination({
           handle: target.handle,
           filename,
           mimeType: plan.mimeType,
           maxBytes: policy.maxOutputBytes,
-        })
-      : createBufferDestination({
-          filename,
-          mimeType: plan.mimeType,
-          maxBytes: policy.maxOutputBytes,
         });
+      } catch (error) {
+        // Some browsers hand out a save handle but refuse to write to it (the
+        // file is protected, or the browser blocks file writes altogether).
+        // Nothing is rendered yet, so a video short and small enough to hold
+        // in memory is built there and offered as a download instead.
+        const inMemory = checkExportAdmission({
+          destination: "buffer",
+          outputSeconds: timeline.videoDurationSeconds,
+          videoBitrate: spec.output.videoBitrate,
+          audioBitrate: spec.output.audioBitrate,
+          workingMemoryBytes: resources.songFile?.size ?? 0,
+        });
+        if (!inMemory.ok || asReplayExportError(error, "storage_write_failed").code !== "storage_write_failed") throw error;
+        bytePolicy = REPLAY_EXPORT_ADMISSION.buffer;
+        callbacks.onWarning("file-save-fallback");
+      }
+    }
+    destination ??= createBufferDestination({
+      filename,
+      mimeType: plan.mimeType,
+      maxBytes: bytePolicy.maxOutputBytes,
+    });
     throwIfAborted(signal);
 
     encoder = new ReplayExportEncoder({
@@ -202,7 +221,7 @@ export async function runLocalExport(options: LocalExportRunOptions): Promise<Re
       // packet of the lagging track.
       await pumpAudio(videoSeconds + AUDIO_BLOCK_LOOKAHEAD);
 
-      if (destination.bytesWritten > policy.maxOutputBytes) {
+      if (destination.bytesWritten > bytePolicy.maxOutputBytes) {
         throw new ReplayExportError("resource_limit_exceeded", "Output grew past its byte limit.");
       }
 

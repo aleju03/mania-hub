@@ -10,6 +10,7 @@ import {
 } from "#/lib/live-backend";
 import type { StreakPool } from "#/lib/streak-game";
 import { CountryFlag } from "../ui/CountryFlag";
+import { UsernameText } from "../ui/UsernameText";
 
 // The blitz board, read next to the game that writes it. Only blitz runs
 // reach it: a casual streak is scored in the browser, so it is a personal best
@@ -56,7 +57,7 @@ function Row({
             isViewer ? "font-bold text-osu-pink-light" : "font-semibold text-white"
           }`}
         >
-          {entry.username}
+          <UsernameText username={entry.username} userId={entry.userId} />
         </span>
       </Link>
       <span className="shrink-0 text-[15px] font-bold tabular-nums text-white">{entry.streak}</span>

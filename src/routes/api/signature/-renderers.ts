@@ -69,6 +69,8 @@ import type { SignatureTiming } from "../../../lib/signature-timing";
 import type { SignatureProfileSnapshot as ProfileSnapshot, ResolvedSignature } from "../../../lib/signature-resolve";
 import { buildPpCumulativeDistribution, calculateUserProfileInsights } from "../../../lib/profile-insights";
 import type { InsightScoreSnapshot, OsuScore, UserProfileInsights } from "../../../lib/types";
+import { DEFAULT_PROFILE_STATS, formatTopPercent, parseProfileStats, parseProfileStatsData, sessionLength, type ProfileStatId, type ProfileStatsData } from "../../../lib/profile-stats";
+import { parseProfilePlays, type ProfilePlay } from "../../../lib/profile-plays";
 import {
   loadRenderModBadges,
   modGlyphColor,
@@ -167,7 +169,7 @@ function frame(width: number, height: number, children: ReactNode[], background?
         overflow: "hidden",
         borderRadius: `${FRAME_RADIUS}px`,
         background: background ?? "transparent",
-        fontFamily: '"Torus OG"',
+        fontFamily: '"Tracker Round OG"',
         color: "#ffffff",
       },
     },
@@ -574,6 +576,12 @@ function goalReadout(goal: UserGoal): string {
     case "grade":
       if (goal.progress?.currentGrade) return `best ${goal.progress.currentGrade}`;
       break;
+    case "reach_dan":
+      if (goal.progress?.currentLabel) return `now ${goal.progress.currentLabel}`;
+      break;
+    case "reach_rating":
+      if (current == null) break;
+      return `now ${current.toFixed(2)}`;
     default:
       break;
   }
@@ -595,8 +603,8 @@ export function completedGoalDate(goal: UserGoal, timeZone: string | null): stri
   return formatDate(new Date(goal.completedAt).toISOString(), timeZone ?? "UTC");
 }
 
-/* The tick. Drawn as an SVG image rather than a text glyph: satori lays text
-   out with the fonts the card loaded, and Torus has no check in it. */
+/* The tick. Drawn as an SVG image rather than a text glyph, so it never
+   depends on what the card's fonts happen to cover. */
 function checkGlyphDataUrl(color: string): string {
   return svgDataUrl(
     `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">`
@@ -913,7 +921,7 @@ function skillsUnavailable(skills: MyDataSkillBreakdown | null): string | null {
    The labels are not in there: text inside an embedded SVG is laid out by the
    rasterizer, which never sees the fonts loaded for the card, so it fell back
    to a default face and printed "Chordstream" wider and softer than every
-   other word on the image. As satori nodes they use Torus like everything
+   other word on the image. As satori nodes they use Tracker Round like everything
    else. */
 function radarGeometryFor(entries: ReturnType<typeof skillModeEntries>, width: number, height: number) {
   const fontSize = Math.max(9, Math.round(Math.min(width, height) * 0.046));
@@ -1810,6 +1818,133 @@ export function insightCellWidths(totalWidth: number, keyModeCount: number): [nu
   return [keyWidth, secondaryWidth, secondaryWidth, remaining - secondaryWidth * 2];
 }
 
+/* A supporter's own picks for the insight panel, as the profile shows them:
+   their four stats (with what the extra ones read) and the play they put in
+   place of the newest top play. Everyone else gets the usual four. */
+export interface InsightPicks {
+  stats: readonly ProfileStatId[];
+  data: ProfileStatsData;
+  play: ProfilePlay | null;
+}
+
+export function readInsightPicks(resolved: Pick<ResolvedSignature, "insightsPicks">): InsightPicks {
+  const raw = resolved.insightsPicks;
+  return {
+    stats: parseProfileStats(raw?.stats) ?? DEFAULT_PROFILE_STATS,
+    data: parseProfileStatsData(raw?.data),
+    play: parseProfilePlays([raw?.play ?? null, null])?.[0] ?? null,
+  };
+}
+
+const RICE_BLUE = "#66ccff";
+const LN_ORANGE = "#ff8e5d";
+
+function ratioText(ratio: { perfect: number; great: number }): string {
+  if (ratio.great === 0) return "All MAX";
+  const value = ratio.perfect / ratio.great;
+  return value >= 100 ? Math.round(value).toString() : value.toFixed(value >= 10 ? 1 : 2);
+}
+
+/* The headline and the footer of each extra stat, at the sizes the usual
+   four use. `size` is the headline's px (26 in the row, 17 on a line). */
+function extraStatParts(stat: ProfileStatId, data: ProfileStatsData, accent: string, dim: string, size: number, barWidth: number): { value: ReactNode; footer: ReactNode } | null {
+  const small = `${Math.round(size * 0.42)}px`;
+  const big = { fontSize: `${size}px`, fontWeight: 900, lineHeight: 1 };
+  const footer = (text: string) => h("div", { key: "f", style: { fontSize: "11px", color: dim } }, text);
+  switch (stat) {
+    case "ratio": {
+      const ratio = data.ratio;
+      if (!ratio) return null;
+      return {
+        value: h("div", { key: "v", style: { display: "flex", alignItems: "baseline", gap: "4px" } }, [
+          h("div", { key: "n", style: big }, ratioText(ratio)),
+          ratio.great > 0 ? h("div", { key: "u", style: { fontSize: small, fontWeight: 700, color: dim } }, ": 1") : h("div", { key: "u" }),
+        ]),
+        footer: footer("MAX to 300 over every tracked play"),
+      };
+    }
+    case "lnSplit": {
+      const split = data.lnSplit;
+      const total = split ? split.ln + split.rice : 0;
+      if (!split || total <= 0) return null;
+      const ln = Math.round((split.ln / total) * 100);
+      const riceLeads = ln < 50;
+      const part = (key: string, pct: number, label: string, color: string, lead: boolean) => h("div", { key, style: { display: "flex", alignItems: "baseline", gap: "3px" } }, [
+        h("div", { key: "n", style: { fontSize: `${lead ? size : Math.round(size * 0.65)}px`, fontWeight: 900, lineHeight: 1, color } }, `${pct}%`),
+        h("div", { key: "l", style: { fontSize: "11px", fontWeight: 700, color } }, label),
+      ]);
+      return {
+        value: h("div", { key: "v", style: { display: "flex", alignItems: "baseline", gap: "10px" } }, [
+          part("r", 100 - ln, "rice", RICE_BLUE, riceLeads),
+          part("l", ln, "LN", LN_ORANGE, !riceLeads),
+        ]),
+        footer: barWidth > 0
+          ? segmentedBar(barWidth, [{ pct: 100 - ln, color: RICE_BLUE }, { pct: ln, color: LN_ORANGE }])
+          : h("div", { key: "f" }),
+      };
+    }
+    case "streak": {
+      const streak = data.streak;
+      if (!streak || streak.longest <= 0) return null;
+      return {
+        value: h("div", { key: "v", style: { display: "flex", alignItems: "baseline", gap: "5px" } }, [
+          h("div", { key: "n", style: big }, nf(streak.longest)),
+          h("div", { key: "u", style: { fontSize: "11px", fontWeight: 700, color: dim } }, streak.longest === 1 ? "day" : "days"),
+        ]),
+        footer: footer(streak.current > 0 ? `${nf(streak.current)} going now` : "In a row, with a play each day"),
+      };
+    }
+    case "percentile": {
+      const percentile = data.percentile;
+      const top = percentile ? formatTopPercent(percentile.rank, percentile.players) : null;
+      if (!percentile || !top) return null;
+      return {
+        value: h("div", { key: "v", style: { display: "flex", alignItems: "baseline", gap: "5px" } }, [
+          h("div", { key: "u", style: { fontSize: "11px", fontWeight: 700, color: dim } }, "top"),
+          h("div", { key: "n", style: { ...big, color: accent } }, `${top}%`),
+        ]),
+        footer: footer(`#${nf(percentile.rank)} of ${nf(percentile.players)} tracked players`),
+      };
+    }
+    case "session": {
+      const session = data.session;
+      if (!session) return null;
+      const length = sessionLength(session.minutes);
+      return {
+        value: h("div", { key: "v", style: { display: "flex", alignItems: "baseline", gap: "5px" } }, [
+          h("div", { key: "n", style: big }, length.value),
+          h("div", { key: "u", style: { fontSize: "11px", fontWeight: 700, color: dim } }, length.hours ? (length.value === "1" ? "hour" : "hours") : "min"),
+        ]),
+        footer: footer(session.plays === 1 ? "1 play in one sitting" : `${nf(session.plays)} plays in one sitting`),
+      };
+    }
+    default:
+      return null;
+  }
+}
+
+const EXTRA_STAT_LABELS: Partial<Record<ProfileStatId, string>> = {
+  ratio: "Ratio",
+  lnSplit: "Rice / LN",
+  streak: "Longest streak",
+  percentile: "Percentile",
+  session: "Longest session",
+};
+
+/* The widths of the cells in the order they sit: the key split takes what
+   insightCellWidths gives it, wherever it is, and the rest share the remainder. */
+function pickedCellWidths(stats: readonly ProfileStatId[], totalWidth: number, keyModeCount: number): number[] {
+  const keyWidth = stats.includes("keySplit") ? insightCellWidths(totalWidth, keyModeCount)[0] : 0;
+  const others = stats.filter((stat) => stat !== "keySplit").length;
+  const share = Math.floor((totalWidth - keyWidth) / others);
+  const lastOther = stats.reduce((last, stat, index) => (stat === "keySplit" ? last : index), -1);
+  return stats.map((stat, index) => {
+    if (stat === "keySplit") return keyWidth;
+    // the last of them takes the rounding, so the row is exactly as wide as before
+    return index === lastOther ? totalWidth - keyWidth - share * (others - 1) : share;
+  });
+}
+
 /* The four readings, at the widths they are actually drawn at. Fixed rather
    than flex:1 because the bars inside them need a pixel width - satori has no
    percentage sizing to fall back on. */
@@ -1819,13 +1954,20 @@ function insightCells(
   accent: string,
   dim: string,
   modBadge: RenderModBadge | null,
+  picks: InsightPicks = { stats: DEFAULT_PROFILE_STATS, data: {}, play: null },
 ): ReactNode[] {
-  const [keyWidth, modWidth, bpmWidth, ppWidth] = insightCellWidths(totalWidth, insights.keySplit.length);
+  const widths = pickedCellWidths(picks.stats, totalWidth, insights.keySplit.length);
+  const widthOf = (stat: ProfileStatId) => widths[picks.stats.indexOf(stat)] ?? Math.floor(totalWidth / 4);
+  const firstOf = (stat: ProfileStatId) => picks.stats.indexOf(stat) === 0;
+  const keyWidth = widthOf("keySplit");
+  const modWidth = widthOf("mostUsedMod");
+  const bpmWidth = widthOf("medianBpm");
+  const ppWidth = widthOf("ppRange");
   const mod = insights.mostUsedMod;
   const modPct = mod && mod.total > 0 ? Math.round((mod.count / mod.total) * 100) : 0;
 
-  return [
-    insightCell(
+  const usual: Partial<Record<ProfileStatId, () => ReactNode>> = {
+    keySplit: () => insightCell(
       "keys",
       "Key split",
       dim,
@@ -1837,9 +1979,9 @@ function insightCells(
         })))
         : h("div", { key: "f" }),
       keyWidth,
-      true,
+      firstOf("keySplit"),
     ),
-    insightCell(
+    mostUsedMod: () => insightCell(
       "mod",
       "Most used mod",
       dim,
@@ -1862,9 +2004,9 @@ function insightCells(
         ])
         : h("div", { key: "f" }),
       modWidth,
-      false,
+      firstOf("mostUsedMod"),
     ),
-    insightCell(
+    medianBpm: () => insightCell(
       "bpm",
       "Median BPM",
       dim,
@@ -1879,9 +2021,9 @@ function insightCells(
           `${Math.round(insights.bpmRange.min)} to ${Math.round(insights.bpmRange.max)}`)
         : h("div", { key: "f" }),
       bpmWidth,
-      false,
+      firstOf("medianBpm"),
     ),
-    insightCell(
+    ppRange: () => insightCell(
       "pp",
       "PP range",
       dim,
@@ -1897,9 +2039,16 @@ function insightCells(
           `${nf(insights.ppRange.top - insights.ppRange.bottom)}pp spread`)
         : h("div", { key: "f" }),
       ppWidth,
-      false,
+      firstOf("ppRange"),
     ),
-  ];
+  };
+  return picks.stats.map((stat, index) => {
+    const usualCell = usual[stat];
+    if (usualCell) return usualCell();
+    const width = widths[index];
+    const parts = extraStatParts(stat, picks.data, accent, dim, 26, width - 22);
+    return insightCell(stat, EXTRA_STAT_LABELS[stat] ?? stat, dim, parts?.value ?? insightMissing("-", dim), parts?.footer ?? h("div", { key: "f" }), width, index === 0);
+  });
 }
 
 /* The star pill the site draws everywhere a map is named, in satori's terms:
@@ -1961,7 +2110,11 @@ function topPlayCard(
   timeZone: string | null,
   modBadges: RenderModBadge[],
   compact = false,
+  /* A supporter's own play: their title over it, and the number they chose. */
+  heading = "Newest top play",
+  metric: { value: string; unit: string; color: string } | null = null,
 ): ReactNode {
+  const shown = metric ?? (snapshot.pp != null ? { value: String(Math.round(snapshot.pp)), unit: "pp", color: accent } : null);
   const date = snapshot.date ? formatDate(snapshot.date, timeZone ?? "UTC") : null;
   /* Clamped to the layout, and nowrap besides. A map title is arbitrary
      length: on the card width it would otherwise wrap onto a second line and
@@ -2011,7 +2164,7 @@ function topPlayCard(
         h("div", {
           key: "l",
           style: { fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: label },
-        }, "Newest top play"),
+        }, clamp(heading, 40)),
         /* Title and star pill on one line: the pill is what a reader wants
            beside the map's name, and it is the one number this card carried
            nowhere else. The title clamps shorter than it used to, by roughly
@@ -2035,17 +2188,42 @@ function topPlayCard(
           ])
           : h("div", { key: "m" }),
       ]),
-      snapshot.pp != null
+      shown
         ? h("div", { key: "pp", style: { display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 } }, [
-          h("div", { key: "v", style: { fontSize: "30px", fontWeight: 900, lineHeight: 1, color: accent } }, String(Math.round(snapshot.pp))),
+          h("div", { key: "v", style: { fontSize: "30px", fontWeight: 900, lineHeight: 1, color: shown.color } }, shown.value),
           h("div", {
             key: "l",
             style: { marginTop: "3px", fontSize: "10px", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: secondary },
-          }, "pp"),
+          }, shown.unit),
         ])
         : h("div", { key: "pp" }),
     ]),
   ]);
+}
+
+/* A supporter's featured play as the card's snapshot, and the number it shows. */
+function featuredSnapshot(entry: ProfilePlay): InsightScoreSnapshot {
+  const { play } = entry;
+  return {
+    title: play.title,
+    artist: play.artist,
+    version: play.version,
+    pp: play.pp,
+    stars: null,
+    rank: play.rank,
+    coverUrl: play.coverUrl ?? "",
+    beatmapUrl: `https://osu.ppy.sh/beatmaps/${play.beatmapId}`,
+    scoreUrl: play.scoreId ? `https://osu.ppy.sh/scores/${play.scoreId}` : null,
+    date: play.playedAt ?? "",
+    mods: play.mods,
+  };
+}
+
+function featuredMetric(entry: ProfilePlay, accent: string): { value: string; unit: string; color: string } | null {
+  const { play } = entry;
+  if (entry.show === "msd" && play.msd != null) return { value: play.msd.toFixed(2), unit: "rating", color: RICE_BLUE };
+  if (entry.show === "dan" && play.dan) return { value: play.dan.label, unit: play.dan.family === "ln" ? "LN dan" : "dan", color: LN_ORANGE };
+  return play.pp != null ? { value: String(Math.round(play.pp)), unit: "pp", color: accent } : null;
 }
 
 /** Label / value line, for the tall layout where four cells in a row would be
@@ -2196,7 +2374,9 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
      amount of height to give it. The strip carries no name, so it fetches
      nothing. */
   const avatarSize = ctx.design === 1 ? 28 : ctx.design === 3 ? 26 : ctx.design === 4 ? 24 : 0;
-  const play = insights.newestTopPlay;
+  const picks = readInsightPicks(ctx.resolved);
+  const play = picks.play ? featuredSnapshot(picks.play) : insights.newestTopPlay;
+  const playLabel = picks.play?.title ?? "Newest top play";
   const inner = spec.width - (ctx.design === 3 ? 48 : 56);
   const hasTopPlay = ctx.design !== 2 && ctx.design !== 4;
   const [background, avatarSrc, cover, modBadges, [mostUsedModBadge = null]] = await Promise.all([
@@ -2228,7 +2408,7 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
       h("div", {
         key: "body",
         style: { display: "flex", alignItems: "stretch", padding: "18px 28px", width: "100%" },
-      }, insightCells(insights, inner, accent, dim, mostUsedModBadge)),
+      }, insightCells(insights, inner, accent, dim, mostUsedModBadge, picks)),
       wordmark(ctx.style, 12, 8),
     ]));
   }
@@ -2237,6 +2417,32 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
     const modPct = insights.mostUsedMod && insights.mostUsedMod.total > 0
       ? Math.round((insights.mostUsedMod.count / insights.mostUsedMod.total) * 100)
       : 0;
+    // The usual three as lines; any extra stat a supporter picked is drawn the same way.
+    const tallLines: Partial<Record<ProfileStatId, () => ReactNode>> = {
+      mostUsedMod: () => insightLine("mod", "Most used mod", h("div", {
+          key: "v",
+          style: { display: "flex", alignItems: "baseline", gap: "6px" },
+        }, [
+          mostUsedModBadge
+            ? renderModBadge(mostUsedModBadge, 0, 18)
+            : h("div", { key: "n", style: { fontSize: "17px", fontWeight: 900 } }, insights.mostUsedMod?.label ?? "-"),
+          insights.mostUsedMod
+            ? h("div", { key: "p", style: { fontSize: "11px", color: dim } }, `${modPct}%`)
+            : h("div", { key: "p" }),
+        ]), dim),
+      medianBpm: () => insightLine("bpm", "Median BPM", h("div", {
+          key: "v",
+          style: { fontSize: "17px", fontWeight: 900 },
+        }, insights.medianBpm != null ? String(Math.round(insights.medianBpm)) : "-"), dim),
+      ppRange: () => insightLine("pp", "PP range", h("div", {
+          key: "v",
+          style: { display: "flex", alignItems: "baseline", gap: "5px" },
+        }, insights.ppRange ? [
+          h("div", { key: "t", style: { fontSize: "17px", fontWeight: 900, color: accent } }, String(Math.round(insights.ppRange.top))),
+          h("div", { key: "s", style: { fontSize: "11px", color: dim } }, "to"),
+          h("div", { key: "b", style: { fontSize: "17px", fontWeight: 900 } }, String(Math.round(insights.ppRange.bottom))),
+        ] : [h("div", { key: "t", style: { fontSize: "17px", fontWeight: 900 } }, "-")]), dim),
+    };
     return renderPng(ctx, frame(spec.width, spec.height, [
       ...background.layers,
       h("div", {
@@ -2250,7 +2456,7 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
             style: { fontSize: "10px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: dim },
           }, "Profile stats"),
         ], "9px"),
-        h("div", { key: "keys", style: { display: "flex", flexDirection: "column", gap: "9px" } }, [
+        !picks.stats.includes("keySplit") ? h("div", { key: "keys" }) : h("div", { key: "keys", style: { display: "flex", flexDirection: "column", gap: "9px" } }, [
           keySplitValue(insights),
           insights.keySplit.length > 1
             ? segmentedBar(inner, insights.keySplit.map((entry) => ({
@@ -2259,34 +2465,15 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
             })))
             : h("div", { key: "bar" }),
         ]),
-        h("div", { key: "lines", style: { display: "flex", flexDirection: "column", gap: "8px" } }, [
-          insightLine("mod", "Most used mod", h("div", {
-            key: "v",
-            style: { display: "flex", alignItems: "baseline", gap: "6px" },
-          }, [
-            mostUsedModBadge
-              ? renderModBadge(mostUsedModBadge, 0, 18)
-              : h("div", { key: "n", style: { fontSize: "17px", fontWeight: 900 } }, insights.mostUsedMod?.label ?? "-"),
-            insights.mostUsedMod
-              ? h("div", { key: "p", style: { fontSize: "11px", color: dim } }, `${modPct}%`)
-              : h("div", { key: "p" }),
-          ]), dim),
-          insightLine("bpm", "Median BPM", h("div", {
-            key: "v",
-            style: { fontSize: "17px", fontWeight: 900 },
-          }, insights.medianBpm != null ? String(Math.round(insights.medianBpm)) : "-"), dim),
-          insightLine("pp", "PP range", h("div", {
-            key: "v",
-            style: { display: "flex", alignItems: "baseline", gap: "5px" },
-          }, insights.ppRange ? [
-            h("div", { key: "t", style: { fontSize: "17px", fontWeight: 900, color: accent } }, String(Math.round(insights.ppRange.top))),
-            h("div", { key: "s", style: { fontSize: "11px", color: dim } }, "to"),
-            h("div", { key: "b", style: { fontSize: "17px", fontWeight: 900 } }, String(Math.round(insights.ppRange.bottom))),
-          ] : [h("div", { key: "t", style: { fontSize: "17px", fontWeight: 900 } }, "-")]), dim),
-        ]),
+        h("div", { key: "lines", style: { display: "flex", flexDirection: "column", gap: "8px" } }, picks.stats.filter((stat) => stat !== "keySplit").map((stat) => tallLines[stat]?.() ?? insightLine(
+          stat,
+          EXTRA_STAT_LABELS[stat] ?? stat,
+          extraStatParts(stat, picks.data, accent, dim, 17, 0)?.value ?? h("div", { key: "v", style: { fontSize: "17px", fontWeight: 900 } }, "-"),
+          dim,
+        ))),
         play
           ? h("div", { key: "playwrap", style: { display: "flex", marginTop: "auto" } }, [
-            topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, ctx.resolved.timeZone, modBadges, true),
+            topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, ctx.resolved.timeZone, modBadges, true, playLabel, picks.play ? featuredMetric(picks.play, accent) : null),
           ])
           : h("div", { key: "playwrap" }),
       ]),
@@ -2310,10 +2497,10 @@ async function renderInsights(ctx: SignatureRenderContext): Promise<Buffer> {
         }, "Profile stats"),
       ], "10px"),
       h("div", { key: "cells", style: { display: "flex", alignItems: "stretch", height: "62px" } },
-        insightCells(insights, inner, accent, dim, mostUsedModBadge)),
+        insightCells(insights, inner, accent, dim, mostUsedModBadge, picks)),
       play
         ? h("div", { key: "playwrap", style: { display: "flex", marginTop: "auto" } }, [
-          topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, ctx.resolved.timeZone, modBadges),
+          topPlayCard(play, cover, accent, dim, inner, TOP_PLAY_CARD_HEIGHT, ctx.resolved.timeZone, modBadges, false, playLabel, picks.play ? featuredMetric(picks.play, accent) : null),
         ])
         : h("div", { key: "playwrap" }),
     ]),

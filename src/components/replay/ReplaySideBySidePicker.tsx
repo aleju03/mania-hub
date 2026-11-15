@@ -26,6 +26,7 @@ import { formatSideBySideIssue, getSideBySideCandidateIssue, getSideBySideIssue 
 import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp, scoreHasReplay } from "#/lib/score";
 import type { OsuScore } from "#/lib/types";
 import { useLocale } from "#/lib/locale-context";
+import { UsernameText } from "../ui/UsernameText";
 
 /* Setup screen for the Side by Side tab: pick the two runs, then watch them on
    one clock. It is built as the matchup it produces, two cards facing each
@@ -628,7 +629,7 @@ function RunPicker({ slotIndex, anchor, pickedIds, recentReplays, onPick }: {
             className="h-6 w-6 rounded-full object-cover ring-1 ring-white/10"
           />
           <CountryFlag code={player.country_code ?? undefined} size="xs" decorative />
-          <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-white">{player.username}</span>
+          <UsernameText username={player.username} userId={player.id} className="min-w-0 flex-1 truncate text-[13px] font-bold text-white" />
           <button
             type="button"
             onClick={() => {
@@ -888,7 +889,7 @@ function PickerBody({
               className="h-6 w-6 rounded-full object-cover ring-1 ring-white/10"
             />
             <CountryFlag code={candidate.country_code ?? undefined} size="xs" decorative />
-            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white">{candidate.username}</span>
+            <UsernameText username={candidate.username} userId={candidate.id} className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white" />
           </button>
         ))}
       </>
