@@ -14,7 +14,7 @@ describe("sitemap players", () => {
     expect(xml).toContain("<loc>https://mania-tracker.com/player/Some%20Player</loc>");
     expect(xml).toContain("<lastmod>2026-09-12</lastmod>");
     expect(xml).toContain("<loc>https://mania-tracker.com/player/Undated</loc>");
-    expect(xml.match(/<url>/g)).toHaveLength(16);
+    expect(xml.match(/<url>/g)).toHaveLength(17);
     expect(xml.match(/<lastmod>/g)).toHaveLength(1);
     expect(xml.indexOf("/skins/x")).toBeLessThan(xml.indexOf("/player/"));
   });

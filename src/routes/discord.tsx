@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
@@ -7,7 +7,6 @@ import { ChevronDown, CircleHelp, Globe, Plus, X } from "lucide-react";
 import { getI18n } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DiscordTabs } from "../components/discord/DiscordTabs";
-import { canUseDevFeatures } from "../lib/auth-shared";
 import { fetchDiscordPublicInfo, fetchLiveUserSearch, type DiscordPublicInfo, type LiveUserSearchEntry } from "../lib/live-backend";
 import {
   fetchBotAccount,
@@ -52,14 +51,7 @@ export const Route = createFileRoute("/discord")({
       origin: match.context.origin,
       imageKind: "discord",
       imageTitle: "maniabot - Mania Tracker for Discord",
-      noindex: true,
     });
-  },
-  beforeLoad: ({ context }) => {
-    if (!canUseDevFeatures(context.auth)) {
-      throw notFound();
-    }
-    return undefined as never;
   },
   // The /profile preview loads with the page, so it is there on first paint.
   // A slow render is left to the client rather than holding the page.

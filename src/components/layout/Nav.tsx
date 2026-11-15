@@ -112,7 +112,7 @@ const DEV_NAV_LABELS: Partial<Record<NavLeafId, ReturnType<typeof msg>>> = {
 };
 
 // The Discord entry branches into its two pages: a flyout on desktop, two rows
-// in the mobile menu. Only for those who can see the bot page.
+// in the mobile menu.
 const DISCORD_BRANCHES = [
   { to: "/discord" as const, label: msg`Bot`, mobileLabel: msg`Discord bot` },
   { to: "/communities" as const, label: msg`Servers`, mobileLabel: msg`Discord servers` },
@@ -835,7 +835,7 @@ export function Nav() {
                     >
                       {groupItems.map((leaf) => {
                         const itemActive = current?.id === leaf.id;
-                        if (leaf.id === "discord" && devMode) {
+                        if (leaf.id === "discord") {
                           return (
                             <div
                               key={leaf.id}
@@ -1232,7 +1232,7 @@ export function Nav() {
                             transition={{ duration: 0.2, ease: "easeOut" }}
                             className="overflow-hidden bg-osu-b6/40"
                           >
-                            {groupItems.map((leaf) => leaf.id === "discord" && devMode
+                            {groupItems.map((leaf) => leaf.id === "discord"
                               ? DISCORD_BRANCHES.map((branch) => (
                                 <Link
                                   key={branch.to}

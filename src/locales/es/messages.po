@@ -17654,7 +17654,7 @@ msgstr "Notas"
 #: src/components/player/ProfileStatCards.tsx
 #: src/lib/profile-stats.ts
 msgid "Notes hit"
-msgstr "Notas acertadas"
+msgstr "Notas tocadas"
 
 #: src/components/prism/PrismVisualizer.tsx
 #~ msgid "Notes take the colour of the pattern Prism files their row under, and hold bodies are drawn faint. The strip under the controls is each half second's demand, coloured by its main pattern, or LN where holds make up as much of its notes as on a chart Prism rates LN."
@@ -25673,7 +25673,7 @@ msgstr "Cambia cualquier elemento por otra imagen de {0}, o haz clic en él en l
 
 #: src/routes/support.tsx
 msgid "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak, percentile among tracked players, notes hit, strongest skill or the hour you play most."
-msgstr "Cambia cualquiera de las cuatro tarjetas bajo tu perfil por tu ratio, reparto rice / LN, racha más larga, percentil entre los jugadores registrados, notas acertadas, skill más fuerte o la hora en que más juegas."
+msgstr "Cambia cualquiera de las cuatro tarjetas bajo tu perfil por tu ratio, reparto rice / LN, racha más larga, percentil entre los jugadores registrados, notas tocadas, skill más fuerte o la hora en que más juegas."
 
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile."

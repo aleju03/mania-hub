@@ -1,13 +1,9 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { Trans } from "@lingui/react/macro";
-import { useAuth } from "../../lib/auth-context";
 
 // The two Discord pages share one menu entry; this strip moves between them.
-// The bot page is still a dev preview, so its tab shows only to those who can see it.
 export function DiscordTabs() {
-  const auth = useAuth();
   const { pathname } = useLocation();
-  if (!auth.canUseDevFeatures) return null;
   const tabs = [
     { to: "/communities" as const, label: <Trans>Servers</Trans>, active: pathname.startsWith("/communities") },
     { to: "/discord" as const, label: <Trans>Bot</Trans>, active: pathname.startsWith("/discord") },

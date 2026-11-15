@@ -15,6 +15,7 @@ const STATIC_PATHS = [
   { path: "/recommendations", changefreq: "daily", priority: "0.7" },
   { path: "/skins", changefreq: "daily", priority: "0.7" },
   { path: "/communities", changefreq: "daily", priority: "0.7" },
+  { path: "/discord", changefreq: "weekly", priority: "0.6" },
   { path: "/packs", changefreq: "weekly", priority: "0.6" },
   { path: "/packs/collections", changefreq: "daily", priority: "0.6" },
   { path: "/bbcode", changefreq: "monthly", priority: "0.5" },

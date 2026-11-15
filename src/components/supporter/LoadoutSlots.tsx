@@ -236,10 +236,14 @@ export function SleeveCard({ sleeve, className }: { sleeve: SupporterCardSleeveI
    covers' blended grain and shadows are slow to rasterize live, which dropped
    frames when a row of them scrolled into view. Re-render them (3x, 64x84)
    if a cover's CSS changes. */
+/* A cover redrawn after it shipped gets a new file name: public/sw.js serves
+   /images/ cache-first, so the old art would stay for returning visitors. */
+const BINDER_COVER_FILES: Partial<Record<SupporterBinderId, string>> = { case: "case-2" };
+
 export function BinderBook({ binder, className }: { binder: SupporterBinderId; className: string }) {
   return (
     <img
-      src={`/images/binders/covers/${binder}.webp`}
+      src={`/images/binders/covers/${BINDER_COVER_FILES[binder] ?? binder}.webp`}
       alt=""
       aria-hidden
       draggable={false}
