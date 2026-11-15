@@ -118,7 +118,7 @@ function SectionNav() {
 /* Each section hydrates in its own Suspense boundary (nothing in them
    suspends), so React hydrates the page a section at a time and lets a
    scroll through in between, rather than in one long task. */
-function Perk({ id, title, count, body, more, children }: { id: string; title: string; count: ReactNode; body: string; /** A second line under the body, for a way to make your own. */ more?: ReactNode; children: ReactNode }) {
+function Perk({ id, title, count, body, more, children }: { id: string; title: string; count: ReactNode; body: ReactNode; /** A second line under the body, for a way to make your own. */ more?: ReactNode; children: ReactNode }) {
   return (
     <Suspense fallback={null}>
     <section id={id} className="scroll-mt-[76px] border-t border-white/[0.07] pt-8">
@@ -128,7 +128,7 @@ function Perk({ id, title, count, body, more, children }: { id: string; title: s
           <h2 className="text-[22px] font-bold text-white">{title}</h2>
           <span className="text-[13px] font-semibold text-osu-pink-light">{count}</span>
         </div>
-        <p className="mt-1.5 text-[14px] leading-relaxed text-osu-l2">{body}</p>
+        <p className="mt-1.5 text-[14px] leading-relaxed text-osu-l2 [&_a]:font-semibold [&_a]:text-osu-pink-light hover:[&_a]:underline">{body}</p>
         {more ? <p className="mt-1 text-[14px] leading-relaxed text-osu-l2 [&_a]:font-semibold [&_a]:text-osu-pink-light hover:[&_a]:underline">{more}</p> : null}
       </div>
       <Reveal delay={0.08}>{children}</Reveal>
@@ -281,7 +281,7 @@ function SupportPage() {
               id="packs"
               title={t`Packs`}
               count={t`Cases, binders and wrappers`}
-              body={t`Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill the board with 3x the cards.`}
+              body={<Trans>Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill <Link to="/packs/collections" search={{ tab: "board" }}>the board</Link> with 3x the cards.</Trans>}
             >
               <PacksShowcase />
             </Perk>

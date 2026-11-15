@@ -13557,8 +13557,8 @@ msgid "Keep playing"
 msgstr "继续玩"
 
 #: src/routes/support.tsx
-msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill the board with 3x the cards."
-msgstr "把你拥有的卡片放进 3D 卡套，用卡册页面展示你的收藏，开启印着你专属包装的卡包，配上你自己的刀光、火花和声音。还能在卡板上放下 3 倍的卡牌。"
+msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill <0>the board</0> with 3x the cards."
+msgstr "把你拥有的卡片放进 3D 卡套，用卡册页面展示你的收藏，开启印着你专属包装的卡包，配上你自己的刀光、火花和声音。还能在<0>卡板</0>上放下 3 倍的卡牌。"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Keep the rest"

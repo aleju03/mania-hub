@@ -13591,8 +13591,8 @@ msgid "Keep playing"
 msgstr "Keep playing"
 
 #: src/routes/support.tsx
-msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill the board with 3x the cards."
-msgstr "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill the board with 3x the cards."
+msgid "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill <0>the board</0> with 3x the cards."
+msgstr "Keep the cards you own in a 3D case, show your collection as binder pages, and open packs printed on your own wrapper, with your own blade, sparks and sound. And fill <0>the board</0> with 3x the cards."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Keep the rest"
