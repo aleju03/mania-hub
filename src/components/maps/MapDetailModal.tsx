@@ -32,21 +32,7 @@ import { usesPrism } from "#dan/prism/switch";
 import { useNoDans } from "../../store";
 import { useMapDanLabel } from "../../lib/use-map-dan-label";
 import { DAN_SKILLSET_META, msdSkillsetMeta } from "../../lib/skill-axes";
-import {
-  FamilyPatternChip,
-  PATTERN_COLOR,
-  SubPatternChip,
-  entryDiffs,
-  mapCoverUrl,
-  osuBeatmapUrl,
-  osuDirectUrl,
-  oszDownloadUrl,
-  patternLabel,
-  subPatternTags,
-  isLnSkillsetTag,
-  lnSkillTiles,
-  skillTiles,
-} from "./SearchCard";
+import { FamilyPatternChip, PATTERN_COLOR, SubPatternChip, entryDiffs, osuBeatmapUrl, osuDirectUrl, oszDownloadUrl, patternLabel, subPatternTags, isLnSkillsetTag, lnSkillTiles, skillTiles, mapBannerUrl } from "./SearchCard";
 import { HoverTip } from "../ui/HoverTip";
 import { ChartLabelSection } from "./ChartLabelReport";
 import { useAuth } from "../../lib/auth-context";
@@ -1227,7 +1213,7 @@ export function MapDetailModal({
               <MapDetailHeader
                 entry={entry}
                 active={active}
-                cover={hasBanner ? <BannerCover key={local ? entry.beatmapId : entry.beatmapsetId} src={mapCoverUrl(entry)} /> : null}
+                cover={hasBanner ? <BannerCover key={local ? entry.beatmapId : entry.beatmapsetId} src={mapBannerUrl(entry)} /> : null}
                 stars={headerStars}
                 status={headerStatus}
                 tiles={headerTiles}

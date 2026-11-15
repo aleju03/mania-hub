@@ -44,12 +44,27 @@ export function entryDiffs(entry: LiveMapSearchEntry): LiveMapSearchEntry[] {
 }
 
 export function mapCoverUrl(entry: Pick<LiveMapSearchEntry, "covers" | "beatmapsetId">): string {
+  // `list` is a 150px square, the last resort for anything this size
   return (
     entry.covers?.["card@2x"] ??
     entry.covers?.card ??
-    entry.covers?.list ??
+    entry.covers?.["cover@2x"] ??
     entry.covers?.cover ??
+    entry.covers?.list ??
     `https://assets.ppy.sh/beatmaps/${entry.beatmapsetId}/covers/card@2x.jpg`
+  );
+}
+
+/* The wide header image: the full-width cover first. A play from a chart off
+   osu! (set id 0) carries only the covers it was imported with. */
+export function mapBannerUrl(entry: Pick<LiveMapSearchEntry, "covers" | "beatmapsetId">): string {
+  return (
+    entry.covers?.["cover@2x"] ??
+    entry.covers?.cover ??
+    entry.covers?.["card@2x"] ??
+    entry.covers?.card ??
+    (entry.beatmapsetId > 0 ? `https://assets.ppy.sh/beatmaps/${entry.beatmapsetId}/covers/cover@2x.jpg` : entry.covers?.list) ??
+    `https://assets.ppy.sh/beatmaps/${entry.beatmapsetId}/covers/cover@2x.jpg`
   );
 }
 
