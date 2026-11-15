@@ -821,6 +821,8 @@ export function SkinUploadModal({
           coverShotUrlRef.current = null;
         }
         if (uploadError.code === "duplicate") setDuplicate(uploadError.duplicate ?? null);
+        // The uploader's own skin: the link alone, no "(uploaded by you)".
+        if (uploadError.code === "own_repost") setDuplicate(uploadError.duplicate ? { ...uploadError.duplicate, ownerUsername: "" } : null);
         setError(uploadError.message);
       } else {
         setError(uploadErrorMessage("upload_failed"));

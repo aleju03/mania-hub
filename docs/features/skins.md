@@ -10,6 +10,12 @@ Skins carry a `visibility` (`public`/`private`) beside `status`.
 - Its R2 objects live under a `p-<secret>` key segment, never get a public bucket URL, and only answer to `?t=<secret>`, which `toSkinSummary(row, { asOwner })` attaches for owner-scoped reads only. **Any endpoint that serves a skin must go through that serializer, never the raw row.**
 - Replay viewers never receive a private `.osk`: `/api/replay-skin/bundle` (`backend/src/skins/replay-bundle.ts`) zips only the assets the player's stored settings draw. This protects the file and the page, not the pixels a replay shows.
 
+## Duplicate and repost guards
+
+- A public upload whose `.osk` hash matches a published public skin is refused (`duplicate`), at `/api/skins/start` on the client hash and again on the server hash.
+- A public upload that repeats one of the uploader's own public skins with a few changed files is refused (`own_repost`) and pointed at Update file on that skin (`backend/src/skins/repost-guard.ts`). It needs both near-identical note art (visual signature similarity >= 0.98) and a file-content overlap >= 0.75 (0.9 when either skin has no visual signature). Edit variants of one base skin share most files but not notes; unrelated skins can have lookalike notes but share no files.
+- `file_fingerprint` is a bottom-256 MinHash of the `.osk`'s non-empty file contents, written at upload and replacement. Older rows get one lazily, read from R2 only when a note-art match needs it.
+
 ## Dates
 
 - `published_at`: when the `.osk` was uploaded. Shown as "Uploaded" on the skin page.

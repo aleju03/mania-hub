@@ -1471,7 +1471,8 @@ export class SkinUploadError extends Error {
     readonly code: string,
     message: string,
     readonly status?: number,
-    // Set on code === "duplicate": the published skin holding these bytes.
+    // Set on code === "duplicate": the published skin holding these bytes; on
+    // "own_repost", the uploader's own skin this upload repeats.
     readonly duplicate?: DuplicateSkinRef | null,
     // Set on code === "rate_limited": how long the backend says to wait. The
     // bulk uploader sleeps exactly that long instead of guessing a pace.
@@ -1660,6 +1661,7 @@ export function uploadErrorMessage(code: string, status?: number): string {
     return "This .osk could not be validated as a mania skin.";
   }
   if (code === "duplicate") return "This exact .osk is already published on the site.";
+  if (code === "own_repost") return "You already published this skin. To ship a new version, use Update file in its settings.";
   if (code === "invalid_image") return "Screenshots must be PNG, JPEG, or WebP images.";
   if (code === "screenshot_limit") return `A skin can have up to ${SKIN_MAX_SCREENSHOTS} screenshots.`;
   if (code === "rate_limited") return "Too many upload requests. Wait a minute and try again.";
