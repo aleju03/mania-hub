@@ -40,6 +40,8 @@ export interface AdminSupporterRow {
   customMotifUrl: string | null;
   /** A rank pinned for them (0 Amber .. 11 Holo, supporter-ranks.ts), or null for the real monthly count. */
   rankPin: number | null;
+  /** Supporter for good (the backend's SUPPORTER_PERMANENT_USER_IDS): no countdown. */
+  permanent?: boolean;
 }
 
 export interface AdminSupportersView {

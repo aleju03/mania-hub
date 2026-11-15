@@ -69,6 +69,7 @@ function formatMoney(amount: number, currency: string): string {
 
 function timeLeft(row: AdminSupporterRow, now: number): string {
   if (!row.active) return `lapsed ${formatShortDate(row.expiresAt)}`;
+  if (row.permanent) return "Permanent";
   const days = Math.ceil((row.expiresAt - now) / DAY_MS);
   if (days < 60) return days === 1 ? "1 day left" : `${days} days left`;
   return `${Math.floor(days / 30)} months left`;
@@ -444,7 +445,7 @@ function SupporterTile({
               </div>
             ) : null}
             <div className="mt-2.5 space-y-0.5 text-[11px] text-osu-f1">
-              <div>{row.active ? `Until ${formatDate(row.expiresAt)}` : `Lapsed ${formatDate(row.expiresAt)}`}</div>
+              <div>{row.permanent ? "Permanent" : row.active ? `Until ${formatDate(row.expiresAt)}` : `Lapsed ${formatDate(row.expiresAt)}`}</div>
               <div>Supporting since {formatDate(row.firstSupportedAt)}</div>
             </div>
             {row.username ? (
