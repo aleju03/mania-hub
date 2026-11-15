@@ -1,5 +1,6 @@
 import { previewMascot, startSupporterProfilePreview } from "#/lib/supporter-preview";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { track } from "../lib/analytics";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
@@ -114,6 +115,15 @@ const REEL_STOP_GAP_MS = 190;
 /* How long a preview outlasts the pointer leaving its tile. */
 const HOVER_END_MS = 90;
 
+/* Each section opened and each slot tried on counts once per page load, so a
+   visitor clicking through every font is one line in the feed, not forty. */
+const trackedOnce = new Set<string>();
+function trackOnce(event: string) {
+  if (trackedOnce.has(event)) return;
+  trackedOnce.add(event);
+  track(event);
+}
+
 export const Route = createFileRoute("/supporter")({
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
@@ -150,6 +160,7 @@ function SupporterPage() {
   const section: SupporterSection = Route.useSearch().s ?? "theme";
   const navigate = useNavigate({ from: "/supporter" });
   const openSection = useCallback((next: SupporterSection) => {
+    trackOnce(`supporter_section_${next}`);
     void navigate({ search: next === "theme" ? {} : { s: next }, replace: true, resetScroll: false });
   }, [navigate]);
   const open: SlotId | null = isSlotSection(section) ? section : null;
@@ -291,6 +302,7 @@ function SupporterPage() {
       return;
     }
     if (slotValue(equipped, slot) === value) return;
+    trackOnce(`supporter_pick_${slot}`);
     equip(withSlot(equipped, slot, value, custom));
   };
 
@@ -367,6 +379,7 @@ function SupporterPage() {
   const roll = () => {
     const base = pending ?? equipped;
     if (!base || spinning || rollable.length === 0) return;
+    trackOnce("supporter_roll");
     setHover(null);
     setError(null);
     let target = base;
@@ -499,6 +512,7 @@ function SupporterPage() {
   const previewOnProfile = () => {
     const loadout = pending ?? equipped;
     if (!viewer || !loadout) return;
+    track("supporter_preview");
     const mascot = supporter ? undefined : previewMascot();
     startSupporterProfilePreview(viewer.id, {
       look: loadout.look,

@@ -83,7 +83,10 @@ function GoogleContribution({ viewerId }: { viewerId: number | null | undefined 
         <p className="text-[12px] text-osu-f1">
           {viewerId ? t`Pick an amount in Google's checkout.` : t`Sign in first so it counts toward your account.`}
         </p>
-        <button type="button" {...{ "swg-standard-button": "contribution" }} />
+        {/* Google draws its own button in here; the click still bubbles. */}
+        <span onClickCapture={() => track("support_google_checkout")}>
+          <button type="button" {...{ "swg-standard-button": "contribution" }} />
+        </span>
       </div>
       {status && <p className={`mt-2 text-[12px] ${status.ok ? "text-osu-l2" : "text-osu-red-light"}`}>{status.text}</p>}
       {viewerId ? (
@@ -347,7 +350,7 @@ export function SupportCheckout({ methods, method, onMethod }: { methods: Suppor
               aria-checked={on}
               onClick={() => {
                 onMethod(id);
-                track("support_method", { method: id });
+                track(`support_method_${id}`);
               }}
               className={`cursor-pointer rounded-lg px-2 py-2 text-center transition-colors ${on ? "bg-osu-b2 text-white" : "text-osu-l2 hover:bg-white/[0.05] hover:text-white"}`}
             >

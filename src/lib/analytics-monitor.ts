@@ -233,7 +233,16 @@ const ANALYTICS_EVENT_LABELS: Record<string, string> = {
   skin_upload_failed: "Skin upload failed",
   skin_upload_published: "Skin published",
   streak_run: "Streak run",
-  support_open: "Support box opened",
+  support_open: "Become a supporter clicked",
+  support_google_checkout: "Google checkout opened",
+  support_lava_open: "lava.top checkout opened",
+  support_kofi_claimed: "Ko-fi payment claimed",
+  support_lava_claimed: "lava.top payment claimed",
+  support_google_claimed: "Google payment claimed",
+  supporter_preview: "Supporter preview on profile",
+  supporter_roll: "Supporter look rolled",
+  supporter_gift_redeemed: "Gift code redeemed",
+  supporter_gift_copied: "Gift link copied",
 };
 
 export function formatAnalyticsEventLabel(event: string): string {

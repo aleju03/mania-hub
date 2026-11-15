@@ -215,6 +215,17 @@ describe("describeAnalyticsEvent", () => {
     });
   });
 
+  it("files the support and supporter pages under Support", () => {
+    expect(describeAnalyticsEvent(row({ event: "$pageview", path: "/support" }))).toMatchObject({ kind: "support", subject: "the support page" });
+    expect(
+      describeAnalyticsEvent(row({ event: "$pageview", path: "/supporter", viewUrl: "https://mania-tracker.com/supporter?s=nameFont" })),
+    ).toMatchObject({ kind: "support", subject: "the supporter page", detail: "name fonts" });
+    expect(describeAnalyticsEvent(row({ event: "$pageview", path: "/gift/ABCDEFGH" }))).toEqual({ kind: "support", verb: "opened", subject: "a gift link", detail: null });
+    expect(describeAnalyticsEvent(row({ event: "support_method_kofi", path: "/support" }))).toMatchObject({ kind: "support", verb: "picked", subject: "Ko-fi" });
+    expect(describeAnalyticsEvent(row({ event: "supporter_pick_frame", path: "/supporter" }))).toMatchObject({ kind: "support", verb: "tried on", subject: "avatar frames" });
+    expect(describeAnalyticsEvent(row({ event: "supporter_preview", path: "/supporter" }))).toMatchObject({ kind: "support", subject: "Preview on my profile" });
+  });
+
   it("counts the cards a showcase was saved with", () => {
     expect(
       describeAnalyticsEvent(row({ event: "packs_showcase_saved", path: "/packs/collections", collectionsCards: "1" })),

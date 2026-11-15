@@ -3,6 +3,7 @@ import { useLingui } from "@lingui/react/macro";
 import { Check, Link2 } from "lucide-react";
 
 import { claimSupporterGiftCode, fetchSupporterGiftCode, type GiftClaimError, type SupporterGiftState } from "../../lib/supporter-look-settings";
+import { track } from "../../lib/analytics";
 import { rememberViewerSupporter } from "../../lib/viewer-supporter";
 import { requestSupporterWelcome } from "./SupporterWelcome";
 
@@ -50,6 +51,7 @@ export function GiftCodePanel({ viewerId }: { viewerId: number }) {
   const code = gift.code;
   const copy = () => {
     const url = `${window.location.origin}/gift/${code}`;
+    track("supporter_gift_copied");
     void navigator.clipboard?.writeText(url).then(() => setCopied(true)).catch(() => undefined);
   };
 
@@ -107,6 +109,7 @@ export function RedeemGiftCode({ viewerId, onClaimed }: { viewerId: number; onCl
       const result = await claimSupporterGiftCode({ data: { code: typed.slice(0, 16) } });
       if (result.ok) {
         rememberViewerSupporter(viewerId, result.expiresAt);
+        track("supporter_gift_redeemed");
         requestSupporterWelcome();
         onClaimed();
       } else {

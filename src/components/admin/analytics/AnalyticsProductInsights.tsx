@@ -37,6 +37,7 @@ const iconButton = "inline-flex h-7 w-7 shrink-0 cursor-pointer items-center jus
 const FEATURE_KINDS: Record<string, AnalyticsActivityKind> = {
   player: "profile", replay: "replay", maps: "search", rankings: "ranking", teams: "team", team: "team", snipes: "snipe", "farm-helper": "farm",
   packs: "pack", collections: "pack", skins: "skin", communities: "community",
+  support: "support", supporter: "support", workshop: "support",
 };
 
 // Keep the existing Insights card and row treatment; definitions are available

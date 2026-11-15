@@ -108,6 +108,7 @@ export type AnalyticsActivityKind =
   | "pack"
   | "skin"
   | "community"
+  | "support"
   | "error";
 
 export const ANALYTICS_ACTIVITY_KINDS: AnalyticsActivityKind[] = [
@@ -122,6 +123,7 @@ export const ANALYTICS_ACTIVITY_KINDS: AnalyticsActivityKind[] = [
   "pack",
   "skin",
   "community",
+  "support",
   "error",
 ];
 
@@ -536,6 +538,44 @@ const ADD_SCORE_FAILURE_LABELS: Record<string, string> = {
   failed: "request failed",
 };
 
+const SUPPORT_METHOD_LABELS: Record<string, string> = { kofi: "Ko-fi", google: "Google", lava: "lava.top" };
+
+/* The supporter page's sections, as the feed names them. */
+const SUPPORTER_SECTION_LABELS: Record<string, string> = {
+  theme: "profile themes",
+  frame: "avatar frames",
+  nameStyle: "name styles",
+  nameFont: "name fonts",
+  companion: "stands",
+  stats: "profile stats",
+  foil: "card foils",
+  motif: "card art",
+  sleeve: "card sleeves",
+  binder: "binders",
+  wrapper: "pack wrappers",
+  blade: "pack openings",
+  you: "their supporter status",
+  perks: "what supporting gets you",
+};
+
+/* The supporter events that carry their subject in the name
+   (support_method_kofi, supporter_section_nameFont, supporter_pick_frame). */
+function describeSupporterEvent(event: string): AnalyticsActivity | null {
+  if (event.startsWith("support_method_")) {
+    const method = event.slice("support_method_".length);
+    return { kind: "support", verb: "picked", subject: SUPPORT_METHOD_LABELS[method] ?? method, detail: "to pay with" };
+  }
+  if (event.startsWith("supporter_section_")) {
+    const section = event.slice("supporter_section_".length);
+    return { kind: "support", verb: "browsed", subject: SUPPORTER_SECTION_LABELS[section] ?? section, detail: "on the supporter page" };
+  }
+  if (event.startsWith("supporter_pick_")) {
+    const section = event.slice("supporter_pick_".length);
+    return { kind: "support", verb: "tried on", subject: SUPPORTER_SECTION_LABELS[section] ?? section, detail: "on the supporter page" };
+  }
+  return null;
+}
+
 /* What an event says about itself, before its page is consulted. Null for an
    event this file has never been taught, which the caller can either describe
    by page (the feed) or name outright (the event lookup, where describing a
@@ -544,11 +584,34 @@ function describeNamedAnalyticsEvent(
   row: AnalyticsRecentEventRow,
   replayMaps?: AnalyticsReplayMapIndex,
 ): AnalyticsActivity | null {
+  const supporter = describeSupporterEvent(row.event);
+  if (supporter) return supporter;
   switch (row.event) {
     case "changelog_open":
       return { kind: "visit", verb: "opened", subject: "the changelog", detail: null };
+    /* The support page and the supporter page: who looks at them and how far
+       they get. Every event here has its own name, so the backend needs no
+       property for it. */
     case "support_open":
-      return { kind: "visit", verb: "opened", subject: "the support box", detail: null };
+      return { kind: "support", verb: "clicked", subject: "Become a supporter", detail: "on the support page" };
+    case "support_google_checkout":
+      return { kind: "support", verb: "opened", subject: "Google's checkout", detail: null };
+    case "support_lava_open":
+      return { kind: "support", verb: "went to pay on", subject: "lava.top", detail: null };
+    case "support_kofi_claimed":
+      return { kind: "support", verb: "claimed", subject: "a Ko-fi payment", detail: null };
+    case "support_lava_claimed":
+      return { kind: "support", verb: "claimed", subject: "a lava.top payment", detail: null };
+    case "support_google_claimed":
+      return { kind: "support", verb: "claimed", subject: "a Google payment", detail: null };
+    case "supporter_preview":
+      return { kind: "support", verb: "opened", subject: "Preview on my profile", detail: null };
+    case "supporter_roll":
+      return { kind: "support", verb: "rolled", subject: "a random look", detail: "on the supporter page" };
+    case "supporter_gift_redeemed":
+      return { kind: "support", verb: "redeemed", subject: "a gift code", detail: null };
+    case "supporter_gift_copied":
+      return { kind: "support", verb: "copied", subject: "their gift link", detail: null };
     /* The dan explainer fires both: the open, and the read once the end of the
        article has been on screen. A visitor who bounced has only the first. */
     case "dan_estimates_view":
@@ -737,6 +800,19 @@ export function describeAnalyticsEvent(
   const scope = formatAnalyticsSelectedScope(row.selectedCountry);
   if (!path || path === "/") return { kind: "visit", verb: "landed on", subject: "the home page", detail: scope };
   if (path === "/maps") return describeMaps(row);
+  if (path === "/support") return { kind: "support", verb: "visited", subject: "the support page", detail: null };
+  if (path === "/supporter") {
+    const section = analyticsUrlParam(row.viewUrl, "s");
+    return { kind: "support", verb: "visited", subject: "the supporter page", detail: section ? SUPPORTER_SECTION_LABELS[section] ?? section : null };
+  }
+  if (path.startsWith("/supporter/themes/")) {
+    return { kind: "support", verb: "opened", subject: "a profile theme", detail: decodeURIComponent(path.slice("/supporter/themes/".length)) || null };
+  }
+  // The code in a gift link is the gift itself, so the line never shows it.
+  if (path.startsWith("/gift/")) return { kind: "support", verb: "opened", subject: "a gift link", detail: null };
+  if (path === "/workshop" || path.startsWith("/workshop/")) {
+    return { kind: "support", verb: "visited", subject: "the workshop", detail: path.slice("/workshop/".length) || null };
+  }
   if (path === "/skins") return describeSkinsList(row);
   if (path.startsWith("/skins/")) {
     return {

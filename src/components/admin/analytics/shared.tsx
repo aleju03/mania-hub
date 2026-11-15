@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Crosshair, Eye, MessagesSquare, Monitor, Package, Palette, Play, Search, Smartphone, Sprout, Trophy, TriangleAlert, User, Users, type LucideIcon } from "lucide-react";
+import { Check, ChevronDown, Crosshair, Eye, Heart, MessagesSquare, Monitor, Package, Palette, Play, Search, Smartphone, Sprout, Trophy, TriangleAlert, User, Users, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CountryFlag } from "../../ui/CountryFlag";
 import { getCountryName } from "../../../lib/country";
@@ -35,6 +35,8 @@ export const ACTIVITY_KIND_STYLES: Record<AnalyticsActivityKind, {
   // Discord's own blurple rather than a theme colour, because that is what the
   // rest of the directory is coloured with.
   community: { label: "Servers", icon: MessagesSquare, text: "text-indigo-300", bg: "bg-indigo-400/12", ring: "ring-indigo-400/30", bar: "bg-indigo-400" },
+  // Rose: the support page's pink without being mistaken for a replay.
+  support: { label: "Support", icon: Heart, text: "text-rose-300", bg: "bg-rose-400/12", ring: "ring-rose-400/30", bar: "bg-rose-300" },
   error: { label: "Errors", icon: TriangleAlert, text: "text-osu-red-light", bg: "bg-osu-red/12", ring: "ring-osu-red/30", bar: "bg-osu-red-light" },
 };
 
