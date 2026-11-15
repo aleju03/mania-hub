@@ -7,6 +7,7 @@ import { cardMotifImageSrc, isPaintedMotif, motifCopyOpacity, type CardMotif } f
 import { SUPPORTER_FOIL_OPACITY, SUPPORTER_FOIL_TINT_OPACITY, supporterFoilDataUrl } from "#/lib/supporter-foil-art";
 import { getCosmicTierPalette as cosmicPaletteFor, motifKeepsStarfield } from "#/lib/maniacard-cosmic";
 import type { CosmicTierPalette } from "#/lib/maniacard-cosmic";
+import { drawFiltered } from "#/lib/canvas";
 import { FROST_GLAZE, rasterSpell, SPELL_TINT } from "#/lib/pack-spell-art";
 
 const FONT = "Tracker Round, Arial, sans-serif";
@@ -314,9 +315,7 @@ function bakeSpell(
     getContext(copy).drawImage(layer, 0, 0);
     withinCard(context, () => {
       context.clearRect(0, 0, width, height);
-      context.filter = SPELL_TINT[spell.kind];
-      context.drawImage(copy, 0, 0);
-      context.filter = "none";
+      drawFiltered(context, SPELL_TINT[spell.kind], (layer) => layer.drawImage(copy, 0, 0));
       if (spell.kind === "frozen" && index === 0) {
         const glaze = context.createLinearGradient(width * 0.59, 0, width * 0.41, height);
         for (const [at, color] of FROST_GLAZE) glaze.addColorStop(at, color);

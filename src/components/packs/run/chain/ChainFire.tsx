@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { drawFiltered } from "#/lib/canvas";
 import { InkFlame, inkFlameLook } from "./InkFlame";
 
 /* The fire on the round score once it passes the target, burning off the
@@ -385,12 +386,11 @@ export function ChainFire({
       // The fuel is the number exactly as drawn (fill and outline) with a hair
       // of blur: wherever the fire starts, the digits sit over it, so no
       // edge of it ever shows.
-      context.save();
-      context.filter = `blur(${Math.max(1, now.size * 0.02)}px)`;
       context.lineWidth = now.stroke;
-      context.strokeText(now.text, x, now.top);
-      context.fillText(now.text, x, now.top);
-      context.restore();
+      drawFiltered(context, `blur(${Math.max(1, now.size * 0.02)}px)`, (layer) => {
+        layer.strokeText(now.text, x, now.top);
+        layer.fillText(now.text, x, now.top);
+      });
       const half = context.measureText(now.text).width / 2;
       span = [(x - half) / CELL, (x + half) / CELL];
       base = now.rows - (now.top - now.size * 0.35) / CELL;

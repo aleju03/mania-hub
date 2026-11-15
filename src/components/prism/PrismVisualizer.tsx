@@ -4,6 +4,7 @@ import { Loader2, Pause, Play, Search, Volume2, VolumeX } from "lucide-react";
 import { explainPrism, type PrismExplanation, type PrismExplainSection } from "#dan/prism/explain";
 import type { PrismPattern } from "#dan/prism/workload";
 import { parseManiaBeatmap } from "#dan/beatmap-parser";
+import { drawFiltered } from "../../lib/canvas";
 import { getBeatmapFile } from "../../lib/osu";
 import { getBeatmapAudioUrl } from "../../lib/audio-url";
 import { fetchLiveMapSearch, loadLiveMapSearchEntry, type LiveMapSearchEntry } from "../../lib/live-backend";
@@ -425,9 +426,7 @@ function tintNote(image: HTMLImageElement, color: string): CanvasImageSource {
   canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) return image;
-  ctx.filter = "grayscale(1) brightness(1.25)";
-  ctx.drawImage(image, 0, 0);
-  ctx.filter = "none";
+  drawFiltered(ctx, "grayscale(1) brightness(1.25)", (layer) => layer.drawImage(image, 0, 0));
   ctx.globalCompositeOperation = "multiply";
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, width, height);

@@ -10,6 +10,8 @@
    The noise comes from the browser's own feTurbulence, rasterized once when
    the spell starts; every frame after that is arithmetic on its pixels. */
 
+import { drawFiltered, filteredCanvas } from "#/lib/canvas";
+
 export type PackSpellKind = "burn" | "freeze";
 
 export interface SpellField {
@@ -147,6 +149,8 @@ export async function createSpellField(kind: PackSpellKind, origin: { u: number;
   const glowCanvas = document.createElement("canvas");
   glowCanvas.width = FIELD_W;
   glowCanvas.height = FIELD_H;
+  // the glow with its blur run, drawn twice
+  const glowBlur = document.createElement("canvas");
   const lineCanvas = document.createElement("canvas");
   lineCanvas.width = FIELD_W;
   lineCanvas.height = FIELD_H;
@@ -254,10 +258,9 @@ export async function createSpellField(kind: PackSpellKind, origin: { u: number;
         glowContext.putImageData(glowPixels, 0, 0);
         lineContext.putImageData(linePixels, 0, 0);
         // the front's glow, twice, under its bright line
-        layerContext.filter = `blur(${(kind === "burn" ? 2.2 : 2.4) * s}px)`;
-        layerContext.drawImage(glowCanvas, 0, 0);
-        layerContext.drawImage(glowCanvas, 0, 0);
-        layerContext.filter = "none";
+        const blurred = filteredCanvas(glowCanvas, `blur(${(kind === "burn" ? 2.2 : 2.4) * s}px)`, glowBlur);
+        layerContext.drawImage(blurred, 0, 0);
+        layerContext.drawImage(blurred, 0, 0);
         layerContext.drawImage(lineCanvas, 0, 0);
       }
       const crackContext = cracks?.getContext("2d");
@@ -266,9 +269,7 @@ export async function createSpellField(kind: PackSpellKind, origin: { u: number;
         sharpContext.putImageData(crackPixels, 0, 0);
         crackContext.clearRect(0, 0, FIELD_W, FIELD_H);
         // a soft glow round each crack, then the crack itself
-        crackContext.filter = `blur(${1.6 * s}px)`;
-        crackContext.drawImage(crackSharp, 0, 0);
-        crackContext.filter = "none";
+        drawFiltered(crackContext, `blur(${1.6 * s}px)`, (layer) => layer.drawImage(crackSharp, 0, 0));
         crackContext.drawImage(crackSharp, 0, 0);
       }
       return layer;

@@ -4,6 +4,7 @@ import { useLingui } from "@lingui/react/macro";
 import { mountFoilSource } from "./FoilPreview";
 import { useWebGlSlot } from "../../lib/gl-budget";
 import { mirrorGlCanvas } from "../../lib/gl-mirror";
+import { drawFiltered } from "../../lib/canvas";
 import { queueGpuWork } from "../../lib/gpu-queue";
 
 /* The gift ticket on /support as a real object: a thick ticket in 3D with its
@@ -128,9 +129,8 @@ function drawFace(ctx: CanvasRenderingContext2D, labels: Labels, font: string, h
   ctx.textBaseline = "alphabetic";
   if (heart) {
     ctx.save();
-    ctx.filter = "brightness(0) invert(1)";
     ctx.globalAlpha = 0.85;
-    ctx.drawImage(heart, left, 120, 56, 56);
+    drawFiltered(ctx, "brightness(0) invert(1)", (layer) => layer.drawImage(heart, left, 120, 56, 56));
     ctx.restore();
   }
   ctx.globalAlpha = 0.85;
@@ -196,10 +196,7 @@ function drawBack(ctx: CanvasRenderingContext2D, labels: Labels, font: string, h
   ctx.shadowColor = "rgba(0,0,0,0.3)";
   ctx.shadowBlur = 16;
   if (heart) {
-    ctx.save();
-    ctx.filter = "brightness(0) invert(1)";
-    ctx.drawImage(heart, FACE_W / 2 - 110, 150, 220, 220);
-    ctx.restore();
+    drawFiltered(ctx, "brightness(0) invert(1)", (layer) => layer.drawImage(heart, FACE_W / 2 - 110, 150, 220, 220));
   }
   ctx.font = `700 50px ${font}`;
   ctx.letterSpacing = "14px";
