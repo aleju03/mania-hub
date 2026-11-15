@@ -43,7 +43,10 @@ precision highp float;
 
 uniform sampler2D u_image;
 uniform float u_time;
-uniform float u_imageAspectRatio;
+// mediump to match Paper's vertex shader, which declares it too: a uniform
+// whose precision differs between the two stages fails to link, and every
+// look but Chrome and Molten gold (Paper's own shader) never drew.
+uniform mediump float u_imageAspectRatio;
 
 in vec2 v_imageUV;
 out vec4 fragColor;

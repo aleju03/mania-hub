@@ -13,9 +13,15 @@ export function ThemeReadabilityPanel({ dim, blur, onLive, onSave }: {
 }) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
-  // /supporter links here with ?adjust=theme to open it straight away
+  // Only when /supporter sent them here (?adjust=theme, which opens it straight
+  // away): it's a tool for setting the theme up, not part of browsing their
+  // own profile.
+  const [requested, setRequested] = useState(false);
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("adjust") === "theme") setOpen(true);
+    if (new URLSearchParams(window.location.search).get("adjust") === "theme") {
+      setRequested(true);
+      setOpen(true);
+    }
   }, []);
   const [draft, setDraft] = useState({ dim, blur });
   const [failed, setFailed] = useState(false);
@@ -54,6 +60,7 @@ export function ThemeReadabilityPanel({ dim, blur, onLive, onSave }: {
     </div>
   );
 
+  if (!requested) return null;
   return (
     <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2">
       {open ? (
