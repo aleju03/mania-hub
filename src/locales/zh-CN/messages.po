@@ -18624,6 +18624,10 @@ msgstr "osu! 没有响应，请一分钟后再试。"
 msgid "osu! has no team with this id."
 msgstr "osu! 上没有这个 ID 的战队。"
 
+#: src/components/layout/OsuOutageBanner.tsx
+msgid "osu! is down right now. New scores, profiles and rankings will catch up once it's back."
+msgstr "osu! 目前无法访问。新成绩、个人资料和排名会在恢复后同步。"
+
 #: src/routes/terms.tsx
 msgid "osu! Login"
 msgstr "osu! 登录"

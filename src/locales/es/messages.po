@@ -18612,6 +18612,10 @@ msgstr "osu! no respondió. Inténtalo de nuevo en un minuto."
 msgid "osu! has no team with this id."
 msgstr "osu! no tiene un equipo con este id."
 
+#: src/components/layout/OsuOutageBanner.tsx
+msgid "osu! is down right now. New scores, profiles and rankings will catch up once it's back."
+msgstr "osu! está caído ahora mismo. Las puntuaciones nuevas, los perfiles y las clasificaciones se pondrán al día cuando vuelva."
+
 #: src/routes/terms.tsx
 msgid "osu! Login"
 msgstr "Inicio de sesión de osu!"

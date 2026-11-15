@@ -8,6 +8,7 @@ import { CustomCursor } from "../components/layout/CustomCursor";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { Nav } from "../components/layout/Nav";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
+import { OsuOutageBanner } from "../components/layout/OsuOutageBanner";
 import { StaleBuildNotice } from "../components/layout/StaleBuildNotice";
 import { GoalToasts } from "../components/me/GoalToasts";
 import { SupporterWelcome } from "../components/supporter/SupporterWelcome";
@@ -611,6 +612,7 @@ function RootLayout() {
               <RouteLoadingBar />
               <main className="relative flex-1 pt-[60px]">
                 <SkinsBackdrop />
+                <OsuOutageBanner />
                 <Outlet />
               </main>
               <GoalToasts />

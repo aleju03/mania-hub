@@ -300,6 +300,7 @@ export const LIVE_EVENT_NAMES = [
   "donation_goal",
   "pack_board",
   "job_status",
+  "osu_status",
 ] as const;
 
 export type LiveEventName = (typeof LIVE_EVENT_NAMES)[number];
@@ -1990,6 +1991,22 @@ export async function fetchCompanellaPresenceDirect(): Promise<CompanellaPresenc
   } catch (error) {
     if (error instanceof LiveBackendRequestError && error.status === 404) return [];
     throw error;
+  }
+}
+
+/* Whether osu! is down, as the backend reads it off its own osu! calls; the
+   outage banner's first answer, then the `osu_status` live event moves it. */
+export interface LiveOsuStatus {
+  down: boolean;
+  since: string | null;
+}
+
+export async function fetchOsuStatusDirect(): Promise<LiveOsuStatus | null> {
+  try {
+    return await fetchLiveJson<LiveOsuStatus>("/api/osu-status");
+  } catch {
+    // An older backend (404) or an unreachable one: no banner.
+    return null;
   }
 }
 
