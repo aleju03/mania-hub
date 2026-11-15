@@ -15444,8 +15444,6 @@ msgid "Marker"
 msgstr "Marker"
 
 #: src/components/supporter/SupporterExtras.tsx
-msgid "Mascot"
-msgstr "Mascot"
 
 #: src/routes/support.tsx
 #~ msgid "Mascots"
@@ -31724,12 +31722,12 @@ msgid "Your subscription keeps up to 3 months banked, and anything past that tur
 msgstr "Your subscription keeps up to 3 months banked, and anything past that turns into gift codes for your friends."
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
-msgid "Your support keeps the servers running and gives me the time to keep building the site."
-msgstr "Your support keeps the servers running and gives me the time to keep building the site."
+msgid "Your support keeps the servers running and new features coming."
+msgstr "Your support keeps the servers running and new features coming."
 
 #: src/routes/supporter.tsx
-msgid "Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks."
-msgstr "Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks."
+msgid "Your support keeps the servers running and new features coming. These extras are the thank-you."
+msgstr "Your support keeps the servers running and new features coming. These extras are the thank-you."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Your supporter time has run out."

@@ -728,7 +728,7 @@ function SupporterPage() {
                         <>
                           <p className="text-[18px] font-semibold text-white">{t`Thank you for supporting, ${viewer.username}.`}</p>
                           <p className="mt-1 text-[13px] text-osu-l2">
-                            {t`Your support pays for the servers and gives me the time to keep working on the site. It means a lot, and these extras are my way of saying thanks.`}
+                            {t`Your support keeps the servers running and new features coming. These extras are the thank-you.`}
                           </p>
                           {state.runStartedAt != null ? (
                             <SupporterRankLadder

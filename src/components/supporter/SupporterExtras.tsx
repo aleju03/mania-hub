@@ -237,7 +237,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
 
   return (
     <section>
-      <h2 className="text-[13px] font-semibold text-white">{t`Mascot`}</h2>
+      <h2 className="text-[13px] font-semibold text-white">{t`Stand`}</h2>
       <p className="mt-1 text-[12px] text-osu-f1">{t`A figure that stands beside your profile's numbers. Drag a 3D one to turn it.`}</p>
       {/* the preview keeps the last one rested on, so it can be dragged */}
       <div className="mt-3 grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)]" onMouseLeave={() => {

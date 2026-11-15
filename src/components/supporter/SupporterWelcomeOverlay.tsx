@@ -358,8 +358,8 @@ export function SupporterWelcomeOverlay({ username, expiresAt, giftFrom, onDone 
           </motion.span>
           {parts.after ? <motion.span {...rise(textAt + 80 + parts.words.length * 85)} className="inline-block whitespace-pre">{parts.after}</motion.span> : null}
         </h2>
-        <motion.p {...rise(textAt + 640, 6)} className="mx-auto m-0 max-w-[680px] text-[14px] leading-[1.55] text-[#d9c5cd] sm:text-[15px]">
-          {giftFrom ? t`${giftFrom} gave you a week of supporter.` : t`Your support keeps the servers running and gives me the time to keep building the site.`}
+        <motion.p {...rise(textAt + 640, 6)} className="mx-auto m-0 max-w-[680px] text-[14px] leading-[1.55] text-[#d9c5cd] [text-wrap:balance] sm:text-[15px]">
+          {giftFrom ? t`${giftFrom} gave you a week of supporter.` : t`Your support keeps the servers running and new features coming.`}
           <br />
           {t`Profile themes, avatar frames, name styles and card foils are all yours now.`}
         </motion.p>
