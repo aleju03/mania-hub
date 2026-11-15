@@ -1940,6 +1940,12 @@ uniform sampler2D u_sprite;
    beat, further the nearer its tip, all leaning downwind when a gust comes
    through. seed tells the palms apart. */
 float palm(vec2 q, vec2 base, float height, float flip, float t, float seed) {
+  // The sprite's gradients, taken here while every pixel is still running: a
+  // texture() after the early returns below gets no derivatives along the
+  // sprite's box, picks a far mip there, and on phone GPUs that drew the box's
+  // outline round each palm.
+  vec2 scale = vec2(flip / (519. / 880.), -1.) / height;
+  vec2 gx = dFdx(q) * scale, gy = dFdy(q) * scale;
   vec2 l = (q - base) / height;
   l.x *= flip;
   if (abs(l.x) > .34 || l.y < 0. || l.y > 1.02) return 0.;
@@ -1961,7 +1967,7 @@ float palm(vec2 q, vec2 base, float height, float flip, float t, float seed) {
   l = d + vec2(0., .705);
   vec2 cell = vec2(.5 + l.x / (519. / 880.), 1. - l.y);
   if (cell.x < 0. || cell.x > 1. || cell.y < 0. || cell.y > 1.) return 0.;
-  return texture(u_sprite, cell).a;
+  return textureGrad(u_sprite, cell, gx, gy).a;
 }
 
 vec3 theme(vec2 uv, vec2 p, float t) {
