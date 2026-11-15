@@ -8,6 +8,7 @@ import { formatGiftCode, useGiftClaimErrorText } from "../components/supporter/G
 import { requestSupporterWelcome } from "../components/supporter/SupporterWelcome";
 import { useAuth } from "../lib/auth-context";
 import { getI18n } from "../lib/i18n";
+import { pageSeo } from "../lib/seo";
 import { claimSupporterGiftCode, peekSupporterGiftCode, type GiftClaimError } from "../lib/supporter-look-settings";
 import { rememberViewerSupporter } from "../lib/viewer-supporter";
 
@@ -16,14 +17,24 @@ import { rememberViewerSupporter } from "../lib/viewer-supporter";
    plays the supporter welcome, as the friend's version. */
 
 export const Route = createFileRoute("/gift/$code")({
-  head: ({ match }) => {
+  // Peeked on the server too, so the link's embed can name who sent it.
+  loader: ({ params }) => peekSupporterGiftCode({ data: { code: params.code } }).catch(() => null),
+  head: ({ match, loaderData }) => {
     const i18n = getI18n(match.context.locale);
-    return {
-      meta: [
-        { title: i18n._(msg`A week of supporter`) },
-        { name: "robots", content: "noindex, nofollow" },
-      ],
-    };
+    const from = loaderData?.from;
+    return pageSeo({
+      // What the gift is stays for the page to tell.
+      title: from ? i18n._(msg`${from} sent you a gift`) : i18n._(msg`Someone sent you a gift`),
+      // An empty description keeps the embed to its title and the drawing.
+      description: "",
+      path: `/gift/${match.params.code}`,
+      origin: match.context.origin,
+      image: "/images/support/gift-embed.png",
+      imageWidth: 1200,
+      imageHeight: 630,
+      appendSiteName: false,
+      noindex: true,
+    });
   },
   component: GiftPage,
 });
@@ -34,13 +45,15 @@ function GiftPage() {
   const { t, i18n } = useLingui();
   const { code } = Route.useParams();
   const viewer = useAuth().viewer;
-  const [peek, setPeek] = useState<Peek>(undefined);
+  const loaded = Route.useLoaderData();
+  const [peek, setPeek] = useState<Peek>(loaded ?? undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GiftClaimError | null>(null);
   const [againAt, setAgainAt] = useState<number | null>(null);
   const [claimed, setClaimed] = useState<{ expiresAt: number | null } | null>(null);
 
   useEffect(() => {
+    if (loaded) return;
     let alive = true;
     peekSupporterGiftCode({ data: { code } })
       .then((next) => alive && setPeek(next))
@@ -48,7 +61,7 @@ function GiftPage() {
     return () => {
       alive = false;
     };
-  }, [code]);
+  }, [code, loaded]);
 
   const claim = async () => {
     setBusy(true);
