@@ -1,4 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { getAppRateLimitClientIp } from "../app-client-ip";
+import { takeReplayDownloadSlot } from "../replay-download-limit";
 import {
   acquireCacheLock,
   fetchBeatmapFileWithMeta,
@@ -113,8 +116,10 @@ async function downloadReplay(
   throw firstError ?? new Error("Failed to download replay");
 }
 
-/** The score's raw .osr: the R2 copy the viewer left behind, else one osu! download. */
-export async function getReplayBuffer(data: { scoreId: number; mode: string }): Promise<Buffer> {
+/** The score's raw .osr: the R2 copy the viewer left behind, else one osu! download.
+    `clientKey` names who asked, so an uncached download counts against that
+    client's hourly ceiling (replay-download-limit.ts); a cached copy never does. */
+export async function getReplayBuffer(data: { scoreId: number; mode: string }, clientKey?: string): Promise<Buffer> {
   const {
     getCachedReplay,
     getCachedReplayEndpointKind,
@@ -123,6 +128,7 @@ export async function getReplayBuffer(data: { scoreId: number; mode: string }): 
   } = await getReplayCacheModule();
   const cached = await getCachedReplay(data.scoreId);
   if (cached) return cached.buffer;
+  if (clientKey) takeReplayDownloadSlot(clientKey);
 
   const preferredEndpointKind = await getCachedReplayEndpointKind(data.scoreId);
   if (!isR2ReplayCacheConfigured()) {
@@ -188,7 +194,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
       const stored = await getJsonArtifact<ParsedReplayResponse>(storageKey);
       if (stored) return stored;
 
-      const buffer = await getReplayBuffer(data);
+      const buffer = await getReplayBuffer(data, getAppRateLimitClientIp(getRequest()));
       const { frames, keyCount, ...replay } = readOsr(buffer).replay;
       const response: ParsedReplayResponse = {
         ...replay,

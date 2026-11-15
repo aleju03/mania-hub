@@ -2223,6 +2223,7 @@ export function PlayerProfilePage({
      as a one-off, and stays his until he picks one. */
   const companion: SupporterCompanion | null = (supporterFrame?.userId === profileUserId ? supporterFrame.companion : null)
     ?? (user.username.toLowerCase() === "sebasrj" ? { builtIn: builtInCompanion("sahur-keycap")! } : null);
+  const showYunarkmTuna = !companion && user.username.toLowerCase() === "yunarkm";
   // The tab strip sits flush on the section edge unless a filter/sort bar
   // follows it, which then needs the breathing room back.
   const hasTabControls = tab === "recent" || (tab === "best" && bestWindowLoaded && shownBest.length > 0);
@@ -2686,7 +2687,7 @@ export function PlayerProfilePage({
 
           {/* The keycap easter egg stands on the rail below and leans into this
               corner, so on narrow screens the numbers step out of its way. */}
-          <div className={`mt-7 grid grid-cols-2 gap-x-6 gap-y-5 sm:mt-9 sm:flex sm:flex-wrap sm:items-end sm:gap-x-12 sm:pr-0 ${companion ? "pr-24" : ""}`}>
+          <div className={`mt-7 grid grid-cols-2 gap-x-6 gap-y-5 sm:mt-9 sm:flex sm:flex-wrap sm:items-end sm:gap-x-12 sm:pr-0 ${companion || showYunarkmTuna ? "pr-24" : ""}`}>
             <HeroStat
               label={t`Global`}
               value={restrictedPpPending ? heroValueSkeleton : shownGlobalRank ? `#${formatNumber(shownGlobalRank)}` : "-"}
@@ -2744,6 +2745,7 @@ export function PlayerProfilePage({
               the numbers with a hairline under them. */}
           <div className="relative flex flex-wrap items-center gap-x-8 gap-y-5 border-b border-osu-b3/25 py-5 sm:gap-x-12">
             {companion && <ProfileCompanion companion={companion} />}
+            {showYunarkmTuna && <YunarkmTuna />}
             <RailStat
               label={t`Accuracy`}
               value={restrictedPpPending
@@ -3265,6 +3267,21 @@ export function PlayerProfilePage({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function YunarkmTuna() {
+  return (
+    <video
+      src="/videos/yunarkm-tuna.mp4"
+      autoPlay
+      loop
+      muted
+      playsInline
+      disablePictureInPicture
+      aria-hidden
+      className="pointer-events-none absolute right-3 bottom-full z-20 h-20 w-20 translate-y-1 rounded-lg object-cover shadow-[0_8px_16px_rgba(0,0,0,0.38)] sm:right-5 sm:h-28 sm:w-28"
+    />
   );
 }
 

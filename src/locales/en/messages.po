@@ -3875,6 +3875,7 @@ msgstr "accuracy"
 #: src/components/team/TeamProfilePage.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/dan-estimates.tsx
+#: src/routes/discord.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/rankings.tsx
 #: src/routes/teams.tsx
@@ -4993,8 +4994,8 @@ msgstr "At the start of each song, removes the charm to its right and gains +{0}
 #~ msgstr "At the time of writing there were skill ratings for 14,385 players on 4K, 4,119 on 7K and 2,879 on 6K. Of the 4K players, 12,974 had enough qualifying passes for a regular dan and 5,038 for an LN dan. This is where the 4K regular estimates landed:"
 
 #: src/routes/dan-estimates.tsx
-msgid "At the time of writing, 12,974 players had a 4K regular dan. This is where they landed:"
-msgstr "At the time of writing, 12,974 players had a 4K regular dan. This is where they landed:"
+#~ msgid "At the time of writing, 12,974 players had a 4K regular dan. This is where they landed:"
+#~ msgstr "At the time of writing, 12,974 players had a 4K regular dan. This is where they landed:"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/replay/ReplayControls.tsx
@@ -6996,6 +6997,7 @@ msgid "client"
 msgstr "client"
 
 #: src/components/replay/ReplayInfo.tsx
+#: src/routes/discord.tsx
 msgid "Client"
 msgstr "Client"
 
@@ -12460,6 +12462,10 @@ msgid "hold to delete"
 msgstr "hold to delete"
 
 #: src/components/me/RemovePlaysSheet.tsx
+msgid "Hold to delete"
+msgstr "Hold to delete"
+
+#: src/components/me/RemovePlaysSheet.tsx
 msgid "Hold to delete everything"
 msgstr "Hold to delete everything"
 
@@ -12484,8 +12490,8 @@ msgid "Hold to recycle every duplicate, worth {recyclable} shards"
 msgstr "Hold to recycle every duplicate, worth {recyclable} shards"
 
 #: src/components/me/RemovePlaysSheet.tsx
-msgid "Hold to remove"
-msgstr "Hold to remove"
+#~ msgid "Hold to remove"
+#~ msgstr "Hold to remove"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Hold to stop tracking"
@@ -12627,6 +12633,10 @@ msgstr "how many players near you have it"
 #: src/routes/recommendations.tsx
 msgid "How recommendations work"
 msgstr "How recommendations work"
+
+#: src/routes/discord.tsx
+msgid "How the pp is worked out"
+msgstr "How the pp is worked out"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "How to pay"
@@ -12979,6 +12989,10 @@ msgstr "in 90d"
 #: src/components/player/ProfileStatCards.tsx
 msgid "In a row, with a play each day"
 msgstr "In a row, with a play each day"
+
+#: src/routes/dan-estimates.tsx
+msgid "In August 2026, 12,974 players had a 4K regular dan. This is where they landed:"
+msgstr "In August 2026, 12,974 players had a 4K regular dan. This is where they landed:"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "In everyone's picker"
@@ -18064,6 +18078,10 @@ msgstr "On 4K jack charts the bonus above the bar is halved, since very high acc
 msgid "On in every channel."
 msgstr "On in every channel."
 
+#: src/routes/discord.tsx
+msgid "on lazer"
+msgstr "on lazer"
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
 msgstr "On low OD charts the hit windows are wide enough that pressing every key on a steady beat still hits most of the notes. Prism now judges that mash against the chart's hit windows, and when a section mashed gets 90% or more while being much easier than reading it, the section is rated as the mash."
@@ -18071,6 +18089,10 @@ msgstr "On low OD charts the hit windows are wide enough that pressing every key
 #: src/components/packs/SetsView.tsx
 msgid "On Showcase"
 msgstr "On Showcase"
+
+#: src/routes/discord.tsx
+msgid "on stable"
+msgstr "on stable"
 
 #: src/components/supporter/SupportPlans.tsx
 msgid "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
@@ -20055,6 +20077,10 @@ msgstr "pp"
 msgid "PP"
 msgstr "PP"
 
+#: src/routes/discord.tsx
+msgid "pp at"
+msgstr "pp at"
+
 #: src/routes/player/$username.tsx
 msgid "PP by keymode"
 msgstr "PP by keymode"
@@ -21552,7 +21578,6 @@ msgstr "Removal failed."
 msgid "remove"
 msgstr "remove"
 
-#: src/components/me/RemovePlaysSheet.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/skins/SkinSettingsModal.tsx
@@ -21725,8 +21750,8 @@ msgid "Removing..."
 msgstr "Removing..."
 
 #: src/components/me/RemovePlaysSheet.tsx
-msgid "Removing…"
-msgstr "Removing…"
+#~ msgid "Removing…"
+#~ msgstr "Removing…"
 
 #: src/components/companella/InstallationList.tsx
 #: src/components/packs/SetsView.tsx
@@ -27791,12 +27816,16 @@ msgid "They're already a GOAT."
 msgstr "They're already a GOAT."
 
 #: src/components/me/RemovePlaysSheet.tsx
+msgid "They're deleted for good from your tracked plays, recent plays and activity on this site."
+msgstr "They're deleted for good from your tracked plays, recent plays and activity on this site."
+
+#: src/components/me/RemovePlaysSheet.tsx
 msgid "They're deleted on {deleteOn}. You can cancel from this page until then."
 msgstr "They're deleted on {deleteOn}. You can cancel from this page until then."
 
 #: src/components/me/RemovePlaysSheet.tsx
-msgid "They're removed from your tracked plays, recent plays and activity on this site."
-msgstr "They're removed from your tracked plays, recent plays and activity on this site."
+#~ msgid "They're removed from your tracked plays, recent plays and activity on this site."
+#~ msgstr "They're removed from your tracked plays, recent plays and activity on this site."
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Thickness"
@@ -30218,6 +30247,10 @@ msgstr "Welcome to supporter, {username}"
 #: src/routes/discord.tsx
 #~ msgid "What {name} posts"
 #~ msgstr "What {name} posts"
+
+#: src/routes/discord.tsx
+msgid "What a play at that accuracy on that client gives, at the speed the post names."
+msgstr "What a play at that accuracy on that client gives, at the speed the post names."
 
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."

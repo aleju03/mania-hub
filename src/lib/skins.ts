@@ -335,13 +335,41 @@ function skinsListCacheMode(): RequestCache | undefined {
   return undefined;
 }
 
+// The list normally answers in milliseconds. A request sent while the backend
+// is frozen (a deploy's build, a cold restart) could otherwise hang for good
+// and leave the grid on skeletons until a manual reload, so each try gives up
+// after this long and the list is asked for once more before the page shows
+// its failed state.
+export const SKINS_LIST_TIMEOUT_MS = 15_000;
+const SKINS_LIST_ATTEMPTS = 2;
+
 export async function fetchSkinsListDirect(params: SkinsListParams, init?: RequestInit): Promise<SkinsListResult> {
   const base = getLiveBackendUrl();
   if (!base) throw new Error("Server is not configured.");
-  const query = skinsListQuery(params);
-  const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { credentials: "omit", cache: skinsListCacheMode(), ...init });
-  if (!response.ok) throw new Error(`Server ${response.status}`);
-  return response.json() as Promise<SkinsListResult>;
+  const url = `${base}/api/skins/list?${skinsListQuery(params).toString()}`;
+  const callerSignal = init?.signal ?? undefined;
+  for (let attempt = 1; ; attempt++) {
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), SKINS_LIST_TIMEOUT_MS);
+    const stopOnCallerAbort = () => timeout.abort();
+    callerSignal?.addEventListener("abort", stopOnCallerAbort);
+    try {
+      if (callerSignal?.aborted) throw new DOMException("Aborted", "AbortError");
+      const response = await fetch(url, { credentials: "omit", cache: skinsListCacheMode(), ...init, signal: timeout.signal });
+      if (!response.ok) throw new Error(`Server ${response.status}`);
+      return await (response.json() as Promise<SkinsListResult>);
+    } catch (error) {
+      // Only a try that ran out of time is repeated; the caller leaving, or a
+      // real error answer, ends it here.
+      const timedOut = timeout.signal.aborted && !callerSignal?.aborted;
+      if (!timedOut || attempt >= SKINS_LIST_ATTEMPTS) {
+        throw timedOut ? new Error("The skins list took too long to answer.") : error;
+      }
+    } finally {
+      clearTimeout(timer);
+      callerSignal?.removeEventListener("abort", stopOnCallerAbort);
+    }
+  }
 }
 
 function skinsListQuery(params: SkinsListParams): URLSearchParams {
@@ -1471,7 +1499,8 @@ export class SkinUploadError extends Error {
     readonly code: string,
     message: string,
     readonly status?: number,
-    // Set on code === "duplicate": the published skin holding these bytes.
+    // Set on code === "duplicate": the published skin holding these bytes; on
+    // "own_repost", the uploader's own skin this upload repeats.
     readonly duplicate?: DuplicateSkinRef | null,
     // Set on code === "rate_limited": how long the backend says to wait. The
     // bulk uploader sleeps exactly that long instead of guessing a pace.
@@ -1660,6 +1689,7 @@ export function uploadErrorMessage(code: string, status?: number): string {
     return "This .osk could not be validated as a mania skin.";
   }
   if (code === "duplicate") return "This exact .osk is already published on the site.";
+  if (code === "own_repost") return "You already published this skin. To ship a new version, use Update file in its settings.";
   if (code === "invalid_image") return "Screenshots must be PNG, JPEG, or WebP images.";
   if (code === "screenshot_limit") return `A skin can have up to ${SKIN_MAX_SCREENSHOTS} screenshots.`;
   if (code === "rate_limited") return "Too many upload requests. Wait a minute and try again.";

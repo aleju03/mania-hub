@@ -355,7 +355,8 @@ export async function publishBulkSkin(
     return skin;
   } catch (error) {
     if (error instanceof BulkUploadCancelled) throw error;
-    if (error instanceof SkinUploadError && error.code === "duplicate") {
+    // A repost of one of the uploader's own skins counts as already here too.
+    if (error instanceof SkinUploadError && (error.code === "duplicate" || error.code === "own_repost")) {
       onUpdate({ phase: "duplicate", message: "Already on the site.", duplicate: error.duplicate ?? null });
       return null;
     }

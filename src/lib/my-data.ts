@@ -40,6 +40,8 @@ export interface MyDataTopPlaysParams extends MyDataFeedFilters {
 export interface MyDataTrackedPlay extends LeanTrackerScore {
   /** The play's stored identity, which removeMyTrackedScores names it by. */
   scoreIdentity?: string;
+  /** On a graveyard or loved map, the only plays that can be removed one at a time. */
+  removable?: boolean;
   archived?: boolean;
   archivedExact?: boolean;
 }

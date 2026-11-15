@@ -1,4 +1,4 @@
-import { Check, X } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
@@ -45,7 +45,7 @@ export function MeScoreRow({
   score: MyDataScoreRow;
   isNew?: boolean;
   ppGain?: number;
-  /** Given when the viewer may remove this play; the × picks it. */
+  /** Given when the viewer may remove this play; the trash button picks it. */
   selected?: boolean;
   onToggleSelected?: () => void;
   /** Opens the map's details; the row is a button when given. */
@@ -148,13 +148,13 @@ export function MeScoreRow({
           aria-pressed={!!selected}
           aria-label={t`Remove play`}
           onClick={onToggleSelected}
-          className={`-mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-[opacity,colors] cursor-pointer ${
+          className={`-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-[opacity,colors] cursor-pointer ${
             selected
               ? "bg-osu-red-light text-osu-b5"
-              : "text-osu-f1 opacity-40 hover:bg-osu-red-light/15 hover:text-osu-red-light hover:opacity-100 group-hover:opacity-100"
+              : "text-osu-f1 opacity-70 hover:bg-osu-red-light/15 hover:text-osu-red-light hover:opacity-100 group-hover:opacity-100"
           }`}
         >
-          {selected ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : <X className="h-3.5 w-3.5" />}
+          {selected ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : <Trash2 className="h-4 w-4" />}
         </button>
       ) : null}
     </div>

@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { buildAttachmentContentDisposition } from "#/lib/content-disposition";
 import { sanitizeReplayFilename } from "#/lib/replay-share";
 import { REPLAY_FILE_MISSING_ERROR } from "#/lib/replay-score-availability";
+import { getAppRateLimitClientIp } from "#/lib/app-client-ip";
+import { ReplayDownloadLimitError } from "#/lib/replay-download-limit";
 
 // The .osr behind the replay viewer's Download button: a score's cached copy
 // (the one the viewer itself parsed) or an uploaded file. Uploads are
@@ -46,9 +48,15 @@ export const Route = createFileRoute("/api/replay-file")({
         const scoreId = Number(scoreIdParam);
         const { getReplayBuffer } = await import("#/lib/osu/replay");
         try {
-          const buffer = await getReplayBuffer({ scoreId, mode: "mania" });
+          const buffer = await getReplayBuffer({ scoreId, mode: "mania" }, getAppRateLimitClientIp(request));
           return osrResponse(buffer, sanitizeReplayFilename(name || `${scoreId}.osr`));
         } catch (error) {
+          if (error instanceof ReplayDownloadLimitError) {
+            return new Response("Too many replay downloads from this connection, try again later", {
+              status: 429,
+              headers: { "Cache-Control": "no-store", "Retry-After": String(Math.ceil(error.retryAfterMs / 1000)) },
+            });
+          }
           const missing = error instanceof Error && error.message === REPLAY_FILE_MISSING_ERROR;
           return errorResponse(missing ? "osu! has no replay file for this score" : "Replay download failed", missing ? 404 : 502);
         }
