@@ -86,11 +86,16 @@ void main() {
   for (int i = 0; i < 100; i++) {
     float fi = float(i) * step;
     if (fi > reach) break;
+    // The falloff only shrinks from here and the mask is at most 1, so once
+    // it is no more than the best found nothing further down can win: stop
+    // (the same picture, a fraction of the lookups).
+    float falloff = 1.0 - smoothstep(0.0, colLen, fi / reach);
+    if (falloff <= best) break;
     // Slow, wide curls, more the further it gets from the glyphs.
     float drift = (fbm(vec2(p.x * 0.03, (p.y - fi) * 0.03 - t * 0.8)) - 0.5) * fi * 0.7;
     float m = texture2D(u_mask, (p - vec2(drift, fi)) / u_res).a;
     // Rounded tips: the falloff eases out instead of a straight ramp.
-    best = max(best, m * (1.0 - smoothstep(0.0, colLen, fi / reach)));
+    best = max(best, m * falloff);
   }
   float v = 0.0;
   if (best > 0.0) {

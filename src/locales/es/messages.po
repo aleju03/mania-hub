@@ -3005,11 +3005,11 @@ msgstr "24 h"
 #. placeholder {0}: CHAIN_SCENE_NUMBERS.handRowMultiplier
 #: src/lib/chain-run.ts
 msgid "3 cards in a row that share a trait make a hand, and its links trigger 3 times. Every hand after the first gives the row x{0}."
-msgstr "3 cartas seguidas que comparten un rasgo forman una mano, y sus enlaces se activan 3 veces. Cada mano después de la primera le da x{0} a la fila."
+msgstr "3 cartas seguidas que comparten un rasgo forman una jugada, y sus enlaces se activan 3 veces. Cada jugada después de la primera le da x{0} a la fila."
 
 #: src/lib/chain-run.ts
 msgid "3 cards sharing a trait make a hand."
-msgstr "3 cartas con un rasgo en común forman una mano."
+msgstr "3 cartas con un rasgo en común forman una jugada."
 
 #: src/routes/top-plays.tsx
 msgid "3 days"
@@ -10074,8 +10074,8 @@ msgstr "Todas las velocidades de un mapa"
 #. placeholder {1}: CHAIN_SCENE_NUMBERS.forgottenCombo
 #. placeholder {2}: CHAIN_SCENE_NUMBERS.starTimesTarget
 #: src/lib/chain-run.ts
-msgid "Every round you clear without going past {0}x the target gives every row +{1} starting combo. Go past {2}x and she leaves, and you lose all of it."
-msgstr "Cada ronda que pases sin superar {0}x el objetivo le da +{1} de combo inicial a todas las filas. Si pasas de {2}x, se va y pierdes todo."
+msgid "Every round you clear without going past {0}x the target gives every row +{1} starting combo. Go past {2}x in a round and she leaves, taking all that combo with her."
+msgstr "Cada ronda que pases sin superar {0}x el objetivo le da +{1} de combo inicial a todas las filas. Si en una ronda pasas de {2}x, se va y se lleva todo ese combo."
 
 #: src/lib/chain-run.ts
 msgid "Every row makes the next ones stronger."
@@ -10089,6 +10089,11 @@ msgstr "Cada fila se juega dos veces."
 #: src/lib/chain-run.ts
 msgid "Every row with no breaks adds x{0} to her for the rest of the run, and she multiplies every row."
 msgstr "Cada fila sin breaks le suma x{0} por el resto de la partida, y ella multiplica cada fila."
+
+#. placeholder {0}: CHAIN_CONTRACTS.shortRowMax
+#: src/lib/chain-run.ts
+msgid "Every row you play has {0} cards or fewer."
+msgstr "Cada fila que juegues tiene {0} cartas o menos."
 
 #: src/lib/chain-run.ts
 msgid "Every row you play has 6 cards."
@@ -11203,6 +11208,10 @@ msgstr "Cuatro teclas"
 msgid "Four maps per row"
 msgstr "Cuatro mapas por fila"
 
+#: src/lib/chain-run.ts
+msgid "Four traits"
+msgstr "Cuatro rasgos"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "fps"
 msgstr "fps"
@@ -11896,7 +11905,7 @@ msgstr "Hand"
 
 #: src/components/packs/run/chain/ChainScoring.tsx
 msgid "HAND"
-msgstr "MANO"
+msgstr "JUGADA"
 
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Hand busy"
@@ -14209,6 +14218,11 @@ msgstr "texto del enlace"
 #: src/routes/discord.tsx
 msgid "Link this account"
 msgstr "Vincular esta cuenta"
+
+#. placeholder {0}: CHAIN_CONTRACTS.linkTraits
+#: src/lib/chain-run.ts
+msgid "Link two cards that share {0} traits."
+msgstr "Enlaza dos cartas que compartan {0} rasgos."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Link URL (optional)"
@@ -18063,6 +18077,10 @@ msgstr "Una copia para un amigo. Te quedas con {remaining}."
 #~ msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 #~ msgstr "Un nivel de dan es amplio, así que cada uno se divide en cinco escalones. Un chart puede ser 7--, 7-, 7, 7+ o 7++, del extremo más fácil del 7º dan al más difícil. Esos sufijos ordenan dentro de un nivel, nada más."
 
+#: src/lib/chain-run.ts
+msgid "One flag"
+msgstr "Una bandera"
+
 #: src/components/supporter/SupportPlans.tsx
 msgid "One for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
 msgstr "Uno para un amigo cada tres meses, además del que trae cada $4. El tiempo que pase de 3 meses por adelantado se convierte en más códigos en vez de acumularse."
@@ -19514,6 +19532,11 @@ msgstr "Reproducir"
 #: src/lib/chain-run.ts
 msgid "Play a 6-card row with no breaks."
 msgstr "Juega una fila de 6 cartas sin cortes."
+
+#. placeholder {0}: CHAIN_CONTRACTS.flagCards
+#: src/lib/chain-run.ts
+msgid "Play a row of {0} or more cards from one country."
+msgstr "Juega una fila de {0} cartas o más de un mismo país."
 
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Play added"
@@ -23539,6 +23562,10 @@ msgstr "Brillo"
 #: src/components/packs/run/RunTally.tsx
 msgid "Shop"
 msgstr "Tienda"
+
+#: src/lib/chain-run.ts
+msgid "Short rows"
+msgstr "Filas cortas"
 
 #: src/lib/chain-run.ts
 msgid "Short rows score x3."
@@ -28714,7 +28741,7 @@ msgstr "Triángulos"
 #. placeholder {0}: link.fires
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Triggers {0} times in a hand."
-msgstr "Se activa {0} veces en una mano."
+msgstr "Se activa {0} veces en una jugada."
 
 #: src/lib/pack-run.ts
 msgid "Trill"

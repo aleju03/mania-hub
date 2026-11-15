@@ -78,6 +78,9 @@ export interface CardTextureSet {
   avatarLoaded: boolean;
   /** Set only when this card floats a motif and its image actually loaded. */
   motif: PreparedCardMotif | null;
+  /** Ember's char and its glowing edge as alpha, so the overlay keeps its
+      foil off the burnt part; null on any other card. */
+  spellMask: CanvasTexture | null;
   layout: FaceLayout;
   dispose: () => void;
 }
@@ -246,6 +249,7 @@ export async function createCardTextures(
      which is what tells the shader to keep drifting triangles or stars. */
   const preparedMotif = data.motif && motif ? prepareCardMotif(data.motif, motif, paintedMotif) : null;
   const contentTexture = contentCanvas ? toTexture(contentCanvas) : null;
+  const spellMask = data.spell?.kind === "burnt" && spellDrawing ? toTexture(spellDrawing) : null;
 
   return {
     frontTexture,
@@ -268,11 +272,13 @@ export async function createCardTextures(
     backReady,
     avatarLoaded: avatar !== null,
     motif: preparedMotif,
+    spellMask,
     layout,
     dispose: () => {
       disposed = true;
       frontTexture.dispose();
       contentTexture?.dispose();
+      spellMask?.dispose();
       backTexture.dispose();
       preparedMotif?.texture.dispose();
     },

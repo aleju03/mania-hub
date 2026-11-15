@@ -38,6 +38,9 @@ import {
   isChainStartDeck,
 } from "../../backend/src/shared/chain-run";
 import { honoraryPlayerById } from "./honorary-players";
+import { displayCountryName } from "./country";
+import type { AppLocale } from "./locale";
+import { getRegionDef } from "./regions";
 import { liveBridgeToken } from "./live-backend-tokens";
 
 /* The chain run on this side: the server functions behind its table and the
@@ -422,10 +425,16 @@ export const CHAIN_TRAIT_WORD: Record<ChainTrait, MessageDescriptor> = {
   skill: msg`Skillset`,
 };
 
+/* A region's name in the reader's language, from the same table the
+   country picker uses; English when the table has no entry. */
+function regionWord(code: string, i18n: I18n): string {
+  return getRegionDef(code) ? displayCountryName(code, i18n.locale as AppLocale) : chainRegionName(code);
+}
+
 /* A card's region by name, from its country ("South America"). */
-export function chainRegionOf(card: Pick<ChainCard, "cc" | "chart">): string | null {
+export function chainRegionOf(card: Pick<ChainCard, "cc" | "chart">, i18n: I18n): string | null {
   const code = card.chart || !card.cc ? null : chainRegionCode(card.cc);
-  return code ? chainRegionName(code) : null;
+  return code ? regionWord(code, i18n) : null;
 }
 
 /* A dan's bare label as people say it: "Dan 10", "Gamma". */
@@ -436,7 +445,7 @@ export function chainDanName(dan: string): string {
 /* A link trait's value in words: a region's name, a dan without its
    keymode, a rarity's label; anything else as it is. */
 export function chainTraitValueText(trait: string, value: string, i18n: I18n): string {
-  if (trait === "region") return chainRegionName(value);
+  if (trait === "region") return regionWord(value, i18n);
   if (trait === "dan") return chainDanName(value.replace(/^\d+K /, ""));
   if (trait === "tier" && isChainTier(value)) return i18n._(CHAIN_TIER_LABEL[value]);
   if (trait === "skill" && value.startsWith(CHAIN_SKILL2_MARK)) return value.slice(CHAIN_SKILL2_MARK.length);
@@ -562,7 +571,7 @@ export const CHAIN_SCENE_COPY: Record<ChainSceneId, { short: MessageDescriptor; 
   },
   forgotten: {
     short: msg`Stay under ${CHAIN_SCENE_NUMBERS.starTimesTarget}x the target for more combo.`,
-    text: msg`Every round you clear without going past ${CHAIN_SCENE_NUMBERS.starTimesTarget}x the target gives every row +${CHAIN_SCENE_NUMBERS.forgottenCombo} starting combo. Go past ${CHAIN_SCENE_NUMBERS.starTimesTarget}x and she leaves, and you lose all of it.`,
+    text: msg`Every round you clear without going past ${CHAIN_SCENE_NUMBERS.starTimesTarget}x the target gives every row +${CHAIN_SCENE_NUMBERS.forgottenCombo} starting combo. Go past ${CHAIN_SCENE_NUMBERS.starTimesTarget}x in a round and she leaves, taking all that combo with her.`,
   },
   future: {
     short: msg`3 cards sharing a trait make a hand.`,
@@ -665,6 +674,9 @@ export const CHAIN_CONTRACT_COPY: Record<ChainContractId, { name: MessageDescrip
   noRedraw: { name: msg`No redraws`, rule: msg`Clear without redrawing.` },
   fullHouse: { name: msg`Full house`, rule: msg`Every row you play has 6 cards.` },
   perfect: { name: msg`Perfect chain`, rule: msg`Play a 6-card row with no breaks.` },
+  oneFlag: { name: msg`One flag`, rule: msg`Play a row of ${CHAIN_CONTRACTS.flagCards} or more cards from one country.` },
+  shortRows: { name: msg`Short rows`, rule: msg`Every row you play has ${CHAIN_CONTRACTS.shortRowMax} cards or fewer.` },
+  fourTraits: { name: msg`Four traits`, rule: msg`Link two cards that share ${CHAIN_CONTRACTS.linkTraits} traits.` },
 };
 
 /* The signed contract mid-round: how it reads now. "met" when it would pay
@@ -683,7 +695,7 @@ export function chainContractState(
         ? `${Math.floor((roundScore / Math.max(1, target)) * 10) / 10}x/${CHAIN_CONTRACTS.overkill}x`
         : null;
   if (lost && !(id === "quick" && track.rows === CHAIN_CONTRACTS.quickRows)) return { state: "lost", progress };
-  if (id === "perfect" || id === "overkill") return { state: chainContractMet(id, track, roundScore, target) ? "met" : "on", progress };
+  if (id === "perfect" || id === "overkill" || id === "oneFlag" || id === "fourTraits") return { state: chainContractMet(id, track, roundScore, target) ? "met" : "on", progress };
   return { state: "on", progress };
 }
 

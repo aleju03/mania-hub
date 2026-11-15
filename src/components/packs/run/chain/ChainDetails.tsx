@@ -214,7 +214,7 @@ function CardDetails({ entry }: { entry: ChainCardInstance }) {
       </div>
       {!card.chart && !card.goat && (
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] font-bold text-white/75">
-          {chainRegionOf(entry.card) && <span>{chainRegionOf(entry.card)}</span>}
+          {chainRegionOf(entry.card, i18n) && <span>{chainRegionOf(entry.card, i18n)}</span>}
           {entry.card.dan && (
             <>
               <span aria-hidden="true" className="h-3 w-px bg-white/25" />

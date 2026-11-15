@@ -48,6 +48,9 @@ uniform float uFlagRadius;
 // The pack run's edition on this copy: 0 none, 1 foil, 2 holo, 3 polychrome.
 // Laid over everything, the portrait included, and lit even on a common card.
 uniform float uEdition;
+// Ember's char (alpha), where no foil plays: burnt card is not shiny.
+uniform sampler2D uSpellMask;
+uniform float uSpellMaskOn;
 varying vec2 vUv;
 
 float roundedRectMaskPx(vec2 uv, vec4 rectUv, float radiusPx, vec2 textureSize) {
@@ -564,6 +567,7 @@ void main() {
     color = mix(color, edColor, edWeight);
     alpha = max(alpha, clamp(edAlpha * uIntensity, 0.0, 0.62) * mask);
   }
+  if (uSpellMaskOn > 0.5) alpha *= 1.0 - texture2D(uSpellMask, vUv).a;
   gl_FragColor = vec4(color, alpha);
 }
 `;

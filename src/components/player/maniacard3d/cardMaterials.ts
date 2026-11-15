@@ -87,6 +87,8 @@ export function createOverlayMaterial(
      in grid cells. Null keeps the tier's own drifting layer, which is what
      every un-granted card wants. */
   motif: PreparedCardMotif | null = null,
+  /* Ember's char as alpha (cardTexture.ts): no foil where the card burnt. */
+  spellMask: Texture | null = null,
 ) {
   const avatar = layout.masks.avatar;
   const flag = layout.masks.flag;
@@ -125,6 +127,8 @@ export function createOverlayMaterial(
       uAvatarRadius: { value: layout.front.avatar.radius },
       uFlagMask: { value: flag ? textureRectUv(flag.rect) : new Vector4(-1, -1, 0, 0) },
       uFlagRadius: { value: flag?.radius ?? 0 },
+      uSpellMask: { value: spellMask ?? getEmptyMotifTexture() },
+      uSpellMaskOn: { value: spellMask ? 1 : 0 },
       uEdition: { value: data.edition === "foil" ? 1 : data.edition === "holo" ? 2 : data.edition === "polychrome" ? 3 : 0 },
     },
   });

@@ -281,7 +281,7 @@ export class ManiaCardRenderer {
 
     this.overlay = new Mesh(
       createCardFaceGeometry(),
-      createOverlayMaterial(data, textures.layout, this.quality.shaderQuality, textures.motif),
+      createOverlayMaterial(data, textures.layout, this.quality.shaderQuality, textures.motif, textures.spellMask),
     );
     this.overlay.position.z = OVERLAY_Z_OFFSET;
     // A setSupporterFoil that came in while the textures were painting wins.

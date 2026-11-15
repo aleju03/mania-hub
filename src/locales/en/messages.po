@@ -10105,8 +10105,15 @@ msgstr "Every rate of a chart"
 #. placeholder {1}: CHAIN_SCENE_NUMBERS.forgottenCombo
 #. placeholder {2}: CHAIN_SCENE_NUMBERS.starTimesTarget
 #: src/lib/chain-run.ts
-msgid "Every round you clear without going past {0}x the target gives every row +{1} starting combo. Go past {2}x and she leaves, and you lose all of it."
-msgstr "Every round you clear without going past {0}x the target gives every row +{1} starting combo. Go past {2}x and she leaves, and you lose all of it."
+#~ msgid "Every round you clear without going past {0}x the target gives every row +{1} starting combo. Go past {2}x and she leaves, and you lose all of it."
+#~ msgstr "Every round you clear without going past {0}x the target gives every row +{1} starting combo. Go past {2}x and she leaves, and you lose all of it."
+
+#. placeholder {0}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#. placeholder {1}: CHAIN_SCENE_NUMBERS.forgottenCombo
+#. placeholder {2}: CHAIN_SCENE_NUMBERS.starTimesTarget
+#: src/lib/chain-run.ts
+msgid "Every round you clear without going past {0}x the target gives every row +{1} starting combo. Go past {2}x in a round and she leaves, taking all that combo with her."
+msgstr "Every round you clear without going past {0}x the target gives every row +{1} starting combo. Go past {2}x in a round and she leaves, taking all that combo with her."
 
 #: src/lib/chain-run.ts
 msgid "Every row makes the next ones stronger."
@@ -10120,6 +10127,11 @@ msgstr "Every row plays twice."
 #: src/lib/chain-run.ts
 msgid "Every row with no breaks adds x{0} to her for the rest of the run, and she multiplies every row."
 msgstr "Every row with no breaks adds x{0} to her for the rest of the run, and she multiplies every row."
+
+#. placeholder {0}: CHAIN_CONTRACTS.shortRowMax
+#: src/lib/chain-run.ts
+msgid "Every row you play has {0} cards or fewer."
+msgstr "Every row you play has {0} cards or fewer."
 
 #: src/lib/chain-run.ts
 msgid "Every row you play has 6 cards."
@@ -11233,6 +11245,10 @@ msgstr "Four Keys"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Four maps per row"
 msgstr "Four maps per row"
+
+#: src/lib/chain-run.ts
+msgid "Four traits"
+msgstr "Four traits"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "fps"
@@ -14248,6 +14264,11 @@ msgstr "link text"
 #: src/routes/discord.tsx
 msgid "Link this account"
 msgstr "Link this account"
+
+#. placeholder {0}: CHAIN_CONTRACTS.linkTraits
+#: src/lib/chain-run.ts
+msgid "Link two cards that share {0} traits."
+msgstr "Link two cards that share {0} traits."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Link URL (optional)"
@@ -18102,6 +18123,10 @@ msgstr "One copy for a friend. You keep {remaining}."
 #~ msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 #~ msgstr "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 
+#: src/lib/chain-run.ts
+msgid "One flag"
+msgstr "One flag"
+
 #: src/components/supporter/SupportPlans.tsx
 msgid "One for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
 msgstr "One for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up."
@@ -19553,6 +19578,11 @@ msgstr "Play"
 #: src/lib/chain-run.ts
 msgid "Play a 6-card row with no breaks."
 msgstr "Play a 6-card row with no breaks."
+
+#. placeholder {0}: CHAIN_CONTRACTS.flagCards
+#: src/lib/chain-run.ts
+msgid "Play a row of {0} or more cards from one country."
+msgstr "Play a row of {0} or more cards from one country."
 
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "Play added"
@@ -23578,6 +23608,10 @@ msgstr "Shine"
 #: src/components/packs/run/RunTally.tsx
 msgid "Shop"
 msgstr "Shop"
+
+#: src/lib/chain-run.ts
+msgid "Short rows"
+msgstr "Short rows"
 
 #: src/lib/chain-run.ts
 msgid "Short rows score x3."

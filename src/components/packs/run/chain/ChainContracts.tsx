@@ -75,6 +75,26 @@ function ContractIcon({ id, size, ink }: { id: ChainContractId; size: number; in
           <path d="M5 19 H19" {...stroke} strokeWidth={1.6} />
         </>
       )}
+      {id === "oneFlag" && (
+        <>
+          <path d="M6 21 V3.5" {...stroke} />
+          <path d="M6 4.5 C9 3 11 6.5 14 5.5 C16 4.8 17.5 4.2 19 4.6 V12.6 C17.5 12.2 16 12.8 14 13.5 C11 14.5 9 11 6 12.5" {...stroke} />
+        </>
+      )}
+      {id === "shortRows" && (
+        <>
+          {[0, 1, 2, 3].map((col) => <rect key={col} x={2.5 + col * 5} y={8} width={3.8} height={5.6} rx={0.8} {...stroke} strokeWidth={1.7} />)}
+          <path d="M2.5 18.5 H20" {...stroke} strokeWidth={1.6} />
+          <path d="M17.5 16 L20 18.5 L17.5 21" {...stroke} strokeWidth={1.6} />
+        </>
+      )}
+      {id === "fourTraits" && (
+        <>
+          <ellipse cx={8.5} cy={12} rx={5.5} ry={3.6} {...stroke} />
+          <ellipse cx={15.5} cy={12} rx={5.5} ry={3.6} {...stroke} />
+          {[4.5, 9.5, 14.5, 19.5].map((x) => <circle key={x} cx={x} cy={19.5} r={1.3} fill={ink} />)}
+        </>
+      )}
     </svg>
   );
 }
