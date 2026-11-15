@@ -6,6 +6,7 @@ import { BeatmapStatusBadge } from "../ui/BeatmapStatusBadge";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { StarRatingBadge, starTextColor, stripKeymodePrefix } from "./SearchCard";
 import { formatDuration } from "../../lib/format";
+import { useSongText } from "../../lib/original-titles";
 
 // The map detail modal's header, diff tabs and stats line.
 
@@ -78,6 +79,7 @@ function StarSlot({ stars }: { stars: DetailStars }) {
 // status in its corner, the chart's strongest skillset rating bottom-right.
 // Shorter on phones so the MSD panel stays in view below it.
 export function MapDetailHeader({ entry, active, cover, stars, status, tiles, rating, onClose }: MapDetailHeaderProps) {
+  const song = useSongText(entry.beatmapsetId, { title: entry.title, artist: entry.artist });
   return (
     <div className="relative h-[136px] shrink-0 sm:h-[164px]">
       {/* The cover dissolves into the panel; the title's shade fades
@@ -93,9 +95,9 @@ export function MapDetailHeader({ entry, active, cover, stars, status, tiles, ra
       <CloseButton onClose={onClose} />
       <div className="absolute inset-x-0 bottom-0 flex items-end gap-4 px-4 pb-3">
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-[22px] font-extrabold leading-tight sm:text-[24px] text-white drop-shadow-md">{entry.title}</h2>
+          <h2 className="truncate text-[22px] font-extrabold leading-tight sm:text-[24px] text-white drop-shadow-md">{song.title}</h2>
           <p className="flex min-w-0 items-center gap-2.5 text-[13px] leading-tight text-white/75">
-            <span className="truncate">{entry.artist}</span>
+            <span className="truncate">{song.artist}</span>
             {entry.creator ? (
               <>
                 <Hairline />

@@ -1598,6 +1598,10 @@ msgid "{forNextPass} wait for the next rating pass."
 msgstr "{forNextPass} esperan el próximo cálculo."
 
 #: src/routes/gift.$code.tsx
+msgid "{from} sent you a gift"
+msgstr "{from} te envió un regalo"
+
+#: src/routes/gift.$code.tsx
 msgid "{from} sent you a week of supporter"
 msgstr "{from} te mandó una semana de supporter"
 
@@ -3768,8 +3772,8 @@ msgid "A week for a friend"
 msgstr "Una semana para un amigo"
 
 #: src/routes/gift.$code.tsx
-msgid "A week of supporter"
-msgstr "Una semana de supporter"
+#~ msgid "A week of supporter"
+#~ msgstr "Una semana de supporter"
 
 #: src/routes/recommendations.tsx
 msgid "a while"
@@ -18599,6 +18603,10 @@ msgstr "Orden"
 msgid "Order number from the receipt"
 msgstr "Número de pedido del recibo"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Original song titles"
+msgstr "Títulos originales de las canciones"
+
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
 msgid "osu! Assets And Data"
@@ -23915,6 +23923,10 @@ msgid "Shows player dans without low, mid or high, and counts a low dan as the o
 msgstr "Muestra los dans de los jugadores sin low, mid o high, y cuenta un dan low como el anterior"
 
 #: src/components/settings/SettingsPanel.tsx
+msgid "Shows song titles and artists in their original language instead of romanized"
+msgstr "Muestra los títulos y artistas en su idioma original en vez de romanizados"
+
+#: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
 #~ msgstr "Muestra el MSD LN de 4K, el eje LN y el dan LN de 4K en Skills"
 
@@ -24667,6 +24679,10 @@ msgstr "Alguien ya reclamó este regalo."
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Someone reported your server and it got taken down for the following reason{said}"
 msgstr "Alguien reportó tu servidor y fue retirado por la siguiente razón{said}"
+
+#: src/routes/gift.$code.tsx
+msgid "Someone sent you a gift"
+msgstr "Alguien te envió un regalo"
 
 #: src/routes/gift.$code.tsx
 msgid "Someone sent you a week of supporter"

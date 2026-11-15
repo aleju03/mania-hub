@@ -20,6 +20,7 @@ import { MapDetailModal } from "../maps/MapDetailModal";
 import { ReplayChip } from "../ui/ReplayChip";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
+import { SongTitle } from "../../lib/original-titles";
 
 const SKILL_PLAYS_PAGE_SIZE = 50;
 
@@ -468,7 +469,7 @@ function SkillPlayRow({
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-[13px] font-semibold text-osu-l1 group-hover:text-white sm:text-sm">
-            {play.title}
+            <SongTitle beatmapsetId={play.beatmapsetId} title={play.title} />
             <span className="ml-1.5 text-[11px] font-normal text-osu-f1">[{play.version}]</span>
           </span>
           <span className="flex shrink-0 items-center"><PlayModBadges play={play} size={0.75} /></span>

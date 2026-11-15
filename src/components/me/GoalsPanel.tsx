@@ -51,6 +51,7 @@ import {
 import type { I18n, MessageDescriptor } from "@lingui/core";
 import type { OsuBeatmap, OsuBeatmapset } from "../../lib/types";
 import { scaledPx } from "#/lib/ui-scale-values";
+import { SetTitle, SetArtist } from "../../lib/original-titles";
 
 const ICONS = {
   beatmapsets: "/images/icons/beatmapsets.svg",
@@ -1515,7 +1516,7 @@ function MapSearchRow({
           <img src={listCover(pickedSet)} alt="" className="h-10 w-16 shrink-0 rounded-md object-cover" loading="lazy" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[12.5px] font-bold text-white">
-              {pickedSet.artist} - {pickedSet.title}
+              <SetArtist set={pickedSet} /> - <SetTitle set={pickedSet} />
             </div>
             <div className="text-[10.5px] font-semibold text-osu-f1">{t`Choose a mania difficulty`}</div>
           </div>
@@ -1561,9 +1562,9 @@ function MapSearchRow({
               <button key={set.id} type="button" onClick={() => onPickSet(set)} className="flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left transition-colors hover:bg-osu-b3/35">
                 <img src={listCover(set)} alt="" className="h-10 w-16 shrink-0 rounded object-cover" loading="lazy" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12.5px] font-bold text-white">{set.title}</span>
+                  <span className="block truncate text-[12.5px] font-bold text-white"><SetTitle set={set} /></span>
                   <span className="block truncate text-[10.5px] text-osu-f1">
-                    {set.artist} · <Plural value={diffs.length} one="# mania diff" other="# mania diffs" />
+                    <SetArtist set={set} /> · <Plural value={diffs.length} one="# mania diff" other="# mania diffs" />
                   </span>
                 </span>
               </button>

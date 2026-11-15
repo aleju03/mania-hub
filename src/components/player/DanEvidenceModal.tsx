@@ -28,6 +28,7 @@ import type { MapDetailPlayContext } from "../maps/MapDetailModal";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 import { useLocale } from "../../lib/locale-context";
 import { useWholeDans } from "../../store";
+import { SongTitle } from "../../lib/original-titles";
 
 // The dan chip's accent per side; decorative only, identity stays on the text.
 const SIDE_COLOR: Record<"rc" | "ln", string> = { rc: "#e0b04c", ln: "#f07474" };
@@ -955,7 +956,7 @@ function PendingRow({
       <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-osu-f1">{position}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[12px] font-semibold text-osu-l1 group-hover:text-white">
-          {play.title}
+          <SongTitle beatmapsetId={play.beatmapsetId} title={play.title} />
           <span className="ml-1.5 text-[10px] font-normal text-osu-f1">[{play.version}]</span>
         </span>
         {/* A phone has no hover for the title tooltip and no room for a
@@ -1010,7 +1011,7 @@ function CredentialRow({
     >
       <span className="w-4 shrink-0 text-right text-[10px] leading-none" style={{ color }} aria-hidden>{passed ? "✓" : ""}</span>
       <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-osu-l1 group-hover:text-white">
-        {credential.title}
+        <SongTitle beatmapsetId={credential.beatmapsetId} title={credential.title} />
         <span className="ml-1.5 text-[10px] font-normal text-osu-f1">[{credential.version}]</span>
       </span>
       <span
@@ -1083,7 +1084,7 @@ function ClearRow({
     >
       <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-osu-f1">{position}</span>
       <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-osu-l1 group-hover:text-white">
-        {play.title}
+        <SongTitle beatmapsetId={play.beatmapsetId} title={play.title} />
         <span className="ml-1.5 text-[10px] font-normal text-osu-f1">[{play.version}]</span>
       </span>
       <span className="flex shrink-0 items-center"><PlayModBadges play={play} size={0.75} /></span>

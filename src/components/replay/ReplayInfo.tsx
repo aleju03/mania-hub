@@ -13,6 +13,7 @@ import type { ManiaBeatmap } from "#/lib/beatmap-parser";
 import type { ServerReplay } from "#/lib/replay-types";
 import type { OsuMod, OsuScore } from "#/lib/types";
 import { scaledPx } from "#/lib/ui-scale-values";
+import { SongTitle } from "../../lib/original-titles";
 
 // Avatar + banner resolved from the replay's player so the info bar carries the
 // player's identity instead of a bare name. Seeded from the score's embedded
@@ -171,10 +172,10 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
               {beatmap ? (
                 mapUrl ? (
                   <a href={mapUrl} target="_blank" rel="noopener noreferrer" className={`min-w-0 truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>
-                    {beatmap.title} [{beatmap.version}]
+                    <SongTitle beatmapsetId={beatmapsetId} title={beatmap.title} /> [{beatmap.version}]
                   </a>
                 ) : (
-                  <div className={`min-w-0 truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
+                  <div className={`min-w-0 truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}><SongTitle beatmapsetId={beatmapsetId} title={beatmap.title} /> [{beatmap.version}]</div>
                 )
               ) : (
                 <div className="min-w-0 truncate text-xs font-semibold text-osu-l2">{t`Replay loaded`}</div>
@@ -279,11 +280,11 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
               <div className="flex items-center gap-2 min-w-0">
                 {mapUrl ? (
                   <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="min-w-0 truncate text-[15px] font-semibold text-white transition-colors hover:text-osu-pink-light [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]" title={`${beatmap.title} [${beatmap.version}]`}>
-                    {beatmap.title} <span className="font-medium text-white/75">[{beatmap.version}]</span>
+                    <SongTitle beatmapsetId={beatmapsetId} title={beatmap.title} /> <span className="font-medium text-white/75">[{beatmap.version}]</span>
                   </a>
                 ) : (
                   <div className="min-w-0 truncate text-[15px] font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]" title={`${beatmap.title} [${beatmap.version}]`}>
-                    {beatmap.title} <span className="font-medium text-white/75">[{beatmap.version}]</span>
+                    <SongTitle beatmapsetId={beatmapsetId} title={beatmap.title} /> <span className="font-medium text-white/75">[{beatmap.version}]</span>
                   </div>
                 )}
                 {stars != null && <StarRatingBadge stars={stars} className="shrink-0" size={1.2} />}

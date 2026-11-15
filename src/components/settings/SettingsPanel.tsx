@@ -95,7 +95,7 @@ import {
   writeCursorSettings,
 } from "../../lib/cursor";
 import type { CursorSettings } from "../../lib/cursor";
-import { useAppStore, useChangelogNotify, useMapsFourPerRow, useNoDans, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings, useWholeDans, useWholeMapDans } from "../../store";
+import { useAppStore, useChangelogNotify, useMapsFourPerRow, useNoDans, useOriginalTitles, usePacksRevealAll, usePacksSkipAnimations, useRecentPlayRatings, useWholeDans, useWholeMapDans } from "../../store";
 import { markChangelogSeen } from "../../lib/changelog";
 import { Switch } from "../ui/Switch";
 import { SETTINGS_TABS as TABS, type SettingsTabId } from "./settings-tabs";
@@ -1243,6 +1243,8 @@ function PreferencesPanel() {
   const setRecentPlayRatings = useAppStore((state) => state.setRecentPlayRatings);
   const mapsFourPerRow = useMapsFourPerRow();
   const setMapsFourPerRow = useAppStore((state) => state.setMapsFourPerRow);
+  const originalTitles = useOriginalTitles();
+  const setOriginalTitles = useAppStore((state) => state.setOriginalTitles);
   const changelogNotify = useChangelogNotify();
   const setChangelogNotify = useAppStore((state) => state.setChangelogNotify);
   const hiddenUsers = useAppStore((state) => state.hiddenUsers);
@@ -1349,6 +1351,15 @@ function PreferencesPanel() {
             </div>
           </div>
           <Switch checked={mapsFourPerRow} onChange={setMapsFourPerRow} label={t`Four maps per row`} />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-semibold text-osu-l1"><Trans>Original song titles</Trans></div>
+            <div className="text-[11px] text-osu-f1">
+              <Trans>Shows song titles and artists in their original language instead of romanized</Trans>
+            </div>
+          </div>
+          <Switch checked={originalTitles} onChange={setOriginalTitles} label={t`Original song titles`} />
         </div>
         <div className="flex items-center justify-between gap-3">
           <div>

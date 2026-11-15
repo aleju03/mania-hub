@@ -39,6 +39,7 @@ import { CountryWarming } from "../components/CountryWarming";
 import { LiveBackendRequired, LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { useWindowActive } from "../lib/window-activity";
+import { SetTitle } from "../lib/original-titles";
 
 type PopOff = CountryTopPlay;
 
@@ -873,11 +874,11 @@ function PopOffsPage() {
                               className="text-xs text-osu-l2 truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
                               title={t`Open beatmap on osu!`}
                             >
-                              {p.score.beatmapset?.title}
+                              <SetTitle set={p.score.beatmapset} />
                             </a>
                           ) : (
                             <span className="text-xs text-osu-l2 truncate">
-                              {p.score.beatmapset?.title}
+                              <SetTitle set={p.score.beatmapset} />
                             </span>
                           )}
                           <span className="text-[11px] text-osu-f1 truncate">

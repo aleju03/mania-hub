@@ -7,6 +7,7 @@ import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTime
 import type { LeanTrackerScore } from "../../lib/types";
 import { useLingui } from "@lingui/react/macro";
 import { useLocale } from "../../lib/locale-context";
+import { SetArtist } from "../../lib/original-titles";
 
 export type MyDataScoreRow = LeanTrackerScore & { archived?: boolean; archivedExact?: boolean };
 
@@ -109,7 +110,7 @@ export function MeScoreRow({
           <span className="hidden min-w-0 shrink-[3] truncate text-[10px] text-osu-f1 md:inline">[{score.beatmap?.version}]</span>
         </div>
         <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] text-osu-f1 sm:text-[10px]">
-          {score.beatmapset?.artist ? <span className="max-w-44 truncate">{score.beatmapset.artist}</span> : null}
+          {score.beatmapset?.artist ? <span className="max-w-44 truncate"><SetArtist set={score.beatmapset} /></span> : null}
           {keys ? <span className="rounded bg-osu-b3/35 px-1 py-0.5 font-bold text-osu-yellow">{keys}</span> : null}
           {score.archived && mods.length === 0 ? (
             <span>{score.archivedExact ? t`archived` : t`archived summary`}</span>

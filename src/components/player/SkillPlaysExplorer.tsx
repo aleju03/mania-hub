@@ -73,6 +73,7 @@ import {
   reverseCycleModFilterMode,
   type ModFilterState,
 } from "#/lib/mod-filter";
+import { SongTitle, SongArtist } from "../../lib/original-titles";
 
 const PLAYS_COHORT_SIZE = 200;
 const PLAYS_REVEAL_STEP = 50;
@@ -1945,12 +1946,12 @@ function PlayRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="min-w-0 truncate text-xs font-semibold text-white sm:text-sm">{play.title}</span>
+          <span className="min-w-0 truncate text-xs font-semibold text-white sm:text-sm"><SongTitle beatmapsetId={play.beatmapsetId} title={play.title} /></span>
           <span className="hidden min-w-0 shrink-[3] truncate text-[10px] text-osu-f1 md:inline">[{play.version}]</span>
         </div>
         <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] text-osu-f1 sm:text-[10px]">
           <span className="max-w-44 truncate">
-            {play.artist}<span className="md:hidden"> · [{play.version}]</span>
+            <SongArtist beatmapsetId={play.beatmapsetId} artist={play.artist} /><span className="md:hidden"> · [{play.version}]</span>
           </span>
           <span className="rounded bg-osu-b3/35 px-1 py-0.5 font-bold text-osu-yellow">{play.keyCount}K</span>
           {badge}

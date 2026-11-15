@@ -44,6 +44,7 @@ import { usePlayVideo, useScoreVideo } from "../../lib/score-videos";
 import type { OsuScore } from "../../lib/types";
 import { getTrackedPlayRank } from "../../lib/tracked-play-score";
 import { useLocale } from "../../lib/locale-context";
+import { SetArtist, SongArtist } from "../../lib/original-titles";
 
 /* The profile's play rows and play popup, shared with pages that list plays
    the same way (the Companella page's imports). */
@@ -202,7 +203,7 @@ export function TrackedScoreRow({
             {video ? <VideoMark video={video} /> : null}
           </div>
           <span className="text-[11px] text-osu-f1">
-            {play.artist}
+            <SongArtist beatmapsetId={play.beatmapsetId} artist={play.artist} />
             {play.playedAt && (
               <>
                 {" "}&middot;{" "}
@@ -359,7 +360,7 @@ export function ScoreRow({
         </div>
         <span className="glow-room block truncate text-[11px] text-osu-f1">
           {player ? <><UsernameText username={player.username} avatarUrl={player.avatar_url} className="font-semibold text-osu-l2" /> &middot;{" "}</> : null}
-          {score.beatmapset?.artist} &middot;{" "}
+          <SetArtist set={score.beatmapset} /> &middot;{" "}
           {/* Fresh scores are minutes old, so this half drifts between SSR and
               hydration; the artist name stays hydration-checked. */}
           {/* pointer-events-auto opts this one span back into hit testing: the
@@ -612,7 +613,7 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
                   <DanBadge score={score} />
                 </div>
                 <div className="mt-0.5 truncate text-[11px] text-osu-f1">
-                  {score.beatmapset?.artist}
+                  <SetArtist set={score.beatmapset} />
                   {getScoreDisplayVersion(score) ? ` · [${getScoreDisplayVersion(score)}]` : ""}
                   {score.beatmapset?.creator ? ` · ${t`mapped by ${score.beatmapset.creator}`}` : ""}
                 </div>

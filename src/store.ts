@@ -316,6 +316,7 @@ interface AppState {
   packsRevealAll: boolean;
   recentPlayRatings: boolean;
   mapsFourPerRow: boolean;
+  originalTitles: boolean;
   changelogNotify: boolean;
   hiddenUsers: Record<number, HiddenUser>;
   avatarAccents: Record<string, CachedAvatarAccent>;
@@ -346,6 +347,7 @@ interface AppState {
   setPacksRevealAll: (revealAll: boolean) => void;
   setRecentPlayRatings: (show: boolean) => void;
   setMapsFourPerRow: (four: boolean) => void;
+  setOriginalTitles: (original: boolean) => void;
   setChangelogNotify: (notify: boolean) => void;
   addHiddenUser: (user: HiddenUser) => void;
   removeHiddenUser: (userId: number) => void;
@@ -609,6 +611,7 @@ export const useAppStore = create<AppState>()(
       packsRevealAll: false,
       recentPlayRatings: false,
       mapsFourPerRow: false,
+      originalTitles: false,
       changelogNotify: false,
       hiddenUsers: initialClientHiddenUsers,
       avatarAccents: initialClientAvatarAccents,
@@ -653,6 +656,7 @@ export const useAppStore = create<AppState>()(
       setPacksRevealAll: (revealAll) => set({ packsRevealAll: revealAll }),
       setRecentPlayRatings: (show) => set({ recentPlayRatings: show }),
       setMapsFourPerRow: (four) => set({ mapsFourPerRow: four }),
+      setOriginalTitles: (original) => set({ originalTitles: original }),
       setChangelogNotify: (notify) => set({ changelogNotify: notify }),
       addHiddenUser: (user) =>
         set((state) => {
@@ -1036,6 +1040,9 @@ export const useAppStore = create<AppState>()(
           mapsFourPerRow: typeof nextState.mapsFourPerRow === "boolean"
             ? nextState.mapsFourPerRow
             : currentState.mapsFourPerRow,
+          originalTitles: typeof nextState.originalTitles === "boolean"
+            ? nextState.originalTitles
+            : currentState.originalTitles,
           changelogNotify: typeof nextState.changelogNotify === "boolean"
             ? nextState.changelogNotify
             : currentState.changelogNotify,
@@ -1103,6 +1110,7 @@ export const useAppStore = create<AppState>()(
         packsRevealAll: state.packsRevealAll,
         recentPlayRatings: state.recentPlayRatings,
         mapsFourPerRow: state.mapsFourPerRow,
+        originalTitles: state.originalTitles,
         changelogNotify: state.changelogNotify,
         // themeHue is persisted separately via THEME_HUE_STORAGE_KEY so a
         // QuotaExceededError on this big blob (common on mobile Safari) can't
@@ -1249,6 +1257,14 @@ export function useMapsFourPerRow(): boolean {
   const four = useAppStore((state) => state.mapsFourPerRow);
   const hydrated = useHasHydrated();
   return hydrated && four;
+}
+
+// Song titles and artists in their own language (osu!'s title_unicode).
+// Same hydration rule as useNoDans: server and first paint show romanized.
+export function useOriginalTitles(): boolean {
+  const original = useAppStore((state) => state.originalTitles);
+  const hydrated = useHasHydrated();
+  return hydrated && original;
 }
 
 export function useChangelogNotify(): boolean {

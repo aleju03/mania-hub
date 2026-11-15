@@ -26,6 +26,7 @@ import { getCommunityBeatmapAssetUrl } from "#/lib/community-beatmap-assets";
 import { searchPlayersOnOsu } from "#/lib/player-search";
 import type { BeatmapScoreLookupStatus, OsuBeatmap, OsuBeatmapset, OsuScore } from "#/lib/types";
 import { UsernameText } from "../ui/UsernameText";
+import { SetTitle, SetArtist } from "../../lib/original-titles";
 
 export type ReplayBrowseMode = "player" | "beatmap" | "side-by-side" | "upload";
 
@@ -860,7 +861,7 @@ function PlayerScoreSections({
                   <img src={score.beatmapset.covers.list} alt="" className="h-8 w-12 flex-shrink-0 rounded object-cover" loading="lazy" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-white">{score.beatmapset?.title}</div>
+                  <div className="truncate text-sm font-medium text-white"><SetTitle set={score.beatmapset} /></div>
                   <div className="flex min-w-0 items-center gap-2">
                     <div className="truncate text-[10px] text-osu-f1">[{score.beatmap?.version}] {score.beatmap?.cs && `${score.beatmap.cs}K`}</div>
                     <ScoreModBadges score={score} className="hidden shrink-0 gap-0.5 sm:flex" hideWhenEmpty />
@@ -1138,8 +1139,8 @@ function PlayerBeatmapLookup({
                 )}
                 <div className="relative px-4 py-2.5">
                   <div className="mb-1.5">
-                    <div className="text-sm font-medium text-white truncate">{beatmapset.title}</div>
-                    <div className="text-[10px] text-osu-f1 truncate">{beatmapset.artist} // {beatmapset.creator}</div>
+                    <div className="text-sm font-medium text-white truncate"><SetTitle set={beatmapset} /></div>
+                    <div className="text-[10px] text-osu-f1 truncate"><SetArtist set={beatmapset} /> // {beatmapset.creator}</div>
                   </div>
                   {maniaDiffs.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
@@ -1375,8 +1376,8 @@ function BeatmapReplayBrowser({
                 <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/75 to-black/50" />
                 <div className="relative z-10 px-4 py-3">
                   <div className="mb-2">
-                    <div className="text-sm font-semibold text-white truncate drop-shadow-sm">{beatmapset.title}</div>
-                    <div className="text-[10px] text-white/60 truncate">{beatmapset.artist} // {beatmapset.creator}</div>
+                    <div className="text-sm font-semibold text-white truncate drop-shadow-sm"><SetTitle set={beatmapset} /></div>
+                    <div className="text-[10px] text-white/60 truncate"><SetArtist set={beatmapset} /> // {beatmapset.creator}</div>
                   </div>
                   {maniaDiffs.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">

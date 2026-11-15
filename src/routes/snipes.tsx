@@ -32,6 +32,7 @@ import { useWindowActive } from "../lib/window-activity";
 import { useAuth } from "../lib/auth-context";
 import { AddScoreModal } from "../components/player/AddScoreModal";
 import { ScorePlayDetailModal } from "../components/player/ScorePlayDetailModal";
+import { SetTitle, SetArtist } from "../lib/original-titles";
 
 type KeyFilter = SnipesKeyFilter;
 type RangeFilter = SnipesRange;
@@ -935,14 +936,14 @@ function SnipeRow({
                       className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
                       title={t`Open beatmap on osu!`}
                     >
-                      {event.beatmapset.title}
+                      <SetTitle set={event.beatmapset} />
                     </a>
                   ) : (
-                    <span className="text-xs text-white truncate">{event.beatmapset.title}</span>
+                    <span className="text-xs text-white truncate"><SetTitle set={event.beatmapset} /></span>
                   )}
                   <span className="text-[10px] text-osu-f1 truncate">[{event.beatmap.version}]</span>
                 </div>
-                <div className="text-[10px] text-osu-f1 truncate">{event.beatmapset.artist}</div>
+                <div className="text-[10px] text-osu-f1 truncate"><SetArtist set={event.beatmapset} /></div>
               </div>
             </div>
             <div className="flex flex-shrink-0 items-center gap-1.5">

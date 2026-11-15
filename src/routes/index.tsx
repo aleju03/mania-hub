@@ -35,6 +35,7 @@ import { mergeRestrictedPpRanking, useRestrictedPpRankings } from "../lib/restri
 import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
 import { useWindowActive } from "../lib/window-activity";
+import { SongTitle } from "../lib/original-titles";
 
 // The SSR paint is what crawlers index, so the loader fills the top-players
 // panel with real rows server-side instead of skeletons. Both sources sit
@@ -898,7 +899,7 @@ function HomePage() {
                   </div>
                   <div className="mt-3 w-full max-w-[26ch] space-y-1">
                     <div className="text-[11px] text-osu-f1 leading-relaxed line-clamp-2">
-                      {p.score.title}
+                      <SongTitle beatmapsetId={p.score.beatmapsetId} title={p.score.title} />
                     </div>
                     <div className="text-[10px] text-osu-f1/80 leading-relaxed line-clamp-2">
                       [{p.score.version}]

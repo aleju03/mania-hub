@@ -3233,6 +3233,7 @@ function FarmedCard({
       coverUrl={map.covers["card@2x"] ?? map.covers.card}
       keyLabel={`${map.cs}K`}
       status={map.status}
+      beatmapsetId={map.beatmapsetId}
       title={map.title}
       artist={map.artist}
       onOpen={onOpenDetails}
@@ -3321,6 +3322,7 @@ function MostPlayedCard({
       coverUrl={map.covers["card@2x"] ?? map.covers.card}
       keyLabel={kc ? `${kc}K` : null}
       status={map.status}
+      beatmapsetId={map.beatmapsetId}
       title={map.title}
       artist={map.artist}
       onOpen={onOpenDetails}
@@ -3368,6 +3370,7 @@ function FavouriteCard({
     <MapCardFrame
       coverUrl={fav.covers["card@2x"] ?? fav.covers.card}
       status={fav.status}
+      beatmapsetId={fav.beatmapsetId}
       title={fav.title}
       artist={fav.artist}
       onOpen={onOpenDetails}

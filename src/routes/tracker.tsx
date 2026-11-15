@@ -56,6 +56,7 @@ import { CountryWarming } from "../components/CountryWarming";
 import { LiveBackendRequired, LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { useWindowActive } from "../lib/window-activity";
+import { SetTitle } from "../lib/original-titles";
 
 const TRACKER_PAGE_SIZE = 45;
 const TRACKER_LIVE_MIN_SNAPSHOT_LIMIT = TRACKER_PAGE_SIZE * 2;
@@ -1827,10 +1828,10 @@ const MultiFeedCard = memo(function MultiFeedCard({
                   className="text-sm font-semibold text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
                   title={t`Open beatmap on osu!`}
                 >
-                  {sample.beatmapset?.title}
+                  <SetTitle set={sample.beatmapset} />
                 </a>
               ) : (
-                <span className="text-sm font-semibold text-white truncate">{sample.beatmapset?.title}</span>
+                <span className="text-sm font-semibold text-white truncate"><SetTitle set={sample.beatmapset} /></span>
               )}
               <span className="text-[10px] text-osu-f1 truncate hidden sm:inline">[{sample.beatmap?.version}]</span>
               {keymodeLabel && (
@@ -1892,10 +1893,10 @@ const MultiFeedCard = memo(function MultiFeedCard({
                       className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
                       title={t`Open beatmap on osu!`}
                     >
-                      {roundSample.beatmapset?.title}
+                      <SetTitle set={roundSample.beatmapset} />
                     </a>
                   ) : (
-                    <span className="text-xs text-white truncate">{roundSample.beatmapset?.title}</span>
+                    <span className="text-xs text-white truncate"><SetTitle set={roundSample.beatmapset} /></span>
                   )}
                   <span className="text-[10px] text-osu-f1 truncate">[{roundSample.beatmap?.version}]</span>
                   {roundKeymode && (
@@ -2066,10 +2067,10 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                     className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
                     title={t`Open beatmap on osu!`}
                   >
-                    {score.beatmapset?.title}
+                    <SetTitle set={score.beatmapset} />
                   </a>
                 ) : (
-                  <span className="text-xs text-white truncate">{score.beatmapset?.title}</span>
+                  <span className="text-xs text-white truncate"><SetTitle set={score.beatmapset} /></span>
                 )}
                 <span className="text-[11px] text-osu-f1 truncate">[{getScoreDisplayVersion(score)}]</span>
               </div>

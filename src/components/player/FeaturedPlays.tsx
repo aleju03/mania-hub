@@ -24,6 +24,7 @@ import {
   type ProfilePlaySort,
 } from "#/lib/profile-plays";
 import { fetchProfilePlayChoices, fetchProfilePlayPreview } from "#/lib/supporter-look-settings";
+import { SongTitle, SongArtist } from "../../lib/original-titles";
 
 /* A supporter's own play in place of the newest or oldest top play
    (lib/profile-plays.ts): the same card, under their title, with the number
@@ -79,8 +80,8 @@ export function FeaturedPlayCard({ entry, link = true, onOpen }: { entry: Profil
       <div className="relative flex h-full items-center gap-3 p-4">
         <div className="min-w-0 flex-1">
           <div className="truncate text-[9px] font-semibold uppercase tracking-[0.18em] text-osu-pink-light/80">{entry.title}</div>
-          <div className="mt-1.5 truncate text-[15px] font-bold text-white">{play.title}</div>
-          <div className="truncate text-[10px] text-white/55">{play.artist} [{play.version}]</div>
+          <div className="mt-1.5 truncate text-[15px] font-bold text-white"><SongTitle beatmapsetId={play.beatmapsetId} title={play.title} /></div>
+          <div className="truncate text-[10px] text-white/55"><SongArtist beatmapsetId={play.beatmapsetId} artist={play.artist} /> [{play.version}]</div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <GradeImg grade={play.rank} size={18} />
             {play.mods.map((mod) => <ModBadge key={mod} mod={mod} />)}

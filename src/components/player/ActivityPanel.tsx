@@ -44,6 +44,7 @@ import { buildActivityMapScore, type TrackedPlayViewer } from "../../lib/tracked
 import { ScorePlayDetailModal } from "./ScorePlayDetailModal";
 import { getModDisplayList } from "../../lib/score";
 import { ModBadge } from "../ui/ModBadge";
+import { SongTitle, SongArtist } from "../../lib/original-titles";
 
 type ActivityDay = {
   date: string;
@@ -1312,9 +1313,9 @@ function ActivityMapRow({ map, onOpen }: { map: ActivityPlayedMap; onOpen?: () =
     <>
       <ActivityMapCover map={map} />
       <div className="min-w-0">
-        <div className="truncate text-sm font-bold text-white">{map.title}</div>
+        <div className="truncate text-sm font-bold text-white"><SongTitle beatmapsetId={map.beatmapsetId} title={map.title} /></div>
         <div className="truncate text-[11px] text-osu-f1">
-          {map.artist} <span className="text-osu-l2">[{map.version}]</span>
+          <SongArtist beatmapsetId={map.beatmapsetId} artist={map.artist} /> <span className="text-osu-l2">[{map.version}]</span>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-osu-f1">
           {map.keyCount ? <span className="font-semibold text-osu-l2">{map.keyCount}K</span> : null}

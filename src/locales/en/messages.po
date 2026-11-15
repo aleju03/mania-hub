@@ -1621,6 +1621,10 @@ msgid "{forNextPass} wait for the next rating pass."
 msgstr "{forNextPass} wait for the next rating pass."
 
 #: src/routes/gift.$code.tsx
+msgid "{from} sent you a gift"
+msgstr "{from} sent you a gift"
+
+#: src/routes/gift.$code.tsx
 msgid "{from} sent you a week of supporter"
 msgstr "{from} sent you a week of supporter"
 
@@ -3791,8 +3795,8 @@ msgid "A week for a friend"
 msgstr "A week for a friend"
 
 #: src/routes/gift.$code.tsx
-msgid "A week of supporter"
-msgstr "A week of supporter"
+#~ msgid "A week of supporter"
+#~ msgstr "A week of supporter"
 
 #: src/routes/recommendations.tsx
 msgid "a while"
@@ -18645,6 +18649,10 @@ msgstr "Order"
 msgid "Order number from the receipt"
 msgstr "Order number from the receipt"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Original song titles"
+msgstr "Original song titles"
+
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
 msgid "osu! Assets And Data"
@@ -23965,6 +23973,10 @@ msgid "Shows player dans without low, mid or high, and counts a low dan as the o
 msgstr "Shows player dans without low, mid or high, and counts a low dan as the one below it"
 
 #: src/components/settings/SettingsPanel.tsx
+msgid "Shows song titles and artists in their original language instead of romanized"
+msgstr "Shows song titles and artists in their original language instead of romanized"
+
+#: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
 #~ msgstr "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
 
@@ -24721,6 +24733,10 @@ msgstr "Someone already claimed this gift."
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Someone reported your server and it got taken down for the following reason{said}"
 msgstr "Someone reported your server and it got taken down for the following reason{said}"
+
+#: src/routes/gift.$code.tsx
+msgid "Someone sent you a gift"
+msgstr "Someone sent you a gift"
 
 #: src/routes/gift.$code.tsx
 msgid "Someone sent you a week of supporter"

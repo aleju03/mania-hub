@@ -18,6 +18,7 @@ import { DAN_SKILLSET_META } from "../../lib/skill-axes";
 
 // Pattern presentation now lives in lib/pattern-labels (see the note there);
 // re-exported here because the maps surfaces import it from the card.
+import { useSongText } from "../../lib/original-titles";
 import { PATTERN_COLOR, PATTERN_LABEL, usePatternLabel } from "../../lib/pattern-labels";
 export { PATTERN_COLOR, PATTERN_LABEL, PATTERN_LABEL_MSG, patternLabel, usePatternLabel } from "../../lib/pattern-labels";
 
@@ -394,6 +395,7 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
       coverUrl={mapCoverUrl(entry)}
       keyLabel={keyModeLabel(model.diffs)}
       status={entry.status}
+      beatmapsetId={entry.beatmapsetId}
       title={entry.title}
       artist={entry.artist}
       seam={model.mix.length > 0 ? <MixSeam model={model} /> : undefined}
@@ -433,6 +435,7 @@ export function MapCardFrame({
   coverUrl,
   keyLabel,
   status,
+  beatmapsetId,
   title,
   artist,
   coverOverlay,
@@ -443,6 +446,8 @@ export function MapCardFrame({
   coverUrl: string;
   keyLabel?: string | null;
   status?: string | null;
+  /** Looks up the title and artist in their own language when the reader asked for that. */
+  beatmapsetId?: number | null;
   title: string;
   artist: string;
   /** Drawn over the art, under the corner badges (the farmed tab's mod glyph). */
@@ -453,6 +458,7 @@ export function MapCardFrame({
   children: ReactNode;
 }) {
   const { t } = useLingui();
+  const song = useSongText(beatmapsetId, { title, artist });
   const clickable = !!onOpen;
   return (
     <div
@@ -491,8 +497,8 @@ export function MapCardFrame({
           {status ? <BeatmapStatusBadge status={status} /> : null}
         </div>
         <div className={`absolute left-3.5 right-3.5 ${seam ? "bottom-2.5" : "bottom-1"}`}>
-          <div className="truncate text-[16px] font-extrabold leading-tight text-white drop-shadow-md">{title}</div>
-          <div className="truncate text-[12px] leading-tight text-white/70">{artist}</div>
+          <div className="truncate text-[16px] font-extrabold leading-tight text-white drop-shadow-md">{song.title}</div>
+          <div className="truncate text-[12px] leading-tight text-white/70">{song.artist}</div>
         </div>
       </div>
       {seam}

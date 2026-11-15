@@ -1610,6 +1610,10 @@ msgid "{forNextPass} wait for the next rating pass."
 msgstr "{forNextPass} 个成绩等待下一轮评分。"
 
 #: src/routes/gift.$code.tsx
+msgid "{from} sent you a gift"
+msgstr "{from} 送了你一份礼物"
+
+#: src/routes/gift.$code.tsx
 msgid "{from} sent you a week of supporter"
 msgstr "{from} 送了你一周的支持者"
 
@@ -3780,8 +3784,8 @@ msgid "A week for a friend"
 msgstr "送朋友一周"
 
 #: src/routes/gift.$code.tsx
-msgid "A week of supporter"
-msgstr "一周支持者"
+#~ msgid "A week of supporter"
+#~ msgstr "一周支持者"
 
 #: src/routes/recommendations.tsx
 msgid "a while"
@@ -18611,6 +18615,10 @@ msgstr "排序"
 msgid "Order number from the receipt"
 msgstr "收据上的订单号"
 
+#: src/components/settings/SettingsPanel.tsx
+msgid "Original song titles"
+msgstr "原文歌曲标题"
+
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
 msgid "osu! Assets And Data"
@@ -23927,6 +23935,10 @@ msgid "Shows player dans without low, mid or high, and counts a low dan as the o
 msgstr "玩家段位不显示 low、mid、high，low 段位按低一级的段位显示"
 
 #: src/components/settings/SettingsPanel.tsx
+msgid "Shows song titles and artists in their original language instead of romanized"
+msgstr "以原文显示歌曲标题和艺术家，而不是罗马音"
+
+#: src/components/settings/SettingsPanel.tsx
 #~ msgid "Shows the 4K LN MSD, LN axis and 4K LN dan on skills"
 #~ msgstr "在技能页显示 4K LN MSD、LN 轴和 4K LN 段位"
 
@@ -24679,6 +24691,10 @@ msgstr "这份礼物已被别人领取。"
 #: src/components/communities/CommunityStatusNote.tsx
 msgid "Someone reported your server and it got taken down for the following reason{said}"
 msgstr "有人举报了你的服务器，它已因以下原因被下架{said}"
+
+#: src/routes/gift.$code.tsx
+msgid "Someone sent you a gift"
+msgstr "有人送了你一份礼物"
 
 #: src/routes/gift.$code.tsx
 msgid "Someone sent you a week of supporter"

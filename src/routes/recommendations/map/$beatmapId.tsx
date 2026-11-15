@@ -18,6 +18,7 @@ import { pageSeo } from "../../../lib/seo";
 import { useNoDans } from "../../../store";
 import { useMapDanLabel, type MapDanLabel } from "../../../lib/use-map-dan-label";
 import { msdHeadline } from "#dan/msd-headline";
+import { SetTitle } from "../../../lib/original-titles";
 
 type FarmMapContext = {
   beatmapsetId?: number;
@@ -285,7 +286,7 @@ function FarmMapDetailPage() {
                     {farmContext?.keyMode ? <ContextBadge>{farmContext.keyMode.toUpperCase()}</ContextBadge> : null}
                   </div>
                   <h1 className="truncate text-2xl font-black text-osu-c1 sm:text-3xl">
-                    {beatmapset.title}
+                    <SetTitle set={beatmapset} />
                   </h1>
                   <div className="mt-1 truncate text-sm font-medium text-osu-f1">
                     <Trans>{beatmapset.artist} / mapped by {beatmapset.creator}</Trans>

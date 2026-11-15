@@ -23,7 +23,6 @@ function EtternaMark({ className }: { className?: string }) {
 const CLASSIC_LOGO_SRC = "/images/favicon-256.png";
 const CLASSIC_LOGO_FILTER = "hue-rotate(calc((var(--theme-hue) - 333) * 1deg)) saturate(var(--theme-sat))";
 
-const WORD_HEIGHT = 14;
 const BURST_COUNT = 7;
 
 // A handful of the destination's shapes thrown off the coin on a flip: the
@@ -85,7 +84,10 @@ function MethodCoin({ keyCount, className }: { keyCount: number; className: stri
   const hovering = useRef(false);
   const leanToward = (from: OverallMethod) => lean.set(hovering.current && !reduceMotion ? (from === "classic" ? -0.09 : 0.09) : 0);
   const scale = useTransform(progress, (value) => 1 + Math.sin(Math.min(1, Math.max(0, value)) * Math.PI) * 0.22);
-  const wordY = useTransform(progress, (value) => -value * WORD_HEIGHT);
+  // Each word rolls by its own height, not a fixed pixel step: browsers that
+  // scale text (Android font size, zoom settings) shrink the line with it.
+  const etternaY = useTransform(progress, (value) => `${-value * 100}%`);
+  const legacyY = useTransform(progress, (value) => `${(1 - value) * 100}%`);
   useEffect(() => {
     if (reduceMotion) progress.jump(classic ? 1 : 0);
     else progress.set(classic ? 1 : 0);
@@ -155,11 +157,11 @@ function MethodCoin({ keyCount, className }: { keyCount: number; className: stri
           <Burst key={burst.id} to={burst.to} onDone={() => setBursts((current) => current.filter((entry) => entry.id !== burst.id))} />
         ))}
       </motion.span>
-      <span className="block overflow-hidden text-[11px] font-semibold uppercase leading-[14px] tracking-wide" style={{ height: WORD_HEIGHT }}>
-        <motion.span className="block" style={{ y: wordY }}>
-          <span className="block text-[#b89be0] transition-[filter] group-hover:brightness-125">{t`Etterna`}</span>
-          <span className="block text-osu-pink-light transition-[filter] group-hover:brightness-110">{t({ message: "Legacy", context: "overall rating method" })}</span>
-        </motion.span>
+      {/* Both words share one grid cell, so the window is exactly one line
+          tall at whatever size the browser draws the text. */}
+      <span className="grid overflow-hidden text-[11px] font-semibold uppercase leading-[14px] tracking-wide">
+        <motion.span className="[grid-area:1/1] text-[#b89be0] transition-[filter] group-hover:brightness-125" style={{ y: etternaY }}>{t`Etterna`}</motion.span>
+        <motion.span className="[grid-area:1/1] text-osu-pink-light transition-[filter] group-hover:brightness-110" style={{ y: legacyY }}>{t({ message: "Legacy", context: "overall rating method" })}</motion.span>
       </span>
     </button>
   );
