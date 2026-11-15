@@ -10,6 +10,7 @@ import { mirrorShaderMount } from "./gl-mirror";
 
 import type { ShaderNameStyle } from "./supporter-name-styles";
 import { queueGpuWork } from "./gpu-queue";
+import { mountShaderInBackground } from "./name-shader-warmup";
 
 /* Live WebGL looks for a name tag, drawn over a supporter's name where it is
    big (the profile hero, the /supporter preview). Chrome and molten gold run
@@ -640,14 +641,24 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
       onReady();
       return;
     }
-    // a context and a compile each, so a list of names starts one at a time
+    // a context and a compile each, so a list of names starts one at a time;
+    // the compile runs in the background, so it never holds the page
     unqueue?.();
     unqueue = queueGpuWork(() => {
       if (disposed || mount) return;
-      mount = new ShaderMount(host, built.shader, uniforms, { premultipliedAlpha: true }, still ? 0 : 1, 3, 2, undefined, built.mipmaps);
-      // drawn off the page, shown as a 2D copy that never flashes a lost context's white box
-      unmirror = mirrorShaderMount(mount);
-      onReady();
+      void mountShaderInBackground(() => disposed || mount !== null, host, built.shader, uniforms, { premultipliedAlpha: true }, still ? 0 : 1, 3, 2, undefined, built.mipmaps).then((made) => {
+        if (!made) return;
+        if (disposed || mount) {
+          const gl = made.canvasElement.getContext("webgl2");
+          made.dispose();
+          gl?.getExtension("WEBGL_lose_context")?.loseContext();
+          return;
+        }
+        mount = made;
+        // drawn off the page, shown as a 2D copy that never flashes a lost context's white box
+        unmirror = mirrorShaderMount(mount);
+        onReady();
+      });
     });
   };
 
@@ -798,7 +809,8 @@ export function stillNameShader(span: HTMLElement, host: HTMLElement, style: Sha
       const built = await buildStyle(style, mask);
       if (disposed) return;
       const uniforms = { ...built.uniforms, ...SIZING } as ConstructorParameters<typeof ShaderMount>[2];
-      const mount = new ShaderMount(host, built.shader, uniforms, { premultipliedAlpha: true, preserveDrawingBuffer: true }, 0, STILL_FRAMES[0], 2, undefined, built.mipmaps);
+      const mount = await mountShaderInBackground(() => disposed, host, built.shader, uniforms, { premultipliedAlpha: true, preserveDrawingBuffer: true }, 0, STILL_FRAMES[0], 2, undefined, built.mipmaps);
+      if (!mount) return;
       const gl = mount.canvasElement;
       gl.style.visibility = "hidden";
       // let Paper size the canvas to the box before drawing
