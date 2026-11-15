@@ -43,6 +43,7 @@ const METHOD_LABEL: Record<DonationLinkMethod, string> = {
   unlinked: "unlinked by hand",
   claim: "claimed by them",
   email_claim: "claimed by email",
+  renewal: "renews a linked order",
 };
 
 const PROVIDER_LABEL: Record<string, string> = { kofi: "Ko-fi", lava: "lava.top", google: "Google" };
@@ -147,7 +148,7 @@ export function SupportersPanel() {
 
   const importGoogle = (file: File) => run(async () => {
     const result = await importAdminGoogleExport({ data: { csv: await file.text() } });
-    return `Read ${result.rows} Google orders: ${result.confirmed} claims confirmed, ${result.added} new, ${result.revoked} claims revoked, ${result.pending} still waiting.`;
+    return `Read ${result.rows} Google orders: ${result.confirmed} claims confirmed, ${result.renewed} renewals linked, ${result.added} new, ${result.revoked} claims revoked, ${result.pending} still waiting.`;
   });
   const pendingClaims = (view?.donations ?? []).filter((row) => row.claimStatus === "pending").length;
 

@@ -70,13 +70,18 @@ jobs:
       # The workflow concurrency group serializes access to this VPS counter.
       - name: Choose app version
         run: |
-          previous=$(ssh "$VPS_USER@$VPS_HOST" "if [ -f '$WEB_DIR/app-version-counter' ]; then cat '$WEB_DIR/app-version-counter'; else printf '175'; fi")
-          if [[ ! "$previous" =~ ^[0-9]{1,9}$ ]]; then
+          # v3 counts from v3.0 on its own counter; app-version-counter keeps
+          # where v2 stopped.
+          previous=$(ssh "$VPS_USER@$VPS_HOST" "if [ -f '$WEB_DIR/app-version-v3-counter' ]; then cat '$WEB_DIR/app-version-v3-counter'; else printf 'none'; fi")
+          if [ "$previous" = "none" ]; then
+            next=0
+          elif [[ "$previous" =~ ^[0-9]{1,9}$ ]]; then
+            next=$((10#$previous + 1))
+          else
             echo "Invalid app version counter"; exit 1
           fi
-          next=$((10#$previous + 1))
           echo "APP_VERSION_COUNTER=$next" >> "$GITHUB_ENV"
-          echo "VITE_APP_VERSION=v2.$next" >> "$GITHUB_ENV"
+          echo "VITE_APP_VERSION=v3.$next" >> "$GITHUB_ENV"
 
       # `npm run build` already ends in scripts/verify-build-assets.mjs, which
       # fails the build if the output references an asset that is not there.
@@ -157,7 +162,7 @@ jobs:
       # number too. The default success() condition skips this after failures.
       - name: Record successful app version
         run: |
-          ssh "$VPS_USER@$VPS_HOST" "printf '%s\n' '$APP_VERSION_COUNTER' > '$WEB_DIR/app-version-counter.new' && mv '$WEB_DIR/app-version-counter.new' '$WEB_DIR/app-version-counter'"
+          ssh "$VPS_USER@$VPS_HOST" "printf '%s\n' '$APP_VERSION_COUNTER' > '$WEB_DIR/app-version-v3-counter.new' && mv '$WEB_DIR/app-version-v3-counter.new' '$WEB_DIR/app-version-v3-counter'"
 
       # Keep the 3 newest releases; older ones are just disk. Never touches
       # whatever `current` points at.

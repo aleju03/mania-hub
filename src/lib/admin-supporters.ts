@@ -10,7 +10,7 @@ import { parseSubmittedFrames } from "./workshop-frames";
    supporter list, and the owner's link, unlink, grant, Ko-fi CSV import and
    Google contributor export import actions. */
 
-export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "message_match" | "manual" | "unlinked" | "claim" | "email_claim";
+export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "message_match" | "manual" | "unlinked" | "claim" | "email_claim" | "renewal";
 
 export interface AdminDonationRow {
   provider: string;
@@ -201,4 +201,4 @@ export const importAdminGoogleExport = createServerFn({ method: "POST" })
     if (csv.length > 8 * 1024 * 1024) throw new Error("That file is too large.");
     return { csv };
   })
-  .handler(({ data }) => adminRequest<{ ok: true; rows: number; confirmed: number; added: number; revoked: number; pending: number }>("/api/admin/supporters/import-google", data));
+  .handler(({ data }) => adminRequest<{ ok: true; rows: number; confirmed: number; added: number; renewed: number; revoked: number; pending: number }>("/api/admin/supporters/import-google", data));

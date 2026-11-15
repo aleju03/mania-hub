@@ -306,7 +306,7 @@ function Health({ data }: { data: ProductData }) {
   const [device, setDevice] = useState("all");
   const [release, setRelease] = useState("all");
   const [limit, setLimit] = useState(6);
-  const releases = [...new Set([...data.reliability, ...data.loads].map((r) => r.release))].sort();
+  const releases = [...new Set([...data.reliability, ...data.loads].map((r) => r.release))].sort((a, b) => a.localeCompare(b, "en-US", { numeric: true }));
   const matches = (r: { device: string; release: string }) => (device === "all" || r.device === device) && (release === "all" || r.release === release);
   const rows = data.reliability.filter(matches);
   const loads = data.loads.filter(matches);

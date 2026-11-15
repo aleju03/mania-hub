@@ -11779,6 +11779,10 @@ msgstr "金色翅膀"
 msgid "Golden hour"
 msgstr "黄金时刻"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi."
+msgstr "Google 只接受几个固定金额，以你在那里支付的金额为准。其他金额请用 Ko-fi 支付。"
+
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Google Pay"
 msgstr "Google Pay"
@@ -12968,6 +12972,10 @@ msgstr "已在所有人的选择器中"
 #~ msgid "in flight"
 #~ msgstr "进行中"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "In Google's checkout, pick a monthly amount. You can cancel any time from your Google account."
+msgstr "在 Google 的付款页面选择一个按月金额。你可以随时在 Google 账号中取消。"
+
 #: src/components/player/LivePresence.tsx
 msgid "In multiplayer"
 msgstr "多人游戏中"
@@ -13922,6 +13930,14 @@ msgstr "熔岩灯"
 #: src/components/supporter/SupportCheckout.tsx
 msgid "lava.top asks for your email when you pay. Type the same one here, so the payment reaches your account."
 msgstr "lava.top 会在付款时要求填写邮箱。在这里填写同一个邮箱，付款就会记到你的账号上。"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "lava.top only sells supporter time as a membership of 1, 3, 6 or 12 months that renews until you cancel it there. To pay once, use Ko-fi."
+msgstr "lava.top 只以 1、3、6 或 12 个月的会员形式出售 supporter 时长，会自动续费，直到你在那里取消。想一次性付款，请用 Ko-fi。"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "lava.top's Supporter membership renews by itself. You can cancel any time on lava.top."
+msgstr "lava.top 的 Supporter 会员会自动续费。你可以随时在 lava.top 取消。"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx

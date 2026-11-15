@@ -346,7 +346,7 @@ function SupportPage() {
                 <div>
                   <h2 className="text-[22px] font-bold text-white">{t`Support`}</h2>
                   {payMethod ? <SupportMethodSteps method={payMethod} /> : <KofiNameSteps />}
-                  <SupportPlans />
+                  <SupportPlans method={payMethod} />
                   <p className="mt-4 text-[13px] leading-relaxed text-osu-l2">
                     {t`Pick your look on the supporter page. It saves as you go.`}{" "}
                     <Link to="/supporter" className="font-semibold text-osu-pink-light hover:underline">{t`Open the supporter page`}</Link>

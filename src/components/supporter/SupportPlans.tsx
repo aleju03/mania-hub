@@ -6,6 +6,7 @@ import { FrameThumb } from "./LoadoutSlots";
 import { SupportDaysPreview } from "./SupportDaysPreview";
 import { RankGem, SupporterRankIcon } from "./SupporterRankBadge";
 import { useShowcaseViewer } from "./SupportShowcase";
+import type { SupportMethod } from "./SupportCheckout";
 
 type Plan = "monthly" | "once";
 
@@ -17,8 +18,10 @@ const GOLD = SUPPORTER_RANKS.find((rank) => rank.id === "gold") ?? SUPPORTER_RAN
    that gets the most, so it comes first and is picked by default) and a
    one-time payment, with the days calculator. Monthly's gem burns and climbs
    the twelve ranks, as a subscriber's does, and the ladder under it lifts the
-   rank it is on. Both are paid on the checkout beside this. */
-export function SupportPlans() {
+   rank it is on. Both are paid on the checkout beside this; Google and
+   lava.top take neither any amount nor (lava.top) a one-off, so each plan
+   says how it goes with the method picked there. */
+export function SupportPlans({ method }: { method: SupportMethod | null }) {
   const { t } = useLingui();
   const [plan, setPlan] = useState<Plan>("monthly");
   const index = useClimbingRank();
@@ -29,7 +32,18 @@ export function SupportPlans() {
         <PlanCard on={plan === "monthly"} onPick={() => setPlan("monthly")} gem={<RankGem rank={rank} renewing className="h-10 w-10" />} title={t`Monthly`} price={t`$4 a month`} />
         <PlanCard on={plan === "once"} onPick={() => setPlan("once")} gem={<SupporterRankIcon rank={rank} className="h-10 w-10" />} title={t`One-time`} price={t`Any amount`} />
       </div>
-      {plan === "monthly" ? <MonthlyPerks index={index} /> : <SupportDaysPreview />}
+      {plan === "monthly" ? <MonthlyPerks index={index} method={method} /> : (
+        <>
+          <SupportDaysPreview />
+          {method === "google" || method === "lava" ? (
+            <p className="mt-2.5 rounded-xl bg-osu-b4 px-4 py-3 text-[12.5px] leading-relaxed text-osu-l2 ring-1 ring-inset ring-white/[0.06]">
+              {method === "google"
+                ? t`Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi.`
+                : t`lava.top only sells supporter time as a membership of 1, 3, 6 or 12 months that renews until you cancel it there. To pay once, use Ko-fi.`}
+            </p>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -71,7 +85,7 @@ function useClimbingRank(): number {
    of the real thing (a burning gem, the viewer's avatar in a frame, the Gold
    gem). The fire row comes first so its flames rise into the ladder's foot
    and not over another row. */
-function MonthlyPerks({ index }: { index: number }) {
+function MonthlyPerks({ index, method }: { index: number; method: SupportMethod | null }) {
   const { t } = useLingui();
   const you = useShowcaseViewer();
   const rank = SUPPORTER_RANKS[index];
@@ -96,7 +110,13 @@ function MonthlyPerks({ index }: { index: number }) {
         <PerkRow art={<TicketMark />} title={t`Extra gift codes`} body={t`One for a friend every third month, on top of the one every $4 brings. Time past 3 months ahead turns into more codes instead of piling up.`} />
         <PerkRow art={<SupporterRankIcon rank={GOLD} className="h-8 w-8" />} title={t`Gold supporter`} body={t`In your rank's tooltip, at $10 a month or more.`} />
       </ul>
-      <p className="border-t border-white/[0.07] px-4 pb-3 pt-2.5 text-[12px] leading-relaxed text-osu-f1">{t`On the Ko-fi panel, tick "Make this monthly" before you pay. You can cancel any time on Ko-fi.`}</p>
+      <p className="border-t border-white/[0.07] px-4 pb-3 pt-2.5 text-[12px] leading-relaxed text-osu-f1">
+        {method === "google"
+          ? t`In Google's checkout, pick a monthly amount. You can cancel any time from your Google account.`
+          : method === "lava"
+            ? t`lava.top's Supporter membership renews by itself. You can cancel any time on lava.top.`
+            : t`On the Ko-fi panel, tick "Make this monthly" before you pay. You can cancel any time on Ko-fi.`}
+      </p>
     </div>
   );
 }

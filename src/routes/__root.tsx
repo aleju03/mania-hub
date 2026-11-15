@@ -658,7 +658,7 @@ function RootLayout() {
               </span>
             </div>
             <span className="absolute right-4 top-1/2 -translate-y-1/2">
-              {import.meta.env.VITE_APP_VERSION || "v2.176"}
+              {import.meta.env.VITE_APP_VERSION || "v3"}
             </span>
           </footer>
         </AnalyticsProvider>
