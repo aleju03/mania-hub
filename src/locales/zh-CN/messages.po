@@ -5461,6 +5461,10 @@ msgstr "Beginner"
 msgid "Beginning of recorded history"
 msgstr "历史记录起点"
 
+#: src/components/supporter/ThemeReadabilityPanel.tsx
+msgid "Behind text"
+msgstr "文字背景"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Behind your row in rankings and lists, when you turn rows on. A still of the paused frame."
 msgstr "开启横幅后，显示在排行榜和列表中你那一行的背后。使用暂停画面的静帧。"
@@ -5679,6 +5683,7 @@ msgid "Blue screen"
 msgstr "蓝屏"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/supporter/ThemeReadabilityPanel.tsx
 msgid "Blur"
 msgstr "模糊"
 
@@ -8153,6 +8158,10 @@ msgstr "无法移除该提名。"
 msgid "Couldn't remove those plays right now. Try again in a moment."
 msgstr "暂时无法移除这些成绩，请稍后再试。"
 
+#: src/components/supporter/ThemeReadabilityPanel.tsx
+msgid "Couldn't save"
+msgstr "保存失败"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Couldn't save that goal. Check the values and try again."
 msgstr "目标保存失败，请检查数值后重试。"
@@ -8703,6 +8712,10 @@ msgstr "深色"
 msgid "Darken"
 msgstr "变暗"
 
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Darkens or blurs the theme behind your profile, for a picture too bright to read over."
+#~ msgstr "将个人资料后面的主题变暗或模糊，适合图片太亮、文字看不清的情况。"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Darkens the beatmap background so notes stay readable."
 msgstr "调暗谱面背景，让音符更清晰。"
@@ -9010,6 +9023,23 @@ msgstr "难度"
 msgid "Difficulty radar chart"
 msgstr "难度雷达图"
 
+#: src/components/supporter/ThemeReadabilityPanel.tsx
+msgid "Dim"
+msgstr "变暗"
+
+#: src/components/supporter/LoadoutSlots.tsx
+#: src/components/supporter/ThemeReadabilityPanel.tsx
+msgid "Dim and blur"
+msgstr "变暗与模糊"
+
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Dims or blurs the theme behind your profile, for a picture too bright or busy to read over."
+#~ msgstr "将个人资料后面的主题变暗或模糊，适合图片太亮或太杂、文字看不清的情况。"
+
+#: src/components/supporter/ThemeReadabilityPanel.tsx
+msgid "Dims or blurs your theme so the page reads well over it. Saves when you let go."
+msgstr "将主题变暗或模糊，让页面文字更清楚。松开滑块即保存。"
+
 #: src/routes/discord.tsx
 #~ msgid "Direct messages"
 #~ msgstr "私信"
@@ -9198,6 +9228,7 @@ msgstr "刷够"
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/settings/CompanellaGroup.tsx
 #: src/components/skins/SkinReportModal.tsx
+#: src/components/supporter/ThemeReadabilityPanel.tsx
 #: src/routes/discord.tsx
 msgid "Done"
 msgstr "完成"
@@ -13876,6 +13907,10 @@ msgstr "最后在线 {0}"
 msgid "Last seen 1d ago"
 msgstr "最后在线 1 天前"
 
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Last seen 2d ago"
+#~ msgstr "2 天前在线"
+
 #: src/components/legal/LegalDocument.tsx
 msgid "Last updated {updatedAt}"
 msgstr "最后更新于 {updatedAt}"
@@ -18430,6 +18465,10 @@ msgstr "打开链接"
 #: src/routes/recommendations.tsx
 msgid "Open map on osu!"
 msgstr "在 osu! 上打开谱面"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Open my profile"
+msgstr "打开我的个人资料"
 
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Open on osu!"
@@ -23386,6 +23425,10 @@ msgstr "卡组名称"
 #: src/components/me/GoalsPanel.tsx
 msgid "Set on {at}"
 msgstr "设定于 {at}"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Set on your profile, so you can see how it reads as you go."
+msgstr "在个人资料页上调整，边调边看文字是否清楚。"
 
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "Set start"

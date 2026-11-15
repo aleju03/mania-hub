@@ -8,7 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { PageHeader } from "../components/layout/PageHeader";
 import { LoadoutStage } from "../components/supporter/LoadoutStage";
-import { LoadoutDrawer, SlotLock, SupporterNav, type CustomMotif } from "../components/supporter/LoadoutSlots";
+import { LoadoutDrawer, SlotLock, SupporterNav, useWornOwnThemeStill, type CustomMotif } from "../components/supporter/LoadoutSlots";
 import { CustomArtDialog, type CustomArtDraft } from "#/components/supporter/CustomArtDialog";
 import { DiceIcon } from "../components/supporter/LoadoutIcons";
 import { GiftCodePanel, RedeemGiftCode } from "../components/supporter/GiftCodePanel";
@@ -270,7 +270,7 @@ function SupporterPage() {
       setBusy(true);
       try {
         // without options the theme's switches stay as they were
-        await wearCustomTheme({ data: { themeId, ...(options ? { rows: !!options.rows, hideCover: !!options.hideCover } : {}) } });
+        await wearCustomTheme({ data: { themeId, ...(options ? { rows: !!options.rows, hideCover: !!options.hideCover, dim: options.dim ?? 0, blur: options.blur ?? 0 } : {}) } });
         const latest = await fetchSupporterLookState();
         setState(latest);
         saved.current = loadoutOf(latest);
@@ -457,6 +457,7 @@ function SupporterPage() {
   const hovered = reel ?? (held && hover ? withSlot(held, hover.slot, hover.value, custom) : held);
   const shown = hovered && outlinePreview !== undefined ? { ...hovered, nameOutline: outlinePreview } : hovered;
   const viewerKeys = useMemo(() => mainKeymode(card?.bestScores), [card]);
+  const ownThemeStill = useWornOwnThemeStill(shown?.theme ?? null, supporter);
   const highwayNotes = useHighwayNotes(viewer?.id, viewerKeys, (shown?.theme === "highway" && !shown.themeOptions.stockNotes) || shown?.theme === "judgements");
   const highwayChart = useHighwayChart(viewer?.id, card?.bestScores, highwayNotes?.lanes ?? viewerKeys ?? 4, shown?.theme === "highway" && !!shown.themeOptions.charts);
   /* The card holds still while the reels spin, and its art waits for the
@@ -653,6 +654,7 @@ function SupporterPage() {
                   {shown && held ? (
                     <LoadoutStage
                       shown={shown}
+                      ownThemeStill={ownThemeStill}
                       notes={highwayNotes}
                       chart={highwayChart}
                       cardLook={cardLook}

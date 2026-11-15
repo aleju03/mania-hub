@@ -162,7 +162,7 @@ function OwnThemesPage() {
                             type="checkbox"
                             checked={worn?.rows ?? false}
                             disabled={busy !== null}
-                            onChange={(event) => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id, rows: event.target.checked, hideCover: worn?.hideCover ?? false } }))}
+                            onChange={(event) => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id, rows: event.target.checked, hideCover: worn?.hideCover ?? false, dim: worn?.dim ?? 0, blur: worn?.blur ?? 0 } }))}
                             className="accent-osu-pink"
                           />
                           {t`Show its banner behind my rows in lists`}
@@ -172,7 +172,7 @@ function OwnThemesPage() {
                             type="checkbox"
                             checked={worn?.hideCover ?? false}
                             disabled={busy !== null}
-                            onChange={(event) => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id, rows: worn?.rows ?? false, hideCover: event.target.checked } }))}
+                            onChange={(event) => void act(theme.id, () => wearCustomTheme({ data: { themeId: theme.id, rows: worn?.rows ?? false, hideCover: event.target.checked, dim: worn?.dim ?? 0, blur: worn?.blur ?? 0 } }))}
                             className="accent-osu-pink"
                           />
                           {t`Hide my osu! banner`}

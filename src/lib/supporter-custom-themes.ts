@@ -54,7 +54,7 @@ export interface CustomThemeDraft extends CustomThemeSummary {
 
 export interface OwnCustomThemes {
   themes: CustomThemeSummary[];
-  worn: { themeId: number; rows: boolean; hideCover?: boolean } | null;
+  worn: { themeId: number; rows: boolean; hideCover?: boolean; dim?: number; blur?: number } | null;
   disabled: boolean;
 }
 
@@ -221,9 +221,11 @@ export const deleteOwnCustomTheme = createServerFn({ method: "POST" })
    takes it off (null). Its switches are sent only when named; left out, the
    ones already worn stay. */
 export const wearCustomTheme = createServerFn({ method: "POST" })
-  .validator((data: { themeId?: unknown; rows?: unknown; hideCover?: unknown }) => ({
+  .validator((data: { themeId?: unknown; rows?: unknown; hideCover?: unknown; dim?: unknown; blur?: unknown }) => ({
     themeId: data?.themeId == null ? null : readThemeId(data.themeId),
-    ...(data?.rows !== undefined || data?.hideCover !== undefined ? { rows: data.rows === true, hideCover: data.hideCover === true } : {}),
+    ...(data?.rows !== undefined || data?.hideCover !== undefined || data?.dim !== undefined || data?.blur !== undefined
+      ? { rows: data.rows === true, hideCover: data.hideCover === true, dim: typeof data.dim === "number" ? data.dim : 0, blur: typeof data.blur === "number" ? data.blur : 0 }
+      : {}),
   }))
   .handler(async ({ data }): Promise<void> => {
     const viewer = await requireViewer();

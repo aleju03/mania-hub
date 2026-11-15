@@ -89,6 +89,11 @@ export function withSlot(loadout: Loadout, slot: SlotId, value: SlotValue, custo
   }
   if (slot === "foil") return { ...loadout, look: { ...loadout.look, foil: value === null ? "none" : value as SupporterFoilId } };
   if (slot === "sleeve" || slot === "binder" || slot === "wrapper" || slot === "blade") return { ...loadout, pack: { ...loadout.pack, [slot]: value } as SupporterPackStyle };
+  if (slot === "theme" && value !== loadout.theme) {
+    // dim and blur are set for one theme's picture, so another starts clear
+    const { dim: _dim, blur: _blur, ...rest } = loadout.themeOptions;
+    return { ...loadout, theme: value, themeOptions: rest } as Loadout;
+  }
   return { ...loadout, [slot]: value } as Loadout;
 }
 

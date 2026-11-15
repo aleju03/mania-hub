@@ -107,12 +107,34 @@ export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, Mes
    instead of the owner's replay skin notes; `rows` lays a strip of the theme
    behind the owner's rows in lists (rankings, leaderboards), which is off
    unless they turn it on; `hideCover` leaves out the owner's osu! banner,
-   which otherwise shows faintly through the theme on their profile. */
+   which otherwise shows faintly through the theme on their profile;
+   `dim` and `blur` (each 0..1, steps of 0.05) darken and soften the theme
+   behind the profile's text, for a picture too bright or busy to read over. */
+
+/* Dim and blur as drawn, shared by the profile and the picker. Full dim is a
+   75% layer of near-black; full blur is 12px, with the picture scaled up a
+   little so its soft edges stay out of view. */
+export function themeDimColor(dim: number | undefined): string | null {
+  return dim ? `rgba(8,4,12,${(Math.min(1, dim) * 0.75).toFixed(3)})` : null;
+}
+
+export function themeBlurStyle(blur: number | undefined): CSSProperties | undefined {
+  return blur ? { filter: `blur(${(Math.min(1, blur) * 12).toFixed(1)}px)`, transform: `scale(${(1 + Math.min(1, blur) * 0.06).toFixed(3)})` } : undefined;
+}
+
+function themeAmount(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const stepped = Math.round(Math.min(1, Math.max(0, value)) * 20) / 20;
+  return stepped > 0 ? stepped : null;
+}
+
 export interface ProfileThemeOptions {
   charts?: true;
   stockNotes?: true;
   rows?: true;
   hideCover?: true;
+  dim?: number;
+  blur?: number;
 }
 
 export function parseProfileThemeOptions(value: unknown): ProfileThemeOptions {
@@ -123,6 +145,8 @@ export function parseProfileThemeOptions(value: unknown): ProfileThemeOptions {
     ...(raw.stockNotes === true ? { stockNotes: true as const } : {}),
     ...(raw.rows === true ? { rows: true as const } : {}),
     ...(raw.hideCover === true ? { hideCover: true as const } : {}),
+    ...(themeAmount(raw.dim) !== null ? { dim: themeAmount(raw.dim)! } : {}),
+    ...(themeAmount(raw.blur) !== null ? { blur: themeAmount(raw.blur)! } : {}),
   };
 }
 

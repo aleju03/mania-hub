@@ -137,6 +137,13 @@ function useOwnThemes(enabled: boolean): OwnCustomThemes | null {
   }, [enabled]);
   return value;
 }
+/* The still of the viewer's own worn theme, for the page's big preview, which
+   plays only the built-in themes. */
+export function useWornOwnThemeStill(theme: SlotValue | null, enabled: boolean): string | null {
+  useOwnThemes(enabled);
+  return wornOwnTheme(theme)?.stillUrl ?? null;
+}
+
 /* The own theme on, when no built-in is: the page reads a worn own theme back as none. */
 function wornOwnTheme(theme: SlotValue | null): CustomThemeSummary | null {
   if (theme || !ownThemes?.worn) return null;
@@ -1352,7 +1359,7 @@ function ThemeDrawer({ current, disabled, avatar, username, canUpload, onTry, on
   const wearOwn = (themeId: number | null, options?: ProfileThemeOptions) => {
     void onWearOwnTheme(themeId, options).then(() => {
       const kept = options ?? current.themeOptions;
-      if (ownThemes) setOwnThemes({ ...ownThemes, worn: themeId === null ? null : { themeId, rows: !!kept.rows, hideCover: !!kept.hideCover } });
+      if (ownThemes) setOwnThemes({ ...ownThemes, worn: themeId === null ? null : { themeId, rows: !!kept.rows, hideCover: !!kept.hideCover, dim: kept.dim ?? 0, blur: kept.blur ?? 0 } });
     });
   };
   // The switches of whichever theme is on: a built-in one saves with the pick, an own one with its wearing.
@@ -1445,6 +1452,20 @@ function ThemeDrawer({ current, disabled, avatar, username, canUpload, onTry, on
           title={t`Hide my osu! banner`}
           body={t`Only the theme shows behind your profile header, without your osu! banner.`}
         />
+      )}
+      {themed && (
+        <div className="mt-3 flex items-center gap-3 rounded-lg bg-osu-b4 px-3 py-2.5">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold text-white">{t`Dim and blur`}</span>
+            <span className="block text-[11px] text-osu-f1">{t`Set on your profile, so you can see how it reads as you go.`}</span>
+          </span>
+          <a
+            href={`/player/${encodeURIComponent(username)}?adjust=theme`}
+            className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white transition hover:brightness-110"
+          >
+            {t`Open my profile`}
+          </a>
+        </div>
       )}
     </div>
   );

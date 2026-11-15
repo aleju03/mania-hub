@@ -11,7 +11,7 @@ import type { SupporterLook } from "../../lib/supporter-card-looks";
 import { SupporterStyledName } from "./SupporterNameStyle";
 import { useFittedName } from "./useFittedName";
 import { ProfileThemeBackdrop } from "./ProfileThemeBackdrop";
-import type { HighwayChart, HighwayNotes } from "../../lib/supporter-profile-themes";
+import { themeBlurStyle, themeDimColor, type HighwayChart, type HighwayNotes } from "../../lib/supporter-profile-themes";
 import type { Loadout } from "./loadout";
 import { useIsSettled } from "./use-settled";
 import { TestPack } from "./TestPack";
@@ -48,8 +48,10 @@ const ROOM_PADDING = `${room(ROOM[0])} ${room(ROOM[1])} ${room(ROOM[2])}`;
 // --name-scale (useFittedName) shrinks a name too wide for its column before it would truncate
 const NAME_CLASS = "min-w-0 max-w-full truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[length:calc(22px*var(--name-scale,1))] font-black leading-none text-white sm:text-[length:calc(40px*var(--name-scale,1))]";
 
-export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, card, focus, pop, spinning, footer, tall = false }: {
+export function LoadoutStage({ shown, ownThemeStill = null, notes, chart, cardLook, username, avatar, card, focus, pop, spinning, footer, tall = false }: {
   shown: Loadout;
+  /** The still of the viewer's own worn theme, shown when no built-in one is. */
+  ownThemeStill?: string | null;
   /** The viewer's replay skin notes, for the Note highway. */
   notes: HighwayNotes | null;
   chart: HighwayChart | null;
@@ -79,7 +81,16 @@ export function LoadoutStage({ shown, notes, chart, cardLook, username, avatar, 
   return (
     <div className={`relative isolate overflow-hidden rounded-2xl bg-osu-b6 ${tall ? "lg:flex lg:h-full lg:flex-col" : ""}`}>
       {/* The profile theme plays behind the whole stage, as it will behind the profile. */}
-      {theme && <ProfileThemeBackdrop theme={theme} notes={notes} chart={chart} maxPixels={500_000} className="absolute inset-0 -z-10" />}
+      {(theme || ownThemeStill) && (
+        <div className="absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute inset-0" style={themeBlurStyle(shown.themeOptions.blur)}>
+            {theme
+              ? <ProfileThemeBackdrop theme={theme} notes={notes} chart={chart} maxPixels={500_000} className="absolute inset-0" />
+              : <img src={ownThemeStill!} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+          </div>
+          {themeDimColor(shown.themeOptions.dim) ? <div className="absolute inset-0" style={{ background: themeDimColor(shown.themeOptions.dim)! }} /> : null}
+        </div>
+      )}
       <div className={`flex flex-col lg:flex-row lg:items-stretch ${tall ? "lg:min-h-0 lg:flex-1" : ""}`}>
         {focus === "binder" ? (
           <div className="min-w-0 flex-1 px-3">

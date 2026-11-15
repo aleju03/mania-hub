@@ -5476,6 +5476,10 @@ msgstr "Beginner"
 msgid "Beginning of recorded history"
 msgstr "Beginning of recorded history"
 
+#: src/components/supporter/ThemeReadabilityPanel.tsx
+msgid "Behind text"
+msgstr "Behind text"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Behind your row in rankings and lists, when you turn rows on. A still of the paused frame."
 msgstr "Behind your row in rankings and lists, when you turn rows on. A still of the paused frame."
@@ -5694,6 +5698,7 @@ msgid "Blue screen"
 msgstr "Blue screen"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/supporter/ThemeReadabilityPanel.tsx
 msgid "Blur"
 msgstr "Blur"
 
@@ -8168,6 +8173,10 @@ msgstr "Couldn't remove that nominee."
 msgid "Couldn't remove those plays right now. Try again in a moment."
 msgstr "Couldn't remove those plays right now. Try again in a moment."
 
+#: src/components/supporter/ThemeReadabilityPanel.tsx
+msgid "Couldn't save"
+msgstr "Couldn't save"
+
 #: src/components/me/GoalsPanel.tsx
 msgid "Couldn't save that goal. Check the values and try again."
 msgstr "Couldn't save that goal. Check the values and try again."
@@ -8718,6 +8727,10 @@ msgstr "dark"
 msgid "Darken"
 msgstr "Darken"
 
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Darkens or blurs the theme behind your profile, for a picture too bright to read over."
+#~ msgstr "Darkens or blurs the theme behind your profile, for a picture too bright to read over."
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Darkens the beatmap background so notes stay readable."
 msgstr "Darkens the beatmap background so notes stay readable."
@@ -9025,6 +9038,23 @@ msgstr "Difficulty"
 msgid "Difficulty radar chart"
 msgstr "Difficulty radar chart"
 
+#: src/components/supporter/ThemeReadabilityPanel.tsx
+msgid "Dim"
+msgstr "Dim"
+
+#: src/components/supporter/LoadoutSlots.tsx
+#: src/components/supporter/ThemeReadabilityPanel.tsx
+msgid "Dim and blur"
+msgstr "Dim and blur"
+
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Dims or blurs the theme behind your profile, for a picture too bright or busy to read over."
+#~ msgstr "Dims or blurs the theme behind your profile, for a picture too bright or busy to read over."
+
+#: src/components/supporter/ThemeReadabilityPanel.tsx
+msgid "Dims or blurs your theme so the page reads well over it. Saves when you let go."
+msgstr "Dims or blurs your theme so the page reads well over it. Saves when you let go."
+
 #: src/routes/discord.tsx
 #~ msgid "Direct messages"
 #~ msgstr "Direct messages"
@@ -9213,6 +9243,7 @@ msgstr "done"
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/settings/CompanellaGroup.tsx
 #: src/components/skins/SkinReportModal.tsx
+#: src/components/supporter/ThemeReadabilityPanel.tsx
 #: src/routes/discord.tsx
 msgid "Done"
 msgstr "Done"
@@ -13910,6 +13941,10 @@ msgstr "Last seen {0}"
 msgid "Last seen 1d ago"
 msgstr "Last seen 1d ago"
 
+#: src/components/supporter/LoadoutSlots.tsx
+#~ msgid "Last seen 2d ago"
+#~ msgstr "Last seen 2d ago"
+
 #: src/components/legal/LegalDocument.tsx
 msgid "Last updated {updatedAt}"
 msgstr "Last updated {updatedAt}"
@@ -18464,6 +18499,10 @@ msgstr "Open link"
 #: src/routes/recommendations.tsx
 msgid "Open map on osu!"
 msgstr "Open map on osu!"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Open my profile"
+msgstr "Open my profile"
 
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Open on osu!"
@@ -23420,6 +23459,10 @@ msgstr "Set name"
 #: src/components/me/GoalsPanel.tsx
 msgid "Set on {at}"
 msgstr "Set on {at}"
+
+#: src/components/supporter/LoadoutSlots.tsx
+msgid "Set on your profile, so you can see how it reads as you go."
+msgstr "Set on your profile, so you can see how it reads as you go."
 
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "Set start"

@@ -85,8 +85,12 @@ const RANK_PIN_OPTIONS: SelectMenuOption<string>[] = [
   })),
 ];
 
+/* The last list this tab loaded: coming back from a profile shows it at once
+   while the fresh one loads, instead of an empty page. */
+let lastView: AdminSupportersView | null = null;
+
 export function SupportersPanel() {
-  const [view, setView] = useState<AdminSupportersView | null>(null);
+  const [view, setView] = useState<AdminSupportersView | null>(lastView);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
   const [openUser, setOpenUser] = useState<number | null>(null);
@@ -103,14 +107,32 @@ export function SupportersPanel() {
 
   const reload = useCallback(async () => {
     try {
-      setView(await loadAdminSupporters());
+      const next = await loadAdminSupporters();
+      lastView = next;
+      setView(next);
     } catch (err) {
       say(err instanceof Error ? err.message : String(err), true);
+      throw err;
     }
   }, [say]);
 
+  // A slow or failed first load (the backend stalls now and then) tries again
+  // a few times rather than leaving the page empty.
   useEffect(() => {
-    void reload();
+    let alive = true;
+    void (async () => {
+      for (let attempt = 0; attempt < 4 && alive; attempt++) {
+        try {
+          await reload();
+          return;
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)));
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, [reload]);
 
   const run = useCallback(async (action: () => Promise<string>) => {
@@ -194,6 +216,14 @@ export function SupportersPanel() {
                 {view ? pendingClaims : "–"}
               </div>
               <div className="mt-1 text-[12px] text-osu-f1">Google claims to check</div>
+            </div>
+            <div>
+              <div className="text-[44px] font-semibold leading-none tabular-nums text-white">{view?.totals ? formatMoney(view.totals.monthCents / 100, "USD") : "–"}</div>
+              <div className="mt-1 text-[12px] text-osu-f1">this month</div>
+            </div>
+            <div>
+              <div className="text-[44px] font-semibold leading-none tabular-nums text-white">{view?.totals ? formatMoney(view.totals.allTimeCents / 100, "USD") : "–"}</div>
+              <div className="mt-1 text-[12px] text-osu-f1">all time</div>
             </div>
             <label className={`${CHIP_CLASS} ml-auto ${busy ? "pointer-events-none opacity-50" : ""}`}>
               <Upload size={13} />
@@ -447,6 +477,7 @@ function SupporterTile({
             <div className="mt-2.5 space-y-0.5 text-[11px] text-osu-f1">
               <div>{row.permanent ? "Permanent" : row.active ? `Until ${formatDate(row.expiresAt)}` : `Lapsed ${formatDate(row.expiresAt)}`}</div>
               <div>Supporting since {formatDate(row.firstSupportedAt)}</div>
+              {row.paidCents ? <div>Paid {formatMoney(row.paidCents / 100, "USD")} in total</div> : null}
             </div>
             {row.username ? (
               <Link to="/player/$username" params={{ username: row.username }} className="mt-2 inline-block text-[12px] text-osu-pink-light hover:underline">

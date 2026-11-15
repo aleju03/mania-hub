@@ -42,11 +42,15 @@ export interface AdminSupporterRow {
   rankPin: number | null;
   /** Supporter for good (the backend's SUPPORTER_PERMANENT_USER_IDS): no countdown. */
   permanent?: boolean;
+  /** Everything their linked donations came to, in US cents, refunds taken off. */
+  paidCents?: number;
 }
 
 export interface AdminSupportersView {
   donations: AdminDonationRow[];
   supporters: AdminSupporterRow[];
+  /** Money in, in US cents, refunds taken off; an older backend sends none. */
+  totals?: { monthCents: number; allTimeCents: number };
 }
 
 export async function adminRequest<T>(path: string, body?: unknown): Promise<T> {

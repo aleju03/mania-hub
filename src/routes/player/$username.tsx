@@ -97,7 +97,9 @@ import { ProfileThemeBackdrop } from "../../components/supporter/ProfileThemeBac
 import { CustomThemeCredit } from "../../components/supporter/CustomThemeCredit";
 import { HoursCard, LnSplitCard, NotesCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, SkillCard, SkillKeymodeChoice, StreakCard, useExtraStatPreviews } from "../../components/player/ProfileStatCards";
 import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "../../lib/profile-stats";
-import { saveSupporterProfilePlaysSetting, saveSupporterProfileSkillKeysSetting, saveSupporterProfileStatsSetting, saveSupporterRankFireSetting } from "../../lib/supporter-look-settings";
+import { saveSupporterProfilePlaysSetting, saveSupporterProfileSkillKeysSetting, saveSupporterProfileStatsSetting, saveSupporterProfileThemeSetting, saveSupporterRankFireSetting } from "../../lib/supporter-look-settings";
+import { wearCustomTheme } from "../../lib/supporter-custom-themes";
+import { ThemeReadabilityPanel } from "../../components/supporter/ThemeReadabilityPanel";
 import { profilePlayAsTrackedPlay, type ProfilePlayPick, type ProfilePlays } from "../../lib/profile-plays";
 import { FeaturedPlayCard, FeaturedPlayDialog, FeaturedPlayEditButton } from "../../components/player/FeaturedPlays";
 import { useViewerIsSupporter } from "../../lib/viewer-supporter";
@@ -105,7 +107,7 @@ import { useHighwayNotes } from "../../components/supporter/use-highway-notes";
 import { useHighwayChart } from "../../components/supporter/use-highway-chart";
 import { useHighwayPlay } from "../../components/supporter/use-highway-play";
 import { HighwayPlayHud } from "../../components/supporter/HighwayPlayHud";
-import { PROFILE_THEME_LOOKS, profileThemeStyle, type ProfileThemeOptions, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
+import { PROFILE_THEME_LOOKS, profileThemeStyle, themeBlurStyle, themeDimColor, type ProfileThemeOptions, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
 import { CUSTOM_THEME_COVER, customThemeStyle, type CustomTheme } from "../../lib/custom-themes";
 import type { BackdropTheme } from "../../lib/profile-theme-gl";
 import { buildRestrictedBestList, profileRailTotals } from "../../components/player/restricted-best-scores";
@@ -1255,6 +1257,12 @@ export function PlayerProfilePage({
   const themed: BackdropTheme | null = profileTheme ?? customTheme;
   /* The owner can leave their osu! banner out from under the theme. */
   const hideCoverUnderTheme = supporterFrame?.userId === profileUserId && !!supporterFrame.profileThemeOptions.hideCover;
+  // How much the wearer dims and blurs the theme behind the profile's text;
+  // while the owner drags the sliders here, their unsaved values.
+  const [themeAdjust, setThemeAdjust] = useState<{ userId: number; dim: number; blur: number } | null>(null);
+  const savedThemeOptions = supporterFrame?.userId === profileUserId ? supporterFrame.profileThemeOptions : null;
+  const themeOptions = themeAdjust?.userId === profileUserId ? { ...savedThemeOptions, dim: themeAdjust.dim, blur: themeAdjust.blur } : savedThemeOptions;
+  const themeDim = themeDimColor(themeOptions?.dim);
   /* The four insight cards: a supporter's own pick, or the usual four. The
      owner's swaps show at once and save in the background. */
   const [statsOverride, setStatsOverride] = useState<{ userId: number; stats: ProfileStatId[] } | null>(null);
@@ -1269,6 +1277,21 @@ export function PlayerProfilePage({
   const ownerIsSupporter = supporterFrame?.userId === profileUserId && supporterFrame.supporter;
   // not while previewing a look tried on at /supporter, which saves nothing
   const canSwapStats = !!auth.viewer && auth.viewer.id === profileUserId && (viewerIsSupporter || ownerIsSupporter) && !supporterLookPreviewFor(profileUserId);
+  /* The owner sets dim and blur here, over the page they affect. Built-in
+     themes save with the theme pick, their own with its wearing. */
+  const canAdjustTheme = canSwapStats && themed !== null;
+  const saveThemeReadability = async ({ dim, blur }: { dim: number; blur: number }) => {
+    const base = savedThemeOptions ?? {};
+    const next = { ...base, dim: dim || undefined, blur: blur || undefined };
+    if (profileTheme) {
+      await saveSupporterProfileThemeSetting({ data: { profileTheme, profileThemeOptions: next } });
+    } else if (customTheme) {
+      await wearCustomTheme({ data: { themeId: customTheme.themeId, rows: !!base.rows, hideCover: !!base.hideCover, dim, blur } });
+    }
+    forgetLiveSupporterLook(profileUserId);
+    setSupporterFrame((current) => current?.userId === profileUserId ? { ...current, profileThemeOptions: next } : current);
+    setThemeAdjust(null);
+  };
   const setProfileStats = (next: ProfileStatId[]) => {
     setStatsOverride({ userId: profileUserId, stats: next });
     const isDefault = next.every((entry, index) => entry === DEFAULT_PROFILE_STATS[index]);
@@ -2354,9 +2377,20 @@ export function PlayerProfilePage({
     <div className={themed ? "relative flex-1 overflow-clip" : "flex-1"} style={customTheme && !profileTheme ? customThemeStyle(customTheme) : profileThemeStyle(profileTheme, highwayNotes)}>
       {themed && (
         <div aria-hidden className="pointer-events-none sticky top-0 h-0">
-          <ProfileThemeBackdrop theme={themed} notes={highwayNotes} chart={highwayPlay.chart} play={highwayPlay.play} scroll className="absolute inset-x-0 top-0 h-screen" />
+          <div className="absolute inset-x-0 top-0 h-screen" style={themeBlurStyle(themeOptions?.blur)}>
+            <ProfileThemeBackdrop theme={themed} notes={highwayNotes} chart={highwayPlay.chart} play={highwayPlay.play} scroll className="absolute inset-0" />
+          </div>
+          {themeDim ? <div className="absolute inset-x-0 top-0 h-screen" style={{ background: themeDim }} /> : null}
         </div>
       )}
+      {canAdjustTheme ? (
+        <ThemeReadabilityPanel
+          dim={savedThemeOptions?.dim ?? 0}
+          blur={savedThemeOptions?.blur ?? 0}
+          onLive={(value) => setThemeAdjust(value ? { userId: profileUserId, ...value } : null)}
+          onSave={saveThemeReadability}
+        />
+      ) : null}
       {themed && profileTheme === "highway" && (
         <HighwayPlayHud playing={highwayPlay.playing} hud={highwayPlay.hud} keys={highwayPlay.keys} lanes={highwayLanes} binding={highwayPlay.binding} onChangeKeys={highwayPlay.startBinding} />
       )}
