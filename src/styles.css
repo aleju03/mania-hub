@@ -1995,6 +1995,17 @@ html[data-custom-cursor="true"] * {
   src: url("/fonts/name/limelight.woff2") format("woff2");
 }
 
+/* Room at the sides for glyphs that overhang their box (Monocraft's A), which
+   a truncated name's own overflow clip shaved off; the margin cancels it so
+   the layout does not move. In a layer, so a utility's own room (the loadout
+   picker's px-[0.35em]) still wins. */
+@layer components {
+  [class*="name-font--"] {
+    padding-inline: 0.08em;
+    margin-inline: -0.08em;
+  }
+}
+
 .name-font--pixel {
   font-family: "Name Press Start 2P", var(--font-sans, sans-serif);
   font-weight: 400;
