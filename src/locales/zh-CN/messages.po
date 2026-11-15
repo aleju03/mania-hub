@@ -5696,7 +5696,6 @@ msgid "Board spot <0>#{0}</0>"
 msgstr "榜单位置 <0>#{0}</0>"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
-#: src/components/supporter/loadout.ts
 #: src/routes/bbcode.tsx
 msgid "Bold"
 msgstr "加粗"
@@ -6721,7 +6720,6 @@ msgstr "领取"
 msgid "Claim it"
 msgstr "领取"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/replay-overlays.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Classic"
@@ -11374,10 +11372,6 @@ msgstr "满宽"
 msgid "Fullscreen"
 msgstr "全屏"
 
-#: src/components/supporter/loadout.ts
-msgid "Fun"
-msgstr "趣味"
-
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26."
 #~ msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ 的 0:12。每次放手都标出它在 v26 中保留的 v25 难度比例。"
@@ -11460,10 +11454,6 @@ msgstr "疾风"
 #: src/routes/workshop.themes.index.tsx
 msgid "Gallery"
 msgstr "画廊"
-
-#: src/components/supporter/loadout.ts
-msgid "Game and tech"
-msgstr "游戏与科技"
 
 #: src/lib/skill-axes.ts
 msgid "General"
@@ -11946,10 +11936,6 @@ msgstr "三押叠"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Handstream"
 msgstr "三押切"
-
-#: src/components/supporter/loadout.ts
-msgid "Handwritten"
-msgstr "手写"
 
 #: src/routes/recommendations.tsx
 msgid "hard"
@@ -15410,7 +15396,6 @@ msgid "Marker"
 msgstr "马克笔"
 
 #: src/components/supporter/SupporterExtras.tsx
-
 #: src/routes/support.tsx
 #~ msgid "Mascots"
 #~ msgstr "吉祥物"

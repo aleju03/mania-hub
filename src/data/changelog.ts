@@ -60,7 +60,7 @@ export interface ChangelogCelebration {
 
 /** Keyed by the release day the heading sits over. */
 export const CELEBRATIONS: Record<string, ChangelogCelebration> = {
-  "2026-11-09": { title: "WE REACHED 10K USERS!!", asideAfter: "10K", aside: "now 12K", line: "Here's a big update to celebrate :D" },
+  "2026-11-14": { title: "WE REACHED 10K USERS!!", asideAfter: "10K", aside: "now 12K", line: "Here's a big update to celebrate :D" },
 };
 
 export const UPDATES: ChangelogUpdate[] = [

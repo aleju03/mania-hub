@@ -5684,7 +5684,6 @@ msgid "Board spot <0>#{0}</0>"
 msgstr "Puesto <0>#{0}</0>"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
-#: src/components/supporter/loadout.ts
 #: src/routes/bbcode.tsx
 msgid "Bold"
 msgstr "Negrita"
@@ -6709,7 +6708,6 @@ msgstr "Reclamar"
 msgid "Claim it"
 msgstr "Reclamarla"
 
-#: src/components/supporter/loadout.ts
 #: src/lib/replay-overlays.ts
 #: src/lib/supporter-name-fonts.ts
 msgid "Classic"
@@ -11362,10 +11360,6 @@ msgstr "Ancho completo"
 msgid "Fullscreen"
 msgstr "Pantalla completa"
 
-#: src/components/supporter/loadout.ts
-msgid "Fun"
-msgstr "Diversión"
-
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Funwari Fuwari [7K] yoshilove's Uryu~ at 0:12. Each release shows the share of its v25 cost it keeps in v26."
 #~ msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ en 0:12. Cada release muestra la parte de su costo de v25 que conserva en v26."
@@ -11448,10 +11442,6 @@ msgstr "Vendaval"
 #: src/routes/workshop.themes.index.tsx
 msgid "Gallery"
 msgstr "Galería"
-
-#: src/components/supporter/loadout.ts
-msgid "Game and tech"
-msgstr "Juegos y tecnología"
 
 #: src/lib/skill-axes.ts
 msgid "General"
@@ -11934,10 +11924,6 @@ msgstr "Handjack"
 #: src/routes/recommendations/map/$beatmapId.tsx
 msgid "Handstream"
 msgstr "Handstream"
-
-#: src/components/supporter/loadout.ts
-msgid "Handwritten"
-msgstr "A mano"
 
 #: src/routes/recommendations.tsx
 msgid "hard"
@@ -15398,7 +15384,6 @@ msgid "Marker"
 msgstr "Marcador"
 
 #: src/components/supporter/SupporterExtras.tsx
-
 #: src/routes/support.tsx
 #~ msgid "Mascots"
 #~ msgstr "Mascotas"

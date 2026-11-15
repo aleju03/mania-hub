@@ -51,7 +51,7 @@ import { SUPPORTER_PROFILE_THEME_LABELS, SUPPORTER_PROFILE_THEMES, type ProfileT
 import {
   FRAME_GROUPS,
   FRAME_NAMES,
-  NAME_FONT_GROUPS,
+  NAME_FONT_ORDER,
   NAME_STYLE_GROUPS,
   PACK_SECTIONS,
   PROFILE_SECTIONS,
@@ -1029,14 +1029,11 @@ function SolidColourTile({ current, nameFont, outline, username, disabled, onTry
 function FontDrawer({ current, disabled, username, onTry, onPick }: DrawerProps) {
   const { t, i18n } = useLingui();
   const nameFont = current.nameFont;
-  const [tab, setTab] = useState(() => NAME_FONT_GROUPS.find((g) => nameFont && g.fonts.includes(nameFont))?.key ?? NAME_FONT_GROUPS[0].key);
-  const group = NAME_FONT_GROUPS.find((g) => g.key === tab) ?? NAME_FONT_GROUPS[0];
   const tryOn = (value: SupporterNameFontId | null) => (on: boolean) => onTry("nameFont", on ? value : undefined);
   return (
     <div>
-      <Chips value={tab} options={NAME_FONT_GROUPS.map((g) => ({ value: g.key, label: i18n._(g.title) }))} onChange={setTab} />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
-        {[null, ...group.fonts].map((id) => (
+        {[null, ...NAME_FONT_ORDER].map((id) => (
           <Item key={id ?? "default"} active={nameFont === id} disabled={disabled} onTry={tryOn(id)} onPick={() => onPick("nameFont", id)} className="items-stretch">
             <span className="flex h-12 items-center justify-center overflow-hidden rounded-md bg-osu-b6 px-3">
               <span className={`truncate px-[0.35em] -mx-[0.35em] py-[0.3em] -my-[0.3em] text-[20px] font-bold leading-none text-white ${id ? `name-font--${id}` : ""}`}>{username}</span>

@@ -420,11 +420,8 @@ export const NAME_STYLE_GROUPS: { key: string; title: MessageDescriptor; styles:
   { key: "labels", title: msg`Labels`, styles: ["plate", "label-tape", "highlighter", "long-note"] },
 ];
 
-export const NAME_FONT_GROUPS: { key: string; title: MessageDescriptor; fonts: SupporterNameFontId[] }[] = [
-  { key: "game", title: msg`Game and tech`, fonts: ["pixel", "silkscreen", "vt323", "majormono", "orbitron", "audiowide", "michroma", "zendots", "rubikglitch", "pixelify", "jersey", "doto", "tektur", "monocraft", "pixeloperator", "pixelheavy"] },
-  { key: "bold", title: msg`Bold`, fonts: ["unbounded", "bungee", "russo", "blackops", "bebas", "monoton", "delagothic", "rubikmono", "climatecrisis"] },
-  { key: "fun", title: msg`Fun`, fonts: ["righteous", "bangers", "luckiest", "shrikhand", "creepster", "fredoka", "bagel", "rampart"] },
-  { key: "hand", title: msg`Handwritten`, fonts: ["marker", "rocksalt", "pacifico", "lobster", "caveat", "sedgwick", "yellowtail", "greatvibes"] },
-  { key: "classic", title: msg`Classic`, fonts: ["cinzel", "playfair", "abril", "unifraktur", "bodoni", "limelight", "uncial"] },
+/* Every name font in picker order: pixel and tech, heavy, cartoon, handwritten, then classic serifs. */
+export const NAME_FONT_ORDER: SupporterNameFontId[] = [
+  "pixel", "silkscreen", "vt323", "majormono", "orbitron", "audiowide", "michroma", "zendots", "rubikglitch", "pixelify", "jersey", "doto", "tektur", "monocraft", "pixeloperator", "pixelheavy", "unbounded", "bungee", "russo", "blackops", "bebas", "monoton", "delagothic", "rubikmono", "climatecrisis", "righteous", "bangers", "luckiest", "shrikhand", "creepster", "fredoka", "bagel", "rampart", "marker", "rocksalt", "pacifico", "lobster", "caveat", "sedgwick", "yellowtail", "greatvibes", "cinzel", "playfair", "abril", "unifraktur", "bodoni", "limelight", "uncial",
 ];
 
