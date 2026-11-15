@@ -10,7 +10,6 @@ import { SupportCheckout, SupportMethodSteps, useSupportMethods, type SupportMet
 import { KofiNameSteps } from "../components/supporter/KofiNameSteps";
 import { SupportPlans } from "../components/supporter/SupportPlans";
 import {
-  BotDmShowcase,
   CardShowcase,
   ClipShowcase,
   FramesShowcase,
@@ -61,9 +60,9 @@ const SECTIONS: { id: string; label: MessageDescriptor }[] = [
   { id: "packs", label: msg`Packs` },
   { id: "stats", label: msg`Profile stats` },
   { id: "sharing", label: msg`Video share links` },
-  { id: "bot-dms", label: msg`Bot DMs` },
   { id: "gift", label: msg`A week for a friend` },
   { id: "ranks", label: msg`Supporter ranks` },
+  { id: "extras", label: msg`Also included` },
   { id: "checkout", label: msg`Support` },
 ];
 
@@ -306,16 +305,6 @@ function SupportPage() {
             </Perk>
 
             <Perk
-              id="bot-dms"
-              title={t`DMs from the bot`}
-              count={t`Optional`}
-              body={t`Link Discord and pick which ones maniabot sends you: when someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week.`}
-              more={<Trans>Turn them on from the <Link to="/discord">Discord bot page</Link>.</Trans>}
-            >
-              <BotDmShowcase />
-            </Perk>
-
-            <Perk
               id="gift"
               title={t`A week for a friend`}
               count={t`One code per $4`}
@@ -332,6 +321,25 @@ function SupportPage() {
             >
               <SupporterRankShowcase />
             </Perk>
+
+            <section id="extras" className="scroll-mt-[76px] border-t border-white/[0.07] pt-8">
+              <Reveal>
+                <h2 className="text-[22px] font-bold text-white">{t`Also included`}</h2>
+                <div id="bot-dms" className="mt-4 flex max-w-[620px] scroll-mt-[96px] gap-3">
+                  <img src="/images/discord/bot-avatar.png" alt="" className="mt-0.5 h-8 w-8 shrink-0 rounded-full" />
+                  <div>
+                    <div className="flex flex-wrap items-baseline gap-x-3">
+                      <h3 className="text-[15px] font-bold text-white">{t`DMs from the bot`}</h3>
+                      <span className="text-[13px] font-semibold text-osu-pink-light">{t`Optional`}</span>
+                    </div>
+                    <p className="mt-1 text-[14px] leading-relaxed text-osu-l2">
+                      {t`Link Discord and pick which ones maniabot sends you: when someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, and a recap of your week.`}{" "}
+                      <span className="[&_a]:font-semibold [&_a]:text-osu-pink-light hover:[&_a]:underline"><Trans>Turn them on from the <Link to="/discord">Discord bot page</Link>.</Trans></span>
+                    </p>
+                  </div>
+                </div>
+              </Reveal>
+            </section>
 
             <section id="checkout" className="scroll-mt-[76px] border-t border-white/[0.07] pt-8">
               <Reveal className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">

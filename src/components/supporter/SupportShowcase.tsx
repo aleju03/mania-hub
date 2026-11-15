@@ -49,8 +49,6 @@ import {
 import type { ProfileStatsData } from "../../lib/profile-stats";
 import type { SupporterLook } from "../../lib/supporter-card-looks";
 import { scaledPx } from "#/lib/ui-scale-values";
-import { DiscordMessageBodyView, FLAG_COMPONENTS_V2, type DiscordComponentJson, type DiscordMessageJson } from "../discord/message/DiscordMessageView";
-import { DISCORD } from "../discord/message/discord-markdown";
 
 /* The live pictures on /support, one per perk: each is the real thing the
    perk draws (the theme's backdrop, the frame's video, the name's shader,
@@ -808,100 +806,6 @@ export function ClipShowcase() {
           />
         </div>
       </motion.div>
-    </div>
-  );
-}
-
-/* --- Bot DMs ---------------------------------------------------------------------- */
-
-const DM_GREEN = 0x88da20;
-const DM_PINK = 0xff66ab;
-
-// the DT pill as the bot sends it, two halves; the zero id draws the site's own copy
-const DM_DT = "<:mod_dt_l:000000000000000000>\u2060<:mod_dt_r:000000000000000000>";
-
-const dmText = (content: string): DiscordComponentJson => ({ type: 10, content });
-// a link button without its url, so the preview draws it but it goes nowhere
-const dmLink = (label: string): DiscordComponentJson => ({ type: 2, style: 5, label });
-
-/* A DM in the bot's own layout (backend discord/dm-alerts.ts, weekly-recap.ts,
-   panels.ts newMapPost): a container with the accent strip, a small line over
-   it when the message has one, text beside a thumbnail, then the rest. */
-function dmMessage(accent: number, lines: string[], image: string, rest: DiscordComponentJson[], over?: string): DiscordMessageJson {
-  return {
-    flags: FLAG_COMPONENTS_V2,
-    components: [{
-      type: 17,
-      accent_color: accent,
-      components: [
-        ...(over ? [dmText(over)] : []),
-        { type: 9, components: lines.map(dmText), accessory: { type: 11, media: { url: image } } },
-        ...rest,
-      ],
-    }],
-  };
-}
-
-/* The bot's DMs as they land in Discord: a new farm map, a card pulled, the
-   weekly recap. Example numbers. */
-export function BotDmShowcase() {
-  const { t } = useLingui();
-  const reduced = useReducedMotion();
-  const you = useShowcaseViewer();
-  // the viewer's own card, as the bot attaches it; the site logo when signed out
-  const cardImage = you.id ? `/api/og?kind=maniacard&username=${encodeURIComponent(you.name)}` : you.avatar;
-  const messages = [
-    // the speeds worth playing it at and what each pays, as the bot prices a 2,000-note chart
-    dmMessage(DM_GREEN, [
-      `### ${t`Example Artist - Example Song`}`,
-      `**${t`Insane`}**\n-# ${t`4K  ranked 2 hours ago`}`,
-      "**6.20★**\n95% **289pp**  97% **340pp**  99% **398pp**\n-# Lazer  305pp  356pp  413pp",
-    ], "/images/supporter-perks/play-cover.webp", [
-      dmText(`**8.60★** ${DM_DT}\n95% **602pp**  97% **709pp**  99% **830pp**\n-# Lazer  636pp  742pp  861pp`),
-      { type: 1, components: [dmLink(t`Map`), dmLink("osu!")] },
-    ], `-# ${t`New farm map`}`),
-    dmMessage(DM_GREEN, [t`**ExamplePlayer** pulled your card`, `-# ${t`the first copy anyone has pulled`}`], cardImage, [
-      { type: 1, components: [dmLink(t`Their collection`), dmLink(t`Packs`)] },
-    ]),
-    dmMessage(DM_PINK, [
-      `-# ${t`Your week  Nov 3 to Nov 9`}`,
-      "## +214pp",
-      `${t`now **10,026pp**`}\n${t`Global **#4,108**  up 312 from #4,420`}\n${t`CR **#31**  up 2 from #33`}`,
-    ], you.avatar, [
-      { type: 14, divider: true, spacing: 1 },
-      dmText(`${t`**186** plays  **4** new top plays  **1** goal completed`}\n${t`Best **412pp** on Example Song [Hard]`}\n${t`Your card was pulled **12** times`}`),
-      { type: 14, divider: false, spacing: 2 },
-      { type: 1, components: [dmLink(t`Your profile`)] },
-    ]),
-  ];
-  return (
-    <div>
-      <div className="overflow-hidden rounded-xl p-4" style={{ backgroundColor: DISCORD.msg, fontFamily: DISCORD.font }}>
-        <div className="flex gap-4">
-          <img src="/images/discord/bot-avatar.png" alt="" className="h-10 w-10 shrink-0 rounded-full" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[16px] font-medium" style={{ color: DISCORD.white }}>maniabot</span>
-              <span className="rounded-[3px] px-1 text-[10px] font-semibold leading-[15px] text-white" style={{ backgroundColor: DISCORD.blurple }}>APP</span>
-              <span className="text-[12px]" style={{ color: DISCORD.muted }}>{t`Today at 21:14`}</span>
-            </div>
-            <div className="mt-1 flex flex-col gap-3">
-              {messages.map((body, index) => (
-                <motion.div
-                  key={index}
-                  initial={reduced ? false : { opacity: 0, y: 24 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "0px 0px -10% 0px" }}
-                  transition={{ type: "spring", stiffness: 300, damping: 26, delay: 0.15 + index * 0.45 }}
-                >
-                  <DiscordMessageBodyView body={body} />
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-      <p className="mt-2 text-[11px] text-osu-f1">{t`Example numbers.`}</p>
     </div>
   );
 }

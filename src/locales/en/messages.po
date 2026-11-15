@@ -2352,16 +2352,16 @@ msgid "{years}y ago"
 msgstr "{years}y ago"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**186** plays  **4** new top plays  **1** goal completed"
-msgstr "**186** plays  **4** new top plays  **1** goal completed"
+#~ msgid "**186** plays  **4** new top plays  **1** goal completed"
+#~ msgstr "**186** plays  **4** new top plays  **1** goal completed"
 
 #: src/components/supporter/SupportShowcase.tsx
 #~ msgid "**23** players gained pp on it already, **1,840pp** in total"
 #~ msgstr "**23** players gained pp on it already, **1,840pp** in total"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "**ExamplePlayer** pulled your card"
-msgstr "**ExamplePlayer** pulled your card"
+#~ msgid "**ExamplePlayer** pulled your card"
+#~ msgstr "**ExamplePlayer** pulled your card"
 
 #: src/components/supporter/SupportShowcase.tsx
 #~ msgid "**ExamplePlayer** sniped you from #1"
@@ -3095,8 +3095,8 @@ msgstr "4K"
 #~ msgstr "4K  5.84★  ranked 2 hours ago"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "4K  ranked 2 hours ago"
-msgstr "4K  ranked 2 hours ago"
+#~ msgid "4K  ranked 2 hours ago"
+#~ msgstr "4K  ranked 2 hours ago"
 
 #. placeholder {0}: N.fourKeys.chips
 #: src/lib/pack-run.ts
@@ -4515,6 +4515,10 @@ msgstr "already tracked"
 msgid "Also {0}"
 msgstr "Also {0}"
 
+#: src/routes/support.tsx
+msgid "Also included"
+msgstr "Also included"
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Also on map dans"
 msgstr "Also on map dans"
@@ -5530,8 +5534,8 @@ msgid "best {best}pp"
 msgstr "best {best}pp"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Best **412pp** on Example Song [Hard]"
-msgstr "Best **412pp** on Example Song [Hard]"
+#~ msgid "Best **412pp** on Example Song [Hard]"
+#~ msgstr "Best **412pp** on Example Song [Hard]"
 
 #: src/lib/pack-run.ts
 msgid "Best card"
@@ -5741,8 +5745,8 @@ msgid "Bot"
 msgstr "Bot"
 
 #: src/routes/support.tsx
-msgid "Bot DMs"
-msgstr "Bot DMs"
+#~ msgid "Bot DMs"
+#~ msgstr "Bot DMs"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bottom"
@@ -8317,8 +8321,8 @@ msgstr "Cover"
 #~ msgstr "Covered: jack, tech, speed and stamina on 4K regular, jack, tech, speed and stream on 7K regular, general, tech, inverse and release on 7K LN, and all-round, technical, walls and speed on 4K LN. 6K has none for now."
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "CR **#31**  up 2 from #33"
-msgstr "CR **#31**  up 2 from #33"
+#~ msgid "CR **#31**  up 2 from #33"
+#~ msgstr "CR **#31**  up 2 from #33"
 
 #: src/lib/supporter-foils.ts
 msgid "Cracked ice"
@@ -10241,8 +10245,8 @@ msgid "Exact estimate: {0}"
 msgstr "Exact estimate: {0}"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Example Artist - Example Song"
-msgstr "Example Artist - Example Song"
+#~ msgid "Example Artist - Example Song"
+#~ msgstr "Example Artist - Example Song"
 
 #: src/components/supporter/SupportShowcase.tsx
 msgid "Example numbers."
@@ -11623,8 +11627,8 @@ msgid "Global"
 msgstr "Global"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Global **#4,108**  up 312 from #4,420"
-msgstr "Global **#4,108**  up 312 from #4,420"
+#~ msgid "Global **#4,108**  up 312 from #4,420"
+#~ msgstr "Global **#4,108**  up 312 from #4,420"
 
 #: src/routes/maps.tsx
 msgid "global favs"
@@ -13116,7 +13120,6 @@ msgstr "Input overlay options"
 msgid "Inputs"
 msgstr "Inputs"
 
-#: src/components/supporter/SupportShowcase.tsx
 #: src/lib/pack-run.ts
 msgid "Insane"
 msgstr "Insane"
@@ -15244,7 +15247,6 @@ msgstr "map"
 #: src/components/maps/DanProgressRail.tsx
 #: src/components/rankings/UnratedPlaysBoard.tsx
 #: src/components/replay/ReplayInfo.tsx
-#: src/components/supporter/SupportShowcase.tsx
 msgid "Map"
 msgstr "Map"
 
@@ -16284,8 +16286,8 @@ msgid "New collection"
 msgstr "New collection"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "New farm map"
-msgstr "New farm map"
+#~ msgid "New farm map"
+#~ msgstr "New farm map"
 
 #: src/routes/discord.tsx
 msgid "New farm maps"
@@ -17849,8 +17851,8 @@ msgid "now {now}"
 msgstr "now {now}"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "now **10,026pp**"
-msgstr "now **10,026pp**"
+#~ msgid "now **10,026pp**"
+#~ msgstr "now **10,026pp**"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "now #{nowRank}"
@@ -18946,7 +18948,6 @@ msgstr "packs"
 #: src/components/packs/run/RunHud.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/supporter/LoadoutSlots.tsx
-#: src/components/supporter/SupportShowcase.tsx
 #: src/routes/support.tsx
 msgid "Packs"
 msgstr "Packs"
@@ -27005,8 +27006,8 @@ msgid "The first card scores twice."
 msgstr "The first card scores twice."
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "the first copy anyone has pulled"
-msgstr "the first copy anyone has pulled"
+#~ msgid "the first copy anyone has pulled"
+#~ msgstr "the first copy anyone has pulled"
 
 #: src/routes/workshop.index.tsx
 msgid "The first frame players make goes up here."
@@ -27631,8 +27632,8 @@ msgid "The week is yours."
 msgstr "The week is yours."
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Their collection"
-msgstr "Their collection"
+#~ msgid "Their collection"
+#~ msgstr "Their collection"
 
 #: src/components/packs/CardCollectors.tsx
 msgid "Their copy"
@@ -31232,8 +31233,8 @@ msgid "Your card level goes with it. Whoever gets this number gets level {carrie
 msgstr "Your card level goes with it. Whoever gets this number gets level {carriedLevel}, and you go down to level {levelLeft}."
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Your card was pulled **12** times"
-msgstr "Your card was pulled **12** times"
+#~ msgid "Your card was pulled **12** times"
+#~ msgstr "Your card was pulled **12** times"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Your cards"
@@ -31527,8 +31528,8 @@ msgid "Your private skins are on the shelf above; anything you publish lands her
 msgstr "Your private skins are on the shelf above; anything you publish lands here."
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Your profile"
-msgstr "Your profile"
+#~ msgid "Your profile"
+#~ msgstr "Your profile"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Your profile is being deleted."
@@ -31727,8 +31728,8 @@ msgid "Your username and avatar"
 msgstr "Your username and avatar"
 
 #: src/components/supporter/SupportShowcase.tsx
-msgid "Your week  Nov 3 to Nov 9"
-msgstr "Your week  Nov 3 to Nov 9"
+#~ msgid "Your week  Nov 3 to Nov 9"
+#~ msgstr "Your week  Nov 3 to Nov 9"
 
 #: src/routes/support.tsx
 msgid "Your whole profile takes on a theme, with a living backdrop behind it and the site's colours shifted to match."
