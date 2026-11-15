@@ -16068,8 +16068,8 @@ msgid "Music"
 msgstr "Music"
 
 #: src/components/packs/run/chain/ChainHowTo.tsx
-msgid "Music: \"Cool Vibes\" by Kevin MacLeod (<0>incompetech.com</0>), CC BY 4.0"
-msgstr "Music: \"Cool Vibes\" by Kevin MacLeod (<0>incompetech.com</0>), CC BY 4.0"
+msgid "Music by Kevin MacLeod (<0>incompetech.com</0>), CC BY 4.0"
+msgstr "Music by Kevin MacLeod (<0>incompetech.com</0>), CC BY 4.0"
 
 #: src/components/prism/PrismVisualizer.tsx
 msgid "Mute"

@@ -322,6 +322,7 @@ export function ChainStart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const height = narrow ? 150 : 230;
+  const dailyButton = { key: "daily", label: <Trans>Daily run</Trans>, title: t`Daily run`, icon: <IconDaily />, tone: KIT.gold, onClick: () => onDaily?.() };
   const width = Math.round(height * PACK_ASPECT);
   return (
     <div className="absolute inset-0 overflow-y-auto overflow-x-hidden">
@@ -379,11 +380,15 @@ export function ChainStart({
                   onNewRun();
                 },
               },
-              ...(!daily && onDaily
-                ? [{ key: "daily", label: <Trans>Daily run</Trans>, title: t`Daily run`, icon: <IconDaily />, tone: KIT.gold, onClick: onDaily }]
-                : []),
+              // Beside Start a run on a wide screen; on a phone the two do not fit one line.
+              ...(!daily && onDaily && !narrow ? [dailyButton] : []),
             ]}
           />
+          {!daily && onDaily && narrow && (
+            <div className="mt-3 flex justify-center">
+              <ChainButtons items={[dailyButton]} />
+            </div>
+          )}
           {onHowTo && (
             <button
               type="button"

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -60,8 +60,36 @@ function LinkChips({ traits, broken = false }: { traits: ReactNode[]; broken?: b
   );
 }
 
+/* A row of cards and link chips, shrunk as a whole when the window is
+   narrower than the row (three cards and two chip columns pass 380px). */
 function Cards({ children }: { children: ReactNode }) {
-  return <div className="flex items-start justify-center gap-1.5">{children}</div>;
+  const outer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ scale: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    const box = outer.current;
+    const row = inner.current;
+    if (!box || !row) return;
+    const measure = () => {
+      const scale = Math.min(1, box.clientWidth / row.scrollWidth);
+      setFit(scale < 1 ? { scale, height: row.offsetHeight * scale } : null);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={outer} className="flex w-full justify-center" style={fit ? { height: fit.height } : undefined}>
+      <div
+        ref={inner}
+        className="flex shrink-0 items-start justify-center gap-1.5"
+        style={fit ? { transform: `scale(${fit.scale})`, transformOrigin: "top center" } : undefined}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
 
 function Face({ card, lit, width, playedCover }: { card: ChainCard; lit?: string[]; width: number; playedCover?: string }) {
@@ -238,11 +266,12 @@ export function ChainHowTo({ open, narrow, onClose, onTutorial }: { open: boolea
                 ]}
               />
             </div>
-            {/* CC BY 4.0 attribution for the table's music (packSfx.ts). */}
+            {/* CC BY 4.0 attribution for the table's music (packSfx.ts). 4.0 asks
+                for the creator, the licence and a link, not the title. */}
             {last && (
               <div className="mt-4 text-[11px] font-bold text-[#f3e9d8]/45">
                 <Trans>
-                  Music: "Cool Vibes" by Kevin MacLeod (
+                  Music by Kevin MacLeod (
                   <a href="https://incompetech.com" target="_blank" rel="noreferrer" className="underline hover:text-[#f3e9d8]">
                     incompetech.com
                   </a>
