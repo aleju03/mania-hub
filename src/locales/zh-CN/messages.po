@@ -28183,7 +28183,7 @@ msgstr "这次游玩的判定 OD 为 {0}，段位通过需要高于该 OD。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play's file has a lower OD than the chart on osu!, so this accuracy was not set against the windows a dan clear is judged on."
-msgstr ""
+msgstr "这次游玩的文件 OD 低于 osu! 上的谱面，这个准确率并非在段位通过所依据的判定下取得。"
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "This play's strongest skillset"

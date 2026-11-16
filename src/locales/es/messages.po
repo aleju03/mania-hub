@@ -28171,7 +28171,7 @@ msgstr "Esta jugada se jugó con OD {0}. Un pase de dan tiene que jugarse con un
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play's file has a lower OD than the chart on osu!, so this accuracy was not set against the windows a dan clear is judged on."
-msgstr ""
+msgstr "El archivo de esta jugada tiene un OD más bajo que el mapa en osu!, así que esta precisión no se logró con las ventanas con las que se juzga un pase de dan."
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "This play's strongest skillset"

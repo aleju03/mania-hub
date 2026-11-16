@@ -1521,7 +1521,9 @@ function useDanRejectionReason(rejected: LivePlayerDanRejectedPlay): string {
             ? t`This play was judged at OD ${od.toFixed(1)}. A dan clear has to be played at a higher OD than that.`
             : t`This play was judged at a lower OD than a dan clear has to be played at.`)
           : rejected.reason === "ez_windows"
-            ? t`Easy widened every hit window, so this accuracy was not set against the windows a dan clear is judged on.`
+            ? (rejected.play.mods?.includes("EZ") === false
+              ? t`This play's file has a lower OD than the chart on osu!, so this accuracy was not set against the windows a dan clear is judged on.`
+              : t`Easy widened every hit window, so this accuracy was not set against the windows a dan clear is judged on.`)
             : rejected.reason === "jumptrill"
               ? t`Jumptrill chart. This play counts toward skill ratings but not toward dan.`
             : rejected.reason === "chart_ineligible"
