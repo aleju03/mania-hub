@@ -27,6 +27,34 @@ describe("ResolutionGovernor", () => {
     expect(governor.scale).toBe(1);
   });
 
+  it("is back at full within a second of a guess that was too low", () => {
+    const governor = new ResolutionGovernor();
+    governor.start(0.12);
+    run(governor, 16.7, 50);
+    expect(governor.scale).toBe(1);
+  });
+
+  it("holds a guessed start while the first frames are not fast, and never lowers it that early", () => {
+    const governor = new ResolutionGovernor();
+    governor.start(0.3);
+    run(governor, 20, 90);
+    expect(governor.scale).toBeCloseTo(0.3);
+    const slow = new ResolutionGovernor();
+    slow.start(0.3);
+    run(slow, 40, 90);
+    expect(slow.scale).toBeCloseTo(0.3);
+  });
+
+  it("stops climbing early at the size where frames stop being fast", () => {
+    const governor = new ResolutionGovernor();
+    governor.start(0.12);
+    run(governor, 16.7, 20);
+    const reached = governor.scale;
+    expect(reached).toBeCloseTo(0.12 * 1.6 * 1.6);
+    run(governor, 20, 70);
+    expect(governor.scale).toBeCloseTo(reached);
+  });
+
   it("climbs slowly again once a guessed start has run slow", () => {
     const governor = new ResolutionGovernor();
     governor.start(0.5);

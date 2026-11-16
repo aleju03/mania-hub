@@ -502,6 +502,8 @@ const MIN_PIXEL_SCALE = 0.12;
 /* Frames not judged after it starts (~1.5s): a page still loading, hydrating
    and decoding images says nothing about the GPU. */
 const WARMUP_FRAMES = 90;
+/* Frames in a window judged during the warm-up, when it started from a guess. */
+const GUESS_WINDOW = 10;
 /* Fast windows (~0.5s each) before it climbs a step under its ceiling. */
 const CLIMB_WINDOWS = 8;
 /* Fast windows at its ceiling before it tries above it, doubling up to the
@@ -547,7 +549,18 @@ export class ResolutionGovernor {
   frame(gapMs: number): boolean {
     if (this.warmup > 0) {
       this.warmup -= 1;
-      return false;
+      // A start below full is a guess from two tiny frames timed while the
+      // page loads, and it guesses low on a GPU that carries the theme. A
+      // loading page only makes frames look slower, so fast ones this early
+      // are real room: it climbs on short windows here and never lowers.
+      if (!this.guessed || this.scale >= this.ceiling || gapMs > 250) return false;
+      this.gaps.push(gapMs);
+      if (this.gaps.length < GUESS_WINDOW) return false;
+      const early = this.gaps.sort((a, b) => a - b)[GUESS_WINDOW >> 1];
+      this.gaps.length = 0;
+      if (early >= FAST_FRAME_MS) return false;
+      this.scale = Math.min(this.ceiling, this.scale * 1.6);
+      return true;
     }
     // a hidden tab or a long hitch says nothing about the GPU
     if (gapMs > 250) {
