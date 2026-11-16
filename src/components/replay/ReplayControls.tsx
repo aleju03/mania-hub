@@ -1,7 +1,8 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, Film, Loader2, Maximize2, Settings, Share2 } from "lucide-react";
+import { Check, ChevronDown, Film, Loader2, Maximize2, Settings, Share2, Upload } from "lucide-react";
+import { SHARED_CLIP_MAX_BYTES } from "#/lib/shared-clips";
 import { Trans, useLingui } from "@lingui/react/macro";
 
 import type { ReplayRendererLike } from "#/lib/replay-types";
@@ -80,6 +81,10 @@ interface ReplayControlsProps {
   videoExportBusy?: boolean;
   /** False where this browser has no save dialog, so output is in-memory. */
   videoExportCanSaveToFile?: boolean;
+  /** The viewer can turn an export into a share link (active supporter). */
+  videoExportCanShare?: boolean;
+  /** A share export can render into private storage instead of memory. */
+  videoExportCanShareToFile?: boolean;
   /** Export dialog choices, held by the page so they outlive the drawer. */
   videoExportDraft: ReplayVideoExportDraft;
   onVideoExportDraftChange: Dispatch<SetStateAction<ReplayVideoExportDraft>>;
@@ -116,6 +121,8 @@ export type ReplayVideoExportOptions = {
   encodingMode?: ReplayExportEncodingMode;
   videoBitrate?: number;
   kind: "clip" | "full" | "custom";
+  /** Only wanted as a share link: skip the save dialog and upload it when done. */
+  share?: boolean;
   /** Output seconds for a clip; source span is this times the rate. */
   durationSeconds?: number;
   startTimeMs?: number;
@@ -208,6 +215,8 @@ export function ReplayControls({
   ownerSkinName,
   videoExportBusy = false,
   videoExportCanSaveToFile = false,
+  videoExportCanShare = false,
+  videoExportCanShareToFile = false,
   videoExportDraft,
   onVideoExportDraftChange,
   shareUrl: replayShareUrl = null,
@@ -501,14 +510,22 @@ export function ReplayControls({
   });
   const exportEstimatedBytes = exportAdmission.estimatedBytes;
   const exportOverLimit = !exportAdmission.ok;
+  // A share export has its own destination and the link's size cap on top.
+  const shareOverLimit = exportEstimatedBytes > SHARED_CLIP_MAX_BYTES || !checkExportAdmission({
+    destination: videoExportCanShareToFile ? "file" : "buffer",
+    outputSeconds: exportOutputSeconds,
+    videoBitrate: selectedVideoBitrate,
+    audioBitrate: REPLAY_EXPORT_AUDIO_BITRATE,
+    workingMemoryBytes: 0,
+  }).ok;
   const exportRangeReady = videoExportKind !== "custom" || hasCustomRange;
   // Pink means "you are marking a range", which only Custom mode does.
   const videoMarkingActive = videoExportKind === "custom" && videoClipMode;
 
-  const submitVideoExport = () => {
-    if (!onExportVideo || videoExportBusy || !exportRangeReady || exportOverLimit || fastSupportChecking || customBitrateInvalid) return;
+  const submitVideoExport = (share = false) => {
+    if (!onExportVideo || videoExportBusy || !exportRangeReady || (share ? shareOverLimit : exportOverLimit) || fastSupportChecking || customBitrateInvalid) return;
     setVideoMenuOpen(false);
-    const outputOptions = { preset: videoPreset, layout: videoLayout, encodingMode: videoEncodingMode, videoBitrate: customVideoBitrate };
+    const outputOptions = { preset: videoPreset, layout: videoLayout, encodingMode: videoEncodingMode, videoBitrate: customVideoBitrate, share };
     if (videoExportKind === "full") {
       onExportVideo({ kind: "full", ...outputOptions });
     } else if (videoExportKind === "clip") {
@@ -1101,15 +1118,33 @@ export function ReplayControls({
             <div className="px-1 pt-1 text-[10px] leading-tight text-osu-f1">
               {t`The video is created on your device. Keep this tab open while it exports.`}
             </div>
-            <button
-              type="button"
-              onClick={submitVideoExport}
-              disabled={videoExportBusy || !exportRangeReady || exportOverLimit || fastSupportChecking || customBitrateInvalid}
-              className="mt-1.5 flex w-full cursor-pointer items-center justify-center rounded bg-osu-pink px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink"
-            >
-              {fastSupportChecking && <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" />}
-              {t`Export video`}
-            </button>
+            {videoExportCanShare && shareOverLimit && !exportOverLimit && exportRangeReady && (
+              <div className="px-1 pt-1 text-[10px] leading-tight text-osu-f1">
+                {t`Share links take videos up to 200 MB.`}
+              </div>
+            )}
+            <div className="mt-1.5 flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => submitVideoExport()}
+                disabled={videoExportBusy || !exportRangeReady || exportOverLimit || fastSupportChecking || customBitrateInvalid}
+                className="flex min-w-0 flex-1 cursor-pointer items-center justify-center rounded bg-osu-pink px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink"
+              >
+                {fastSupportChecking && <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" />}
+                {t`Export video`}
+              </button>
+              {videoExportCanShare && (
+                <button
+                  type="button"
+                  onClick={() => submitVideoExport(true)}
+                  disabled={videoExportBusy || !exportRangeReady || shareOverLimit || fastSupportChecking || customBitrateInvalid}
+                  className="flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded bg-osu-pink/15 px-2 py-1.5 text-[11px] font-semibold text-osu-pink-light hover:bg-osu-pink/25 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink/15"
+                >
+                  <Upload className="h-3.5 w-3.5" strokeWidth={2.4} />
+                  {t`Share video`}
+                </button>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

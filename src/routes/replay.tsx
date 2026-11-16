@@ -118,7 +118,8 @@ import { getReplaySpectatorTicket, type ReplaySpectatorTicket } from "../lib/rep
 import { useLocale } from "../lib/locale-context";
 import { getReplayExportManager } from "../lib/replay-export/manager";
 import { useReplayExportJob } from "../lib/replay-export/use-replay-export-job";
-import { requestExportFileHandle, supportsFileSystemAccess } from "../lib/replay-export/save-picker";
+import { useViewerIsSupporter } from "../lib/viewer-supporter";
+import { requestExportFileHandle, requestScratchExportFileHandle, supportsFileSystemAccess, supportsScratchExportFile } from "../lib/replay-export/save-picker";
 import { buildReplayExportSpec, type ReplayExportCapture } from "../lib/replay-export/snapshot";
 import { DEFAULT_EXPORT_CLIP_SECONDS } from "../lib/replay-export/limits";
 import { MIN_EXPORT_RANGE_MS, resolveExportRange } from "../lib/replay-export/timeline";
@@ -2440,6 +2441,8 @@ function ReplayViewer({
   // Probed once on mount: the value decides which admission limits the
   // dialog quotes, and it cannot change while the page is open.
   const [exportCanSaveToFile] = useState(() => supportsFileSystemAccess());
+  const [exportCanShareToFile] = useState(() => supportsScratchExportFile());
+  const exportCanShare = useViewerIsSupporter(auth.viewer?.id);
 
   const cancelReplayEndAudioFade = useCallback((restoreVolume = true) => {
     replayEndAudioFadeActiveRef.current = false;
@@ -5002,7 +5005,7 @@ function ReplayViewer({
       try {
         // A local .osr has nothing in the query to come back to.
         const replayPath = window.location.search ? `${window.location.pathname}${window.location.search}` : null;
-        manager.start({ spec, capture, target, title, replayPath });
+        manager.start({ spec, capture, target, title, replayPath, share: options.share === true });
         // Avoid running the live replay alongside its export renderer. The
         // user can resume it manually; cancelling the picker never pauses it.
         if (rendererRef.current === renderer && renderer.isPlaying) togglePlayRef.current?.();
@@ -5012,6 +5015,13 @@ function ReplayViewer({
       }
     };
 
+    if (options.share) {
+      // A video that is only going to be a link renders into the browser's
+      // private storage: no save dialog, nothing left in the user's folders.
+      void requestScratchExportFileHandle()
+        .then((handle) => begin(handle ? { kind: "file", handle } : { kind: "buffer" }));
+      return;
+    }
     if (!supportsFileSystemAccess()) {
       begin({ kind: "buffer" });
       return;
@@ -5117,6 +5127,8 @@ function ReplayViewer({
       onToggleOwnerSkin={() => setOwnerSkinApplied((value) => !value)}
       videoExportBusy={replayExportBusy}
       videoExportCanSaveToFile={exportCanSaveToFile}
+      videoExportCanShare={exportCanShare}
+      videoExportCanShareToFile={exportCanShareToFile}
       shareUrl={shareUrl ?? null}
       onTogglePlay={togglePlay}
       onToggleFullscreen={toggleReplayFullscreen}

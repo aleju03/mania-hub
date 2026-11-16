@@ -33,6 +33,8 @@ export function ShareClipButton({ job }: { job: ReplayExportJobView }) {
   const supporter = useViewerIsSupporter(viewer?.id);
   const [state, setState] = useState<ShareState>({ kind: "idle" });
   const abortRef = useRef<AbortController | null>(null);
+  const autoStartedRef = useRef<string | null>(null);
+  const shareRef = useRef<() => void>(() => {});
 
   // A new export starts the button over; leaving the panel stops an upload.
   useEffect(() => {
@@ -40,8 +42,17 @@ export function ShareClipButton({ job }: { job: ReplayExportJobView }) {
     return () => abortRef.current?.abort();
   }, [job.id]);
 
+  const canShare = Boolean(viewer && supporter && job.result);
+  const tooBig = (job.result?.byteLength ?? 0) > SHARED_CLIP_MAX_BYTES;
+
+  // An export started from "Share link" uploads itself, once.
+  useEffect(() => {
+    if (!job.share || !canShare || tooBig || autoStartedRef.current === job.id) return;
+    autoStartedRef.current = job.id;
+    shareRef.current();
+  }, [job.id, job.share, canShare, tooBig]);
+
   if (!viewer || !supporter || !job.result) return null;
-  const tooBig = job.result.byteLength > SHARED_CLIP_MAX_BYTES;
 
   const share = async () => {
     const manager = peekReplayExportManager();
@@ -79,6 +90,23 @@ export function ShareClipButton({ job }: { job: ReplayExportJobView }) {
       if (controller.signal.aborted) return;
       setState({ kind: "error", reason: "upload" });
     }
+  };
+
+  shareRef.current = () => void share();
+
+  // The only copy of a share export is in private storage; if the link can't
+  // be made, this is how the video is still handed over.
+  const saveInstead = async () => {
+    const file = await peekReplayExportManager()?.resultFile();
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = job.result?.filename ?? job.filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
   const copy = async () => {
@@ -139,6 +167,15 @@ export function ShareClipButton({ job }: { job: ReplayExportJobView }) {
       </button>
       {tooBig && <p className="text-[11px] leading-tight text-osu-f1">{t`Share links take videos up to 200 MB.`}</p>}
       {state.kind === "error" && <p className="text-[11px] leading-tight text-red-200">{i18n._(shareErrorText(state.reason))}</p>}
+      {(state.kind === "error" || tooBig) && job.share && job.result.kind === "file" && (
+        <button
+          type="button"
+          onClick={saveInstead}
+          className="flex w-full cursor-pointer items-center justify-center rounded bg-osu-b4 px-2 py-1.5 text-[11px] font-semibold text-osu-f0 transition-colors hover:text-white"
+        >
+          {t`Download the video instead`}
+        </button>
+      )}
     </div>
   );
 }

@@ -65,6 +65,12 @@ export type ReplayExportJobView = {
   /** Milliseconds the job has spent in an active phase. */
   elapsedMs: number;
   destination: ReplayExportDestinationKind;
+  /**
+   * Started from "Share link": the file goes to the browser's private storage
+   * instead of a folder the user picked, and the panel uploads it as soon as
+   * it is finished.
+   */
+  share: boolean;
   container: "mp4" | "webm";
   hasAudio: boolean;
   warnings: ReplayExportWarningCode[];
@@ -136,6 +142,8 @@ export type ReplayExportStartRequest = {
   /** Captured viewer state; its bytes are taken during the preparing phase. */
   capture: ReplayExportCapture;
   target: ReplayExportDestinationTarget;
+  /** The video is only wanted as a share link; see `ReplayExportJobView.share`. */
+  share?: boolean;
   title: string;
   replayPath?: string | null;
 };

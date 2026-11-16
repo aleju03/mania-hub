@@ -47,3 +47,37 @@ export async function requestExportFileHandle(
     );
   }
 }
+
+const SCRATCH_EXPORT_FILE = "share-clip-export";
+
+/** True where the browser has private storage a share export can render into. */
+export function supportsScratchExportFile(): boolean {
+  return typeof navigator !== "undefined" && typeof navigator.storage?.getDirectory === "function";
+}
+
+/**
+ * A file in the origin's private storage, for an export that is only going
+ * to be shared as a link: no save dialog, nothing in the user's folders. One
+ * fixed name, so an export left behind by a closed tab is overwritten by the
+ * next one. Null where the browser has no such storage.
+ */
+export async function requestScratchExportFileHandle(): Promise<FileSystemFileHandle | null> {
+  if (!supportsScratchExportFile()) return null;
+  try {
+    const root = await navigator.storage.getDirectory();
+    return await root.getFileHandle(SCRATCH_EXPORT_FILE, { create: true });
+  } catch {
+    return null;
+  }
+}
+
+/** Deletes the scratch file once its export has been shared or dropped. */
+export async function clearScratchExportFile(): Promise<void> {
+  if (!supportsScratchExportFile()) return;
+  try {
+    const root = await navigator.storage.getDirectory();
+    await root.removeEntry(SCRATCH_EXPORT_FILE);
+  } catch {
+    // Already gone, or storage is unavailable: nothing to free either way.
+  }
+}

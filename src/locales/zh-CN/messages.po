@@ -4285,6 +4285,10 @@ msgstr "Aero"
 msgid "Aero bubble"
 msgstr "Aero 气泡"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Aero glass"
+msgstr "Aero 玻璃"
+
 #: src/components/supporter/loadout.ts
 msgid "Aero window"
 msgstr "Aero 窗口"
@@ -9379,6 +9383,10 @@ msgstr "下载 .osk，{0}"
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Download the template"
 msgstr "下载模板"
+
+#: src/components/replay/ShareClipButton.tsx
+msgid "Download the video instead"
+msgstr ""
 
 #: src/routes/replay.tsx
 msgid "Downloading replay and beatmap{elapsedLabel}"
@@ -23645,10 +23653,15 @@ msgstr "分享码已复制"
 msgid "Share in the gallery"
 msgstr "分享到画廊"
 
+#: src/components/replay/ReplayControls.tsx
+#~ msgid "Share link"
+#~ msgstr ""
+
 #: src/components/replay/ShareClipButton.tsx
 msgid "Share links are a supporter perk."
 msgstr "分享链接是支持者专属功能。"
 
+#: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ShareClipButton.tsx
 msgid "Share links take videos up to 200 MB."
 msgstr "分享链接支持最大 200 MB 的视频。"
@@ -23676,6 +23689,10 @@ msgstr "分享这份回放"
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Share this run"
 msgstr "分享这一局"
+
+#: src/components/replay/ReplayControls.tsx
+msgid "Share video"
+msgstr "分享视频"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Share…"
@@ -29917,6 +29934,10 @@ msgstr "视频码率（Mbps）"
 #: src/components/replay/ReplayControls.tsx
 msgid "Video layout"
 msgstr "视频布局"
+
+#: src/components/replay/ReplayExportPanel.tsx
+msgid "Video ready"
+msgstr ""
 
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx

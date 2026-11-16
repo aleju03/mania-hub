@@ -10,6 +10,7 @@
 import { ReplayExportError, asReplayExportError, isReplayExportError } from "./errors";
 import type { ReplayExportCodecPlan } from "./capabilities";
 import { REPLAY_EXPORT_ADMISSION } from "./limits";
+import { clearScratchExportFile } from "./save-picker";
 import { resolveReplayExportResources } from "./snapshot";
 import type { ReplayExportTimeline } from "./timeline";
 import {
@@ -113,6 +114,7 @@ export class ReplayExportManager {
       estimatedBytes: 0,
       elapsedMs: 0,
       destination,
+      share: request.share === true,
       container: request.spec.output.container,
       hasAudio: request.spec.output.audioCodec !== null,
       warnings: [],
@@ -384,6 +386,8 @@ export class ReplayExportManager {
     this.detachVisibilityWatch();
     if (job.view.result?.downloadUrl) URL.revokeObjectURL(job.view.result.downloadUrl);
     job.blob = null;
+    // A share export's file lives in private storage nobody else will tidy.
+    if (job.view.share && job.fileHandle) void clearScratchExportFile();
     job.fileHandle = null;
     this.job = null;
     this.updateUnloadGuard();

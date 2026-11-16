@@ -37,7 +37,7 @@ export function ReplayExportPanel() {
     const key = `${job.id}:${job.phase}`;
     if (lastAnnouncedRef.current === key) return;
     lastAnnouncedRef.current = key;
-    setAnnouncement(i18n._(phaseLabel(job.phase)));
+    setAnnouncement(i18n._(phaseLabel(job.phase, job.share)));
   }, [job, i18n]);
 
   const onCancel = useCallback(() => {
@@ -107,10 +107,12 @@ export function ReplayExportPanel() {
               )}
             </div>
 
-            {!collapsed && (
-              <div className="mt-2 space-y-2">
+            {/* Hidden rather than unmounted: a share export's upload runs in
+                here and has to survive the panel being collapsed. */}
+            {(
+              <div className={collapsed ? "hidden" : "mt-2 space-y-2"}>
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-osu-f1">{i18n._(phaseLabel(job.phase))}</span>
+                  <span className="text-osu-f1">{i18n._(phaseLabel(job.phase, job.share))}</span>
                   {(active || cancelling) && <span className="tabular-nums font-semibold text-white">{percent}%</span>}
                 </div>
 
@@ -129,7 +131,7 @@ export function ReplayExportPanel() {
                   </div>
                 )}
 
-                {job.result && (
+                {job.result && !(job.share && job.result.kind === "file") && (
                   <div className="tabular-nums text-osu-f1">
                     {job.result.filename} · {formatBytes(job.result.byteLength)}
                   </div>
@@ -138,7 +140,7 @@ export function ReplayExportPanel() {
                 {job.warnings.includes("audio-decode-skipped") && (
                   <div className="text-osu-yellow">{t`Some hitsound samples couldn't be decoded and were left out.`}</div>
                 )}
-                {job.warnings.includes("file-save-fallback") && (
+                {job.warnings.includes("file-save-fallback") && !job.share && (
                   <div className="text-osu-yellow">{t`This browser wouldn't save to the file you picked, so the video is a download instead.`}</div>
                 )}
                 {job.warnings.includes("container-fallback") && (
@@ -214,7 +216,9 @@ export function ReplayExportPanel() {
 
 // Descriptors rather than `t` template literals: this runs outside the
 // component, so the caller resolves it against its own i18n instance.
-function phaseLabel(phase: ReplayExportJobView["phase"]): MessageDescriptor {
+function phaseLabel(phase: ReplayExportJobView["phase"], share = false): MessageDescriptor {
+  // A share export's file is in private storage, so "Saved" would mislead.
+  if (share && phase === "saved-to-file") return msg`Video ready`;
   switch (phase) {
     case "preparing":
       return msg`Preparing`;
