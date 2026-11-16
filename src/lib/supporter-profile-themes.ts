@@ -17,7 +17,6 @@ export const SUPPORTER_PROFILE_THEMES = [
   "judgements", "koi", "hanabi", "vaporwave", "blackhole", "singularity",
   "knight", "knightfight", "sketch", "redtree",
   "fireflies", "crystal", "maple", "chrome", "aero", "tty", "galaxy", "aeroglass",
-  "moonsea",
 ] as const;
 
 export type SupporterProfileThemeId = (typeof SUPPORTER_PROFILE_THEMES)[number];
@@ -68,7 +67,6 @@ export const PROFILE_THEME_LOOKS: Record<SupporterProfileThemeId, ProfileThemeLo
   aero: { hue: 168, sat: 0.7, base: "#03161a", swatch: "radial-gradient(70% 40% at 55% 62%,#3f7a1c 0%,transparent 70%),linear-gradient(180deg,#0a3a40 0%,#06272c 60%,#03161a 100%)", cover: 0.25 },
   tty: { hue: 36, sat: 0.9, base: "#080502", swatch: "radial-gradient(60% 55% at 68% 34%,#7a4a08 0%,transparent 70%),linear-gradient(180deg,#140b03 0%,#080502 100%)", cover: 0.12 },
   aeroglass: { hue: 186, sat: 0.75, base: "#01090f", swatch: "radial-gradient(70% 60% at 76% 80%,#0a4a52 0%,transparent 70%),linear-gradient(156deg,transparent 46%,#3fd0c0 47%,transparent 49%,transparent 58%,#6fdc4a 59%,transparent 61%),linear-gradient(180deg,#01090f 0%,#031c26 100%)", cover: 0.2 },
-  moonsea: { hue: 214, sat: 0.5, base: "#02060e", swatch: "radial-gradient(5% 8% at 66% 22%,#f2ecd8 0%,#f2ecd8 60%,transparent 100%),linear-gradient(90deg,transparent 62%,#cfc9b4 64%,#cfc9b4 68%,transparent 70%) 0 100%/100% 55% no-repeat,linear-gradient(180deg,#060c18 0%,#0f2134 44%,#030810 46%,#01040a 100%)", cover: 0.15 },
   galaxy: { hue: 222, sat: 0.6, base: "#03040a", swatch: "radial-gradient(38% 30% at 62% 42%,#e8c78a 0%,#5a6a9a 28%,transparent 75%),linear-gradient(180deg,#05060f 0%,#03040a 100%)", cover: 0.15 },
 };
 
@@ -103,7 +101,6 @@ export const SUPPORTER_PROFILE_THEME_LABELS: Record<SupporterProfileThemeId, Mes
   tty: msg`Terminal`,
   galaxy: msg`Galaxy`,
   aeroglass: msg`Aero glass`,
-  moonsea: msg`Moonlit sea`,
 };
 
 /* A theme's own switches, saved with the pick (the backend keeps the same

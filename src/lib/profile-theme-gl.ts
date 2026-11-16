@@ -667,13 +667,14 @@ function heavyTheme(theme: BackdropTheme): boolean {
 
 /* A backdrop's pixel budget, unless its host sets one. */
 const PIXEL_BUDGET = 1_000_000;
-/* Themes with hard edges, where the upscaling shows (the Universe Shifter's
-   ink and orb on a 1440p screen came out at half size, stretched; the
-   moon's disc and glints are the same): theirs is a 1440p screen's worth. With that many pixels they count as heavy themes, so the
-   probe starts a weak GPU where it can carry them, and the governor's floor
-   stays the same count of pixels as everyone's. */
+/* Themes with hard edges, where the upscaling shows: at PIXEL_BUDGET a
+   2560x1440 backdrop is drawn at about half size and stretched, which blurs
+   the Universe Shifter's ink and orb. These themes get enough pixels to fill
+   2560x1440 unscaled. With that many pixels they count as heavy themes, so
+   the probe starts a weak GPU where it can carry them, and the governor's
+   floor stays the same count of pixels as every other theme's. */
 const SHARP_PIXEL_BUDGET = 3_700_000;
-const SHARP_THEMES: ReadonlySet<string> = new Set<SupporterProfileThemeId>(["singularity", "moonsea"]);
+const SHARP_THEMES: ReadonlySet<string> = new Set<SupporterProfileThemeId>(["singularity"]);
 
 function pixelBudget(theme: BackdropTheme): number {
   return typeof theme === "string" && SHARP_THEMES.has(theme) ? SHARP_PIXEL_BUDGET : PIXEL_BUDGET;

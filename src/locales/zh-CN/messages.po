@@ -15898,10 +15898,6 @@ msgstr "第 {month} 个月"
 msgid "Monthly"
 msgstr "按月"
 
-#: src/lib/supporter-profile-themes.ts
-msgid "Moonlit sea"
-msgstr "月光海"
-
 #: src/components/layout/Nav.tsx
 msgid "more"
 msgstr "更多"
