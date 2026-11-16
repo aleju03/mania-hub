@@ -545,6 +545,9 @@ export class ResolutionGovernor {
   /* The scale came from the start-up probe's guess, and no window has run slow since. */
   private guessed = false;
 
+  /* `floor`: the least share of the budget it goes down to. */
+  constructor(private readonly floor = MIN_PIXEL_SCALE) {}
+
   /* Returns true when the scale changed. */
   frame(gapMs: number): boolean {
     if (this.warmup > 0) {
@@ -597,7 +600,7 @@ export class ResolutionGovernor {
         this.retryWindows = Math.min(MAX_RETRY_WINDOWS, this.retryWindows * 2);
         return true;
       }
-      if (this.scale <= MIN_PIXEL_SCALE) {
+      if (this.scale <= this.floor) {
         // a try at full rate that ran slow waits twice as long before the next
         if (this.starvedTry) this.starvedWindows = Math.min(MAX_RETRY_WINDOWS, this.starvedWindows * 2);
         this.starvedTry = false;
@@ -605,7 +608,7 @@ export class ResolutionGovernor {
         return false;
       }
       this.ceiling = this.scale * 0.8;
-      this.scale = Math.max(MIN_PIXEL_SCALE, this.scale * 0.55);
+      this.scale = Math.max(this.floor, this.scale * 0.55);
       return true;
     }
     if (median >= FAST_FRAME_MS) return false;
@@ -644,7 +647,7 @@ export class ResolutionGovernor {
 
   /* Starts lower than full, for a theme whose first frames showed it is heavy. */
   start(scale: number) {
-    this.scale = Math.max(MIN_PIXEL_SCALE, Math.min(1, scale));
+    this.scale = Math.max(this.floor, Math.min(1, scale));
     this.ceiling = 1;
     this.guessed = this.scale < 1;
   }
@@ -660,6 +663,20 @@ const HEAVY_THEMES: ReadonlySet<string> = new Set<SupporterProfileThemeId>(["sin
 
 function heavyTheme(theme: BackdropTheme): boolean {
   return typeof theme === "string" && HEAVY_THEMES.has(theme);
+}
+
+/* A backdrop's pixel budget, unless its host sets one. */
+const PIXEL_BUDGET = 1_000_000;
+/* Themes with hard edges, where the upscaling shows (the Universe Shifter's
+   ink and orb on a 1440p screen came out at half size, stretched): theirs is
+   a 1440p screen's worth. They are heavy themes, so the probe still starts a
+   weak GPU where it can carry them, and the governor's floor stays the same
+   count of pixels as everyone's. */
+const SHARP_PIXEL_BUDGET = 3_700_000;
+const SHARP_THEMES: ReadonlySet<string> = new Set<SupporterProfileThemeId>(["singularity"]);
+
+function pixelBudget(theme: BackdropTheme): number {
+  return typeof theme === "string" && SHARP_THEMES.has(theme) ? SHARP_PIXEL_BUDGET : PIXEL_BUDGET;
 }
 
 /* At the floor and still too slow, a built-in theme draws at most this often, ms. */
@@ -698,7 +715,7 @@ export interface ProfileBackdrop {
 export function mountProfileBackdrop(
   host: HTMLElement,
   initial: BackdropTheme,
-  { scroll = false, maxPixels = 1_000_000, onFallback }: {
+  { scroll = false, maxPixels, onFallback }: {
     scroll?: boolean;
     maxPixels?: number;
     /** A custom theme that can't run here (too slow, failed, crashed): show its still instead. */
@@ -729,7 +746,11 @@ export function mountProfileBackdrop(
   const pointer: [number, number] = [0.5, 0.65];
   let target: [number, number] = [0.5, 0.65];
   let client: [number, number] | null = null;
-  let governor = new ResolutionGovernor();
+  /* The most pixels `drawn` is drawn at, and the governor's floor as a share
+     of it: the same count of pixels whatever the budget. */
+  const budget = (drawn: BackdropTheme) => maxPixels ?? pixelBudget(drawn);
+  const floor = (drawn: BackdropTheme) => Math.min(1, (MIN_PIXEL_SCALE * PIXEL_BUDGET) / budget(drawn));
+  let governor = new ResolutionGovernor(floor(initial));
   /* A custom or heavy theme's timed first frames: how many drawn so far, and the slowest. */
   const probing = (next: BackdropTheme) => (typeof next !== "string" || (heavyTheme(next) && !still) ? { frames: 0, worst: 0, grown: false } : null);
   let probe: { frames: number; worst: number; grown: boolean } | null = probing(initial);
@@ -759,8 +780,8 @@ export function mountProfileBackdrop(
   const runProbe = (probed: BackdropTheme, time: number): boolean => {
     if (!probe) return true;
     const custom = typeof probed === "string" ? null : probed;
-    const full = Math.min(maxPixels, host.clientWidth * host.clientHeight * (window.devicePixelRatio || 1) ** 2);
-    const share = custom ? 0 : Math.sqrt((full * MIN_PIXEL_SCALE) / Math.max(1, host.clientWidth * host.clientHeight));
+    const full = Math.min(budget(probed), host.clientWidth * host.clientHeight * (window.devicePixelRatio || 1) ** 2);
+    const share = custom ? 0 : Math.sqrt((full * floor(probed)) / Math.max(1, host.clientWidth * host.clientHeight));
     const grow = probe.grown ? PROBE_GROW : 1;
     const width = custom ? PROBE_WIDTH * grow : Math.max(1, Math.round(host.clientWidth * share));
     const height = custom ? PROBE_HEIGHT * grow : Math.max(1, Math.round(host.clientHeight * share));
@@ -799,7 +820,7 @@ export function mountProfileBackdrop(
   const size = () => {
     const width = host.clientWidth, height = host.clientHeight;
     if (!width || !height) return false;
-    const ratio = Math.min(window.devicePixelRatio || 1, Math.sqrt((maxPixels * governor.scale) / (width * height)));
+    const ratio = Math.min(window.devicePixelRatio || 1, Math.sqrt((budget(theme) * governor.scale) / (width * height)));
     const w = Math.max(1, Math.round(width * ratio)), h = Math.max(1, Math.round(height * ratio));
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
@@ -927,14 +948,14 @@ export function mountProfileBackdrop(
       // rather than from the heavy one's share
       if (typeof next === "string" && !gaveUp && (heavyTheme(next) || heavyTheme(theme))) {
         probe = probing(next);
-        governor = new ResolutionGovernor();
+        governor = new ResolutionGovernor(floor(next));
       }
       theme = next;
       // a custom theme proves itself from the start, out of sight while its
       // tiny first frames draw; built-ins swap programs under the old frame
       if (typeof next !== "string" || gaveUp) {
         probe = probing(next);
-        governor = new ResolutionGovernor();
+        governor = new ResolutionGovernor(floor(next));
         gaveUp = false;
         shown = false;
         customShownAt = 0;

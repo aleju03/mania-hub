@@ -2608,19 +2608,30 @@ float sgThrowNoise(float x, float y) {
 // toward its tips, unioned smoothly into the skin so the two are one surface
 // under the same light. Returns a distance estimate (the outline is a noise
 // field, bounded only loosely, so the march steps through it gently).
+// Its outline as a field over the sheet, at rxy from the ball's middle and
+// angle a round it: above zero inside the ink.
+float sgInkField(float rxy, float a, float t) {
+  float sect = smoothstep(1.75, 2.3, a) * smoothstep(3.75, 3.15, a);
+  float al = rxy - 1.;
+  float across = a * 1.3; // (by angle, so a chunk keeps its width as it flies)
+  // (no finer than this: cells a few pixels wide by the ball cut every edge
+  // there into a comb)
+  float field = inoise(vec2(across * 8., al * 1.2 - t * .06)) * .6 + inoise(vec2(across * 13., al * 2.6 - t * .1) + 7.) * .3 + .05;
+  return field - .34 - .4 * smoothstep(.04, 1.2, al) - .6 * (1. - sect) + .05 / rxy;
+}
+
+// Half the sheet's thickness at rxy.
+float sgInkThick(float rxy) {
+  return .03 + .22 * (1. - smoothstep(0., 1.1, rxy - 1.));
+}
+
 float sgInk(vec3 p, float t) {
   float rxy = length(p.xy);
   float a = sgAngle(p.xy);
   float ad = max(1.6 - a, a - 3.9);
   float bound = max(max(rxy - 2.6, .85 - rxy), max(ad > 0. ? rxy * sin(min(ad, 1.5)) : 0., abs(p.z + .05) - .3));
   if (bound > .06) return bound;
-  float sect = smoothstep(1.75, 2.3, a) * smoothstep(3.75, 3.15, a);
-  float al = rxy - 1.;
-  float across = a * 1.3; // (by angle, so a chunk keeps its width as it flies)
-  float field = inoise(vec2(across * 8., al * 1.2 - t * .06)) * .6 + inoise(vec2(across * 19., al * 2.6 - t * .1) + 7.) * .3 + inoise(vec2(across * 40., al * 5.) + 3.) * .1;
-  float v = field - .34 - .4 * smoothstep(.04, 1.2, al) - .6 * (1. - sect);
-  float th = .03 + .22 * (1. - smoothstep(0., 1.1, al));
-  return max(max(-v * rxy / 16., abs(p.z + .05) - th), bound);
+  return max(max(-sgInkField(rxy, a, t) * rxy / 16., abs(p.z + .05) - sgInkThick(rxy)), bound);
 }
 
 // The scene in ball radii: x = distance, y = what was hit (0 skin, 1 a
@@ -2770,9 +2781,24 @@ vec4 sgOrb(vec2 d, float t) {
   // where it gave up: that point lies on the surface's edge
   z = zNear;
   h = hNear;
-  float cover = smoothstep(edge, 0., near);
   // (only round the ball itself: the ink's loose bounds would spread it)
   vec3 halo = vec3(.5, .75, 1.) * exp(-near * 6.) * .55 * smoothstep(1.4, 1., rs);
+  if (h.y > 3.5) {
+    // The ink's distance is a loose one, its outline's field scaled by a
+    // fixed slope. An edge taken from it comes out soft where the field is
+    // shallow and jagged where it is steep, so past the root, where the ink
+    // is its own outline, the edge is measured truly: the field over its
+    // slope here, taken across half a pixel.
+    vec3 pe = ro + rd * z;
+    float e = .5 * PX / SG_R;
+    float re = length(pe.xy);
+    float v0 = sgInkField(re, sgAngle(pe.xy), t);
+    vec2 ex = pe.xy + vec2(e, 0.), ey = pe.xy + vec2(0., e);
+    vec2 slope = vec2(sgInkField(length(ex), sgAngle(ex), t), sgInkField(length(ey), sgAngle(ey), t)) - v0;
+    float wall = -v0 * e / max(length(slope), 1e-6);
+    near = mix(near, max(wall, abs(pe.z + .05) - sgInkThick(re)), smoothstep(1.1, 1.25, re));
+  }
+  float cover = smoothstep(edge, 0., near);
   if (cover <= 0.) return vec4(halo, 0.);
   vec3 p = ro + rd * z;
   float ao;
