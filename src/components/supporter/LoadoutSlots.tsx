@@ -139,24 +139,38 @@ function useOwnThemes(enabled: boolean): OwnCustomThemes | null {
 }
 /* The still of the viewer's own worn theme, for the page's big preview, which
    plays only the built-in themes. */
-export function useWornOwnThemeStill(theme: SlotValue | null, enabled: boolean): string | null {
+export function useWornOwnThemeStill(loadout: OwnThemeHolder | null, enabled: boolean): string | null {
   useOwnThemes(enabled);
-  return wornOwnTheme(theme)?.stillUrl ?? null;
+  return loadout ? wornOwnTheme(loadout)?.stillUrl ?? null : null;
 }
 
-/* The own theme on, when no built-in is: the page reads a worn own theme back as none. */
-function wornOwnTheme(theme: SlotValue | null): CustomThemeSummary | null {
-  if (theme || !ownThemes?.worn) return null;
-  const worn = ownThemes.worn.themeId;
-  return ownThemes.themes.find((entry) => entry.id === worn) ?? null;
+type OwnThemeHolder = Pick<Loadout, "theme" | "ownTheme">;
+
+/* The id of the own theme a loadout has on, when no built-in is: the one it
+   holds unsaved, else the saved one (the page reads a worn own theme back as
+   no built-in). */
+export function ownThemeOf(loadout: OwnThemeHolder): number | null {
+  if (loadout.theme) return null;
+  return loadout.ownTheme !== undefined ? loadout.ownTheme : ownThemes?.worn?.themeId ?? null;
+}
+
+/* The saved own theme changed (null: none is worn now). */
+export function markOwnThemeWorn(themeId: number | null, options: ProfileThemeOptions = {}): void {
+  if (!ownThemes) return;
+  setOwnThemes({ ...ownThemes, worn: themeId === null ? null : { themeId, rows: !!options.rows, hideCover: !!options.hideCover, dim: options.dim ?? 0, blur: options.blur ?? 0 } });
+}
+
+function wornOwnTheme(loadout: OwnThemeHolder): CustomThemeSummary | null {
+  const worn = ownThemeOf(loadout);
+  return worn === null ? null : ownThemes?.themes.find((entry) => entry.id === worn) ?? null;
 }
 
 /* --- Slot rows ----------------------------------------------------------- */
 
 function useSlotName() {
   const { t, i18n } = useLingui();
-  return (slot: SlotId, value: SlotValue): string => {
-    if (slot === "theme") return value ? i18n._(SUPPORTER_PROFILE_THEME_LABELS[value as SupporterProfileThemeId]) : wornOwnTheme(value)?.name ?? t`Site colours`;
+  return (slot: SlotId, value: SlotValue, loadout: Loadout): string => {
+    if (slot === "theme") return value ? i18n._(SUPPORTER_PROFILE_THEME_LABELS[value as SupporterProfileThemeId]) : wornOwnTheme(loadout)?.name ?? t`Site colours`;
     if (slot === "frame") {
       if (!value) return t`No frame`;
       const made = workshopFrameName(value as SupporterAvatarFrameId);
@@ -188,7 +202,7 @@ function NoArt({ className }: { className?: string }) {
 function SlotThumb({ slot, loadout, avatar }: { slot: SlotId; loadout: Loadout; avatar: string | undefined }) {
   useWrapperArtVersion();
   if (slot === "theme") {
-    const own = wornOwnTheme(loadout.theme);
+    const own = wornOwnTheme(loadout);
     return loadout.theme
       ? <ProfileThemeSwatch key={loadout.theme} theme={loadout.theme} still className="h-12 w-12" />
       : own?.stillUrl ? <img src={own.stillUrl} alt="" onError={hideBrokenImage} className="h-12 w-12 object-cover" draggable={false} />
@@ -396,7 +410,7 @@ export function SupporterNav({ shown, section, onSection, locks, spinning, tryin
                         transition={{ duration: spinning ? 0.07 : 0.16, ease: "easeOut" }}
                         className={`block truncate text-[13px] font-semibold leading-[18px] ${trying === id ? "text-osu-pink-light" : "text-white"}`}
                       >
-                        {slotName(id, value)}
+                        {slotName(id, value, shown)}
                       </motion.span>
                     </AnimatePresence>
                   </span>
@@ -560,7 +574,7 @@ export interface DrawerProps {
   onNameOutline: (outline: string | null, commit: boolean) => void;
   /** Puts on one of the viewer's own themes, or takes it off with null; with
       `options`, sets its switches too (left out, they stay as they are). */
-  onWearOwnTheme: (themeId: number | null, options?: ProfileThemeOptions) => Promise<void>;
+  onWearOwnTheme: (themeId: number | null, options?: ProfileThemeOptions) => void;
 }
 
 /* Memoised: the page re-renders on every hover, and the drawer's props hold still through one. */
@@ -1355,14 +1369,9 @@ function ThemeDrawer({ current, disabled, avatar, username, canUpload, onTry, on
   const own = useOwnThemes(canUpload);
   const ownLive = (own?.themes ?? []).filter((theme) => theme.state === "live" && theme.liveRevision != null);
   // a worn own theme leaves no built-in picked (the page reads it back as none)
-  const wornOwn = current.theme === null ? own?.worn?.themeId ?? null : null;
-  const wearOwn = (themeId: number | null, options?: ProfileThemeOptions) => {
-    void onWearOwnTheme(themeId, options).then(() => {
-      const kept = options ?? current.themeOptions;
-      if (ownThemes) setOwnThemes({ ...ownThemes, worn: themeId === null ? null : { themeId, rows: !!kept.rows, hideCover: !!kept.hideCover, dim: kept.dim ?? 0, blur: kept.blur ?? 0 } });
-    });
-  };
-  // The switches of whichever theme is on: a built-in one saves with the pick, an own one with its wearing.
+  const wornOwn = ownThemeOf(current);
+  const wearOwn = onWearOwnTheme;
+  // The switches of whichever theme is on.
   const setSwitches = (options: ProfileThemeOptions) => (wornOwn !== null ? wearOwn(wornOwn, options) : onThemeOptions(options));
   const themed = current.theme !== null || wornOwn !== null;
   /* Only the theme under the pointer moves; the rest hold a still frame. Every

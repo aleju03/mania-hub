@@ -17,6 +17,8 @@ export interface Loadout {
   theme: SupporterProfileThemeId | null;
   /** The theme's own switches (the Note highway's real charts). */
   themeOptions: ProfileThemeOptions;
+  /** One of the viewer's own themes put on (or taken off, null) and not saved yet; left out, the saved one stands. Only counts with no built-in theme. */
+  ownTheme?: number | null;
   frame: SupporterAvatarFrameId | null;
   nameStyle: SupporterNameStyleId | null;
   nameFont: SupporterNameFontId | null;
@@ -89,10 +91,12 @@ export function withSlot(loadout: Loadout, slot: SlotId, value: SlotValue, custo
   }
   if (slot === "foil") return { ...loadout, look: { ...loadout.look, foil: value === null ? "none" : value as SupporterFoilId } };
   if (slot === "sleeve" || slot === "binder" || slot === "wrapper" || slot === "blade") return { ...loadout, pack: { ...loadout.pack, [slot]: value } as SupporterPackStyle };
-  if (slot === "theme" && value !== loadout.theme) {
+  if (slot === "theme") {
+    // a pick in the theme slot takes the viewer's own theme off
+    if (value === loadout.theme) return { ...loadout, ownTheme: null };
     // dim and blur are set for one theme's picture, so another starts clear
     const { dim: _dim, blur: _blur, ...rest } = loadout.themeOptions;
-    return { ...loadout, theme: value, themeOptions: rest } as Loadout;
+    return { ...loadout, theme: value, themeOptions: rest, ownTheme: null } as Loadout;
   }
   return { ...loadout, [slot]: value } as Loadout;
 }

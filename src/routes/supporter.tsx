@@ -8,7 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { PageHeader } from "../components/layout/PageHeader";
 import { LoadoutStage } from "../components/supporter/LoadoutStage";
-import { LoadoutDrawer, SlotLock, SupporterNav, useWornOwnThemeStill, type CustomMotif } from "../components/supporter/LoadoutSlots";
+import { LoadoutDrawer, markOwnThemeWorn, ownThemeOf, SlotLock, SupporterNav, useWornOwnThemeStill, type CustomMotif } from "../components/supporter/LoadoutSlots";
 import { CustomArtDialog, type CustomArtDraft } from "#/components/supporter/CustomArtDialog";
 import { DiceIcon } from "../components/supporter/LoadoutIcons";
 import { GiftCodePanel, RedeemGiftCode } from "../components/supporter/GiftCodePanel";
@@ -74,9 +74,10 @@ import { wearCustomTheme } from "../lib/supporter-custom-themes";
    and foil every copy of their card wears. The page itself takes on the
    theme being shown. The stage shows the loadout on them; the slots beside it open a
    drawer of items, where pointing at one tries it on and clicking puts it in.
-   The dice rolls every unlocked slot, and the roll waits to be kept or undone.
-   A supporter's loadout saves as it changes; anyone else can try everything
-   on, with nothing saved. The profile itself only draws what was saved. */
+   The dice rolls every unlocked slot. A supporter's picks and rolls wait as
+   unsaved changes until the bar at the bottom saves or discards them; anyone
+   else can try everything on, with nothing saved, and their roll waits to be
+   kept or undone. The profile itself only draws what was saved. */
 
 const NO_SCORES: [] = [];
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -124,6 +125,38 @@ function trackOnce(event: string) {
   track(event);
 }
 
+/* A supporter's unsaved changes, kept for this tab: "Preview on my profile"
+   leaves the page and comes back to them. */
+const DRAFT_KEY = "supporter-loadout-draft:v1";
+
+function readDraft(userId: number): Loadout | null {
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(DRAFT_KEY) ?? "null") as { userId?: unknown; loadout?: Loadout } | null;
+    const loadout = stored?.userId === userId ? stored.loadout : null;
+    return loadout && typeof loadout === "object" && loadout.look && loadout.pack && loadout.themeOptions ? loadout : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeDraft(userId: number, loadout: Loadout | null): void {
+  try {
+    if (loadout) window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ userId, loadout }));
+    else window.sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // private mode: the changes last until the page is left
+  }
+}
+
+const themeSwitches = (loadout: Loadout) => JSON.stringify(parseProfileThemeOptions(loadout.themeOptions));
+
+function sameLoadout(a: Loadout, b: Loadout): boolean {
+  return a.theme === b.theme && ownThemeOf(a) === ownThemeOf(b) && themeSwitches(a) === themeSwitches(b)
+    && a.frame === b.frame && a.nameStyle === b.nameStyle && a.nameFont === b.nameFont && a.nameOutline === b.nameOutline
+    && sameLook(a.look, b.look)
+    && a.pack.sleeve === b.pack.sleeve && a.pack.binder === b.pack.binder && a.pack.wrapper === b.pack.wrapper && a.pack.blade === b.pack.blade;
+}
+
 export const Route = createFileRoute("/supporter")({
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
@@ -149,9 +182,9 @@ function SupporterPage() {
   const reduced = useReducedMotion();
   const [state, setState] = useState<SupporterLookState | null>(null);
   const [card, setCard] = useState<LivePackCardSnapshot | null | undefined>(undefined);
-  /* What the slots hold. For a supporter it runs ahead of the server while saves are in flight. */
+  /* What the slots hold. For a supporter it runs ahead of the server while a save is in flight. */
   const [equipped, setEquipped] = useState<Loadout | null>(null);
-  /* A roll that landed and waits to be kept or undone. */
+  /* What is on and not saved or kept yet: a supporter's unsaved changes, or anyone else's landed roll. */
   const [pending, setPending] = useState<Loadout | null>(null);
   const [hover, setHover] = useState<{ slot: SlotId; value: SlotValue } | null>(null);
   /* The reels while a roll spins: what each spinning slot shows this tick. */
@@ -189,6 +222,7 @@ function SupporterPage() {
         rememberViewerSupporter(viewer.id, next.supporter ? next.expiresAt : null);
         saved.current = loadoutOf(next);
         setEquipped(loadoutOf(next));
+        if (next.supporter) setPending(readDraft(viewer.id));
       })
       .catch(() => alive && setEquipped({ theme: null, themeOptions: {}, frame: null, nameStyle: null, nameFont: null, nameOutline: null, look: DEFAULT_LOOK, pack: NO_PACK_STYLE }));
     fetchLivePackCardSnapshotDirect(String(viewer.id))
@@ -217,7 +251,7 @@ function SupporterPage() {
   );
 
   /* Writes what changed between the last saved loadout and `next`, one save
-     at a time in order, so a quick run of picks lands as the last one. */
+     at a time in order. A save that fails leaves `next` waiting as unsaved changes. */
   const persist = (next: Loadout) => {
     if (!supporter || !viewer) return;
     saveChain.current = saveChain.current.then(async () => {
@@ -226,8 +260,28 @@ function SupporterPage() {
       let latest: SupporterLookState | null = null;
       setBusy(true);
       try {
-        if (next.theme !== before.theme || JSON.stringify(parseProfileThemeOptions(next.themeOptions)) !== JSON.stringify(parseProfileThemeOptions(before.themeOptions))) {
-          latest = await saveSupporterProfileThemeSetting({ data: { profileTheme: next.theme, profileThemeOptions: next.themeOptions } });
+        /* One of the viewer's own themes is stored apart from the built-ins,
+           and wearing it leaves no built-in picked, so the saved look is read
+           back afterwards. */
+        const switches = parseProfileThemeOptions(next.themeOptions);
+        const switchesChanged = themeSwitches(next) !== themeSwitches(before);
+        const ownBefore = ownThemeOf(before);
+        const ownNext = ownThemeOf(next);
+        if (ownNext !== null) {
+          if (ownNext !== ownBefore || switchesChanged) {
+            await wearCustomTheme({ data: { themeId: ownNext, rows: !!switches.rows, hideCover: !!switches.hideCover, dim: switches.dim ?? 0, blur: switches.blur ?? 0 } });
+            markOwnThemeWorn(ownNext, switches);
+            latest = await fetchSupporterLookState();
+          }
+        } else {
+          if (ownBefore !== null && !next.theme) {
+            await wearCustomTheme({ data: { themeId: null } });
+            latest = await fetchSupporterLookState();
+          }
+          if (next.theme !== before.theme || switchesChanged) {
+            latest = await saveSupporterProfileThemeSetting({ data: { profileTheme: next.theme, profileThemeOptions: next.themeOptions } });
+          }
+          if (ownBefore !== null) markOwnThemeWorn(null);
         }
         if (next.frame !== before.frame) latest = await saveSupporterFrameSetting({ data: { frame: next.frame } });
         if (next.nameStyle !== before.nameStyle) latest = await saveSupporterNameStyleSetting({ data: { nameStyle: next.nameStyle } });
@@ -250,41 +304,13 @@ function SupporterPage() {
       } catch (cause) {
         if (latest) saved.current = loadoutOf(latest);
         setEquipped(saved.current);
+        setPending((current) => current ?? next);
         setError(cause instanceof Error ? cause.message : t`Could not save that.`);
       } finally {
         setBusy(false);
       }
     });
   };
-
-  /* One of the viewer's own themes on (or off, with null). It is stored apart
-     from the built-ins, so the saved look is read back afterwards: a worn own
-     theme leaves no built-in picked. */
-  const wearOwnTheme = (themeId: number | null, options?: ProfileThemeOptions) => new Promise<void>((resolve) => {
-    if (!supporter || !viewer) {
-      resolve();
-      return;
-    }
-    setError(null);
-    saveChain.current = saveChain.current.then(async () => {
-      setBusy(true);
-      try {
-        // without options the theme's switches stay as they were
-        await wearCustomTheme({ data: { themeId, ...(options ? { rows: !!options.rows, hideCover: !!options.hideCover, dim: options.dim ?? 0, blur: options.blur ?? 0 } : {}) } });
-        const latest = await fetchSupporterLookState();
-        setState(latest);
-        saved.current = loadoutOf(latest);
-        setEquipped(saved.current);
-        forgetLiveSupporterLook(viewer.id);
-        setSupporterThemeLocally(viewer.id, null);
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : t`Could not save that.`);
-      } finally {
-        setBusy(false);
-        resolve();
-      }
-    });
-  });
 
   const equip = (next: Loadout) => {
     setError(null);
@@ -293,20 +319,38 @@ function SupporterPage() {
     persist(next);
   };
 
-  const pick = (slot: SlotId, value: SlotValue) => {
-    if (!equipped) return;
-    setHover(null);
-    if (pending) {
-      setPending(withSlot(pending, slot, value, custom));
-      setPop((n) => n + 1);
+  /* Puts a changed loadout on: a supporter's waits as unsaved changes, as
+     does anything changed while a roll waits; otherwise it goes straight in. */
+  const put = (next: Loadout) => {
+    if (!pending && !supporter) {
+      equip(next);
       return;
     }
-    if (slotValue(equipped, slot) === value) return;
-    trackOnce(`supporter_pick_${slot}`);
-    equip(withSlot(equipped, slot, value, custom));
+    setError(null);
+    setPending(next);
+    setPop((n) => n + 1);
   };
 
-  /* A theme's own switches go in with the theme, waiting with a roll like any pick. */
+  const pick = (slot: SlotId, value: SlotValue) => {
+    const base = pending ?? equipped;
+    if (!base) return;
+    setHover(null);
+    if (slotValue(base, slot) === value) return;
+    trackOnce(`supporter_pick_${slot}`);
+    put(withSlot(base, slot, value, custom));
+  };
+
+  /* One of the viewer's own themes on (or off, with null), in place of a
+     built-in. Without options the switches stay, except dim and blur when it
+     is another theme: they were set for the last one's picture. */
+  const wearOwnTheme = (themeId: number | null, options?: ProfileThemeOptions) => {
+    const base = pending ?? equipped;
+    if (!base || !supporter) return;
+    const { dim: _dim, blur: _blur, ...rest } = base.themeOptions;
+    const kept = themeId !== null && ownThemeOf(base) === themeId ? base.themeOptions : rest;
+    put({ ...base, theme: null, ownTheme: themeId, themeOptions: options ?? kept });
+  };
+
   /* The name's outline: `commit` false only previews it (the colour picker
      moving), true wears and saves it. */
   const [outlinePreview, setOutlinePreview] = useState<string | null | undefined>(undefined);
@@ -317,20 +361,12 @@ function SupporterPage() {
       return;
     }
     setOutlinePreview(undefined);
-    if (pending) {
-      setPending({ ...pending, nameOutline });
-      return;
-    }
-    equip({ ...equipped, nameOutline });
+    put({ ...(pending ?? equipped), nameOutline });
   };
 
   const setThemeOptions = (themeOptions: Loadout["themeOptions"]) => {
     if (!equipped) return;
-    if (pending) {
-      setPending({ ...pending, themeOptions });
-      return;
-    }
-    equip({ ...equipped, themeOptions });
+    put({ ...(pending ?? equipped), themeOptions });
   };
 
   /* The viewer's own image goes through CustomArtDialog: an upload opens
@@ -366,8 +402,7 @@ function SupporterPage() {
     const base = pending ?? equipped;
     if (!artDraft?.url || !base) return;
     const look: SupporterLook = { motif: "custom", foil: base.look.foil, url: artDraft.url, scale: artDraft.scale, opacity: artDraft.opacity };
-    if (pending) setPending({ ...pending, look });
-    else equip({ ...base, look });
+    put({ ...base, look });
     setArtDraft(null);
   };
 
@@ -415,15 +450,17 @@ function SupporterPage() {
     reelTimers.current.push(tick as unknown as ReturnType<typeof setTimeout>);
   };
 
+  /* What waits goes in (and saves, for a supporter). */
   const keep = () => {
     if (!pending) return;
     const next = pending;
     setPending(null);
+    if (equipped && sameLoadout(next, equipped)) return;
     equip(next);
   };
 
-  /* Everything back to bare, waiting like a roll, so Keep saves it and Undo takes it back. */
-  const BARE: Loadout = { theme: null, themeOptions: {}, frame: null, nameStyle: null, nameFont: null, nameOutline: null, look: DEFAULT_LOOK, pack: NO_PACK_STYLE };
+  /* Everything back to bare, waiting like a roll to be saved or taken back. */
+  const BARE: Loadout = { theme: null, themeOptions: {}, ownTheme: null, frame: null, nameStyle: null, nameFont: null, nameOutline: null, look: DEFAULT_LOOK, pack: NO_PACK_STYLE };
   const clearAll = () => {
     if (!equipped || spinning) return;
     setHover(null);
@@ -431,20 +468,29 @@ function SupporterPage() {
     setPending(BARE);
     setPop((n) => n + 1);
   };
-  const bare = !!equipped && equipped.theme === null && equipped.frame === null && equipped.nameStyle === null && equipped.nameFont === null && equipped.nameOutline === null && sameLook(equipped.look, DEFAULT_LOOK)
-    && !equipped.pack.sleeve && !equipped.pack.binder && !equipped.pack.wrapper && !equipped.pack.blade;
+  const worn = pending ?? equipped;
+  const bare = !!worn && worn.theme === null && ownThemeOf(worn) === null && worn.frame === null && worn.nameStyle === null && worn.nameFont === null && worn.nameOutline === null && sameLook(worn.look, DEFAULT_LOOK)
+    && !worn.pack.sleeve && !worn.pack.binder && !worn.pack.wrapper && !worn.pack.blade;
+  /* A supporter's changes that differ from what is saved. */
+  const unsaved = supporter && !!pending && !!equipped && !sameLoadout(pending, equipped);
+
+  useEffect(() => {
+    if (!viewer || !supporter) return;
+    storeDraft(viewer.id, unsaved ? pending : null);
+  }, [viewer?.id, supporter, unsaved, pending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const undo = () => {
     setPending(null);
     setPop((n) => n + 1);
   };
 
+  // Escape takes a roll back; a supporter's changes only leave by Discard
   useEffect(() => {
-    if (!pending) return;
+    if (!pending || supporter) return;
     const onKey = (event: KeyboardEvent) => event.key === "Escape" && undo();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pending]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pending, supporter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleLock = (slot: SlotId) => setLocks((prev) => {
     const next = new Set(prev);
@@ -457,7 +503,7 @@ function SupporterPage() {
   const hovered = reel ?? (held && hover ? withSlot(held, hover.slot, hover.value, custom) : held);
   const shown = hovered && outlinePreview !== undefined ? { ...hovered, nameOutline: outlinePreview } : hovered;
   const viewerKeys = useMemo(() => mainKeymode(card?.bestScores), [card]);
-  const ownThemeStill = useWornOwnThemeStill(shown?.theme ?? null, supporter);
+  const ownThemeStill = useWornOwnThemeStill(shown, supporter);
   const highwayNotes = useHighwayNotes(viewer?.id, viewerKeys, (shown?.theme === "highway" && !shown.themeOptions.stockNotes) || shown?.theme === "judgements");
   const highwayChart = useHighwayChart(viewer?.id, card?.bestScores, highwayNotes?.lanes ?? viewerKeys ?? 4, shown?.theme === "highway" && !!shown.themeOptions.charts);
   /* The card holds still while the reels spin, and its art waits for the
@@ -523,8 +569,8 @@ function SupporterPage() {
       nameOutline: loadout.nameOutline,
       profileTheme: loadout.theme,
       profileThemeOptions: loadout.themeOptions,
-      // a built-in theme picked here takes the place of their own
-      ...(loadout.theme ? { customTheme: null } : {}),
+      // a built-in theme picked here takes the place of their own, as does taking their own off
+      ...(loadout.theme || loadout.ownTheme === null ? { customTheme: null } : {}),
       packStyle: loadout.pack,
       ...(supporter ? {} : { runStartedAt: Date.now(), companion: mascot ?? null }),
     });
@@ -571,7 +617,7 @@ function SupporterPage() {
     [card, cardUser],
   );
 
-  const footer = pending && !spinning ? (
+  const footer = pending && !spinning && !supporter ? (
     <>
       <button type="button" onClick={keep} className="h-9 cursor-pointer rounded-full bg-osu-pink px-5 text-[13px] font-semibold text-white transition hover:brightness-110">
         {t`Keep`}
@@ -711,6 +757,8 @@ function SupporterPage() {
                         onWearOwnTheme={onWearOwnTheme}
                       />
                       {error && <div className="mt-3 text-[12px] text-osu-red-light">{error}</div>}
+                      {/* room for the bar below, so it never covers the last row */}
+                      {unsaved && <div className="h-16" aria-hidden />}
                       <AnimatePresence>
                       {artDraft && (
                         <CustomArtDialog
@@ -783,6 +831,30 @@ function SupporterPage() {
           )}
         </div>
       </div>
+      {/* A supporter's unsaved changes, pinned to the bottom of the window. */}
+      <AnimatePresence>
+        {unsaved && !spinning && (
+          <motion.div
+            initial={reduced ? false : { y: 16, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={reduced ? undefined : { y: 16, opacity: 0 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="pointer-events-none fixed inset-x-0 bottom-4 z-[90] flex justify-center px-3"
+          >
+            <div className="pointer-events-auto flex items-center gap-4 rounded-2xl border border-white/10 bg-osu-b3/95 py-2 pl-5 pr-2 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur">
+              <p className="text-[13px] font-semibold text-white">{t`Unsaved changes`}</p>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={undo} disabled={busy} className="h-9 cursor-pointer rounded-full px-4 text-[13px] font-semibold text-osu-l2 transition-colors hover:text-white disabled:cursor-default disabled:opacity-40">
+                  {t`Discard`}
+                </button>
+                <button type="button" onClick={keep} disabled={busy} className="h-9 cursor-pointer rounded-full bg-osu-pink px-6 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-40">
+                  {t`Save`}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
