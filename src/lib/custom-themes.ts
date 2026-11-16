@@ -18,6 +18,8 @@ export interface CustomTheme {
   look: { hue: number; sat: number; base: string };
   stillUrl: string;
   rowUrl: string | null;
+  /** Listed in the gallery right now, where it can be reported. */
+  inGallery?: boolean;
 }
 
 const ASSET_URL = /^https:\/\/cdn\.mania-tracker\.com\/theme-assets\/[a-f0-9]{64}\.webp$/;
@@ -45,6 +47,7 @@ export function parseCustomTheme(value: unknown): CustomTheme | null {
     look: { hue: Math.min(360, Math.max(0, look.hue)), sat: Math.min(1, Math.max(0, look.sat)), base: look.base },
     stillUrl: raw.stillUrl,
     rowUrl: typeof raw.rowUrl === "string" && ASSET_URL.test(raw.rowUrl) ? raw.rowUrl : null,
+    inGallery: raw.inGallery === true,
   };
 }
 

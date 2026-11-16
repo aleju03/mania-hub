@@ -11,8 +11,9 @@ import type { CustomTheme } from "../../lib/custom-themes";
 import { CUSTOM_THEME_REPORT_NOTE_MAX, reportCustomTheme, type CustomThemeReportKind } from "../../lib/custom-theme-reports";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
-/* The line under a profile wearing a supporter's own theme: a Report for
-   anyone signed in who isn't its wearer or maker (about its content or its rights),
+/* The line under a profile wearing a supporter's own theme: for a private
+   theme a Report for anyone signed in who isn't its wearer or maker (about its
+   content or its rights; gallery themes are reported in the gallery),
    and for the admin a Take down that pulls it off every profile at once
    (backend features/custom-themes.ts). Themes go live without review, so
    this is how a bad one gets seen. */
@@ -23,7 +24,8 @@ export function CustomThemeCredit({ theme, ownerId }: { theme: CustomTheme; owne
   const [takingDown, setTakingDown] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const admin = canUseAdminFeatures(auth);
-  const canReport = !!auth.viewer && auth.viewer.id !== theme.author.id && auth.viewer.id !== ownerId;
+  // A gallery theme is reported from the gallery; a private one can only be reported here.
+  const canReport = !theme.inGallery && !!auth.viewer && auth.viewer.id !== theme.author.id && auth.viewer.id !== ownerId;
 
   if (!canReport && !admin) return null;
   return (
