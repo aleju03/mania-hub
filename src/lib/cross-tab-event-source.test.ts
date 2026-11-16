@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { CrossTabEventSource, type CrossTabChannel, type CrossTabLocks } from "./cross-tab-event-source";
+import { CrossTabEventSource, reviveDelayMs, type CrossTabChannel, type CrossTabLocks } from "./cross-tab-event-source";
 
 const URL = "http://localhost:7227/api/live?country=CR";
 const EVENT_NAMES = ["hello", "heartbeat", "tracker_score"] as const;
@@ -133,6 +133,43 @@ beforeEach(() => {
 });
 
 describe("CrossTabEventSource", () => {
+  test("a leader reopens a stream the browser closed for good, resuming from the cursor", async () => {
+    const tab = createTab();
+    await flush();
+    const first = FakeEventSource.instances[0];
+    first.open();
+    first.emit("tracker_score", "{}", "41");
+    vi.useFakeTimers();
+    try {
+      // A dropped connection the browser is retrying itself is left alone.
+      first.fail();
+      vi.advanceTimersByTime(120_000);
+      expect(FakeEventSource.instances).toHaveLength(1);
+      // A non-200 answer closes an EventSource permanently.
+      first.readyState = 2;
+      first.onerror?.(new Event("error"));
+      vi.advanceTimersByTime(999);
+      expect(FakeEventSource.instances).toHaveLength(1);
+      vi.advanceTimersByTime(2_001);
+      expect(FakeEventSource.instances).toHaveLength(2);
+      expect(FakeEventSource.instances[1].url).toBe(`${URL}&lastEventId=41`);
+      tab.close();
+      FakeEventSource.instances[1].readyState = 2;
+      FakeEventSource.instances[1].onerror?.(new Event("error"));
+      vi.advanceTimersByTime(120_000);
+      expect(FakeEventSource.instances).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("revive waits double up to a minute and are spread by half either way", () => {
+    expect(reviveDelayMs(0, () => 0)).toBe(1_000);
+    expect(reviveDelayMs(0, () => 1)).toBe(3_000);
+    expect(reviveDelayMs(3, () => 0.5)).toBe(16_000);
+    expect(reviveDelayMs(40, () => 0.5)).toBe(60_000);
+  });
+
   test("the first tab becomes leader, opens the real stream, and delivers locally", async () => {
     const tab = createTab();
     await flush();

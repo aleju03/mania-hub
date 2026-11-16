@@ -45,6 +45,18 @@ export function supportsCrossTabEventSource(): boolean {
 const STARVATION_MS = 45_000;
 const STARVATION_CHECK_MS = 15_000;
 
+/** A stream the browser has given up on (EventSource never retries a non-200
+ *  answer, such as the proxy's 502 while the backend restarts) is reopened
+ *  after this long: doubling from 2s to a minute, each wait scaled by a random
+ *  0.5-1.5 so the tabs a restart dropped together do not come back together. */
+const REVIVE_BASE_MS = 2_000;
+const REVIVE_MAX_MS = 60_000;
+
+export function reviveDelayMs(attempt: number, random: () => number = Math.random): number {
+  const step = Math.min(REVIVE_MAX_MS, REVIVE_BASE_MS * 2 ** Math.min(attempt, 10));
+  return Math.round(step * (0.5 + random()));
+}
+
 /**
  * One real SSE connection per browser, not per tab. Every tab wanting a given
  * stream URL constructs one of these; they all race for a Web Lock on that URL
@@ -74,6 +86,8 @@ export class CrossTabEventSource extends EventTarget implements PoolableEventSou
   private real: EventSource | null = null;
   private fallback: EventSource | null = null;
   private starvationTimer: ReturnType<typeof setInterval> | null = null;
+  private reviveTimer: ReturnType<typeof setTimeout> | null = null;
+  private reviveAttempt = 0;
   private lastRelayAt = Date.now();
   private readonly onVisibility = () => this.checkStarvation();
   private role: "follower" | "leader" = "follower";
@@ -118,6 +132,8 @@ export class CrossTabEventSource extends EventTarget implements PoolableEventSou
     this.closedFlag = true;
     this.stopStarvationWatch();
     this.closeFallback();
+    if (this.reviveTimer != null) clearTimeout(this.reviveTimer);
+    this.reviveTimer = null;
     this.channel.onmessage = null;
     this.channel.close();
     this.real?.close();
@@ -149,6 +165,7 @@ export class CrossTabEventSource extends EventTarget implements PoolableEventSou
 
   private attachStream(source: EventSource, relay: boolean): void {
     source.onopen = () => {
+      this.reviveAttempt = 0;
       this.state = "open";
       this.dispatchEvent(new Event("open"));
       if (relay) this.post({ k: "st", s: "open", id: this.lastEventId });
@@ -157,6 +174,7 @@ export class CrossTabEventSource extends EventTarget implements PoolableEventSou
       this.state = "error";
       this.dispatchEvent(new Event("error"));
       if (relay) this.post({ k: "st", s: "error", id: this.lastEventId });
+      if (source.readyState === CrossTabEventSource.CLOSED) this.scheduleRevive(source, relay);
     };
     for (const type of this.eventNames) {
       source.addEventListener(type, (event) => {
@@ -169,6 +187,26 @@ export class CrossTabEventSource extends EventTarget implements PoolableEventSou
         if (relay) this.post({ k: "ev", t: type, d: data, id: this.lastEventId });
       });
     }
+  }
+
+  /** Replaces a stream the browser closed for good with a fresh one, resuming
+   *  from the cursor. Does nothing if that stream is no longer the current one
+   *  (closed, or a fallback the relay has since made redundant). */
+  private scheduleRevive(dead: EventSource, relay: boolean): void {
+    if (this.closedFlag || this.reviveTimer != null) return;
+    this.reviveTimer = setTimeout(() => {
+      this.reviveTimer = null;
+      if (this.closedFlag) return;
+      if (relay) {
+        if (this.role !== "leader" || this.real !== dead) return;
+        this.real = this.createEventSource(this.resumeUrl());
+        this.attachStream(this.real, true);
+      } else {
+        if (this.fallback !== dead) return;
+        this.fallback = this.createEventSource(this.resumeUrl());
+        this.attachStream(this.fallback, false);
+      }
+    }, reviveDelayMs(this.reviveAttempt++));
   }
 
   private startStarvationWatch(): void {

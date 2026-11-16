@@ -139,10 +139,25 @@ jobs:
               systemctl --no-pager -n 40 status "mania-hub-web@$1" || true
               return 1
             }
+            # One frontend restart on the box at a time: a develop push lands
+            # the ninja restart in the same minute, and three node boots at
+            # once is what made the "rolling" restart visible (2026-11-15).
+            exec 9>"$HOME/.mania-hub-web-restart.lock"
+            flock -w 300 9 || echo "  restart lock busy for 300s, going ahead"
+            # A fresh instance compiles each route on its first render, so
+            # render the busy ones before Caddy sends it visitors, then give
+            # it a moment before the other one goes down.
+            warm() {
+              for path in / /tracker /top-plays /maps /snipes; do
+                curl -s -o /dev/null -m 20 -H "Host: mania-tracker.com" "http://127.0.0.1:$1$path" || true
+              done
+            }
             for port in 3000 3001; do
               echo "restarting mania-hub-web@$port"
               sudo -n systemctl restart "mania-hub-web@$port"
               wait_ready "$port"
+              warm "$port"
+              sleep 10
             done
           '
 

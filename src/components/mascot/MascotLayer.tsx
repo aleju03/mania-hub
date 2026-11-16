@@ -169,7 +169,9 @@ export function MascotLayer() {
         const delay = RECONNECT_DELAYS_MS[retry];
         if (delay == null) return;
         retry += 1;
-        retryTimer = window.setTimeout(() => void connect(), delay);
+        // Spread by half either way so the tabs a backend restart dropped
+        // together do not all come back in the same second.
+        retryTimer = window.setTimeout(() => void connect(), delay * (0.5 + Math.random()));
       });
     };
 

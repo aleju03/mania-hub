@@ -130,6 +130,10 @@ jobs:
         run: |
           ssh "$VPS_USER@$VPS_HOST" '
             set -e
+            # Shared with the prod rolling restart (deploy-web-prod.yml), so a
+            # push to both branches never boots three node processes at once.
+            exec 9>"$HOME/.mania-hub-web-restart.lock"
+            flock -w 300 9 || echo "  restart lock busy for 300s, going ahead"
             echo "restarting mania-hub-web-ninja"
             sudo -n systemctl restart mania-hub-web-ninja
             for i in $(seq 1 90); do
