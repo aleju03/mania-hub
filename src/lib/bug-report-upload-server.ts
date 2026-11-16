@@ -31,10 +31,10 @@ import {
 } from "./r2-cache";
 import { createFixedWindowLimiter, readCappedBody } from "./upload-guards";
 
-const MAX_SCREENSHOTS = 3;
+const MAX_SCREENSHOTS = 10;
 const RATE_WINDOW_MS = 60_000;
-// Three images per report, and a handful of retries on a bad connection.
-const UPLOAD_RATE_LIMIT_PER_WINDOW = 12;
+// Ten files per report, and a handful of retries on a bad connection.
+const UPLOAD_RATE_LIMIT_PER_WINDOW = 30;
 
 const rateLimiter = createFixedWindowLimiter(RATE_WINDOW_MS);
 
