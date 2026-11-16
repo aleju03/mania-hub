@@ -413,6 +413,7 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
       beatmapsetId={entry.beatmapsetId}
       title={entry.title}
       artist={entry.artist}
+      version={model.multi ? null : model.hardest.version}
       seam={model.mix.length > 0 ? <MixSeam model={model} /> : undefined}
       // Opens on the diff the card summarises (its hardest), so the modal's
       // header and rating panel start on the number the card shows.
@@ -453,6 +454,7 @@ export function MapCardFrame({
   beatmapsetId,
   title,
   artist,
+  version,
   coverOverlay,
   seam,
   onOpen,
@@ -465,6 +467,8 @@ export function MapCardFrame({
   beatmapsetId?: number | null;
   title: string;
   artist: string;
+  /** A one-diff card names its diff after the artist: a pack matched on a diff name otherwise shows only the pack's title. */
+  version?: string | null;
   /** Drawn over the art, under the corner badges (the farmed tab's mod glyph). */
   coverOverlay?: ReactNode;
   /** A strip along the cover's bottom edge; the art then ends there instead of dissolving into the body. */
@@ -513,7 +517,15 @@ export function MapCardFrame({
         </div>
         <div className={`absolute left-3.5 right-3.5 ${seam ? "bottom-2.5" : "bottom-1"}`}>
           <div className="truncate text-[16px] font-extrabold leading-tight text-white drop-shadow-md">{song.title}</div>
-          <div className="truncate text-[12px] leading-tight text-white/70">{song.artist}</div>
+          <div className="truncate text-[12px] leading-tight text-white/70">
+            {song.artist}
+            {version ? (
+              <>
+                <span aria-hidden className="mx-1.5 inline-block h-2.5 w-px bg-white/30 align-[-1px]" />
+                <span className="text-white/85">{stripKeymodePrefix(version)}</span>
+              </>
+            ) : null}
+          </div>
         </div>
       </div>
       {seam}

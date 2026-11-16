@@ -1172,8 +1172,9 @@ export function MapDetailModal({
     ];
 
   // Every matching diff of the set, easiest first. Shared by Map info and
-  // Scores, where switching diffs switches the board.
-  const diffPicker = active && diffs.length > 1 ? (
+  // Scores, where switching diffs switches the board. A lone diff still gets
+  // its tab: it is the only place the modal names the diff.
+  const diffPicker = active && diffs.length > 0 ? (
     <DiffTabs diffs={diffs.map((diff) => ({ ...diff, stars: diffStars(diff) }))} activeId={active.beatmapId} mixedKeys={mixedKeys} onSelect={setSelectedDiffId} />
   ) : null;
 
