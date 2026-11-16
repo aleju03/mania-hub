@@ -113,7 +113,7 @@ function PageShell({ profileTheme = null, customTheme = null, children }: { prof
   const { t } = useLingui();
   const themed = profileTheme ?? customTheme;
   return (
-    <div className={themed ? "relative min-h-screen overflow-clip" : "min-h-screen"} style={customTheme && !profileTheme ? customThemeStyle(customTheme) : profileThemeStyle(profileTheme)}>
+    <div className={`${themed ? "relative overflow-clip" : ""} flex min-h-screen flex-col`} style={customTheme && !profileTheme ? customThemeStyle(customTheme) : profileThemeStyle(profileTheme)}>
       {themed && (
         <div aria-hidden className="pointer-events-none sticky top-0 h-0">
           <ProfileThemeBackdrop theme={themed} scroll className="absolute inset-x-0 top-0 h-screen" />
@@ -123,7 +123,7 @@ function PageShell({ profileTheme = null, customTheme = null, children }: { prof
       <div className={themed ? "relative" : undefined}>
         <PageHeader iconSrc="/images/icons/profile.svg" title={t`my stats`} />
       </div>
-      <div className={`${themed ? "relative bg-osu-b5/[0.78]" : "bg-osu-b5"} min-h-[80vh]`}>
+      <div className={`${themed ? "relative bg-osu-b5/[0.78]" : "bg-osu-b5"} min-h-[80vh] flex-1`}>
         <div className="mx-auto max-w-[1080px] px-3 py-5 sm:px-5 sm:py-7 space-y-5">{children}</div>
       </div>
     </div>
