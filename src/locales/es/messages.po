@@ -189,6 +189,11 @@ msgstr "{0, plural, one {# país} other {# países}}"
 msgid "{0, plural, one {# friend loaded} other {# friends loaded}}"
 msgstr "{0, plural, one {# amigo cargado} other {# amigos cargados}}"
 
+#. placeholder {0}: sub.excluded.length
+#: src/routes/discord.tsx
+msgid "{0, plural, one {# left out} other {# left out}}"
+msgstr "{0, plural, one {# fuera} other {# fuera}}"
+
 #. placeholder {0}: diffs.length
 #: src/components/me/GoalsPanel.tsx
 msgid "{0, plural, one {# mania diff} other {# mania diffs}}"
@@ -264,8 +269,8 @@ msgstr "{0, plural, one {# play} other {# plays}}"
 
 #. placeholder {0}: sub.players.length
 #: src/routes/discord.tsx
-msgid "{0, plural, one {# player} other {# players}}"
-msgstr "{0, plural, one {# jugador} other {# jugadores}}"
+#~ msgid "{0, plural, one {# player} other {# players}}"
+#~ msgstr "{0, plural, one {# jugador} other {# jugadores}}"
 
 #. placeholder {0}: replayableScores.length
 #: src/components/replay/ReplayBrowseView.tsx
@@ -523,8 +528,8 @@ msgstr "No se pudo descargar {0}; se aplicaron solo los colores"
 #. placeholder {0}: countries.length
 #: src/components/discord/FeedPlayersModal.tsx
 #: src/routes/discord.tsx
-msgid "{0} countries"
-msgstr "{0} países"
+#~ msgid "{0} countries"
+#~ msgstr "{0} países"
 
 #. placeholder {0}: summary.highlights.longestStreak
 #: src/components/me/MyDataPanel.tsx
@@ -903,6 +908,12 @@ msgstr "{0} personas tienen tu carta"
 #: src/routes/pull/$ownerId/$cardId.tsx
 #~ msgid "{0} person to pull this card"
 #~ msgstr "{0} persona en sacar esta carta"
+
+#. placeholder {0}: added.length + excluded.length
+#. placeholder {0}: counts.added
+#: src/components/discord/FeedPlayersModal.tsx
+#~ msgid "{0} picked"
+#~ msgstr "{0} elegidos"
 
 #. placeholder {0}: formatNumber(segment.playCount)
 #: src/components/player/ActivityPanel.tsx
@@ -1750,6 +1761,14 @@ msgstr "{likeCountLabel} me gusta"
 #~ msgid "{likeCountLabel} likes, including yours"
 #~ msgstr ""
 
+#: src/routes/discord.tsx
+msgid "{listed, plural, one {# player} other {# players}}"
+msgstr "{listed, plural, one {# jugador} other {# jugadores}}"
+
+#: src/routes/discord.tsx
+msgid "{listed, plural, one {+# player} other {+# players}}"
+msgstr "{listed, plural, one {+# jugador} other {+# jugadores}}"
+
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "{mapCount, plural, one {# top play} other {# top plays}}"
 msgstr "{mapCount, plural, one {# mejor jugada} other {# mejores jugadas}}"
@@ -1983,6 +2002,10 @@ msgstr "{pendingPlays} plays"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{pendingPlays} plays still analyzing, so this estimate can still move."
 msgstr "{pendingPlays} plays aún en análisis, así que esta estimación todavía puede cambiar."
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "{picked} picked"
+msgstr ""
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
@@ -4032,8 +4055,16 @@ msgid "Add a channel, then turn on what it posts."
 msgstr "Agrega un canal y luego activa lo que publica."
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Add a country code"
-msgstr "Agrega un código de país"
+#~ msgid "Add a country code"
+#~ msgstr "Agrega un código de país"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Add a country or region"
+msgstr "Agregar un país o región"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Add a country to pick or leave out its players."
+msgstr "Agrega un país para elegir o dejar fuera a sus jugadores."
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Add a loop (optional)"
@@ -4328,6 +4359,15 @@ msgstr "Todos"
 msgid "all 10"
 msgstr "los 10"
 
+#. placeholder {0}: excluded.length
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "All but {0}"
+msgstr "Todos menos {0}"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "All but {out}"
+msgstr ""
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "All clears"
 msgstr "Todos los clears"
@@ -4338,6 +4378,7 @@ msgstr "Todos los clears"
 msgid "All collections"
 msgstr "Todas las colecciones"
 
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/maps/MapScoresBoard.tsx
 msgid "All countries"
 msgstr "Todos los países"
@@ -6744,7 +6785,6 @@ msgid "clear"
 msgstr "limpiar"
 
 #: src/components/companella/InstallationList.tsx
-#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/maps/RangePill.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
@@ -9043,6 +9083,7 @@ msgid "Direction & long notes"
 msgstr "Dirección y notas largas"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter.tsx
 msgid "Discard"
 msgstr "Descartar"
 
@@ -10035,9 +10076,12 @@ msgid "every collector"
 msgstr "todos los coleccionistas"
 
 #: src/components/discord/FeedPlayersModal.tsx
-#: src/routes/discord.tsx
 msgid "every country"
 msgstr "todos los países"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Every country"
+msgstr "Todos los países"
 
 #: src/routes/recommendations.tsx
 msgid "Every farm map the players around your pp actually play, ranked by how many of them have it. Cleared maps stay in, so you can see where you already stand."
@@ -10185,6 +10229,7 @@ msgid "Every tracked player, same odds"
 msgstr "Todos los jugadores con seguimiento, misma probabilidad"
 
 #: src/components/communities/AccessScopePicker.tsx
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -10193,20 +10238,40 @@ msgid "Everyone"
 msgstr "Todos"
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Everyone except"
-msgstr "Todos menos"
+#~ msgid "Everyone except"
+#~ msgstr "Todos menos"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Everyone gets the same cards and one attempt today."
 msgstr "Hoy todos tienen las mismas cartas y un solo intento."
 
 #: src/routes/discord.tsx
-msgid "Everyone in {scope}"
-msgstr "Todos en {scope}"
+#~ msgid "Everyone in {scope}"
+#~ msgstr "Todos en {scope}"
 
 #: src/routes/discord.tsx
-msgid "Everyone in {scope} except"
-msgstr "Todos en {scope} menos"
+#~ msgid "Everyone in {scope} except"
+#~ msgstr "Todos en {scope} menos"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone in {viewName}"
+msgstr "Todos en {viewName}"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone in {where} except {excluded, plural, one {# player} other {# players}}, plus {added, plural, one {# more player} other {# more players}}."
+msgstr "Todos en {where} menos {excluded, plural, one {# jugador} other {# jugadores}}, y {added, plural, one {# jugador más} other {# jugadores más}}."
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone in {where} except {excluded, plural, one {# player} other {# players}}."
+msgstr "Todos en {where} menos {excluded, plural, one {# jugador} other {# jugadores}}."
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone in {where}, plus {added, plural, one {# more player} other {# more players}}."
+msgstr "Todos en {where}, y {added, plural, one {# jugador más} other {# jugadores más}}."
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone in {where}."
+msgstr "Todos en {where}."
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Everyone watching your replays sees this skin."
@@ -12168,6 +12233,10 @@ msgstr "Ocultar detalles de la exportación"
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Hide it from everyone else, instead of showing it with no way in"
 msgstr "Ocultarlo para todos los demás, en vez de mostrarlo sin forma de entrar"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Hide its countries"
+msgstr "Ocultar sus países"
 
 #: src/components/supporter/LoadoutSlots.tsx
 #: src/routes/workshop.themes.index.tsx
@@ -17430,6 +17499,7 @@ msgstr "NoMod"
 msgid "none"
 msgstr "ninguno"
 
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/lib/signature-style.ts
 msgid "None"
 msgstr "Ninguno"
@@ -18266,6 +18336,10 @@ msgstr "Por ahora solo hay mapas skillboost"
 msgid "Only supporters can save themes. Everything here works as a preview."
 msgstr "Solo los supporters pueden guardar temas. Todo lo de aquí funciona como vista previa."
 
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Only the {added, plural, one {# picked player} other {# picked players}}."
+msgstr "Solo {added, plural, one {el jugador elegido} other {los # jugadores elegidos}}."
+
 #. placeholder {0}: B.keyThree.cards
 #: src/lib/pack-run.ts
 msgid "Only the first {0} cards score."
@@ -18284,8 +18358,8 @@ msgid "Only the theme shows behind your profile header, without your osu! banner
 msgstr "Solo el tema se ve detrás de la cabecera de tu perfil, sin tu banner de osu!."
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Only these"
-msgstr "Solo estos"
+#~ msgid "Only these"
+#~ msgstr "Solo estos"
 
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -19251,8 +19325,12 @@ msgid "Pay with Google here. Your supporter time starts as soon as the payment g
 msgstr "Paga con Google aquí. Tu tiempo de supporter empieza apenas se procese el pago."
 
 #: src/routes/terms.tsx
-msgid "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
-msgstr "Los pagos pasan por Ko-fi, Google o lava.top, que los procesan bajo sus propios términos. Mania Tracker nunca ve los datos de tu tarjeta o banco. Una suscripción mensual se renueva sola hasta que la canceles en la plataforma donde la empezaste; cancelar detiene el siguiente pago, y el tiempo ya pagado se mantiene hasta que se acabe."
+msgid "Payments go through Ko-fi or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+msgstr "Los pagos pasan por Ko-fi o lava.top, que los procesan bajo sus propios términos. Mania Tracker nunca ve los datos de tu tarjeta o banco. Una suscripción mensual se renueva sola hasta que la canceles en la plataforma donde la empezaste; cancelar detiene el siguiente pago, y el tiempo ya pagado se mantiene hasta que se acabe."
+
+#: src/routes/terms.tsx
+#~ msgid "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+#~ msgstr "Los pagos pasan por Ko-fi, Google o lava.top, que los procesan bajo sus propios términos. Mania Tracker nunca ve los datos de tu tarjeta o banco. Una suscripción mensual se renueva sola hasta que la canceles en la plataforma donde la empezaste; cancelar detiene el siguiente pago, y el tiempo ya pagado se mantiene hasta que se acabe."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "PayPal"
@@ -19411,12 +19489,12 @@ msgid "Pick a play below."
 msgstr "Elige un play abajo."
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Pick a region"
-msgstr "Elige una región"
+#~ msgid "Pick a region"
+#~ msgstr "Elige una región"
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Pick a region or add a country to see its players."
-msgstr "Elige una región o agrega un país para ver sus jugadores."
+#~ msgid "Pick a region or add a country to see its players."
+#~ msgstr "Elige una región o agrega un país para ver sus jugadores."
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "Pick a slot, then the card to put in it, or drag a card onto a slot."
@@ -19512,8 +19590,8 @@ msgstr "Primero elige tu recompensa por saltar."
 
 #. placeholder {0}: picked.length
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Picked {0} of {max}"
-msgstr "{0} de {max} elegidos"
+#~ msgid "Picked {0} of {max}"
+#~ msgstr "{0} de {max} elegidos"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Picking a backdrop or a pattern re-renders that playfield from the uploaded .osk while preserving its other saved choice. Patterns are cut from real charts, one keymode at a time. Keymodes left alone keep the previews they were published with."
@@ -20056,17 +20134,17 @@ msgstr "Publica mapas recién rankeados en los que los jugadores están ganando 
 
 #. placeholder {0}: picked.length
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Posts top plays from everyone in {where} except the {0} picked."
-msgstr "Publica top plays de todos en {where} menos los {0} elegidos."
+#~ msgid "Posts top plays from everyone in {where} except the {0} picked."
+#~ msgstr "Publica top plays de todos en {where} menos los {0} elegidos."
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Posts top plays from everyone in {where}."
-msgstr "Publica top plays de todos en {where}."
+#~ msgid "Posts top plays from everyone in {where}."
+#~ msgstr "Publica top plays de todos en {where}."
 
 #. placeholder {0}: picked.length
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Posts top plays from the {0} picked players only."
-msgstr "Publica top plays solo de los {0} jugadores elegidos."
+#~ msgid "Posts top plays from the {0} picked players only."
+#~ msgstr "Publica top plays solo de los {0} jugadores elegidos."
 
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/player/ProfileParts.tsx
@@ -21475,7 +21553,6 @@ msgstr "Reembolso"
 msgid "Refunds"
 msgstr "Reembolsos"
 
-#: src/components/discord/FeedPlayersModal.tsx
 #: src/lib/chain-run.ts
 msgid "Region"
 msgstr "Región"
@@ -21582,6 +21659,7 @@ msgstr "No se pudo eliminar."
 msgid "remove"
 msgstr "eliminar"
 
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/skins/SkinSettingsModal.tsx
@@ -21591,9 +21669,8 @@ msgid "Remove"
 msgstr "Eliminar"
 
 #. placeholder {0}: entry.card.name
-#. placeholder {0}: getCountryName(code)
 #. placeholder {0}: player.username
-#: src/components/discord/FeedPlayersModal.tsx
+#. placeholder {0}: server.name
 #: src/components/packs/run/chain/ChainShop.tsx
 #: src/components/player/ServerLinks.tsx
 #: src/routes/discord.tsx
@@ -22494,6 +22571,7 @@ msgstr "sábados"
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/routes/supporter.tsx
 msgid "Save"
 msgstr "Guardar"
 
@@ -23780,6 +23858,10 @@ msgstr "Mostrar menos"
 msgid "Show its banner behind my rows in lists"
 msgstr "Mostrar su banner detrás de mis filas en listas"
 
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Show its countries"
+msgstr "Mostrar sus países"
+
 #: src/components/packs/collections/CommunitySets.tsx
 #~ msgid "Show less"
 #~ msgstr "Ver menos"
@@ -24661,6 +24743,10 @@ msgstr "Sólido"
 #: src/lib/supporter-name-styles.ts
 msgid "Solid colour"
 msgstr "Color sólido"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Some"
+msgstr "Algunos"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Some cards could not be laid down."
@@ -29349,6 +29435,7 @@ msgid "unreadable"
 msgstr "ilegible"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter.tsx
 msgid "Unsaved changes"
 msgstr "Cambios sin guardar"
 

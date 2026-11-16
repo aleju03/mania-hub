@@ -201,6 +201,11 @@ msgstr "{0, plural, other {# 个国家}}"
 msgid "{0, plural, one {# friend loaded} other {# friends loaded}}"
 msgstr "{0, plural, other {已载入 # 位好友}}"
 
+#. placeholder {0}: sub.excluded.length
+#: src/routes/discord.tsx
+msgid "{0, plural, one {# left out} other {# left out}}"
+msgstr "{0, plural, other {排除 # 人}}"
+
 #. placeholder {0}: diffs.length
 #: src/components/me/GoalsPanel.tsx
 msgid "{0, plural, one {# mania diff} other {# mania diffs}}"
@@ -276,8 +281,8 @@ msgstr "{0, plural, other {# 次游玩}}"
 
 #. placeholder {0}: sub.players.length
 #: src/routes/discord.tsx
-msgid "{0, plural, one {# player} other {# players}}"
-msgstr "{0, plural, other {# 名玩家}}"
+#~ msgid "{0, plural, one {# player} other {# players}}"
+#~ msgstr "{0, plural, other {# 名玩家}}"
 
 #. placeholder {0}: replayableScores.length
 #: src/components/replay/ReplayBrowseView.tsx
@@ -535,8 +540,8 @@ msgstr "{0} 无法下载，只应用了配色"
 #. placeholder {0}: countries.length
 #: src/components/discord/FeedPlayersModal.tsx
 #: src/routes/discord.tsx
-msgid "{0} countries"
-msgstr "{0} 个国家"
+#~ msgid "{0} countries"
+#~ msgstr "{0} 个国家"
 
 #. placeholder {0}: summary.highlights.longestStreak
 #: src/components/me/MyDataPanel.tsx
@@ -915,6 +920,12 @@ msgstr "有 {0} 人持有你的卡片"
 #: src/routes/pull/$ownerId/$cardId.tsx
 #~ msgid "{0} person to pull this card"
 #~ msgstr "{0} 位抽到这张卡片的人"
+
+#. placeholder {0}: added.length + excluded.length
+#. placeholder {0}: counts.added
+#: src/components/discord/FeedPlayersModal.tsx
+#~ msgid "{0} picked"
+#~ msgstr "已选 {0}"
 
 #. placeholder {0}: formatNumber(segment.playCount)
 #: src/components/player/ActivityPanel.tsx
@@ -1762,6 +1773,14 @@ msgstr "{likeCountLabel} 个赞"
 #~ msgid "{likeCountLabel} likes, including yours"
 #~ msgstr ""
 
+#: src/routes/discord.tsx
+msgid "{listed, plural, one {# player} other {# players}}"
+msgstr "{listed, plural, other {# 名玩家}}"
+
+#: src/routes/discord.tsx
+msgid "{listed, plural, one {+# player} other {+# players}}"
+msgstr "{listed, plural, other {+# 名玩家}}"
+
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "{mapCount, plural, one {# top play} other {# top plays}}"
 msgstr "{mapCount, plural, other {# 条最佳成绩}}"
@@ -1995,6 +2014,10 @@ msgstr "{pendingPlays} 个成绩"
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{pendingPlays} plays still analyzing, so this estimate can still move."
 msgstr "{pendingPlays} 个成绩仍在分析中，因此这个估计仍可能变动。"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "{picked} picked"
+msgstr ""
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
@@ -4044,8 +4067,16 @@ msgid "Add a channel, then turn on what it posts."
 msgstr "先添加一个频道，再开启它要发布的内容。"
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Add a country code"
-msgstr "添加国家代码"
+#~ msgid "Add a country code"
+#~ msgstr "添加国家代码"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Add a country or region"
+msgstr "添加国家或地区"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Add a country to pick or leave out its players."
+msgstr "添加一个国家来选择或排除其中的玩家。"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Add a loop (optional)"
@@ -4340,6 +4371,15 @@ msgstr "全部"
 msgid "all 10"
 msgstr "全部 10 名"
 
+#. placeholder {0}: excluded.length
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "All but {0}"
+msgstr "除 {0} 人外全部"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "All but {out}"
+msgstr ""
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "All clears"
 msgstr "整体"
@@ -4350,6 +4390,7 @@ msgstr "整体"
 msgid "All collections"
 msgstr "全部收藏"
 
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/maps/MapScoresBoard.tsx
 msgid "All countries"
 msgstr "所有国家/地区"
@@ -6756,7 +6797,6 @@ msgid "clear"
 msgstr "清除"
 
 #: src/components/companella/InstallationList.tsx
-#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/maps/RangePill.tsx
 #: src/components/player/BestScoresControls.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
@@ -9055,6 +9095,7 @@ msgid "Direction & long notes"
 msgstr "方向与长条"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter.tsx
 msgid "Discard"
 msgstr "丢弃"
 
@@ -10047,8 +10088,11 @@ msgid "every collector"
 msgstr "全部收藏者"
 
 #: src/components/discord/FeedPlayersModal.tsx
-#: src/routes/discord.tsx
 msgid "every country"
+msgstr "所有国家"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Every country"
 msgstr "所有国家"
 
 #: src/routes/recommendations.tsx
@@ -10197,6 +10241,7 @@ msgid "Every tracked player, same odds"
 msgstr "所有已追踪玩家，概率相同"
 
 #: src/components/communities/AccessScopePicker.tsx
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/maps/UserCollectionsSection.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -10205,20 +10250,40 @@ msgid "Everyone"
 msgstr "所有人"
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Everyone except"
-msgstr "除这些外的所有人"
+#~ msgid "Everyone except"
+#~ msgstr "除这些外的所有人"
 
 #: src/components/packs/run/chain/ChainEnd.tsx
 msgid "Everyone gets the same cards and one attempt today."
 msgstr "今天所有人用同一套卡，只有一次机会。"
 
 #: src/routes/discord.tsx
-msgid "Everyone in {scope}"
-msgstr "{scope} 的所有人"
+#~ msgid "Everyone in {scope}"
+#~ msgstr "{scope} 的所有人"
 
 #: src/routes/discord.tsx
-msgid "Everyone in {scope} except"
-msgstr "{scope} 的所有人，除了"
+#~ msgid "Everyone in {scope} except"
+#~ msgstr "{scope} 的所有人，除了"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone in {viewName}"
+msgstr "{viewName} 的所有人"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone in {where} except {excluded, plural, one {# player} other {# players}}, plus {added, plural, one {# more player} other {# more players}}."
+msgstr "{where} 的所有人，排除 {excluded, plural, other {# 名玩家}}，另加 {added, plural, other {# 名玩家}}。"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone in {where} except {excluded, plural, one {# player} other {# players}}."
+msgstr "{where} 的所有人，排除 {excluded, plural, other {# 名玩家}}。"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone in {where}, plus {added, plural, one {# more player} other {# more players}}."
+msgstr "{where} 的所有人，另加 {added, plural, other {# 名玩家}}。"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Everyone in {where}."
+msgstr "{where} 的所有人。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Everyone watching your replays sees this skin."
@@ -12180,6 +12245,10 @@ msgstr "隐藏导出详情"
 #: src/components/communities/AccessScopePicker.tsx
 msgid "Hide it from everyone else, instead of showing it with no way in"
 msgstr "对其他人隐藏，而不是显示出来却进不去"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Hide its countries"
+msgstr "收起其国家"
 
 #: src/components/supporter/LoadoutSlots.tsx
 #: src/routes/workshop.themes.index.tsx
@@ -17442,6 +17511,7 @@ msgstr "无模组"
 msgid "none"
 msgstr "无"
 
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/lib/signature-style.ts
 msgid "None"
 msgstr "无"
@@ -18278,6 +18348,10 @@ msgstr "当前只有提升技能的谱面"
 msgid "Only supporters can save themes. Everything here works as a preview."
 msgstr "只有支持者可以保存主题。这里的一切都可以作为预览使用。"
 
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Only the {added, plural, one {# picked player} other {# picked players}}."
+msgstr "仅限选中的 {added, plural, other {# 名玩家}}。"
+
 #. placeholder {0}: B.keyThree.cards
 #: src/lib/pack-run.ts
 msgid "Only the first {0} cards score."
@@ -18296,8 +18370,8 @@ msgid "Only the theme shows behind your profile header, without your osu! banner
 msgstr "个人资料头部背后只显示主题，不显示你的 osu! 横幅。"
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Only these"
-msgstr "仅这些"
+#~ msgid "Only these"
+#~ msgstr "仅这些"
 
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -19263,8 +19337,12 @@ msgid "Pay with Google here. Your supporter time starts as soon as the payment g
 msgstr "在这里用 Google 支付。付款完成后，你的支持者时长立即开始。"
 
 #: src/routes/terms.tsx
-msgid "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
-msgstr "付款通过 Ko-fi、Google 或 lava.top 进行，并按各平台自己的条款处理。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
+msgid "Payments go through Ko-fi or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+msgstr "付款通过 Ko-fi 或 lava.top 进行，并按各平台自己的条款处理。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
+
+#: src/routes/terms.tsx
+#~ msgid "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+#~ msgstr "付款通过 Ko-fi、Google 或 lava.top 进行，并按各平台自己的条款处理。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "PayPal"
@@ -19423,12 +19501,12 @@ msgid "Pick a play below."
 msgstr "在下方选择一次游玩。"
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Pick a region"
-msgstr "选择地区"
+#~ msgid "Pick a region"
+#~ msgstr "选择地区"
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Pick a region or add a country to see its players."
-msgstr "选择地区或添加国家以查看其玩家。"
+#~ msgid "Pick a region or add a country to see its players."
+#~ msgstr "选择地区或添加国家以查看其玩家。"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "Pick a slot, then the card to put in it, or drag a card onto a slot."
@@ -19524,8 +19602,8 @@ msgstr "请先选择跳过奖励。"
 
 #. placeholder {0}: picked.length
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Picked {0} of {max}"
-msgstr "已选 {0} / {max}"
+#~ msgid "Picked {0} of {max}"
+#~ msgstr "已选 {0} / {max}"
 
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Picking a backdrop or a pattern re-renders that playfield from the uploaded .osk while preserving its other saved choice. Patterns are cut from real charts, one keymode at a time. Keymodes left alone keep the previews they were published with."
@@ -20068,17 +20146,17 @@ msgstr "发布玩家正在刷 pp 的新上架谱面，以及给出的 pp 高于�
 
 #. placeholder {0}: picked.length
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Posts top plays from everyone in {where} except the {0} picked."
-msgstr "发布 {where} 所有人的 top plays，已选的 {0} 人除外。"
+#~ msgid "Posts top plays from everyone in {where} except the {0} picked."
+#~ msgstr "发布 {where} 所有人的 top plays，已选的 {0} 人除外。"
 
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Posts top plays from everyone in {where}."
-msgstr "发布 {where} 所有人的 top plays。"
+#~ msgid "Posts top plays from everyone in {where}."
+#~ msgstr "发布 {where} 所有人的 top plays。"
 
 #. placeholder {0}: picked.length
 #: src/components/discord/FeedPlayersModal.tsx
-msgid "Posts top plays from the {0} picked players only."
-msgstr "仅发布已选 {0} 名玩家的 top plays。"
+#~ msgid "Posts top plays from the {0} picked players only."
+#~ msgstr "仅发布已选 {0} 名玩家的 top plays。"
 
 #: src/components/player/FeaturedPlays.tsx
 #: src/components/player/ProfileParts.tsx
@@ -21487,7 +21565,6 @@ msgstr "退款"
 msgid "Refunds"
 msgstr "退款"
 
-#: src/components/discord/FeedPlayersModal.tsx
 #: src/lib/chain-run.ts
 msgid "Region"
 msgstr "地区"
@@ -21594,6 +21671,7 @@ msgstr "移除失败。"
 msgid "remove"
 msgstr "移除"
 
+#: src/components/discord/FeedPlayersModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/skins/SkinSettingsModal.tsx
@@ -21603,9 +21681,8 @@ msgid "Remove"
 msgstr "移除"
 
 #. placeholder {0}: entry.card.name
-#. placeholder {0}: getCountryName(code)
 #. placeholder {0}: player.username
-#: src/components/discord/FeedPlayersModal.tsx
+#. placeholder {0}: server.name
 #: src/components/packs/run/chain/ChainShop.tsx
 #: src/components/player/ServerLinks.tsx
 #: src/routes/discord.tsx
@@ -22506,6 +22583,7 @@ msgstr "周六"
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/ServerLinks.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/routes/supporter.tsx
 msgid "Save"
 msgstr "保存"
 
@@ -23792,6 +23870,10 @@ msgstr "收起"
 msgid "Show its banner behind my rows in lists"
 msgstr "在列表中我的行后方显示它的横幅"
 
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Show its countries"
+msgstr "展开其国家"
+
 #: src/components/packs/collections/CommunitySets.tsx
 #~ msgid "Show less"
 #~ msgstr "收起"
@@ -24673,6 +24755,10 @@ msgstr "纯色"
 #: src/lib/supporter-name-styles.ts
 msgid "Solid colour"
 msgstr "纯色"
+
+#: src/components/discord/FeedPlayersModal.tsx
+msgid "Some"
+msgstr "部分"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Some cards could not be laid down."
@@ -29361,6 +29447,7 @@ msgid "unreadable"
 msgstr "无法读取"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter.tsx
 msgid "Unsaved changes"
 msgstr "有未保存的更改"
 

@@ -67,7 +67,7 @@ export interface BotServer {
   iconUrl: string | null;
   botPresent: boolean;
   channels: BotChannel[];
-  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number; players?: BotFeedPlayer[]; playersMode?: "only" | "except"; countries?: string[]; minDan?: number; nearClears?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number; ppClient?: "stable" | "lazer" }>;
+  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number; players?: BotFeedPlayer[]; playersMode?: "only" | "mix"; excluded?: BotFeedPlayer[]; countries?: string[]; minDan?: number; nearClears?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number; ppClient?: "stable" | "lazer" }>;
   settings: { defaultCountry: string | null; autoDanChannels: string[] };
 }
 
@@ -75,6 +75,8 @@ export interface BotFeedPlayer {
   id: number;
   username: string;
   avatarUrl: string | null;
+  countryCode?: string | null;
+  pp?: number | null;
 }
 
 export interface BotServers {
@@ -90,7 +92,7 @@ export interface BotServers {
 export interface BotServerChange {
   defaultCountry?: string | null;
   feed?: { channelId: string; feedType: string; on: boolean; country?: string };
-  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number; players: number[]; playersMode?: "only" | "except"; countries?: string[]; minDan?: number; nearClears?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number; ppClient?: "stable" | "lazer" };
+  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number; players: number[]; playersMode?: "only" | "mix"; excluded?: number[]; countries?: string[]; minDan?: number; nearClears?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number; ppClient?: "stable" | "lazer" };
   autoDan?: { channelId: string; on: boolean };
 }
 

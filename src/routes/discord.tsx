@@ -27,7 +27,7 @@ import {
   type BotServers,
 } from "../lib/discord-bot";
 import { DiscordLogo, DISCORD_BLURPLE } from "../components/ui/DiscordLogo";
-import { FeedPlayersModal } from "../components/discord/FeedPlayersModal";
+import { FeedPlayersModal, savedScope, useFeedPlayersSummary } from "../components/discord/FeedPlayersModal";
 import { findRegionByCountries } from "../lib/regions";
 import { COUNTRY_OPTIONS, displayCountryName, getCountryFlagUrl } from "../lib/country";
 import type { AppLocale } from "../lib/locale";
@@ -611,12 +611,12 @@ function danLevelChoices(keys: number[], current: number): number[] {
 // plays, and New farm maps (keymodes and stars).
 const FILTERED_FEEDS = ["top_play", "dan_clear", "goal", "new_map"];
 
-type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "except"; countries: string[]; minDan: number; nearClears: boolean; minStars: number; maxStars: number; mapsMode: "farm" | "all"; ppAccuracy: number; ppClient: PpClient };
-type SavedFeedFilters = Omit<TopPlayFilterState, "players"> & { players: number[] };
+type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "mix"; excluded: BotFeedPlayer[]; countries: string[]; minDan: number; nearClears: boolean; minStars: number; maxStars: number; mapsMode: "farm" | "all"; ppAccuracy: number; ppClient: PpClient };
+type SavedFeedFilters = Omit<TopPlayFilterState, "players" | "excluded"> & { players: number[]; excluded: number[] };
 
 function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
   return {
-    minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [], playersMode: sub.playersMode ?? "only",
+    minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [], playersMode: sub.playersMode ?? "only", excluded: sub.excluded ?? [],
     countries: sub.countries ?? [], minDan: sub.minDan ?? 0, nearClears: sub.nearClears ?? true,
     minStars: sub.minStars ?? 0, maxStars: sub.maxStars ?? 0, mapsMode: sub.mapsMode ?? "farm", ppAccuracy: sub.ppAccuracy ?? DEFAULT_PP_ACCURACY, ppClient: sub.ppClient ?? "stable",
   };
@@ -702,7 +702,7 @@ function TopPlayFilters({ sub, channelName, onSave }: {
     setFilters(next);
     pending.current++;
     queue.current = queue.current
-      .then(() => onSave({ ...next, players: next.players.map((p) => p.id) }))
+      .then(() => onSave({ ...next, players: next.players.map((p) => p.id), excluded: next.excluded.map((p) => p.id) }))
       .then((ok) => {
         pending.current--;
         if (!ok && pending.current === 0) setFilters(filtersOf(sub));
@@ -710,14 +710,13 @@ function TopPlayFilters({ sub, channelName, onSave }: {
   };
   const chip = (active: boolean, interactive = true) =>
     `rounded-md px-2 py-0.5 text-[12px] font-semibold ${active ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"} ${interactive ? "hover:brightness-110" : "cursor-default"}`;
-  const { keys, keymodeTop, players, playersMode, countries, minDan, nearClears, mapsMode } = filters;
+  const { keys, keymodeTop, players, playersMode, excluded, countries, minDan, nearClears, mapsMode } = filters;
+  const feedCountry = sub.country === "GLOBAL" ? null : sub.country;
+  const summarizePlayers = useFeedPlayersSummary();
   const danClears = sub.feedType === "dan_clear";
   // A Goals feed only has its players to choose.
   const goals = sub.feedType === "goal";
   const newMaps = sub.feedType === "new_map";
-  const scope = countries.length === 0
-    ? sub.country === "GLOBAL" ? t`every country` : sub.country
-    : findRegionByCountries(countries)?.name ?? (countries.length <= 4 ? countries.join(", ") : t`${countries.length} countries`);
 
   const row = "flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3";
   const label = "shrink-0 text-[12px] text-osu-f1 sm:w-24";
@@ -844,19 +843,10 @@ function TopPlayFilters({ sub, channelName, onSave }: {
       </>
       )}
       {newMaps ? null : (
-      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
-        <span className={`${label} sm:pt-1.5`}><Trans>Players</Trans></span>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {players.length === 0
-            ? <span className="text-[13px] text-osu-l2"><Trans>Everyone in {scope}</Trans></span>
-            : playersMode === "except" ? <span className="text-[13px] text-osu-l2"><Trans>Everyone in {scope} except</Trans></span> : null}
-          {players.slice(0, 8).map((player) => (
-            <span key={player.id} className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.07] py-1 pl-1.5 pr-2 text-[13px] font-semibold text-white">
-              {player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-4 w-4 rounded-full" /> : null}
-              {player.username}
-            </span>
-          ))}
-          {players.length > 8 ? <span className="text-[12px] text-osu-l2">+{players.length - 8}</span> : null}
+      <div className={row}>
+        <span className={label}><Trans>Players</Trans></span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[13px] text-osu-l2">{summarizePlayers(savedScope(playersMode, players, countries, feedCountry), players.length, excluded.length)}</span>
           <button type="button" onClick={() => setPicking(true)} className="rounded-md bg-osu-pink px-2.5 py-1 text-[13px] font-semibold text-white hover:brightness-110">
             <Trans>Choose players</Trans>
           </button>
@@ -867,11 +857,12 @@ function TopPlayFilters({ sub, channelName, onSave }: {
         <FeedPlayersModal
           title={channelName ? t`Players for #${channelName}` : t`Players`}
           players={players}
+          excluded={excluded}
           max={MAX_FEED_PLAYERS}
           mode={playersMode}
           countries={countries}
-          feedCountry={sub.country === "GLOBAL" ? null : sub.country}
-          onSave={(next) => save({ players: next.players, playersMode: next.mode, countries: next.countries })}
+          feedCountry={feedCountry}
+          onSave={(next) => save({ players: next.players, excluded: next.excluded, playersMode: next.mode, countries: next.countries })}
           onClose={() => setPicking(false)}
         />
       ) : null}
@@ -1142,13 +1133,14 @@ function FeedSummary({ sub }: { sub: ServerSub }) {
     const minPp = sub.minPp;
     if (minPp) parts.push(<Trans>{minPp}pp and up</Trans>);
   }
-  parts.push(
-    sub.players?.length && sub.playersMode !== "except"
-      ? <Plural value={sub.players.length} one="# player" other="# players" />
-      : sub.countries?.length
-        ? findRegionByCountries(sub.countries)?.name ?? (sub.countries.length <= 3 ? sub.countries.join(", ") : <Plural value={sub.countries.length} one="# country" other="# countries" />)
-        : sub.country === "GLOBAL" ? i18n._(msg`Global`) : sub.country,
-  );
+  const listed = sub.players?.length ?? 0;
+  const where = sub.countries?.length
+    ? findRegionByCountries(sub.countries)?.name ?? (sub.countries.length <= 3 ? sub.countries.join(", ") : <Plural value={sub.countries.length} one="# country" other="# countries" />)
+    : sub.country === "GLOBAL" ? i18n._(msg`Global`) : sub.country;
+  if (listed && sub.playersMode !== "mix") parts.push(<Plural value={listed} one="# player" other="# players" />);
+  else parts.push(where);
+  if (listed && sub.playersMode === "mix") parts.push(<Plural value={listed} one="+# player" other="+# players" />);
+  if (sub.excluded?.length) parts.push(<Plural value={sub.excluded.length} one="# left out" other="# left out" />);
   return <SummaryParts parts={parts} />;
 }
 
