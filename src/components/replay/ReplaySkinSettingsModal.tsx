@@ -73,6 +73,7 @@ import {
   REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE,
   REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH,
   replayStagePositionToOsuManiaPosition,
+  resolveColumnSpacings,
   writeReplaySkinPresets,
 } from "#/lib/replay-skin";
 import { extractSkinSoundsFromArchive, importReplaySkinFromOsk, listOskImageEntries, loadOskImageAssetByPath, openOskArchive } from "#/lib/replay-skin-import";
@@ -292,11 +293,8 @@ function getPreviewLnBodyTileHeight(asset: ReplaySkinImageAsset, laneWidth: numb
 // preview's placement measure against.
 function getStageUnitWidth(profile: ReplaySkinKeymodeProfile, keyCount: number): number {
   const keys = Math.max(1, keyCount);
-  let total = 0;
-  for (let col = 0; col < keys; col += 1) {
-    total += profile.columnWidths[col] ?? profile.columnWidth;
-    if (col < keys - 1) total += profile.columnSpacings[col] ?? profile.columnSpacing;
-  }
+  let total = resolveColumnSpacings(profile, keys).reduce((sum, gap) => sum + gap, 0);
+  for (let col = 0; col < keys; col += 1) total += profile.columnWidths[col] ?? profile.columnWidth;
   return total;
 }
 
@@ -3116,7 +3114,7 @@ function ReplaySkinPreview({
   const width = previewWidth;
   const height = Math.round(Math.max(PREVIEW_MIN_HEIGHT, Math.min(PREVIEW_MAX_HEIGHT, width * PREVIEW_HEIGHT_RATIO)));
   const columnWidths = Array.from({ length: keyCount }, (_, col) => profile.columnWidths[col] ?? profile.columnWidth);
-  const columnSpacings = Array.from({ length: Math.max(0, keyCount - 1) }, (_, col) => profile.columnSpacings[col] ?? profile.columnSpacing);
+  const columnSpacings = resolveColumnSpacings(profile, keyCount);
   const desiredPlayfieldWidth = columnWidths.reduce((sum, value) => sum + value, 0) + columnSpacings.reduce((sum, value) => sum + value, 0);
   const targetLayoutScale = height / PREVIEW_MANIA_SKIN_STAGE_HEIGHT;
   const playfieldWidth = Math.min(width * 0.82, desiredPlayfieldWidth * targetLayoutScale);

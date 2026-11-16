@@ -19,7 +19,7 @@ import { replayOverlayCenteredY, replayOverlayLayoutScale, replayOverlayRegion, 
 import { buildReplayMasterTimeline, drawReplayMasterTimeline } from "../../lib/replay-master-overlay";
 import type { ReplayMasterTimeline } from "../../lib/replay-master-overlay";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
-import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, getReplaySkinStagePosition, listSkinAssetFrames, normalizeReplaySkinSettings, pickSkinAnimationFrame } from "../../lib/replay-skin";
+import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, getReplaySkinStagePosition, listSkinAssetFrames, normalizeReplaySkinSettings, pickSkinAnimationFrame, resolveColumnSpacings, skinColumnLineRects } from "../../lib/replay-skin";
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings, ReplaySkinStagePositionKey } from "../../lib/replay-skin";
 import type { ReplayHitEvent, ReplayLiveStats, ReplayViewportSnapshot } from "../../lib/replay-types";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
@@ -2275,7 +2275,8 @@ export class ManiaReplayRenderer {
 
   private getPlayfieldX(w: number, playfieldWidth: number, layoutScale: number, bias: number): number {
     const aligned = (w - playfieldWidth) * (this.playfieldAlign ?? bias);
-    const columnStart = this.skinProfile.columnStart;
+    // Lazer ignores ColumnStart and centres the stage.
+    const columnStart = this.skinProfile.lazerBodies ? null : this.skinProfile.columnStart;
     if (columnStart == null || this.playfieldAlign != null || this.barePlayfield) return aligned;
     const boxWidth = OSU_MANIA_SCREEN_WIDTH * layoutScale;
     const x = (w - boxWidth) / 2 + columnStart * layoutScale;
@@ -2297,13 +2298,7 @@ export class ManiaReplayRenderer {
   }
 
   private getConfiguredColumnSpacings(): number[] {
-    const spacings = this.skinProfile.columnSpacings.length > 0
-      ? this.skinProfile.columnSpacings
-      : [];
-    return Array.from(
-      { length: Math.max(0, this.keyCount - 1) },
-      (_, index) => Math.max(0, spacings[index] ?? this.skinProfile.columnSpacing),
-    );
+    return resolveColumnSpacings(this.skinProfile, this.keyCount);
   }
 
   resize() {
@@ -4108,7 +4103,22 @@ export class ManiaReplayRenderer {
     if (!this.barePlayfield) {
       this.fillRectInto(g, 0, 0, playfieldX, h, "#000000", 0.24);
       this.fillRectInto(g, playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h, "#000000", 0.24);
-      this.fillRectInto(g, playfieldX, 0, playfieldWidth, h, "#000000", this.blackPlayfield ? 1 : hasImportedColumnArt ? 0 : 0.12);
+      // Filled per run of touching columns, so a ColumnSpacing gap shows the
+      // background as in game.
+      const playfieldAlpha = this.blackPlayfield ? 1 : hasImportedColumnArt ? 0 : 0.12;
+      for (let start = 0; playfieldAlpha > 0 && start < this.keyCount; ) {
+        const first = this.getColumnLayout(start, layout);
+        let last = first;
+        let end = start;
+        while (end + 1 < this.keyCount) {
+          const next = this.getColumnLayout(end + 1, layout);
+          if (next.x - (last.x + last.width) >= 0.01) break;
+          last = next;
+          end += 1;
+        }
+        this.fillRectInto(g, first.x, 0, last.x + last.width - first.x, h, "#000000", playfieldAlpha);
+        start = end + 1;
+      }
 
       for (let col = 0; showColumnDividers && col < this.keyCount; col++) {
         const { x, width } = this.getColumnLayout(col, layout);
@@ -4154,26 +4164,18 @@ export class ManiaReplayRenderer {
   private renderSkinColumnLines(g: Graphics, layout: Layout) {
     const widths = this.skinProfile.columnLineWidths;
     if (widths.length === 0) return;
-    const { h, playfieldX, playfieldWidth } = layout;
+    const { h } = layout;
     const rawColor = this.skinProfile.columnLineColor || "#ffffff";
     const color = rawColor.slice(0, 7);
     const alpha = rawColor.length === 9 ? parseInt(rawColor.slice(7, 9), 16) / 255 : 1;
-    for (let boundary = 0; boundary <= this.keyCount; boundary++) {
-      const units = widths[boundary] ?? 0;
-      if (units <= 0) continue;
-      const lineWidth = Math.max(1, units * layout.layoutScale);
-      let x: number;
-      if (boundary === 0) {
-        x = playfieldX;
-      } else if (boundary === this.keyCount) {
-        x = playfieldX + playfieldWidth - lineWidth;
-      } else {
-        const previous = this.getColumnLayout(boundary - 1, layout);
-        const current = this.getColumnLayout(boundary, layout);
-        x = (previous.x + previous.width + current.x) / 2 - lineWidth / 2;
-      }
-      this.fillRectInto(g, x, 0, lineWidth, h, color, alpha);
-    }
+    const columns = Array.from({ length: this.keyCount }, (_, col) => this.getColumnLayout(col, layout));
+    const rects = skinColumnLineRects(
+      (boundary) => widths[boundary] ?? 0,
+      columns.map((column) => column.x),
+      columns.map((column) => column.width),
+      layout.layoutScale,
+    );
+    for (const rect of rects) this.fillRectInto(g, rect.x, 0, rect.width, h, color, alpha);
   }
 
   // Native @1x dimensions for stage furniture: imported assets carry their

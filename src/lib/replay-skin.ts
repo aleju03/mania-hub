@@ -238,7 +238,9 @@ export interface ReplaySkinKeymodeProfile {
   // The skin carries lazer's own files, so its LN bodies are drawn lazer's
   // way: any NoteBodyStyle but 0 stretches one copy of the art to 32800 units
   // from the tail end instead of cascading it at natural aspect, and the body
-  // runs half a tail cap past the end line. Same value in every keymode.
+  // runs half a tail cap past the end line. Lazer also ignores ColumnStart
+  // and centres the stage, so renderers centre these skins. Same value in
+  // every keymode.
   lazerBodies: boolean;
   // Multiplier on the combo counter's drawn size, from the lazer skin's
   // MainHUDComponents.json (LegacyManiaComboCounter Scale). 1 means the skin
@@ -311,6 +313,9 @@ export const REPLAY_SKIN_DEFAULT_COLUMN_WIDTH = 50;
 export const REPLAY_SKIN_MIN_COLUMN_SPACING = 0;
 export const REPLAY_SKIN_MAX_COLUMN_SPACING = 40;
 export const REPLAY_SKIN_DEFAULT_COLUMN_SPACING = 0;
+// Per-gap spacings come from skin.ini, which the game draws as written; the
+// editor's own slider keeps the 40 limit above.
+export const REPLAY_SKIN_MAX_SKIN_COLUMN_SPACING = 400;
 export const REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE = 10;
 export const REPLAY_SKIN_MAX_NOTE_HEIGHT_SCALE = 200;
 export const REPLAY_SKIN_MIN_OUTLINE_WIDTH = 1;
@@ -473,6 +478,45 @@ export const REPLAY_SKIN_MAX_COLUMN_LINE_WIDTH = 20;
 // osu!stable draws 2-unit column lines at every boundary when a skin does not
 // set ColumnLineWidth at all.
 export const OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH = 2;
+
+// One spacing per gap (keys - 1). A skin's ColumnSpacing list leaves the gaps
+// it does not reach at 0, as lazer does; an empty list means the editor's
+// single spacing, applied to every gap.
+export function resolveColumnSpacings(
+  profile: Pick<ReplaySkinKeymodeProfile, "columnSpacing" | "columnSpacings">,
+  keyCount: number,
+): number[] {
+  const gaps = Math.max(0, Math.floor(keyCount) - 1);
+  const listed = profile.columnSpacings.length > 0;
+  return Array.from({ length: gaps }, (_, gap) =>
+    Math.max(0, listed ? (profile.columnSpacings[gap] ?? 0) : profile.columnSpacing),
+  );
+}
+
+// Column lines as lazer draws them: each column carries its left line
+// (ColumnLineWidth[i]) and right line (ColumnLineWidth[i + 1]) inside its own
+// edges, so two touching columns put a double-width line on their boundary
+// and a ColumnSpacing gap shows one line on each side of it. The widths are
+// 768-space units (column widths are 480-space), hence the 480/768.
+export function skinColumnLineRects(
+  lineWidth: (boundary: number) => number,
+  laneXs: readonly number[],
+  laneWidths: readonly number[],
+  pxPer480Unit: number,
+): Array<{ x: number; width: number }> {
+  const rects: Array<{ x: number; width: number }> = [];
+  const px = (units: number) => Math.max(1, units * pxPer480Unit * (480 / 768));
+  laneWidths.forEach((laneWidth, col) => {
+    const left = lineWidth(col);
+    if (left > 0) rects.push({ x: laneXs[col], width: px(left) });
+    const right = lineWidth(col + 1);
+    if (right > 0) {
+      const width = px(right);
+      rects.push({ x: laneXs[col] + laneWidth - width, width });
+    }
+  });
+  return rects;
+}
 // Stable's stage defaults when skin.ini stays silent: columns start 136
 // osu!pixels from the screen's left edge, and the column light's bottom edge
 // sits at 413 of 480.
@@ -783,7 +827,7 @@ function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKe
     columnWidth,
     columnSpacing: normalizeColumnSpacing(raw.columnSpacing ?? fallback?.columnSpacing),
     columnWidths,
-    columnSpacings: normalizeNumberList(raw.columnSpacings, REPLAY_SKIN_MIN_COLUMN_SPACING, REPLAY_SKIN_MAX_COLUMN_SPACING),
+    columnSpacings: normalizeNumberList(raw.columnSpacings, REPLAY_SKIN_MIN_COLUMN_SPACING, REPLAY_SKIN_MAX_SKIN_COLUMN_SPACING),
     columnLineWidths: normalizeNumberList(raw.columnLineWidths, 0, REPLAY_SKIN_MAX_COLUMN_LINE_WIDTH, REPLAY_SKIN_MAX_COLUMNS + 1),
     columnLineColor: normalizeLineColor(raw.columnLineColor),
     columnBackgrounds: normalizeColumnColors(raw.columnBackgrounds),

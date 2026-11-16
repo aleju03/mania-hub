@@ -7,6 +7,8 @@ import {
   OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH,
   OSU_MANIA_DEFAULT_COLUMN_START,
   OSU_MANIA_DEFAULT_LIGHT_POSITION,
+  resolveColumnSpacings,
+  skinColumnLineRects,
 } from "./replay-skin";
 
 // Composes the browse-card preview for an uploaded skin: a fixed 1280x720
@@ -100,7 +102,8 @@ export interface SkinPreviewPatternOptions {
 }
 
 export function computeSkinPreviewLayout(
-  profile: Pick<ReplaySkinKeymodeProfile, "columnWidth" | "columnWidths" | "columnSpacing" | "columnStart">,
+  profile: Pick<ReplaySkinKeymodeProfile, "columnWidth" | "columnWidths" | "columnSpacing" | "columnSpacings" | "columnStart"> &
+    Partial<Pick<ReplaySkinKeymodeProfile, "lazerBodies">>,
   keyCount: number,
   canvasWidth = SKIN_PREVIEW_WIDTH,
   canvasHeight = SKIN_PREVIEW_HEIGHT,
@@ -110,28 +113,31 @@ export function computeSkinPreviewLayout(
     const raw = profile.columnWidths[col] ?? profile.columnWidth;
     return Math.max(8, raw);
   });
-  const spacing = Math.max(0, profile.columnSpacing);
-  const rawStage = rawWidths.reduce((sum, width) => sum + width, 0) + spacing * (keys - 1);
+  const rawSpacings = resolveColumnSpacings(profile, keys);
+  const rawStage = rawWidths.reduce((sum, width) => sum + width, 0) + rawSpacings.reduce((sum, gap) => sum + gap, 0);
   const maxStage = canvasWidth * STAGE_MAX_FRACTION;
   // In-game scale: skin units are 480ths of the screen height.
   const scale = Math.min(canvasHeight / 480, maxStage / rawStage);
   const laneWidths = rawWidths.map((width) => width * scale);
-  const scaledSpacing = spacing * scale;
-  const stageWidth = laneWidths.reduce((sum, width) => sum + width, 0) + scaledSpacing * (keys - 1);
+  const spacings = rawSpacings.map((gap) => gap * scale);
+  const stageWidth = laneWidths.reduce((sum, width) => sum + width, 0) + spacings.reduce((sum, gap) => sum + gap, 0);
   // Stable positions the stage's left edge ColumnStart osu!pixels from the
   // screen's left (the canvas is 16:9, so the unit space is 853.33 wide -
   // exactly canvasWidth at the uncapped scale). Skins centre themselves with
   // ColumnStart = 427 - width/2; BMS-style boards like RESIDENT sit at the
   // left on purpose, and stable's default 136 is left of centre too. Clamped
-  // so the stage always stays on the card.
+  // so the stage always stays on the card. Lazer reads ColumnStart but never
+  // uses it, so a lazer skin's stage sits in the middle.
   const columnStart = profile.columnStart ?? OSU_MANIA_DEFAULT_COLUMN_START;
-  const stageX = Math.max(0, Math.min(canvasWidth - stageWidth, columnStart * scale));
+  const stageX = profile.lazerBodies
+    ? Math.max(0, (canvasWidth - stageWidth) / 2)
+    : Math.max(0, Math.min(canvasWidth - stageWidth, columnStart * scale));
   const laneXs: number[] = [];
   let x = stageX;
-  for (const width of laneWidths) {
+  laneWidths.forEach((width, col) => {
     laneXs.push(x);
-    x += width + scaledSpacing;
-  }
+    x += width + (spacings[col] ?? 0);
+  });
   return { stageX, stageWidth, laneXs, laneWidths, hitLineY: canvasHeight * HIT_LINE_FRACTION, scale };
 }
 
@@ -426,8 +432,21 @@ export async function renderSkinPreview(
   // used to be 72% black, which let the map art wash through every column.
   // A skin that declares Colour{n} gets exactly that colour instead, alpha
   // included, so the ones that deliberately show the background still do.
+  // Filled per run of touching columns: a ColumnSpacing gap shows what is
+  // behind the stage, as in game, and spacing-0 columns get no seam.
   ctx.fillStyle = PLAYFIELD_BACKGROUND;
-  ctx.fillRect(layout.stageX, 0, layout.stageWidth, SKIN_PREVIEW_HEIGHT);
+  for (let start = 0; start < keys; ) {
+    let end = start;
+    while (
+      end + 1 < keys &&
+      layout.laneXs[end + 1] - (layout.laneXs[end] + layout.laneWidths[end]) < 0.01
+    ) {
+      end += 1;
+    }
+    const runX = layout.laneXs[start];
+    ctx.fillRect(runX, 0, layout.laneXs[end] + layout.laneWidths[end] - runX, SKIN_PREVIEW_HEIGHT);
+    start = end + 1;
+  }
   for (let col = 0; col < keys; col += 1) {
     const declared = profile.columnBackgrounds[col];
     if (!declared) continue;
@@ -618,27 +637,12 @@ function drawColumnLines(
   profile: Pick<ReplaySkinKeymodeProfile, "columnLineWidths" | "columnLineColor">,
   layout: SkinPreviewLayout,
 ): void {
-  const keys = layout.laneWidths.length;
   const widths = profile.columnLineWidths;
   const lineWidth = (boundary: number) =>
     widths.length > 0 ? (widths[boundary] ?? 0) : OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH;
   ctx.fillStyle = profile.columnLineColor || "#ffffff";
-  for (let boundary = 0; boundary <= keys; boundary += 1) {
-    const units = lineWidth(boundary);
-    if (units <= 0) continue;
-    const width = Math.max(1, units * layout.scale);
-    let x: number;
-    if (boundary === 0) {
-      x = layout.stageX;
-    } else if (boundary === keys) {
-      x = layout.stageX + layout.stageWidth - width;
-    } else {
-      // Centre the line in the gap between the two lanes (zero-width when
-      // there is no column spacing).
-      const gapCenter = (layout.laneXs[boundary - 1] + layout.laneWidths[boundary - 1] + layout.laneXs[boundary]) / 2;
-      x = gapCenter - width / 2;
-    }
-    ctx.fillRect(x, 0, width, SKIN_PREVIEW_HEIGHT);
+  for (const rect of skinColumnLineRects(lineWidth, layout.laneXs, layout.laneWidths, layout.scale)) {
+    ctx.fillRect(rect.x, 0, rect.width, SKIN_PREVIEW_HEIGHT);
   }
 }
 

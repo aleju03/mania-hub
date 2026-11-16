@@ -18,9 +18,31 @@ import {
   replayHitPositionToOsuManiaHitPosition,
   writeReplaySkinPresets,
   writeReplaySkinSettings,
+  resolveColumnSpacings,
+  skinColumnLineRects,
 } from "./replay-skin";
 import type { ReplaySkinImageAsset, ReplaySkinSettings } from "./replay-skin";
 import type { SkinSummary } from "./skins";
+
+describe("column spacing and lines", () => {
+  it("applies the editor's single spacing to every gap when no list is set", () => {
+    expect(resolveColumnSpacings({ columnSpacing: 5, columnSpacings: [] }, 4)).toEqual([5, 5, 5]);
+  });
+
+  it("leaves gaps a skin's list does not reach at 0, like lazer", () => {
+    expect(resolveColumnSpacings({ columnSpacing: 2, columnSpacings: [2, 2, 2, 2, 2, 2] }, 10)).toEqual([2, 2, 2, 2, 2, 2, 0, 0, 0]);
+  });
+
+  it("draws each line inside the columns beside it", () => {
+    // Two 100px columns with a 10px gap; boundary 1 is 2 units wide, at 1px per 480-unit.
+    const rects = skinColumnLineRects((boundary) => (boundary === 1 ? 2 : 0), [0, 110], [100, 100], 1);
+    const width = Math.max(1, 2 * (480 / 768));
+    expect(rects).toEqual([
+      { x: 100 - width, width },
+      { x: 110, width },
+    ]);
+  });
+});
 
 describe("animated skin assets", () => {
   const frame = (name: string): ReplaySkinImageAsset => ({ name, src: "data:image/png;base64,AA==", path: `mania/${name}` });

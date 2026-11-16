@@ -16,7 +16,7 @@ import { REPLAY_SKIN_NOTE_FRAME_DURATION_MS, type ReplaySkinImageAsset } from ".
 import type { SkinPreviewChartSnippet } from "./skin-preview-patterns";
 
 describe("computeSkinPreviewLayout", () => {
-  const profile = { columnWidth: 36, columnWidths: [], columnSpacing: 0, columnStart: null };
+  const profile = { columnWidth: 36, columnWidths: [], columnSpacing: 0, columnSpacings: [], columnStart: null };
 
   it("scales lanes like the game (skin units are 480ths of the height)", () => {
     const layout = computeSkinPreviewLayout(profile, 4);
@@ -33,7 +33,7 @@ describe("computeSkinPreviewLayout", () => {
 
   it("positions the stage at the skin's ColumnStart (RESIDENT sits at the left)", () => {
     const layout = computeSkinPreviewLayout(
-      { columnWidth: 28, columnWidths: [28, 22, 28, 22, 28, 22, 28], columnSpacing: 0, columnStart: 120 },
+      { columnWidth: 28, columnWidths: [28, 22, 28, 22, 28, 22, 28], columnSpacing: 0, columnSpacings: [], columnStart: 120 },
       7,
     );
     expect(layout.stageX).toBeCloseTo(120 * (SKIN_PREVIEW_HEIGHT / 480), 5);
@@ -42,12 +42,17 @@ describe("computeSkinPreviewLayout", () => {
   it("lands the 427 - width/2 centring formula in the middle of the card", () => {
     // O2Jam FHD 4K: ColumnStart 316 with four 55-unit columns.
     const layout = computeSkinPreviewLayout(
-      { columnWidth: 55, columnWidths: [55, 55, 55, 55], columnSpacing: 0, columnStart: 316 },
+      { columnWidth: 55, columnWidths: [55, 55, 55, 55], columnSpacing: 0, columnSpacings: [], columnStart: 316 },
       4,
     );
     const center = layout.stageX + layout.stageWidth / 2;
     // The author rounded 316.67 down to 316, so allow the same slack.
     expect(Math.abs(center - SKIN_PREVIEW_WIDTH / 2)).toBeLessThan(2);
+  });
+
+  it("centres a lazer skin's stage whatever its ColumnStart says", () => {
+    const layout = computeSkinPreviewLayout({ ...profile, columnStart: 120, lazerBodies: true }, 7);
+    expect(layout.stageX + layout.stageWidth / 2).toBeCloseTo(SKIN_PREVIEW_WIDTH / 2, 5);
   });
 
   it("keeps a far-right ColumnStart on the card", () => {
@@ -56,17 +61,40 @@ describe("computeSkinPreviewLayout", () => {
   });
 
   it("clamps ultra-wide stages to the canvas", () => {
-    const layout = computeSkinPreviewLayout({ columnWidth: 160, columnWidths: [], columnSpacing: 0, columnStart: null }, 10);
+    const layout = computeSkinPreviewLayout({ columnWidth: 160, columnWidths: [], columnSpacing: 0, columnSpacings: [], columnStart: null }, 10);
     expect(layout.stageWidth).toBeLessThanOrEqual(SKIN_PREVIEW_WIDTH * 0.94 + 0.001);
     expect(layout.stageX).toBeGreaterThanOrEqual(0);
     expect(layout.stageX + layout.stageWidth).toBeLessThanOrEqual(SKIN_PREVIEW_WIDTH + 0.001);
   });
 
   it("honours per-column widths from the skin", () => {
-    const layout = computeSkinPreviewLayout({ columnWidth: 30, columnWidths: [30, 60, 30, 60], columnSpacing: 0, columnStart: null }, 4);
+    const layout = computeSkinPreviewLayout({ columnWidth: 30, columnWidths: [30, 60, 30, 60], columnSpacing: 0, columnSpacings: [], columnStart: null }, 4);
     expect(layout.laneWidths[1]).toBeCloseTo(layout.laneWidths[0] * 2, 5);
     // lanes tile the stage without gaps when spacing is zero
     expect(layout.laneXs[1]).toBeCloseTo(layout.laneXs[0] + layout.laneWidths[0], 5);
+  });
+
+  it("reads ColumnSpacing per gap", () => {
+    const layout = computeSkinPreviewLayout(
+      { columnWidth: 85, columnWidths: [85, 85, 85, 85], columnSpacing: 0, columnSpacings: [0, 55, 0], columnStart: 230 },
+      4,
+    );
+    const end = (col: number) => layout.laneXs[col] + layout.laneWidths[col];
+    expect(layout.laneXs[1]).toBeCloseTo(end(0), 5);
+    expect(layout.laneXs[2] - end(1)).toBeCloseTo(55 * layout.scale, 5);
+    expect(layout.laneXs[3]).toBeCloseTo(end(2), 5);
+    expect(layout.stageWidth).toBeCloseTo((85 * 4 + 55) * layout.scale, 5);
+  });
+
+  it("leaves gaps past the end of a short ColumnSpacing list at 0", () => {
+    const layout = computeSkinPreviewLayout(
+      { columnWidth: 65, columnWidths: [], columnSpacing: 20, columnSpacings: [20], columnStart: null },
+      4,
+    );
+    const end = (col: number) => layout.laneXs[col] + layout.laneWidths[col];
+    expect(layout.laneXs[1] - end(0)).toBeCloseTo(20 * layout.scale, 5);
+    expect(layout.laneXs[2]).toBeCloseTo(end(1), 5);
+    expect(layout.laneXs[3]).toBeCloseTo(end(2), 5);
   });
 
   it("keeps the hit line inside the canvas", () => {
