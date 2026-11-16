@@ -21976,7 +21976,6 @@ msgid "Replies to score posts and beatmap links in the channel with the chart's 
 msgstr "Replies to score posts and beatmap links in the channel with the chart's dan."
 
 #: src/components/packs/collections/board/CardBoard.tsx
-#: src/components/supporter/CustomThemeCredit.tsx
 #: src/routes/workshop.themes.gallery.tsx
 msgid "Report"
 msgstr "Report"
@@ -22021,6 +22020,10 @@ msgstr "Report skin"
 #: src/routes/report.tsx
 msgid "Report something else"
 msgstr "Report something else"
+
+#: src/components/supporter/CustomThemeCredit.tsx
+msgid "Report theme"
+msgstr "Report theme"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Report this card to the admins"
@@ -27778,14 +27781,14 @@ msgstr "Theme spec"
 
 #. placeholder {0}: theme.name
 #: src/components/supporter/CustomThemeCredit.tsx
-msgid "Theme: {0}"
-msgstr "Theme: {0}"
+#~ msgid "Theme: {0}"
+#~ msgstr "Theme: {0}"
 
 #. placeholder {0}: theme.name
 #. placeholder {1}: theme.author.username
 #: src/components/supporter/CustomThemeCredit.tsx
-msgid "Theme: {0} by {1}"
-msgstr "Theme: {0} by {1}"
+#~ msgid "Theme: {0} by {1}"
+#~ msgstr "Theme: {0} by {1}"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/workshop.index.tsx
@@ -28227,6 +28230,10 @@ msgstr "This play was judged at a lower OD than a dan clear has to be played at.
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play was judged at OD {0}. A dan clear has to be played at a higher OD than that."
 msgstr "This play was judged at OD {0}. A dan clear has to be played at a higher OD than that."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This play's file has a lower OD than the chart on osu!, so this accuracy was not set against the windows a dan clear is judged on."
+msgstr "This play's file has a lower OD than the chart on osu!, so this accuracy was not set against the windows a dan clear is judged on."
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "This play's strongest skillset"

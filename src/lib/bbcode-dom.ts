@@ -392,55 +392,123 @@ function elementColor(el: Element): string | null {
   return styled && styled !== surfaceColor ? styled : null;
 }
 
-function hasNestedColor(el: Element): boolean {
-  return Array.from(el.querySelectorAll("span, font")).some((inner) => elementColor(inner) != null);
+/** The size of an element that stands for a [size], or null. */
+function elementSize(el: Element): string | null {
+  if (el.tagName !== "SPAN") return null;
+  return el.getAttribute("data-bb-size") ?? (/^(\d+)%$/.exec((el as HTMLElement).style.fontSize)?.[1] ?? null);
+}
+
+type DistributedKind = "color" | "size";
+const DISTRIBUTED_KINDS: DistributedKind[] = ["size", "color"];
+
+function ownValue(el: Element, kind: DistributedKind): string | null {
+  return kind === "color" ? elementColor(el) : elementSize(el);
+}
+
+function hasNested(el: Element, kind: DistributedKind): boolean {
+  return Array.from(el.querySelectorAll("span, font")).some((inner) => ownValue(inner, kind) != null);
 }
 
 /**
- * A [color] whose children hold another [color] is being distributed: osu!
- * pairs an opener with the first closer after it, so one nested inside another
- * prints as text. The outer color is instead written around each run of
- * children that carry no color of their own, and the inner colors stand alone.
+ * A [color] or [size] whose children hold another of the same tag is being
+ * distributed: osu! pairs an opener with the first closer after it, so one
+ * nested inside another prints as text. The outer tag is instead written
+ * around each run of children that carry none of their own, and the inner ones
+ * stand alone.
  */
-let distributedColor: string | null = null;
+const distributed: Record<DistributedKind, string | null> = { color: null, size: null };
+
+/** Runs `fn` with these kinds no longer distributed: something above wrote them. */
+function withWritten<T>(kinds: DistributedKind[], fn: () => T): T {
+  const previous = kinds.map((kind) => distributed[kind]);
+  kinds.forEach((kind) => { distributed[kind] = null; });
+  try {
+    return fn();
+  } finally {
+    kinds.forEach((kind, index) => { distributed[kind] = previous[index]; });
+  }
+}
+
+function wrapKinds(kinds: DistributedKind[], values: Record<DistributedKind, string | null>, inner: string): string {
+  let out = inner;
+  for (let i = kinds.length - 1; i >= 0; i--) out = `[${kinds[i]}=${values[kinds[i]]}]${out}[/${kinds[i]}]`;
+  return out;
+}
 
 function serializeChildren(el: Node): string {
-  const color = distributedColor;
+  const active = DISTRIBUTED_KINDS.filter((kind) => distributed[kind] != null);
   let out = "";
-  if (!color) {
+  if (active.length === 0) {
     el.childNodes.forEach((child) => {
       out += serializeNode(child, out);
     });
     return out;
   }
+  const values = { ...distributed };
   let run = "";
   const flush = () => {
-    if (run) out += `[color=${color}]${run}[/color]`;
+    if (run) out += wrapKinds(active, values, run);
     run = "";
   };
   el.childNodes.forEach((child) => {
-    const isEl = child.nodeType === 1;
-    if (isEl && (elementColor(child as Element) != null || hasNestedColor(child as Element))) {
-      flush();
-      out += serializeNode(child, out);
-    } else {
-      run += serializeNode(child, out + run);
+    const childEl = child.nodeType === 1 ? child as Element : null;
+    const clashing = childEl
+      ? active.filter((kind) => ownValue(childEl, kind) != null || hasNested(childEl, kind))
+      : [];
+    if (clashing.length === 0) {
+      // The run is wrapped whole, so nothing inside it writes these again.
+      run += withWritten(active, () => serializeNode(child, out + run));
+      return;
     }
+    flush();
+    const free = active.filter((kind) => !clashing.includes(kind));
+    out += wrapKinds(free, values, withWritten(free, () => serializeNode(child, out)));
   });
   flush();
   return out;
 }
 
-/** Serializes children under a [color], pushing it inward when they nest one. */
-function serializeColored(el: Element, color: string | null): string {
-  const previous = distributedColor;
-  const nested = color != null && hasNestedColor(el);
-  distributedColor = nested ? color : null;
+/**
+ * Serializes children under an element's own [color] and [size], pushing each
+ * inward when the children nest one. Returns the inner text and the kinds still
+ * to be written around it.
+ */
+function serializeOwn(el: Element, own: Record<DistributedKind, string | null>): { inner: string; wrap: DistributedKind[] } {
+  const previous = { ...distributed };
+  const wrap: DistributedKind[] = [];
+  for (const kind of DISTRIBUTED_KINDS) {
+    if (own[kind] == null) continue;
+    if (hasNested(el, kind)) distributed[kind] = own[kind];
+    else {
+      distributed[kind] = null;
+      wrap.push(kind);
+    }
+  }
   try {
-    const inner = serializeChildren(el);
-    return color && !nested ? `[color=${color}]${inner}[/color]` : inner;
+    return { inner: serializeChildren(el), wrap };
   } finally {
-    distributedColor = previous;
+    Object.assign(distributed, previous);
+  }
+}
+
+function serializeColored(el: Element, color: string | null): string {
+  const { inner, wrap } = serializeOwn(el, { color, size: null });
+  return wrap.includes("color") ? `[color=${color}]${inner}[/color]` : inner;
+}
+
+/* osu! pairs [b], [i], [u] and [s] with the first closer too, so one already
+   open is not written again. */
+const openStyles = new Set<string>();
+
+function serializeStyled(tags: string[], inner: () => string): string {
+  const fresh = tags.filter((tag) => !openStyles.has(tag));
+  fresh.forEach((tag) => openStyles.add(tag));
+  try {
+    let out = inner();
+    for (let i = fresh.length - 1; i >= 0; i--) out = `[${fresh[i]}]${out}[/${fresh[i]}]`;
+    return out;
+  } finally {
+    fresh.forEach((tag) => openStyles.delete(tag));
   }
 }
 
@@ -472,27 +540,27 @@ function serializeBox(el: Element): string {
 }
 
 function serializeSpanStyles(el: HTMLElement): string {
-  const wrappers: Array<[string, string]> = [];
-  if (el.classList.contains("spoiler")) wrappers.push(["[spoiler]", "[/spoiler]"]);
-
-  const color = elementColor(el);
-
-  const sizeAttr = el.getAttribute("data-bb-size");
-  const sizeMatch = sizeAttr ?? (/^(\d+)%$/.exec(el.style.fontSize)?.[1] ?? null);
-  if (sizeMatch) wrappers.push([`[size=${sizeMatch}]`, "[/size]"]);
-
+  const styles: string[] = [];
+  if (el.classList.contains("spoiler")) styles.push("spoiler");
   const weight = el.style.fontWeight;
-  if (weight === "bold" || weight === "bolder" || Number(weight) >= 600) wrappers.push(["[b]", "[/b]"]);
-  if (el.style.fontStyle === "italic") wrappers.push(["[i]", "[/i]"]);
+  if (weight === "bold" || weight === "bolder" || Number(weight) >= 600) styles.push("b");
+  if (el.style.fontStyle === "italic") styles.push("i");
   const decoration = el.style.textDecoration || el.style.textDecorationLine || "";
-  if (decoration.includes("underline")) wrappers.push(["[u]", "[/u]"]);
-  if (decoration.includes("line-through")) wrappers.push(["[s]", "[/s]"]);
+  if (decoration.includes("underline")) styles.push("u");
+  if (decoration.includes("line-through")) styles.push("s");
 
-  let out = serializeColored(el, color);
-  for (let i = wrappers.length - 1; i >= 0; i--) {
-    out = wrappers[i][0] + out + wrappers[i][1];
-  }
-  return out;
+  const own = { color: elementColor(el), size: elementSize(el) };
+  // Written order, outside in: spoiler, size, the text styles, color.
+  const spoiler = styles.filter((tag) => tag === "spoiler");
+  const text = styles.filter((tag) => tag !== "spoiler");
+  const writesSize = own.size != null && !hasNested(el, "size");
+  return serializeStyled(spoiler, () => {
+    const styled = serializeStyled(text, () => {
+      const { inner, wrap } = serializeOwn(el, own);
+      return wrap.includes("color") ? `[color=${own.color}]${inner}[/color]` : inner;
+    });
+    return writesSize ? `[size=${own.size}]${styled}[/size]` : styled;
+  });
 }
 
 function serializeNode(node: Node, prior: string): string {
@@ -543,13 +611,13 @@ function serializeNode(node: Node, prior: string): string {
 
   switch (tag) {
     case "B": case "STRONG":
-      return `[b]${serializeChildren(el)}[/b]`;
+      return serializeStyled(["b"], () => serializeChildren(el));
     case "I": case "EM":
-      return `[i]${serializeChildren(el)}[/i]`;
+      return serializeStyled(["i"], () => serializeChildren(el));
     case "U": case "INS":
-      return `[u]${serializeChildren(el)}[/u]`;
+      return serializeStyled(["u"], () => serializeChildren(el));
     case "S": case "DEL": case "STRIKE":
-      return `[s]${serializeChildren(el)}[/s]`;
+      return serializeStyled(["s"], () => serializeChildren(el));
     case "FONT":
       return serializeColored(el, elementColor(el));
     case "A": {

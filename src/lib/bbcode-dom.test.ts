@@ -377,6 +377,44 @@ describe("nested colors", () => {
   });
 });
 
+describe("tags osu! cannot nest in themselves", () => {
+  const size = (n: number, inner: string) => `<span style="font-size:${n}%" data-bb-size="${n}">${inner}</span>`;
+  const color = (c: string, inner: string) => `<span style="color:${c}" data-bb-color="${c}">${inner}</span>`;
+  const noLiteralTags = (source: string) => {
+    const container = document.createElement("div");
+    container.innerHTML = bbcodeToEditableHtml(source);
+    expect(container.textContent).not.toMatch(/\[\/?(size|color|b|i|u|s)\b/);
+  };
+
+  it("writes an outer size around the runs its inner sizes leave", () => {
+    const out = serialize(size(150, `a${size(100, "b")}c`));
+    expect(out).toBe("[size=150]a[/size][size=100]b[/size][size=150]c[/size]");
+    noLiteralTags(out);
+  });
+
+  it("does not write a color again inside a run it already wraps", () => {
+    const out = serialize(color("#FFFFFF", `<a href="https://example.com">${"link"}</a>${color("#FF0000", "x")}`));
+    expect(out).toBe("[color=#FFFFFF][url=https://example.com]link[/url][/color][color=#FF0000]x[/color]");
+    noLiteralTags(out);
+  });
+
+  it("keeps an outer color for plain text beside a deeper inner color", () => {
+    const out = serialize(color("#FFFFFF", `<span>a${color("#FF0000", "x")}</span>`));
+    expect(out).toBe("[color=#FFFFFF]a[/color][color=#FF0000]x[/color]");
+  });
+
+  it("distributes size and color together", () => {
+    const out = serialize(size(150, color("#FFFFFF", `a${size(100, "b")}`)));
+    expect(out).toBe("[color=#FFFFFF][size=150]a[/size][size=100]b[/size][/color]");
+    noLiteralTags(out);
+  });
+
+  it("writes a text style once however deep it repeats", () => {
+    const out = serialize(`<b>a${color("#FF0000", "<b>b</b>")}<span style="font-weight:bold">c</span></b>`);
+    expect(out).toBe("[b]a[color=#FF0000]b[/color]c[/b]");
+  });
+});
+
 describe("surface color", () => {
   it("does not turn the surface's own text color, carried in by a paste, into a [color]", () => {
     const container = document.createElement("div");

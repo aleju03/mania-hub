@@ -21942,7 +21942,6 @@ msgid "Replies to score posts and beatmap links in the channel with the chart's 
 msgstr "回复频道中的成绩和谱面链接，告诉大家这张谱面的段位。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
-#: src/components/supporter/CustomThemeCredit.tsx
 #: src/routes/workshop.themes.gallery.tsx
 msgid "Report"
 msgstr "举报"
@@ -21987,6 +21986,10 @@ msgstr "举报皮肤"
 #: src/routes/report.tsx
 msgid "Report something else"
 msgstr "再反馈一个问题"
+
+#: src/components/supporter/CustomThemeCredit.tsx
+msgid "Report theme"
+msgstr "举报主题"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Report this card to the admins"
@@ -27728,14 +27731,14 @@ msgstr "主题规范"
 
 #. placeholder {0}: theme.name
 #: src/components/supporter/CustomThemeCredit.tsx
-msgid "Theme: {0}"
-msgstr "主题：{0}"
+#~ msgid "Theme: {0}"
+#~ msgstr "主题：{0}"
 
 #. placeholder {0}: theme.name
 #. placeholder {1}: theme.author.username
 #: src/components/supporter/CustomThemeCredit.tsx
-msgid "Theme: {0} by {1}"
-msgstr "主题：{0}，作者 {1}"
+#~ msgid "Theme: {0} by {1}"
+#~ msgstr "主题：{0}，作者 {1}"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/workshop.index.tsx
@@ -28177,6 +28180,10 @@ msgstr "这次游玩的判定 OD 低于段位通过所需的 OD。"
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "This play was judged at OD {0}. A dan clear has to be played at a higher OD than that."
 msgstr "这次游玩的判定 OD 为 {0}，段位通过需要高于该 OD。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "This play's file has a lower OD than the chart on osu!, so this accuracy was not set against the windows a dan clear is judged on."
+msgstr ""
 
 #: src/components/player/SkillPlaysModal.tsx
 msgid "This play's strongest skillset"

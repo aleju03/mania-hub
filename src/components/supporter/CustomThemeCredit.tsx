@@ -11,8 +11,8 @@ import type { CustomTheme } from "../../lib/custom-themes";
 import { CUSTOM_THEME_REPORT_NOTE_MAX, reportCustomTheme, type CustomThemeReportKind } from "../../lib/custom-theme-reports";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
 
-/* The line under a profile wearing a supporter's own theme: its name and
-   maker, a Report for anyone signed in (about its content or its rights),
+/* The line under a profile wearing a supporter's own theme: a Report for
+   anyone signed in who isn't its wearer or maker (about its content or its rights),
    and for the admin a Take down that pulls it off every profile at once
    (backend features/custom-themes.ts). Themes go live without review, so
    this is how a bad one gets seen. */
@@ -24,25 +24,19 @@ export function CustomThemeCredit({ theme, ownerId }: { theme: CustomTheme; owne
   const [status, setStatus] = useState<string | null>(null);
   const admin = canUseAdminFeatures(auth);
   const canReport = !!auth.viewer && auth.viewer.id !== theme.author.id && auth.viewer.id !== ownerId;
-  const byAuthor = theme.author.id !== ownerId && theme.author.username;
 
+  if (!canReport && !admin) return null;
   return (
     <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-4 py-4 text-[11.5px] text-osu-f1">
-      <span>
-        {byAuthor ? t`Theme: ${theme.name} by ${theme.author.username}` : t`Theme: ${theme.name}`}
-      </span>
       {canReport ? (
-        <>
-          <span aria-hidden className="h-3 w-px bg-white/15" />
-          <button type="button" onClick={() => setReporting(true)} className="inline-flex cursor-pointer items-center gap-1 hover:text-white">
-            <Flag size={11} />
-            {t`Report`}
-          </button>
-        </>
+        <button type="button" onClick={() => setReporting(true)} className="inline-flex cursor-pointer items-center gap-1 hover:text-white">
+          <Flag size={11} />
+          {t`Report theme`}
+        </button>
       ) : null}
       {admin ? (
         <>
-          <span aria-hidden className="h-3 w-px bg-white/15" />
+          {canReport ? <span aria-hidden className="h-3 w-px bg-white/15" /> : null}
           <button type="button" onClick={() => setTakingDown(true)} className="cursor-pointer text-osu-red-light/80 hover:text-osu-red-light">
             Take down
           </button>
