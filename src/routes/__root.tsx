@@ -284,7 +284,7 @@ function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
 
 declare global {
   interface Window {
-    __maniaHubRecoverChunkLoad?: (error: unknown, force?: boolean) => boolean;
+    __maniaHubRecoverChunkLoad?: (error: unknown, force?: boolean, manual?: boolean) => boolean;
     __maniaHubRootSlowContext?: RootSlowContext;
   }
 }
@@ -303,8 +303,12 @@ const CHUNK_LOAD_ERROR_PATTERNS = [
    The ambient listeners recover silently, so a page that reloaded once already
    used to leave the error boundary's forced call guard-blocked -- the user sat
    on "Something broke" having never seen a refresh of their own. Separate slots
-   keep each path's loop protection intact while letting the boundary try once. */
-const CHUNK_LOAD_RECOVERY_SCRIPT = `(()=>{var key="mania-hub-chunk-reload-v1";var forcedKey="mania-hub-route-reload-v1";var ttl=300000;function text(value){try{if(!value)return"";if(typeof value==="string")return value;if(value instanceof Error)return value.name+" "+value.message;var parts=[];if(typeof value.name==="string")parts.push(value.name);if(typeof value.message==="string")parts.push(value.message);if(typeof value.type==="string")parts.push(value.type);if(value.reason)parts.push(text(value.reason));if(value.payload)parts.push(text(value.payload));return parts.join(" ");}catch(e){return"";}}function isChunkError(value){var message=text(value).toLowerCase();return message.indexOf("failed to fetch dynamically imported module")!==-1||message.indexOf("error loading dynamically imported module")!==-1||message.indexOf("importing a module script failed")!==-1||message.indexOf("failed to load module script")!==-1||message.indexOf("loading chunk")!==-1||message.indexOf("chunkloaderror")!==-1||message.indexOf("vite:preloaderror")!==-1;}function freshen(){var tasks=[];try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){tasks.push(navigator.serviceWorker.getRegistrations().then(function(registrations){return Promise.all(registrations.map(function(registration){return registration.unregister().catch(function(){});}));}));}}catch(e){}try{if(window.caches&&caches.keys){tasks.push(caches.keys().then(function(keys){return Promise.all(keys.filter(function(name){return /^static-v/.test(name)||/^mania-hub/.test(name);}).map(function(name){return caches.delete(name);}));}));}}catch(e){}Promise.allSettled(tasks).finally(function(){location.reload();});}function recover(value,force){if(!force&&!isChunkError(value))return false;var slot=force?forcedKey:key;try{var now=Date.now();var href=location.href;var previous=JSON.parse(sessionStorage.getItem(slot)||"null");if(previous&&previous.href===href&&now-previous.at<ttl)return false;sessionStorage.setItem(slot,JSON.stringify({href:href,at:now}));}catch(e){}freshen();return true;}window.__maniaHubRecoverChunkLoad=recover;window.addEventListener("vite:preloadError",function(event){if(recover(event&&event.payload)){event.preventDefault();}},true);window.addEventListener("unhandledrejection",function(event){recover(event&&event.reason);},true);window.addEventListener("error",function(event){recover(event&&(event.error||event.message));},true);})();`;
+   keep each path's loop protection intact while letting the boundary try once.
+
+   Before reloading, the failing chunk is refetched past the HTTP cache: a miss
+   the browser cached would otherwise survive the reload and fail again. The
+   Refresh button passes `manual`, which skips the guard (a click cannot loop). */
+const CHUNK_LOAD_RECOVERY_SCRIPT = `(()=>{var key="mania-hub-chunk-reload-v1";var forcedKey="mania-hub-route-reload-v1";var ttl=300000;function text(value){try{if(!value)return"";if(typeof value==="string")return value;if(value instanceof Error)return value.name+" "+value.message;var parts=[];if(typeof value.name==="string")parts.push(value.name);if(typeof value.message==="string")parts.push(value.message);if(typeof value.type==="string")parts.push(value.type);if(value.reason)parts.push(text(value.reason));if(value.payload)parts.push(text(value.payload));return parts.join(" ");}catch(e){return"";}}function isChunkError(value){var message=text(value).toLowerCase();return message.indexOf("failed to fetch dynamically imported module")!==-1||message.indexOf("error loading dynamically imported module")!==-1||message.indexOf("importing a module script failed")!==-1||message.indexOf("failed to load module script")!==-1||message.indexOf("loading chunk")!==-1||message.indexOf("chunkloaderror")!==-1||message.indexOf("vite:preloaderror")!==-1;}function freshen(value){var tasks=[];try{var urls=text(value).match(/https?:\\/\\/[^\\s"')]+\\.m?js/g)||[];urls.slice(0,4).forEach(function(url){tasks.push(fetch(url,{cache:"reload"}).catch(function(){}));});}catch(e){}try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){tasks.push(navigator.serviceWorker.getRegistrations().then(function(registrations){return Promise.all(registrations.map(function(registration){return registration.unregister().catch(function(){});}));}));}}catch(e){}try{if(window.caches&&caches.keys){tasks.push(caches.keys().then(function(keys){return Promise.all(keys.filter(function(name){return /^static-v/.test(name)||/^mania-hub/.test(name);}).map(function(name){return caches.delete(name);}));}));}}catch(e){}Promise.allSettled(tasks).finally(function(){location.reload();});}function recover(value,force,manual){if(!force&&!isChunkError(value))return false;var slot=force?forcedKey:key;if(manual){freshen(value);return true;}try{var now=Date.now();var href=location.href;var previous=JSON.parse(sessionStorage.getItem(slot)||"null");if(previous&&previous.href===href&&now-previous.at<ttl)return false;sessionStorage.setItem(slot,JSON.stringify({href:href,at:now}));}catch(e){}freshen(value);return true;}window.__maniaHubRecoverChunkLoad=recover;window.addEventListener("vite:preloadError",function(event){if(recover(event&&event.payload)){event.preventDefault();}},true);window.addEventListener("unhandledrejection",function(event){recover(event&&event.reason);},true);window.addEventListener("error",function(event){recover(event&&(event.error||event.message));},true);})();`;
 
 function errorText(error: unknown): string {
   if (!error) return "";
@@ -342,9 +346,9 @@ function isStaleRouteModuleError(error: unknown): boolean {
   return isStaleRouteModuleMessage(errorText(error));
 }
 
-function recoverFromChunkLoadError(error: unknown, force = false): boolean {
+function recoverFromChunkLoadError(error: unknown, force = false, manual = false): boolean {
   if (typeof window === "undefined") return false;
-  return window.__maniaHubRecoverChunkLoad?.(error, force) ?? false;
+  return window.__maniaHubRecoverChunkLoad?.(error, force, manual) ?? false;
 }
 
 function availableCountrySetFromContext(context: RootSlowContext): ReadonlySet<string> | null {
@@ -472,7 +476,7 @@ function RootErrorComponent({ error }: { error: Error }) {
       <StaleBuildNotice
         reloading={reloading}
         onReload={() => {
-          if (!recoverFromChunkLoadError(error, true)) window.location.reload();
+          if (!recoverFromChunkLoadError(error, true, true)) window.location.reload();
         }}
         detail={import.meta.env.DEV ? error?.message : null}
       />
