@@ -1366,6 +1366,16 @@ html[data-custom-cursor="true"] * {
   animation: name-tag-hold 2.2s linear infinite;
 }
 
+/* A name told to fill its row (flex-1 in a leaderboard row) would stretch its
+   backing across the row: the box keeps to the name, and the space it leaves
+   goes after it, so what follows still sits at the row's end. */
+:is(.name-tag--plate, .name-tag--label-tape, .name-tag--highlighter, .name-tag--long-note):is(.flex-1, .grow, .w-full) {
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 100%;
+  margin-inline-end: auto;
+}
+
 /* the light enters past one end and leaves past the other (a 45%-wide image
    is fully off either end at these positions) */
 @keyframes name-tag-hold {
