@@ -17,6 +17,7 @@ interface CompanellaAdminSearch {
   page?: number;
   flag?: RateFlagFilter;
   flagPage?: number;
+  flagQ?: string;
 }
 
 function positiveInteger(value: unknown): number | undefined {
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/admin/bridgers")({
     page: positiveInteger(search.page),
     flag: search.flag === "all" || search.flag === "unreadable" || search.flag === "name" ? search.flag : undefined,
     flagPage: positiveInteger(search.flagPage),
+    flagQ: typeof search.flagQ === "string" ? search.flagQ.trim().slice(0, 40) || undefined : undefined,
   }),
   head: () => ({
     meta: [
@@ -61,6 +63,10 @@ function CompanellaAdminPage() {
     void navigate({ search: (previous) => ({ ...previous, q: q || undefined, user: undefined, page: undefined }), replace: true });
   }, [navigate]);
 
+  const changeFlagQuery = useCallback((flagQ: string) => {
+    void navigate({ search: (previous) => ({ ...previous, flagQ: flagQ || undefined, flagPage: undefined }), replace: true });
+  }, [navigate]);
+
   return (
     <div className="flex-1 bg-osu-b5">
       <PageHeader iconSrc="/images/icons/settings.svg" title="Bridgers" />
@@ -76,6 +82,8 @@ function CompanellaAdminPage() {
           <CompanellaFlagsPanel
             filter={search.flag ?? "mismatch"}
             page={(search.flagPage ?? 1) - 1}
+            query={search.flagQ ?? ""}
+            onQueryChange={changeFlagQuery}
             onFilterChange={(flag) => void navigate({ search: (previous) => ({ ...previous, flag: flag === "mismatch" ? undefined : flag, flagPage: undefined }), replace: true })}
             onPageChange={(page) => void navigate({ search: (previous) => ({ ...previous, flagPage: page > 0 ? page + 1 : undefined }), replace: true })}
           />

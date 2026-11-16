@@ -46,15 +46,17 @@ async function adminFetch(path: string, init: RequestInit = {}): Promise<Respons
 }
 
 export const listRateFlags = createServerFn({ method: "GET" })
-  .validator((data: { filter?: RateFlagFilter; limit?: number; offset?: number } | undefined) => ({
+  .validator((data: { filter?: RateFlagFilter; limit?: number; offset?: number; query?: string } | undefined) => ({
     filter: data?.filter === "mismatch" || data?.filter === "unreadable" || data?.filter === "name" ? data.filter : "all",
     limit: Math.min(200, Math.max(1, Math.floor(Number(data?.limit) || 50))),
     offset: Math.max(0, Math.floor(Number(data?.offset) || 0)),
+    query: typeof data?.query === "string" ? data.query.trim().slice(0, 40) : "",
   }))
   .handler(async ({ data }): Promise<RateFlagsPage> => {
     const { requireAdminAccess } = await import("./auth");
     await requireAdminAccess("List Companella rate flags");
     const query = new URLSearchParams({ filter: data.filter, limit: String(data.limit), offset: String(data.offset) });
+    if (data.query) query.set("q", data.query);
     const response = await adminFetch(`/api/admin/companella/rate-flags?${query.toString()}`);
     if (!response.ok) throw new Error(`Server ${response.status} for /api/admin/companella/rate-flags`);
     return await response.json() as RateFlagsPage;

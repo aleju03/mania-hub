@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { RefreshCw, Trash2, X } from "lucide-react";
+import { RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ConfirmModal } from "../../ui/ConfirmModal";
@@ -161,12 +161,20 @@ function RateFlagRow({ entry, byName, busy, onHold, onRemove }: {
   );
 }
 
-export function CompanellaFlagsPanel({ filter, page, onFilterChange, onPageChange }: {
+export function CompanellaFlagsPanel({ filter, page, query, onFilterChange, onPageChange, onQueryChange }: {
   filter: RateFlagFilter;
   page: number;
+  query: string;
   onFilterChange: (filter: RateFlagFilter) => void;
   onPageChange: (page: number) => void;
+  onQueryChange: (query: string) => void;
 }) {
+  const [searchInput, setSearchInput] = useState(query);
+  useEffect(() => {
+    if (searchInput.trim() === query) return;
+    const timer = setTimeout(() => onQueryChange(searchInput.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [searchInput, query, onQueryChange]);
   const offset = page * PAGE_SIZE;
   const [entries, setEntries] = useState<RateFlag[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -180,7 +188,7 @@ export function CompanellaFlagsPanel({ filter, page, onFilterChange, onPageChang
   const load = useCallback(async () => {
     const request = ++requestRef.current;
     try {
-      const page = await listRateFlags({ data: { filter, limit: PAGE_SIZE, offset } });
+      const page = await listRateFlags({ data: { filter, limit: PAGE_SIZE, offset, ...(query ? { query } : {}) } });
       if (request !== requestRef.current) return;
       setEntries(page.entries);
       setTotal(page.total);
@@ -191,9 +199,11 @@ export function CompanellaFlagsPanel({ filter, page, onFilterChange, onPageChang
       setEntries([]);
       setError("Could not load flags.");
     }
-  }, [filter, offset]);
+  }, [filter, offset, query]);
 
   useEffect(() => { void load(); }, [load]);
+  // The tab counts are for one search at a time.
+  useEffect(() => { setTotals({}); }, [query]);
 
   const hold = useCallback(async (entry: RateFlag, held: boolean) => {
     setBusyId(entry.scoreId);
@@ -245,10 +255,33 @@ export function CompanellaFlagsPanel({ filter, page, onFilterChange, onPageChang
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <SegmentedControl id="companella-flags-filter" value={filter} options={filterOptions} onChange={changeFilter} />
-          <button onClick={() => void load()} disabled={busyId != null} className={ACTION_CLASS} aria-label="Refresh">
-            <RefreshCw size={13} />
-            <span>Refresh</span>
-          </button>
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+            <div className="relative w-full min-w-0 sm:w-[260px]">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
+              <input
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                onKeyDown={(event) => { if (event.key === "Escape") setSearchInput(""); }}
+                placeholder="Username or #id"
+                aria-label="Find a player's flagged plays"
+                className="w-full rounded-md border border-osu-b3/50 bg-osu-b6/70 py-1.5 pl-8 pr-8 text-xs text-osu-l1 outline-none transition-colors placeholder:text-osu-f1/60 focus:border-osu-pink/45"
+              />
+              {searchInput ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput("")}
+                  aria-label="Clear search"
+                  className="absolute right-1.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l1"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+            <button onClick={() => void load()} disabled={busyId != null} className={ACTION_CLASS} aria-label="Refresh">
+              <RefreshCw size={13} />
+              <span>Refresh</span>
+            </button>
+          </div>
         </div>
         <p className="text-[12px] text-osu-f1">{FILTERS.find((option) => option.value === filter)?.hint}</p>
       </div>
@@ -276,7 +309,7 @@ export function CompanellaFlagsPanel({ filter, page, onFilterChange, onPageChang
         </div>
       ) : entries.length === 0 ? (
         <div className="rounded-md border border-osu-b3/20 bg-osu-b5/60 px-3 py-6 text-center text-[12px] text-osu-f1">
-          Nothing flagged.
+          {query ? "No flagged plays for that player." : "Nothing flagged."}
         </div>
       ) : (
         <>
