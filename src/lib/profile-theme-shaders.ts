@@ -4103,6 +4103,138 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   return col;
 }`),
 
+  // Aero glass: the other half of Frutiger Aero, the desktop itself. Ribbons of
+  // light sweep up from the lower left over deep water blue, each a strip of
+  // silk that twists (its width swings through zero), lit along one edge with
+  // fine threads trailing it; now and then a glint runs a ribbon's length.
+  // Glass orbs rise in front at three depths, each magnifying the ribbons
+  // behind it, with the gloss cap of the era on top. All drawn here, no sprite.
+  aeroglass: shader(`
+const vec3 AG_GREEN = vec3(.40, .95, .28);
+const vec3 AG_AQUA = vec3(.08, .82, .80);
+const vec3 AG_BLUE = vec3(.14, .44, 1.);
+
+/* A ribbon's colour along its length: aqua, turning green, then blue. */
+vec3 agHue(float k) {
+  float g = .5 + .5 * sin(k);
+  float b = .5 + .5 * sin(k * .63 + 2.1);
+  return mix(mix(AG_AQUA, AG_GREEN, g * g), AG_BLUE, b * b * .8);
+}
+
+/* Ribbon i (0..3) at q, whose x runs along the ribbons. */
+vec3 agRibbon(vec2 q, float t, float i) {
+  float h1 = ihash(ivec2(int(i), 3)), h2 = ihash(ivec2(int(i), 11)), h3 = ihash(ivec2(int(i), 29));
+  float x = q.x;
+  // the lit edge: the ribbons fan out to the right
+  float lit = (i - 1.5) * (.085 + .11 * (x + .9))
+    + .13 * sin(x * (1. + .5 * h1) + t * (.05 + .03 * h2) + h1 * 6.283)
+    + .04 * sin(x * 2.9 - t * .07 + h2 * 6.283);
+  float d = abs(q.y - lit);
+  // nothing of it reaches this far
+  if (d > .42) return vec3(0.);
+  // the strip hangs off that edge; its width swinging through zero is a twist
+  float full = .13 + .15 * h3;
+  float w = full * sin(x * (1. + .7 * h2) - t * (.045 + .03 * h1) + h3 * 6.283);
+  float aw = max(abs(w), 1e-4);
+  float v = (q.y - lit) / (w >= 0. ? aw : -aw);
+  vec3 hue = agHue(x * 1.4 + i * 1.9 + t * .04);
+  // every other ribbon leans green
+  hue = mix(hue, AG_GREEN, mod(i, 2.) * (.4 + .25 * sin(x * .8 + t * .03 + i)));
+  // a glint runs the ribbon's length, then it rests
+  float gx = mod(t * .11 + i * .61, 2.6) - 1.3;
+  float glint = exp(-(x - gx) * (x - gx) * 39.);
+  vec3 col = vec3(0.);
+  if (v > 0. && v < 1.) {
+    float aa = min(1.5 * PX / aw, .5);
+    float silk = .72 + .28 * sin(v * 34. + i * 2.) * sin(v * 11. + 1.);
+    // narrower is brighter, as the same cloth gathers
+    float pinch = sqrt(full / (aw + .3 * full));
+    float band = smoothstep(0., aa, v) * pow(1. - v, 1.7) * silk * pinch;
+    // its back is bluer and dimmer
+    col += (w >= 0. ? hue : mix(hue, AG_BLUE, .6) * .55) * band * (.62 + .4 * glint);
+  }
+  col += mix(hue, vec3(1.), .55) * exp(-d / (1.3 * PX)) * (.35 + .65 * glint);
+  col += hue * exp(-d * 13.) * .1;
+  // threads trailing the edge
+  float above = q.y - lit;
+  if (above > 0. && above < .075) {
+    float gap = .014 + .008 * sin(x * 1.9 + i * 3.);
+    for (int k = 1; k <= 3; k++) {
+      float fk = float(k);
+      col += hue * exp(-abs(above - fk * gap) / (1.1 * PX)) * .16 / fk;
+    }
+  }
+  return col;
+}
+
+vec3 agScene(vec2 p, float t) {
+  // deep water blue, lit from the lower right, a little green in the other corner
+  vec3 col = mix(vec3(0., .055, .075), vec3(.004, .018, .034), smoothstep(-.55, .55, p.y));
+  vec2 g1 = p - vec2(.42, -.34);
+  col += vec3(0., .2, .25) * exp(-dot(g1, g1) * 2.2);
+  vec2 g2 = p - vec2(-.5, -.6);
+  col += vec3(.035, .12, .02) * exp(-dot(g2, g2) * 3.5);
+  vec2 q = rot(.42) * (p - vec2(-.1, -.12));
+  q.x += u_scroll * .06;
+  vec3 rib = vec3(0.);
+  for (int i = 0; i < 4; i++) rib += agRibbon(q, t, float(i));
+  col += rib;
+  return 1. - exp(-col * 1.2);
+}
+
+vec3 theme(vec2 uv, vec2 p, float t) {
+  vec2 pp = pointerP();
+  // The orbs first: which one covers this pixel (the nearest wins), and how
+  // far it bends the view, so the scene behind is drawn once, through it.
+  vec2 lens = vec2(0.), bn = vec2(0.);
+  float ba = 0.;
+  for (int l = 0; l < 3; l++) {
+    float fl = float(l);
+    float gs = 5.2 - fl * 1.5;
+    vec2 q = (p - pp * (.006 + .008 * fl)) * gs + vec2(fl * 17.3, 0.);
+    q.x += .06 * sin(q.y * 1.3 + t * .25 + fl * 2.);
+    float column = floor(q.x);
+    q.y -= (t * (.018 + .012 * fl) * (.7 + .6 * ihash(ivec2(int(column), l + 50))) + u_scroll * (.12 + .1 * fl)) * gs;
+    ivec2 id = ivec2(floor(q)) + ivec2(l * 37, 0);
+    if (ihash(id) > .17 - .03 * fl) continue;
+    float r = mix(.16, .4, pow(ihash(id + ivec2(5, 1)), 2.));
+    vec2 c = floor(q) + .5 + (vec2(ihash(id + ivec2(9, 2)), ihash(id + ivec2(3, 7))) - .5) * (1. - 2. * r) * .9;
+    vec2 bq = (q - c) / r;
+    float rr = dot(bq, bq);
+    if (rr >= 1.) continue;
+    float rp = r / gs;
+    // far ones sit out of focus
+    float soft = max(3. * PX / rp, .12 - .06 * fl);
+    float edge = smoothstep(1., 1. - soft, rr);
+    lens = bq * rp * (.4 * rr - .4) * edge;
+    bn = bq;
+    ba = edge * (.55 + .2 * fl);
+  }
+  vec3 col = agScene(p + lens, t);
+  if (ba > 0.) {
+    float rr = dot(bn, bn);
+    // the glass darkens toward its rim, which catches sky above and grass below
+    col *= 1. - ba * .2 * smoothstep(.3, 1., rr);
+    vec3 rim = mix(vec3(.45, 1., .5), vec3(.55, .85, 1.), smoothstep(-.6, .6, bn.y));
+    // brightest where the light comes in and where it leaves
+    float lit = .35 + .65 * pow(abs(dot(normalize(bn + 1e-4), normalize(vec2(-.6, .8)))), 2.);
+    col += ba * rim * (pow(rr, 3.) * .22 + smoothstep(.86, .97, rr) * .32) * lit;
+    // the gloss cap, tipped toward the upper left
+    vec2 g = rot(.6) * bn;
+    vec2 m = (g - vec2(0., .5)) / vec2(.6, .3);
+    float cap = smoothstep(1., .55, length(m)) * (.35 + .65 * smoothstep(-1., 1., m.y));
+    col += ba * vec3(.85, 1., 1.) * cap * .38;
+    // light gathering on the far side, low
+    float bounce = smoothstep(.35, .95, rr) * pow(max(dot(normalize(bn + 1e-4), normalize(vec2(.55, -.83))), 0.), 4.);
+    col += ba * vec3(.3, .95, .7) * bounce * .22;
+  }
+  // darker toward the upper left, where the name sits
+  float pool = smoothstep(-.25, .75, dot(uv - vec2(0., 1.), normalize(vec2(1., -.75))));
+  col *= .3 + .7 * pool;
+  col *= 1. - .3 * dot(uv - .5, uv - .5);
+  return col;
+}`),
+
   // Terminal: an amber screen split into panes, each running something: a
   // doughnut turning, shaded in characters (the pointer tips it), a log
   // scrolling by with its last line still being typed, and a spectrum of
