@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check, ExternalLink, Inbox, MessageSquare, RefreshCw, RotateCcw, X, type LucideIcon } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Check, Inbox, MessageSquare, RefreshCw, RotateCcw, X, type LucideIcon } from "lucide-react";
 
 import { Avatar } from "../ui/Avatar";
 import { Skeleton } from "../ui/LoadingSkeleton";
@@ -174,15 +175,13 @@ function GroupCard({ group, onStatus, busy }: { group: ChartLabelGroup; onStatus
           {image ? <img src={image} alt="" className="h-9 w-auto max-w-full object-contain" /> : null}
         </span>
         <div className="min-w-0 flex-1 space-y-1">
-          <a
-            href={`https://osu.ppy.sh/beatmaps/${group.beatmapId}`}
-            target="_blank"
-            rel="noreferrer"
-            className="group flex min-w-0 items-center gap-1.5 text-[14px] font-bold text-white transition-colors duration-[120ms] hover:text-osu-pink-light"
+          <Link
+            to="/maps"
+            search={{ map: group.beatmapId } as never}
+            className="flex min-w-0 items-center text-[14px] font-bold text-white transition-colors duration-[120ms] hover:text-osu-pink-light"
           >
             <span className="truncate">{group.title ?? `Beatmap ${group.beatmapId}`} [{group.version ? stripKeymodePrefix(group.version) : "?"}]</span>
-            <ExternalLink className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
-          </a>
+          </Link>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-osu-f1">
             <span>{group.keyCount ?? "?"}K{rateName(group.rate)}</span>
             <Sep />
