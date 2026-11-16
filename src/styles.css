@@ -3348,16 +3348,6 @@ html[data-custom-cursor="true"] * {
   .run-card-sway, .run-pack-bob, .chain-flame-a, .chain-flame-b, .chain-flame-c, .chain-flame-breathe, .chain-ember { animation: none; }
 }
 
-/* A supporter's image companion (supporter/Companion.tsx), breathing gently. */
-@keyframes companion-bob {
-  0%, 100% { transform: translateY(0) rotate(-1deg); }
-  50% { transform: translateY(-3px) rotate(1deg); }
-}
-.companion-bob { animation: companion-bob 3.2s ease-in-out infinite; transform-origin: 50% 100%; }
-@media (prefers-reduced-motion: reduce) {
-  .companion-bob { animation: none; }
-}
-
 /* /support's entrances (SupportMotion.tsx): sections rise, a perk's items pop
    in one after another. Keyframes on opacity and transform only, so they run
    on the compositor; `backwards` holds the start until each one's delay is up

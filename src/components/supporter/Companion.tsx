@@ -10,7 +10,7 @@ import { TungTungSahurKeycap } from "../player/TungTungSahurKeycap";
 
 /* Draws a companion (lib/supporter-companions.ts): the keycap as its own
    pressable drawing, a model in a small 3D canvas that turns sideways when
-   dragged, an image with a slow bob. Each fills the box it is given. */
+   dragged, a still image. Each fills the box it is given. */
 
 function ModelCompanion({ url, facing, matte, size = 1, spin, label }: { url: string; facing?: number; matte?: boolean; size?: number; spin?: number; label: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -65,7 +65,7 @@ function ImageCompanion({ url, label }: { url: string; label: string }) {
       src={url}
       alt={label}
       draggable={false}
-      className="companion-bob h-full w-full select-none object-contain object-bottom drop-shadow-[0_8px_14px_rgba(0,0,0,0.4)]"
+      className="h-full w-full select-none object-contain object-bottom drop-shadow-[0_8px_14px_rgba(0,0,0,0.4)]"
     />
   );
 }

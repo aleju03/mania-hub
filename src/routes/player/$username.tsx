@@ -2243,9 +2243,11 @@ export function PlayerProfilePage({
     ? rankHistoryPoints[0] - rankHistoryPoints[rankHistoryPoints.length - 1]
     : null;
   /* A supporter's companion beside the numbers. SebasRJ's keycap came first,
-     as a one-off, and stays his until he picks one. */
+     as a one-off, and stays his until he picks one; the Konata fumo is the
+     same kind of one-off, keyed by id so a rename keeps it. */
   const companion: SupporterCompanion | null = (supporterFrame?.userId === profileUserId ? supporterFrame.companion : null)
-    ?? (user.username.toLowerCase() === "sebasrj" ? { builtIn: builtInCompanion("sahur-keycap")! } : null);
+    ?? (user.username.toLowerCase() === "sebasrj" ? { builtIn: builtInCompanion("sahur-keycap")! } : null)
+    ?? (user.id === KONATA_FUMO.submitted.submittedBy.id ? KONATA_FUMO : null);
   const showYunarkmTuna = !companion && user.username.toLowerCase() === "yunarkm";
   // The tab strip sits flush on the section edge unless a filter/sort bar
   // follows it, which then needs the breathing room back.
@@ -3303,6 +3305,18 @@ export function PlayerProfilePage({
     </div>
   );
 }
+
+const KONATA_FUMO = {
+  submitted: {
+    id: "u0",
+    name: "Konata fumo",
+    kind: "image",
+    url: "/images/easter-eggs/konata-fumo.webp",
+    submittedBy: { id: 30870258, username: "Konata-Izumi" },
+    createdAt: 0,
+    listed: false,
+  },
+} satisfies SupporterCompanion;
 
 function YunarkmTuna() {
   return (
