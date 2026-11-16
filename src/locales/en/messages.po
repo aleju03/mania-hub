@@ -3774,8 +3774,8 @@ msgstr "A theme holds up to {LAYERS_MAX} layers."
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "A theme holds up to four pictures."
-msgstr "A theme holds up to four pictures."
+msgid "A theme holds up to eight pictures."
+msgstr "A theme holds up to eight pictures."
 
 #: src/routes/discord.tsx
 #~ msgid "A Top plays feed turned on from here posts players from this country until you choose its players."
@@ -21206,8 +21206,8 @@ msgstr "Reaching the bar gives the chart's full level. Higher accuracy adds a bo
 #~ msgstr "Reaching the bar gives the chart's full level. Higher accuracy adds a bonus. On regular charts it grows by the same amount with each point, and on LN charts it stays small until 99%. A score under the bar still counts for less, down to about five points below it. Accuracy is recalculated from your judgements, so stable and lazer scores count the same way."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
-msgstr "Read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
+msgid "Read in the code as u_tex0 to u_tex7 (iChannel0 to iChannel7 in Shadertoy code)."
+msgstr "Read in the code as u_tex0 to u_tex7 (iChannel0 to iChannel7 in Shadertoy code)."
 
 #. placeholder {0}: reading.name
 #: src/components/skins/SkinUpdateModal.tsx

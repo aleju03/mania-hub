@@ -1,6 +1,6 @@
 // Server handler for /api/supporter-theme-asset: the images a supporter's own
 // profile theme uses. Three kinds, picked by ?kind=:
-// - texture: an image the shader samples (u_tex0..3), fitted inside 2048px;
+// - texture: an image the shader samples (u_tex0..7), fitted inside 2048px;
 // - still: the theme's frame for thumbnails, the gallery and every fallback,
 //   1200x630;
 // - row: its banner behind list rows, 320x200 with the fade the editor baked.

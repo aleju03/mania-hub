@@ -22,7 +22,7 @@ import { corsImageUrl } from "./cors-image-url";
      (use-highway-notes.ts): the lane count, an atlas of each lane's note and
      their colours, as uniforms the other themes simply do not declare.
    - A supporter's own theme (custom-themes.ts) runs the code the backend
-     checked and guarded, with its images on units 5 to 8. A stranger wrote
+     checked and guarded, with its images on units 5 to 12. A stranger wrote
      it, so it has to prove itself: its first frames are drawn tiny and timed
      before it goes full size, it gives up to its still (onFallback) if it is
      too slow even at the governor's floor (remembered on the device and
@@ -179,7 +179,7 @@ class ThemeContext {
     gl.activeTexture(gl.TEXTURE0);
   }
 
-  /* Binds a custom theme's images on units 5 to 8, loading each the first
+  /* Binds a custom theme's images on units 5 to 12, loading each the first
      time; a blank stands in while one loads, or for none. */
   private bindImages(theme: CustomTheme, compiled: Compiled) {
     const { gl } = this;

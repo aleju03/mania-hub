@@ -3763,8 +3763,8 @@ msgstr "一个主题最多 {LAYERS_MAX} 个图层。"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "A theme holds up to four pictures."
-msgstr "一个主题最多放四张图片。"
+msgid "A theme holds up to eight pictures."
+msgstr "一个主题最多放八张图片。"
 
 #: src/routes/discord.tsx
 #~ msgid "A Top plays feed turned on from here posts players from this country until you choose its players."
@@ -21172,8 +21172,8 @@ msgstr "达到通过线即计入谱面的完整段位。更高的准确率会带
 #~ msgstr "达到通过线即计入谱面的完整段位。更高的准确率会带来加分。单点谱面每高一个百分点加分相同，LN 谱面在 99% 之前加得很少。低于通过线的成绩仍按较低段位计入，最多到通过线以下约五个百分点。准确率根据你的判定重新计算，所以 stable 和 lazer 的成绩按同样方式计入。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
-msgstr "在代码中以 u_tex0 到 u_tex3 读取（Shadertoy 代码中为 iChannel0 到 iChannel3）。"
+msgid "Read in the code as u_tex0 to u_tex7 (iChannel0 to iChannel7 in Shadertoy code)."
+msgstr "在代码中以 u_tex0 到 u_tex7 读取（Shadertoy 代码中为 iChannel0 到 iChannel7）。"
 
 #. placeholder {0}: reading.name
 #: src/components/skins/SkinUpdateModal.tsx

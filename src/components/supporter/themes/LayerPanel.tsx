@@ -677,7 +677,7 @@ function ImagePick({ value, doc, onChange, onUpload, uploading, canUpload }: {
 }) {
   const { t } = useLingui();
   const used = layerAssets(doc);
-  // a new picture fits under the four, or replaces one only this layer uses
+  // a new picture fits under the eight, or replaces one only this layer uses
   const users = value ? doc.layers.filter((layer) => "image" in layer && layer.image === value).length : 0;
   const room = used.length < CUSTOM_THEME_TEXTURES || (value !== null && used.includes(value) && users === 1);
   return (
@@ -692,7 +692,7 @@ function ImagePick({ value, doc, onChange, onUpload, uploading, canUpload }: {
           <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />
         </button>
       ))}
-      <label className={`grid h-9 w-9 place-items-center rounded-md border border-dashed ${canUpload && room && !uploading ? "cursor-pointer border-white/20 text-osu-l2 hover:border-osu-pink/60 hover:text-white" : "cursor-default border-white/[0.08] text-osu-f1/40"}`} title={room ? t`Upload` : t`A theme holds up to four pictures.`}>
+      <label className={`grid h-9 w-9 place-items-center rounded-md border border-dashed ${canUpload && room && !uploading ? "cursor-pointer border-white/20 text-osu-l2 hover:border-osu-pink/60 hover:text-white" : "cursor-default border-white/[0.08] text-osu-f1/40"}`} title={room ? t`Upload` : t`A theme holds up to eight pictures.`}>
         {uploading ? <span className="text-[10px]">...</span> : <Plus size={14} />}
         <input type="file" accept="image/*" className="hidden" disabled={!canUpload || !room || uploading} onChange={(event) => {
           const file = event.target.files?.[0];

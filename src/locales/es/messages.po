@@ -3751,8 +3751,8 @@ msgstr "Un tema admite hasta {LAYERS_MAX} capas."
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "A theme holds up to four pictures."
-msgstr "Un tema admite hasta cuatro imágenes."
+msgid "A theme holds up to eight pictures."
+msgstr "Un tema admite hasta ocho imágenes."
 
 #: src/routes/discord.tsx
 #~ msgid "A Top plays feed turned on from here posts players from this country until you choose its players."
@@ -21160,8 +21160,8 @@ msgstr "Llegar al mínimo da el nivel completo del chart. Más acc suma un bono 
 #~ msgstr "Llegar al mínimo da el nivel completo del chart. Más acc suma un bono. En charts regulares crece lo mismo con cada punto, y en charts LN se mantiene pequeño hasta el 99%. Un score por debajo del mínimo sigue contando por menos, hasta unos cinco puntos por debajo. La acc se recalcula a partir de tus judgements, así que los scores de stable y de lazer cuentan igual."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
-msgid "Read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code)."
-msgstr "En el código se leen como u_tex0 a u_tex3 (iChannel0 a iChannel3 en código de Shadertoy)."
+msgid "Read in the code as u_tex0 to u_tex7 (iChannel0 to iChannel7 in Shadertoy code)."
+msgstr "En el código se leen como u_tex0 a u_tex7 (iChannel0 a iChannel7 en código de Shadertoy)."
 
 #. placeholder {0}: reading.name
 #: src/components/skins/SkinUpdateModal.tsx

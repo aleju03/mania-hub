@@ -260,7 +260,7 @@ export function parseLayerDoc(value: unknown): LayerDoc | null {
   };
 }
 
-/* The images a document uses, in the order they bind to u_tex0..3. */
+/* The images a document uses, in the order they bind to u_tex0..7. */
 export function layerAssets(doc: LayerDoc): string[] {
   const urls: string[] = [];
   for (const layer of doc.layers) {

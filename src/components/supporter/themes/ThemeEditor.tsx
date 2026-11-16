@@ -571,7 +571,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
       return;
     }
     if (layerAssets(doc).length >= CUSTOM_THEME_TEXTURES) {
-      setStatus({ tone: "bad", text: t`A theme holds up to four pictures.` });
+      setStatus({ tone: "bad", text: t`A theme holds up to eight pictures.` });
       return;
     }
     const url = await uploadLayerImage(file);
@@ -874,7 +874,7 @@ export function ThemeEditor({ start, onCreated }: { start: ThemeEditorStart; onC
     <>
       {mode === "code" ? (
         <InspectorSection title={t`Pictures`}>
-          <p className="mb-2 text-[11px] leading-relaxed text-osu-f1">{t`Read in the code as u_tex0 to u_tex3 (iChannel0 to iChannel3 in Shadertoy code).`} {t`Paste an image (Ctrl+V) or drop it here to add it.`}</p>
+          <p className="mb-2 text-[11px] leading-relaxed text-osu-f1">{t`Read in the code as u_tex0 to u_tex7 (iChannel0 to iChannel7 in Shadertoy code).`} {t`Paste an image (Ctrl+V) or drop it here to add it.`}</p>
           <div
             className="grid grid-cols-4 gap-1.5"
             onDragOver={(event) => {
