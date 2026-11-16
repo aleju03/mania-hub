@@ -157,6 +157,8 @@ export interface ChartLabelGroup {
   reporters: number;
   played: number;
   status: ChartLabelStatus;
+  closedBy: "auto" | "admin" | null;
+  closedAt: number | null;
   firstAt: number;
   lastAt: number;
   reports: ChartLabelGroupReport[];
