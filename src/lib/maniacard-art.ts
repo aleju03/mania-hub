@@ -16,7 +16,6 @@
 
 import { createElement as h } from "react";
 
-import { formatOgInt } from "./og-render";
 import { getAssetOrigin } from "./origin";
 import { MANIA_GLYPH_D, MANIA_TIER_STYLES, maniaTriangleOverlaySvg, resolveManiaTierStyle } from "./maniacard";
 import type { ManiaCardTier } from "./maniacard";
@@ -48,6 +47,72 @@ export function starDataUrl(fill: string): string {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
 
+/* What the in-app card paints over its mode badge's gradient (drawModeBadge in
+   maniacard3d/cardTexture.ts), in that badge's own 132px space: the small
+   triangle tiles, the highlight over its top half and the shade over its
+   bottom two fifths. */
+let badgeOverlay: string | null = null;
+function badgeOverlayDataUrl(): string {
+  if (badgeOverlay) return badgeOverlay;
+  const size = 132;
+  const tiles: string[] = [];
+  for (let row = 0; row < Math.ceil(size / 26) + 1; row += 1) {
+    for (let col = 0; col < Math.ceil(size / 30) + 1; col += 1) {
+      const x = col * 30;
+      const y = row * 26;
+      tiles.push(
+        `<path d="M${x + 15} ${y + 3}L${x + 28} ${y + 22}L${x + 2} ${y + 22}Z" fill="#fff" fill-opacity=".112"/>` +
+        `<path d="M${x + 3} ${y + 12}L${x + 11} ${y + 23}L${x - 5} ${y + 23}Z" fill="#000" fill-opacity=".096"/>` +
+        `<path d="M${x + 27} ${y + 12}L${x + 35} ${y + 23}L${x + 19} ${y + 23}Z" fill="#fff" fill-opacity=".064"/>`,
+      );
+    }
+  }
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">` +
+    `<defs>` +
+    `<linearGradient id="top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>` +
+    `<linearGradient id="bottom" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".25"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>` +
+    `</defs>` +
+    tiles.join("") +
+    `<rect width="${size}" height="${size / 2}" fill="url(#top)"/>` +
+    `<rect y="${size * 0.6}" width="${size}" height="${size * 0.4}" fill="url(#bottom)"/>` +
+    `</svg>`;
+  badgeOverlay = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+  return badgeOverlay;
+}
+
+/* One star of the card's rating row, as the in-app card draws it
+   (drawFivePointStar): inner radius 0.42 of the outer, a thin dark outline,
+   and a half star gold on its left half only. */
+function cardStarDataUrl(kind: "full" | "half" | "empty"): string {
+  const points: string[] = [];
+  for (let i = 0; i < 10; i += 1) {
+    const angle = (i * Math.PI) / 5 - Math.PI / 2;
+    const r = i % 2 === 0 ? 46 : 46 * 0.42;
+    points.push(`${(50 + Math.cos(angle) * r).toFixed(2)},${(50 + Math.sin(angle) * r).toFixed(2)}`);
+  }
+  const faded = `stop-color="#fcd34d" stop-opacity=".22"`;
+  const gold = `stop-color="#fcd34d"`;
+  const [left, right] = kind === "full" ? [gold, gold] : kind === "half" ? [gold, faded] : [faded, faded];
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
+    `<defs><linearGradient id="f" x1="0" y1="0" x2="1" y2="0"><stop offset=".5" ${left}/><stop offset=".5" ${right}/></linearGradient></defs>` +
+    `<polygon points="${points.join(" ")}" fill="url(#f)" stroke="#000" stroke-opacity=".32" stroke-width="2.4" stroke-linejoin="round"/>` +
+    `</svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
+/* The blocks dissolving off the left end of the name plate (drawUsernamePixelTrail), in texture px from the plate's corner. */
+const NAME_PLATE_TRAIL: ReadonlyArray<readonly [number, number, number, string]> = [
+  [0, 0, 32, "rgba(0,0,0,0.28)"],
+  [0, 44, 18, "rgba(0,0,0,0.36)"],
+  [32, 34, 14, "rgba(255,255,255,0.13)"],
+  [58, 0, 24, "rgba(0,0,0,0.20)"],
+  [70, 36, 19, "rgba(0,0,0,0.32)"],
+  [102, 14, 16, "rgba(0,0,0,0.24)"],
+  [142, 36, 12, "rgba(255,255,255,0.12)"],
+];
+
 // The card front's osu! triangles (maniaTriangleOverlaySvg), base64'd because
 // resvg rasterizes it reliably as an img.
 export function triangleOverlayDataUrl(w: number, height: number): string {
@@ -64,6 +129,9 @@ export function triangleOverlayDataUrl(w: number, height: number): string {
    and the handful of granted cards share very few of them. */
 const MOTIF_OG_MAX_BYTES = 2 * 1024 * 1024;
 const MOTIF_OG_TIMEOUT_MS = 4_000;
+const SATORI_IMAGE_MIMES: ReadonlySet<string> = new Set(["image/png", "image/jpeg", "image/gif"]);
+/* A copy is at most 140 texture px times the largest scale (3), at 0.72 of the texture. */
+const MOTIF_OG_MAX_SIDE = 320;
 interface InlinedMotif {
   dataUrl: string;
   /* Width over height, read straight from the header: satori will not measure
@@ -95,10 +163,16 @@ export function cardMotifDataUrl(motif: CardMotif, request?: Request): Promise<I
       const mime = sniffImageMime(buffer);
       if (!mime) return null;
       const size = readImageSize(buffer);
-      return {
-        dataUrl: `data:${mime};base64,${buffer.toString("base64")}`,
-        aspect: size && size.width > 0 && size.height > 0 ? size.width / size.height : 1,
-      };
+      const aspect = size && size.width > 0 && size.height > 0 ? size.width / size.height : 1;
+      // satori sizes only PNG, JPEG and GIF data URLs and throws on any other,
+      // which lost the whole card. A supporter's own image is a WebP, so it is
+      // redrawn as a PNG no larger than the biggest copy the card floats.
+      if (!SATORI_IMAGE_MIMES.has(mime)) {
+        const { default: sharp } = await import("sharp");
+        const png = await sharp(buffer).resize(MOTIF_OG_MAX_SIDE, MOTIF_OG_MAX_SIDE, { fit: "inside", withoutEnlargement: true }).png().toBuffer();
+        return { dataUrl: `data:image/png;base64,${png.toString("base64")}`, aspect };
+      }
+      return { dataUrl: `data:${mime};base64,${buffer.toString("base64")}`, aspect };
     } catch {
       return null;
     } finally {
@@ -358,6 +432,9 @@ export interface ManiaTierCardArt {
   /* An active supporter's card: the still holographic foil over the art, the
      same one the in-app thumbnails bake (lib/supporter-foil-art.ts). */
   foil?: boolean;
+  /* The supporter's own foil as a still already drawn at the card's size
+     (supporterFoilStillDataUrl), laid in place of the lattice one. */
+  foilStillUrl?: string | null;
   /* Rounds the card's own corners, leaving them transparent. Off by default:
      an embed that sits on an unknown background wants the full rectangle, and
      only the callers that know what is behind the card ask for it. The value
@@ -382,9 +459,14 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
   const segCount = Math.min(10, Math.max(1, Math.ceil(skills.starAvg)));
   const starUrls = Array.from({ length: segCount }, (_, i) => {
     const remaining = skills.starAvg - i;
-    const fill = remaining >= 1 ? "#fcd34d" : remaining >= 0.5 ? "rgba(252,211,77,0.55)" : "rgba(252,211,77,0.22)";
-    return starDataUrl(fill);
+    return cardStarDataUrl(remaining >= 1 ? "full" : remaining >= 0.5 ? "half" : "empty");
   });
+  // Texture px (the in-app card's 1000x1400 space) to this card's.
+  const px = (value: number) => `${(value * (MANIACARD_W / CARD_TEXTURE_WIDTH)).toFixed(1)}px`;
+  // The badge wears the tier's own gradient corner to corner, as the canvas draws it.
+  const badgeFill = /^linear-gradient\(/.test(style.badgeGradient)
+    ? style.badgeGradient.replace(/^linear-gradient\(\s*[\d.]+deg/, "linear-gradient(135deg")
+    : "rgba(255,255,255,0.22)";
 
   const CARD_W = MANIACARD_W;
   const CARD_H = MANIACARD_H;
@@ -447,7 +529,9 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
         // The supporter foil, over the art and under everything printed on
         // it, in the same two passes as the canvas copy: screened so it
         // lightens without greying, then overlaid so it shows on pale tiers.
-        ...(art.foil
+        ...(art.foil && art.foilStillUrl
+          ? [h("img", { key: "foilStill", src: art.foilStillUrl, style: { position: "absolute", top: "0", left: "0", width: "100%", height: "100%" } })]
+          : art.foil
           ? ([
               ["foil", SUPPORTER_FOIL_OPACITY, "screen"],
               ["foilTint", SUPPORTER_FOIL_TINT_OPACITY, "overlay"],
@@ -459,40 +543,53 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
               }),
             )
           : []),
-        // Mode badge (top-left).
+        // Mode badge (top-left): the tier's gradient under its triangle tiles,
+        // a white ring with a dark one inside it, and the glyph at 72% of the box.
         h(
           "div",
           {
             key: "badge",
             style: {
               position: "absolute",
-              left: "28px",
-              top: "28px",
-              width: "96px",
-              height: "96px",
-              borderRadius: "22px",
+              left: px(38),
+              top: px(38),
+              width: px(132),
+              height: px(132),
+              borderRadius: px(30),
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              background: "rgba(0,0,0,0.20)",
-              border: "2px solid rgba(255,255,255,0.34)",
-              boxShadow: `0 0 28px ${style.glowColor}`,
+              background: badgeFill,
+              overflow: "hidden",
+              boxShadow: `0 0 ${px(40)} ${style.glowColor}`,
             },
           },
-          h("img", { src: maniaGlyphDataUrl(), style: { width: "66px", height: "66px" } }),
+          [
+            h("img", { key: "tiles", src: badgeOverlayDataUrl(), style: { position: "absolute", left: "0", top: "0", width: "100%", height: "100%" } }),
+            // the glyph's viewBox is padded by 4% a side
+            h("img", { key: "glyph", src: maniaGlyphDataUrl(), style: { width: px(132 * 0.72 * 1.08), height: px(132 * 0.72 * 1.08) } }),
+            h("div", {
+              key: "ring",
+              style: { position: "absolute", left: "0", top: "0", width: "100%", height: "100%", borderRadius: px(30), border: `${px(3)} solid rgba(255,255,255,0.35)`, display: "flex" },
+            }),
+            h("div", {
+              key: "inner",
+              style: { position: "absolute", left: px(4), top: px(4), width: px(124), height: px(124), borderRadius: px(26), border: `${px(2)} solid rgba(0,0,0,0.22)`, display: "flex" },
+            }),
+          ],
         ),
-        // Username plate (top-center).
+        // Username plate (top-center), with the blocks dissolving off its left end.
         h(
           "div",
           {
             key: "plate",
             style: {
               position: "absolute",
-              left: "176px",
-              top: "54px",
-              width: "458px",
-              height: "76px",
-              borderRadius: "18px",
+              left: px(244),
+              top: px(76),
+              width: px(640),
+              height: px(104),
+              borderRadius: px(24),
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -500,67 +597,73 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
               overflow: "hidden",
             },
           },
-          h(
-            "div",
-            { style: { fontSize: "40px", fontWeight: 900, color: "#ffffff", textShadow, whiteSpace: "nowrap" } },
-            art.username,
-          ),
+          [
+            ...NAME_PLATE_TRAIL.map(([left, top, size, background], i) =>
+              h("div", { key: `trail-${i}`, style: { position: "absolute", left: px(left), top: px(top), width: px(size), height: px(size), background, display: "flex" } }),
+            ),
+            h(
+              "div",
+              { key: "name", style: { fontSize: px(52), fontWeight: 900, color: "#ffffff", textShadow, whiteSpace: "nowrap" } },
+              art.username,
+            ),
+          ],
         ),
-        // Tier label (right).
+        // Tier label (right), slanted: the font has no italic of its own.
         h(
           "div",
           {
             key: "tier",
             style: {
               position: "absolute",
-              right: "34px",
-              top: "152px",
+              right: px(70),
+              top: px(232 - 56 * 0.86),
               display: "flex",
-              fontSize: "42px",
+              fontSize: px(56),
+              lineHeight: 1,
               fontWeight: 900,
-              color: "#ffffff",
-              textShadow: `0 0 22px ${style.glowColor}, 0 2px 5px rgba(0,0,0,0.6)`,
+              color: "rgba(255,255,255,0.95)",
+              transform: "skewX(-12deg)",
+              textShadow: `0 0 ${px(22)} ${style.glowColor}, 0 ${px(5)} ${px(8)} rgba(0,0,0,0.65)`,
             },
           },
           art.label?.trim() || style.label,
         ),
-        // Avatar.
+        // Avatar, in a pale ring that sits outside it.
         h(
           "div",
           {
             key: "avatar",
             style: {
               position: "absolute",
-              left: "133px",
-              top: "202px",
-              width: "454px",
-              height: "454px",
-              borderRadius: "26px",
+              left: px(185 - 8),
+              top: px(280 - 8),
+              width: px(630 + 16),
+              height: px(630 + 16),
+              borderRadius: px(32 + 8),
               display: "flex",
-              border: "6px solid rgba(255,255,255,0.18)",
-              boxSizing: "border-box",
-              overflow: "hidden",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(255,255,255,0.16)",
             },
           },
-          h("img", { src: avatarUrl, style: { width: "100%", height: "100%", objectFit: "cover" } }),
+          h("img", { src: avatarUrl, style: { width: px(630), height: px(630), borderRadius: px(32), objectFit: "cover" } }),
         ),
-        // Stats box.
+        // Stats box: a label with its colon on the left, the number on the right.
         h(
           "div",
           {
             key: "stats",
             style: {
               position: "absolute",
-              left: "148px",
-              top: "678px",
-              width: "424px",
-              height: "180px",
-              borderRadius: "24px",
-              background: "rgba(0,0,0,0.32)",
+              left: px(205),
+              top: px(942),
+              width: px(590),
+              height: px(250),
+              borderRadius: px(32),
+              background: "rgba(0,0,0,0.30)",
               display: "flex",
               flexDirection: "column",
-              justifyContent: "center",
-              padding: "0 38px",
+              padding: `${px(26)} ${px(53)} 0 ${px(55)}`,
             },
           },
           statRows.map(([label, value], i) =>
@@ -573,47 +676,30 @@ export function maniaTierCardElement(art: ManiaTierCardArt) {
                   flexDirection: "row",
                   justifyContent: "space-between",
                   alignItems: "baseline",
-                  marginBottom: i < statRows.length - 1 ? "10px" : "0",
+                  height: px(62),
                 },
               },
               [
-                h("div", { key: "l", style: { fontSize: "30px", fontWeight: 700, color: "rgba(255,255,255,0.85)", textShadow } }, label),
-                h("div", { key: "v", style: { fontSize: "40px", fontWeight: 900, color: "#ffffff", textShadow } }, formatOgInt(value)),
+                h("div", { key: "l", style: { fontSize: px(40), lineHeight: 1, fontWeight: 900, color: "rgba(255,255,255,0.84)", textShadow } }, `${label}:`),
+                h("div", { key: "v", style: { fontSize: px(56), lineHeight: 1, fontWeight: 900, color: "#ffffff", textShadow } }, String(Math.round(value))),
               ],
             ),
           ),
         ),
-        // Star rating row.
+        // Star rating row, and the average under it with its star after the number.
         h(
           "div",
-          {
-            key: "starwrap",
-            style: {
-              position: "absolute",
-              left: "0",
-              bottom: "46px",
-              width: `${CARD_W}px`,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-            },
-          },
+          { key: "stars", style: { position: "absolute", left: "0", top: px(1252 - 32), width: `${CARD_W}px`, display: "flex", flexDirection: "row", justifyContent: "center" } },
+          starUrls.map((src, i) =>
+            h("img", { key: `s-${i}`, src, style: { width: px(64), height: px(64), marginLeft: i ? px(6) : "0" } }),
+          ),
+        ),
+        h(
+          "div",
+          { key: "avg", style: { position: "absolute", left: "0", top: px(1320 - 36 * 0.86), width: `${CARD_W}px`, display: "flex", flexDirection: "row", justifyContent: "center", alignItems: "center" } },
           [
-            h(
-              "div",
-              { key: "stars", style: { display: "flex", flexDirection: "row" } },
-              starUrls.map((src, i) =>
-                h("img", { key: `s-${i}`, src, style: { width: "46px", height: "46px", marginLeft: i ? "6px" : "0" } }),
-              ),
-            ),
-            h(
-              "div",
-              { key: "avg", style: { display: "flex", flexDirection: "row", alignItems: "center", marginTop: "10px" } },
-              [
-                h("img", { key: "as", src: starDataUrl("#fcd34d"), style: { width: "24px", height: "24px", marginRight: "8px" } }),
-                h("div", { key: "an", style: { fontSize: "28px", fontWeight: 900, color: "rgba(255,255,255,0.82)", textShadow } }, skills.starAvg.toFixed(2)),
-              ],
-            ),
+            h("div", { key: "an", style: { fontSize: px(36), lineHeight: 1, fontWeight: 900, color: "rgba(255,255,255,0.78)", textShadow } }, skills.starAvg.toFixed(2)),
+            h("img", { key: "as", src: starDataUrl("rgba(255,255,255,0.78)"), style: { width: px(30), height: px(30), marginLeft: px(2) } }),
           ],
         ),
       ],

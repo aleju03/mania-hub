@@ -21,7 +21,10 @@ export const DEFAULT_DESCRIPTION =
 // the seam, team, a 90-day rank line, and ranks split by keymode.
 // 53: Tracker Round, with the redrawn heavy r. 51 shipped with Torus on prod, and local renders share
 // prod's R2 cache, so the font switch needs a key of its own (52 holds local test renders).
-export const OG_IMAGE_VERSION = "53";
+// 54: the card art (maniacard, pulled card) is drawn like the in-app card: the
+// tier's gradient on the mode badge, the blocks on the name plate, a slanted
+// tier name, stats with colons, a supporter's own image and their own foil.
+export const OG_IMAGE_VERSION = "54";
 
 /* Builds the og:image URL. The image itself only needs title + country —
    the description stays in the HTML `<meta>` for social-card body text

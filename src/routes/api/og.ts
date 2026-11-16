@@ -51,7 +51,8 @@ import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../l
 import { honoraryAvatarUrl } from "../../lib/honorary-players";
 import type { ManiaCardTier } from "../../lib/maniacard";
 import { parseCardMotif } from "../../lib/card-motif";
-import { effectiveCardLook, parseSupporterLook, supporterLookSignature } from "../../lib/supporter-card-looks";
+import { supporterFoilStillDataUrl } from "../../lib/supporter-foil-stills";
+import { effectiveCardLook, parseSupporterLook, supporterLookSignature, type EffectiveCardLook } from "../../lib/supporter-card-looks";
 import { getCosmicTierPalette } from "../../lib/maniacard-cosmic";
 import {
   cardMotifDataUrl,
@@ -1544,6 +1545,34 @@ async function fetchManiacardSnapshot(base: string, key: string): Promise<Maniac
   return (await response.json()) as ManiacardSnapshot;
 }
 
+/* The player's supporter look and the backend's name for it (`lookStamp`),
+   null look for anyone who is not an active supporter. A failed read draws
+   the plain card. */
+async function fetchManiacardLook(base: string, userId: number | undefined): Promise<{ look: unknown; stamp: string }> {
+  if (!userId) return { look: null, stamp: "" };
+  try {
+    const response = await fetch(`${base}/api/supporters/look/${userId}`);
+    if (!response.ok) return { look: null, stamp: "" };
+    const body = (await response.json()) as { look?: unknown; lookStamp?: unknown };
+    return { look: body.look ?? null, stamp: typeof body.lookStamp === "string" ? body.lookStamp : "" };
+  } catch {
+    return { look: null, stamp: "" };
+  }
+}
+
+/* A maniacard URL may also carry `sl=<look stamp>` (the bot adds it for a
+   supporter), so a changed look is a new URL and a new R2 entry too. */
+export function maniacardLookStamp(raw: string | null | undefined): string | null {
+  const trimmed = raw?.trim() ?? "";
+  return /^[a-f0-9]{10}$/.test(trimmed) ? trimmed : null;
+}
+
+/* The R2 key of a maniacard. Without a stamp it is the key those cards have
+   always had. */
+export function maniacardCacheKey(username: string, ppStamp: number | null, lookStamp: string | null, version: number | string): string {
+  return `maniacard:${username}${ppStamp == null ? "" : `:pp${ppStamp}`}${lookStamp == null ? "" : `:sl-${lookStamp}`}:v${version}`;
+}
+
 /* A maniacard URL may carry `pp=<rounded pp>` (the Discord bot adds it), so a
    player whose top plays changed gets a new URL and a new R2 entry. A stamped
    entry can then live as long as the og/ lifecycle rule keeps it. */
@@ -1555,7 +1584,7 @@ export function maniacardPpStamp(raw: string | null | undefined): number | null 
   return Number(trimmed);
 }
 
-async function renderManiacardOg(request: Request, rawUsername: string, ppStamp: number | null = null): Promise<Response> {
+async function renderManiacardOg(request: Request, rawUsername: string, ppStamp: number | null = null, lookStamp: string | null = null): Promise<Response> {
   const username = rawUsername.trim().slice(0, 64);
   const base = getServerLiveBackendUrl();
   if (!base) throw new OgFallbackError("live backend not configured");
@@ -1576,10 +1605,12 @@ async function renderManiacardOg(request: Request, rawUsername: string, ppStamp:
 
   const tier = getManiaCardTier(skills.cardPower);
   const avatarUrl = ogAvatarUrl(request, user.avatar_url, user.id);
-  const laurelUrl = await cosmicLaurelDataUrl(request, tier);
+  const [laurelUrl, supporter] = await Promise.all([cosmicLaurelDataUrl(request, tier), fetchManiacardLook(base, user.id)]);
+  const art: ManiaTierCardArt = { username: user.username || "Unknown", avatarUrl, tier, skills, laurelUrl };
+  await applyCardLook(art, effectiveCardLook(null, supporter.look), request);
 
   const response = new ImageResponse(
-    maniaTierCardElement({ username: user.username || "Unknown", avatarUrl, tier, skills, laurelUrl }),
+    maniaTierCardElement(art),
     {
       width: MANIACARD_W,
       height: MANIACARD_H,
@@ -1592,7 +1623,29 @@ async function renderManiacardOg(request: Request, rawUsername: string, ppStamp:
   // still show the card, but keep it out of R2.
   const pp = user.statistics?.pp;
   if (ppStamp != null && (pp == null || Math.round(pp) !== ppStamp)) response.headers.set(OG_NO_STORE_HEADER, "1");
+  // The same for a look stamp that is not the player's, and for a pp-stamped
+  // URL that names no look while the player has one: that key lives a month.
+  if ((ppStamp != null || lookStamp != null) && (lookStamp ?? "") !== supporter.stamp) response.headers.set(OG_NO_STORE_HEADER, "1");
   return response;
+}
+
+/* Lays a card's look on its art: the foil, and the motif with its palette. A
+   motif whose image cannot be fetched leaves the tier's own pattern in place. */
+async function applyCardLook(art: ManiaTierCardArt, look: EffectiveCardLook, request: Request): Promise<void> {
+  if (look.foil) {
+    art.foil = true;
+    art.foilStillUrl = await supporterFoilStillDataUrl(look.foil, MANIACARD_W, MANIACARD_H);
+  }
+  const motif = look.motif;
+  if (!motif) return;
+  // The palette rides the motif and applies whether or not the image could
+  // be fetched; the sprites need the image (maniaTierCardElement checks both).
+  art.motif = motif;
+  const inlined = await cardMotifDataUrl(motif, request);
+  if (inlined) {
+    art.motifUrl = inlined.dataUrl;
+    art.motifAspect = inlined.aspect;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1702,17 +1755,7 @@ async function renderPulledCardOg(
      fetched simply leaves the tier's own pattern in place. */
   /* The holding's own motif wins; a supporter's look fills in when it has
      none, and its foil applies either way (effectiveCardLook). */
-  const look = effectiveCardLook(parseCardMotif(card.motif), card.supporterLook);
-  const motif = look.motif;
-  if (look.foil) art.foil = true;
-  const inlinedMotif = motif ? await cardMotifDataUrl(motif, request) : null;
-  // The palette rides the motif and applies whether or not the image could
-  // be fetched; the sprites need the image (maniaTierCardElement checks both).
-  if (motif) art.motif = motif;
-  if (motif && inlinedMotif) {
-    art.motifUrl = inlinedMotif.dataUrl;
-    art.motifAspect = inlinedMotif.aspect;
-  }
+  await applyCardLook(art, effectiveCardLook(parseCardMotif(card.motif), card.supporterLook), request);
   const ownerName = payload.owner?.username || "a collector";
 
   const response = new ImageResponse(
@@ -5314,11 +5357,12 @@ export const Route = createFileRoute("/api/og")({
           const username = ogUsernameKey(url.searchParams.get("username"));
           if (!username) return new Response("Missing username", { status: 400 });
           const ppStamp = maniacardPpStamp(url.searchParams.get("pp"));
+          const lookStamp = maniacardLookStamp(url.searchParams.get("sl"));
           try {
             return await serveOg(
               request,
-              ppStamp == null ? `maniacard:${username}:v${version}` : `maniacard:${username}:pp${ppStamp}:v${version}`,
-              () => renderManiacardOg(request, username, ppStamp),
+              maniacardCacheKey(username, ppStamp, lookStamp, version),
+              () => renderManiacardOg(request, username, ppStamp, lookStamp),
               ppStamp == null ? {} : { ttlMs: MANIACARD_STAMPED_TTL_MS },
             );
           } catch (err) {

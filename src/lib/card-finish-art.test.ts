@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { PACK_FINISH_IDS, packFinishMotif, packFinishSvg } from "./card-finish-art";
 import { cardMotifImageSrc, cardMotifSignature, parseCardMotif } from "./card-motif";
 import { parseCardMotif as parseStoredMotif } from "../../backend/src/features/card-motif";
@@ -34,4 +34,19 @@ it("inlines the same curated vector in browser and share images without a remote
     expect(decodeURIComponent(cardMotifImageSrc(motif).split(',')[1])).toBe(decoded);
   }
   expect(packFinishSvg("https://example.com/prismatic.svg")).toBeNull();
+});
+it("redraws a WebP motif as a PNG, the only way the share image can size it", async () => {
+  const { default: sharp } = await import("sharp");
+  const webp = await sharp({ create: { width: 600, height: 300, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 0.5 } } }).webp().toBuffer();
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array(webp))));
+  try {
+    const url = `https://cdn.mania-tracker.com/supporter-motifs/${"ab".repeat(32)}.webp`;
+    const art = await cardMotifDataUrl({ url, scale: 1, opacity: 0.85 });
+    expect(art?.dataUrl.startsWith("data:image/png;base64,")).toBe(true);
+    expect(art?.aspect).toBe(2);
+    const drawn = await sharp(Buffer.from(art!.dataUrl.split(",")[1], "base64")).metadata();
+    expect([drawn.width, drawn.height, drawn.hasAlpha]).toEqual([320, 160, true]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

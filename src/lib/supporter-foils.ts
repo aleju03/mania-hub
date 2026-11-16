@@ -5,8 +5,9 @@ import type { MessageDescriptor } from "@lingui/core";
    supporter's card. A foil is light only, never a colour of its own, so a
    card keeps its tier's colours and a Legendary still has to be earned. The
    3D card draws each one in its overlay shader (cardShaders.ts, branch
-   `uFoilStyle` = the id's index here); flat renders (pack thumbnails, share
-   images) bake the holo still for all of them. The backend keeps the pick
+   `uFoilStyle` = the id's index here); the share images draw a still of each
+   (supporter-foil-stills.ts), and the in-app flat renders (pack thumbnails)
+   bake the holo still for all of them. The backend keeps the pick
    against the same ids (SUPPORTER_CARD_FOILS in features/supporters.ts). */
 
 export const SUPPORTER_FOILS = ["holo", "cracked-ice", "glitter", "sunburst", "caustics", "note-rain", "scanline", "aurora"] as const;

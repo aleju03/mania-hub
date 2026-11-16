@@ -5,7 +5,7 @@
    junk string is a guaranteed cache miss, an osu! lookup and a render. */
 import { describe, expect, it } from "vitest";
 import { OgRenderGate } from "../lib/og-render";
-import { ogUsernameKey, pulledCardLookKeySegment } from "./api/og";
+import { maniacardCacheKey, maniacardLookStamp, ogUsernameKey, pulledCardLookKeySegment } from "./api/og";
 
 describe("ogUsernameKey", () => {
   it("accepts real osu! usernames and folds case and padding into one key", () => {
@@ -80,5 +80,22 @@ describe("pull OG cache key", () => {
     const custom = { motif: "custom", foil: "holo", url: `https://cdn.mania-tracker.com/supporter-motifs/${hash}.webp`, scale: 1.5, opacity: 0.9 };
     expect(pulledCardLookKeySegment({ card: { supporterLook: custom } })).toBe(`:sl-custom.${hash.slice(0, 16)}.1.5.0.9-holo`);
     expect(pulledCardLookKeySegment({ team: {}, card: { supporterLook: { motif: "none", foil: "holo" } } })).toBe("");
+  });
+});
+
+describe("maniacard cache key", () => {
+  it("keeps the keys unstamped and pp-stamped cards already have", () => {
+    expect(maniacardCacheKey("peppy", null, null, 7)).toBe("maniacard:peppy:v7");
+    expect(maniacardCacheKey("peppy", 1234, null, 7)).toBe("maniacard:peppy:pp1234:v7");
+  });
+
+  it("moves with a supporter's look stamp", () => {
+    expect(maniacardCacheKey("peppy", 1234, "0123456789", 7)).toBe("maniacard:peppy:pp1234:sl-0123456789:v7");
+    expect(maniacardCacheKey("peppy", null, "0123456789", 7)).toBe("maniacard:peppy:sl-0123456789:v7");
+  });
+
+  it("takes only a stamp the backend could have made", () => {
+    expect(maniacardLookStamp("0123456789")).toBe("0123456789");
+    for (const value of [null, "", "01234567", "0123456789a", "ABCDEF0123", "holo:../x"]) expect(maniacardLookStamp(value)).toBeNull();
   });
 });
