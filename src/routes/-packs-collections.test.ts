@@ -17,7 +17,9 @@ describe("collections search params", () => {
     expect(validateSearch({})).toEqual({});
     expect(validateSearch({ collector: "" })).toEqual({});
     expect(validateSearch({ collector: "   " })).toEqual({});
-    expect(validateSearch({ collector: 42 })).toEqual({});
+    // The router parses ?collector=42 to a number; it is still an id.
+    expect(validateSearch({ collector: 42 })).toEqual({ collector: "42" });
+    expect(validateSearch({ collector: Number.NaN })).toEqual({});
     expect(validateSearch({ collector: ["a"] })).toEqual({});
   });
 
