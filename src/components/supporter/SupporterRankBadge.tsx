@@ -4,7 +4,7 @@ import { useLingui } from "@lingui/react/macro";
 
 import { useWebGlSlot } from "../../lib/gl-budget";
 import { mountRankFire, RANK_FIRE_BLEED, type RankFire } from "../../lib/rank-fire";
-import { SUPPORTER_RANKS, supporterRank, type SupporterRankDef } from "../../lib/supporter-ranks";
+import { SUPPORTER_RANK_MONTH_MS, SUPPORTER_RANKS, supporterRank, type SupporterRankDef } from "../../lib/supporter-ranks";
 import { Switch } from "../ui/Switch";
 import { Stagger, StaggerItem } from "./SupportMotion";
 
@@ -87,6 +87,17 @@ export function RankGem({ rank, renewing, className }: { rank: SupporterRankDef;
   );
 }
 
+/* How long a run has lasted, in full months; within the first month, in days. */
+function useTenure(runStartedAt: number | null): string {
+  const { t } = useLingui();
+  if (runStartedAt == null) return "";
+  const elapsed = Math.max(0, Date.now() - runStartedAt);
+  const months = Math.floor(elapsed / SUPPORTER_RANK_MONTH_MS);
+  if (months >= 1) return t`Supporter for ${plural(months, { one: "# month", other: "# months" })} in a row`;
+  const days = Math.floor(elapsed / DAY_MS);
+  return days < 1 ? t`Started supporting today` : t`Supporter for ${plural(days, { one: "# day", other: "# days" })}`;
+}
+
 /* A supporter's rank beside their name, with how long they have kept it up
    and when the next one comes on hover or tap. Nothing for a run that
    isn't active (`runStartedAt` null). A renewing rank burns unless its
@@ -97,6 +108,7 @@ export function RankGem({ rank, renewing, className }: { rank: SupporterRankDef;
 export function SupporterRankBadge({ runStartedAt, renewing = false, patron = false, shownRank = null, own = false, fire = true, onFireChange, className = "h-7 w-7" }: { runStartedAt: number | null; renewing?: boolean; patron?: boolean; /* an earlier rank they chose to show */ shownRank?: number | null; /* the viewer's own badge: only they are told which rank it shows */ own?: boolean; fire?: boolean; onFireChange?: (fire: boolean) => void; className?: string }) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
+  const tenure = useTenure(runStartedAt);
   if (runStartedAt == null) return null;
   const rank = supporterRank(runStartedAt);
   const gem = shownRank != null && SUPPORTER_RANKS[shownRank] ? SUPPORTER_RANKS[shownRank] : rank.def;
@@ -105,7 +117,7 @@ export function SupporterRankBadge({ runStartedAt, renewing = false, patron = fa
   const earlier = gem !== rank.def;
   const headline = own ? rank.def : gem;
   const name = headline.name;
-  const inARow = `${name}. ${t`Supporter for ${plural(rank.months, { one: "# month", other: "# months" })} in a row`}`;
+  const inARow = `${name}. ${tenure}`;
   const label = `${inARow}${renewing ? `. ${t`Renews every month`}` : ""}${patron ? `. ${t`Gold supporter`}` : ""}`;
   const fireSwitch = renewing && onFireChange ? onFireChange : undefined;
   return (
@@ -127,14 +139,13 @@ export function SupporterRankBadge({ runStartedAt, renewing = false, patron = fa
         <RankGem rank={gem} renewing={renewing && fire} className={className} />
       </button>
       {/* only while open: the day count would differ between the server render and hydration */}
-      {open ? <RankTip rank={rank} headline={headline} showNext={own || !earlier} patron={patron} shown={own && earlier ? gem : null} fire={fire} onFireChange={fireSwitch} /> : null}
+      {open ? <RankTip rank={rank} tenure={tenure} headline={headline} showNext={own || !earlier} patron={patron} shown={own && earlier ? gem : null} fire={fire} onFireChange={fireSwitch} /> : null}
     </span>
   );
 }
 
-function RankTip({ rank, headline, showNext, patron, shown, fire, onFireChange }: { rank: ReturnType<typeof supporterRank>; headline: SupporterRankDef; showNext: boolean; patron: boolean; shown: SupporterRankDef | null; fire: boolean; onFireChange?: (fire: boolean) => void }) {
+function RankTip({ rank, tenure, headline, showNext, patron, shown, fire, onFireChange }: { rank: ReturnType<typeof supporterRank>; tenure: string; headline: SupporterRankDef; showNext: boolean; patron: boolean; shown: SupporterRankDef | null; fire: boolean; onFireChange?: (fire: boolean) => void }) {
   const { t } = useLingui();
-  const months = rank.months;
   const next = rank.nextAt == null ? null : SUPPORTER_RANKS[rank.index + 1];
   const days = rank.nextAt == null ? 0 : Math.max(1, Math.ceil((rank.nextAt - Date.now()) / DAY_MS));
   const nextName = next ? next.name : "";
@@ -147,7 +158,7 @@ function RankTip({ rank, headline, showNext, patron, shown, fire, onFireChange }
     >
       <span className="block rounded-lg border border-white/10 bg-black/90 px-3 py-2 text-left text-[13px] font-normal leading-snug text-white shadow-xl">
         <span className="block font-semibold" style={{ color: headline.accent }}>{headline.name}</span>
-        <span className="block">{t`Supporter for ${plural(months, { one: "# month", other: "# months" })} in a row`}</span>
+        <span className="block">{tenure}</span>
         {showNext ? (
           <span className="block text-white/60">
             {next ? t`${nextName} in ${plural(days, { one: "# day", other: "# days" })}` : t`The top rank`}
@@ -184,6 +195,7 @@ export function SupporterRankLadder({ runStartedAt, renewing = false, fire = tru
   onShow?: (rank: number | null) => void;
 }) {
   const { t } = useLingui();
+  const tenure = useTenure(runStartedAt);
   const rank = supporterRank(runStartedAt);
   const name = rank.def.name;
   const next = rank.nextAt == null ? null : SUPPORTER_RANKS[rank.index + 1];
@@ -196,7 +208,7 @@ export function SupporterRankLadder({ runStartedAt, renewing = false, fire = tru
       <p className="text-[13px] text-osu-l2">
         <span className="font-semibold" style={{ color: rank.def.accent }}>{name}</span>
         <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />
-        {t`Supporter for ${plural(rank.months, { one: "# month", other: "# months" })} in a row`}
+        {tenure}
         <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />
         {next ? t`${nextName} in ${plural(days, { one: "# day", other: "# days" })}` : t`The top rank`}
         {renewing ? (

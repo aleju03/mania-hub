@@ -25276,6 +25276,10 @@ msgstr "Start tracking your plays"
 msgid "Start with sound"
 msgstr "Start with sound"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Started supporting today"
+msgstr "Started supporting today"
+
 #: src/components/supporter/themes/StartPicker.tsx
 msgid "Starter"
 msgstr "Starter"
@@ -25648,8 +25652,12 @@ msgstr "Supporter"
 
 #. placeholder {0}: rank.months
 #: src/components/supporter/SupporterRankBadge.tsx
-msgid "Supporter for {0, plural, one {# month} other {# months}} in a row"
-msgstr "Supporter for {0, plural, one {# month} other {# months}} in a row"
+#~ msgid "Supporter for {0, plural, one {# month} other {# months}} in a row"
+#~ msgstr "Supporter for {0, plural, one {# month} other {# months}} in a row"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Supporter for {days, plural, one {# day} other {# days}}"
+msgstr "Supporter for {days, plural, one {# day} other {# days}}"
 
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "Supporter for {months, plural, one {# month} other {# months}} in a row"

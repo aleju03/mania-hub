@@ -25234,6 +25234,10 @@ msgstr "开始追踪你的成绩"
 msgid "Start with sound"
 msgstr "带声音开始"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Started supporting today"
+msgstr "今天开始支持"
+
 #: src/components/supporter/themes/StartPicker.tsx
 msgid "Starter"
 msgstr "入门模板"
@@ -25606,8 +25610,12 @@ msgstr "Supporter"
 
 #. placeholder {0}: rank.months
 #: src/components/supporter/SupporterRankBadge.tsx
-msgid "Supporter for {0, plural, one {# month} other {# months}} in a row"
-msgstr "连续 {0, plural, other {# 个月}} 的支持者"
+#~ msgid "Supporter for {0, plural, one {# month} other {# months}} in a row"
+#~ msgstr "连续 {0, plural, other {# 个月}} 的支持者"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Supporter for {days, plural, one {# day} other {# days}}"
+msgstr "已支持 {days, plural, other {# 天}}"
 
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "Supporter for {months, plural, one {# month} other {# months}} in a row"

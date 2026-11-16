@@ -25222,6 +25222,10 @@ msgstr "Empieza a seguir tus plays"
 msgid "Start with sound"
 msgstr "Empezar con sonido"
 
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Started supporting today"
+msgstr "Supporter desde hoy"
+
 #: src/components/supporter/themes/StartPicker.tsx
 msgid "Starter"
 msgstr "Inicial"
@@ -25594,8 +25598,12 @@ msgstr "Supporter"
 
 #. placeholder {0}: rank.months
 #: src/components/supporter/SupporterRankBadge.tsx
-msgid "Supporter for {0, plural, one {# month} other {# months}} in a row"
-msgstr "{0, plural, one {# mes seguido} other {# meses seguidos}} de supporter"
+#~ msgid "Supporter for {0, plural, one {# month} other {# months}} in a row"
+#~ msgstr "{0, plural, one {# mes seguido} other {# meses seguidos}} de supporter"
+
+#: src/components/supporter/SupporterRankBadge.tsx
+msgid "Supporter for {days, plural, one {# day} other {# days}}"
+msgstr "Supporter desde hace {days, plural, one {# día} other {# días}}"
 
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "Supporter for {months, plural, one {# month} other {# months}} in a row"
