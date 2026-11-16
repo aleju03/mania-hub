@@ -15886,6 +15886,10 @@ msgstr "Mes {month}"
 msgid "Monthly"
 msgstr "Mensual"
 
+#: src/lib/supporter-profile-themes.ts
+msgid "Moonlit sea"
+msgstr "Mar de luna"
+
 #: src/components/layout/Nav.tsx
 msgid "more"
 msgstr "Más"
