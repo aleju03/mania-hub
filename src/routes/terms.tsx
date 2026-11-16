@@ -131,7 +131,7 @@ function TermsPage() {
         </LegalParagraph>
         <LegalParagraph>
           <Trans>
-            Payments go through Ko-fi, Google or lava.top, which process them under their own terms.
+            Payments go through Ko-fi or lava.top, which process them under their own terms.
             Mania Tracker never sees your card or bank details. A monthly subscription renews by
             itself until you cancel it on the platform you started it on; cancelling stops the next
             payment, and the time already paid for stays until it runs out.
