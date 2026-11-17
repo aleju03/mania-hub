@@ -11,6 +11,8 @@ import { useMapsFourPerRow } from "../../store";
 import { MapPreviewButton, type MapPreviewAudio, type MapPreviewTrack } from "./MapPreviewAudio";
 import { starRatingColor, starSpectrumGradient, starTextColor, StarRatingBadge } from "../ui/StarRating";
 import { DAN_SKILLSET_META } from "../../lib/skill-axes";
+import { resolveShownMsd } from "../../lib/shown-msd";
+import { msdColor } from "../../lib/msd-color";
 
 // Shared presentation for a single chart-analyzed map across the global Search
 // results and inside Collection detail. Country-agnostic: no player avatars,
@@ -223,7 +225,49 @@ function useCardModel(entry: LiveMapSearchEntry, rate?: "ht" | "dt" | "", starSc
   const starHi = starsOf(byStars[byStars.length - 1]);
   const hardest = byStars[byStars.length - 1];
   const vibro = diffs.some((diff) => diff.vibro) || entry.vibro === true;
-  return { diffs, byStars, multi, starsOf, starLo, starHi, vibro, hardest, mix: patternMix(hardest) };
+  return { diffs, byStars, multi, starsOf, starLo, starHi, vibro, hardest, mix: patternMix(hardest), msdRange: msdRange(diffs, rate) };
+}
+
+/* The set's MSD headline from its easiest diff to its hardest, each end with
+   its diff's keymode for its colour. Search rows carry no half-time MSD and
+   DT only on some, so a speed mod without it shows none rather than the 1.0x
+   numbers next to rate-adjusted stars. */
+type MsdEnd = { value: number; keyCount: number };
+
+function msdRange(diffs: LiveMapSearchEntry[], rate?: "ht" | "dt" | ""): [MsdEnd, MsdEnd] | null {
+  const ends: MsdEnd[] = [];
+  for (const diff of diffs) {
+    if (rate === "ht") continue;
+    if (rate === "dt" && !diff.msdDt) continue;
+    const { overall } = resolveShownMsd({
+      entry: diff,
+      ...(rate === "dt" ? { rate: 1.5, rateMsd: diff.msdDt, rateDan: diff.danDt ?? null } : {}),
+    });
+    if (overall != null && overall > 0) ends.push({ value: overall, keyCount: diff.keyCount });
+  }
+  if (ends.length === 0) return null;
+  ends.sort((a, b) => a.value - b.value);
+  return [ends[0], ends[ends.length - 1]];
+}
+
+// A light edge for busy covers; msdColor already lifts the dark colours.
+const MSD_HALO = "0 0 2px rgba(0,0,0,0.6), 0 1px 2px rgba(0,0,0,0.6)";
+
+// The MSD range in the cover's corner, each end in its own colour.
+function MsdRange({ range }: { range: [MsdEnd, MsdEnd] }) {
+  const [lo, hi] = range;
+  const same = lo.value.toFixed(1) === hi.value.toFixed(1);
+  return (
+    <span className="shrink-0 text-[19px] font-bold italic leading-none tabular-nums" style={{ textShadow: MSD_HALO }} title="MSD">
+      {same ? null : (
+        <>
+          <span style={{ color: msdColor(lo.value, lo.keyCount) }}>{lo.value.toFixed(1)}</span>
+          <span className="text-white/70">-</span>
+        </>
+      )}
+      <span style={{ color: msdColor(hi.value, hi.keyCount) }}>{hi.value.toFixed(1)}</span>
+    </span>
+  );
 }
 
 const MIX_FAMILIES = ["stream", "jumpstream", "handstream", "stamina", "jack", "chordjack", "tech"];
@@ -415,6 +459,7 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
       artist={entry.artist}
       version={model.multi ? null : model.hardest.version}
       seam={model.mix.length > 0 ? <MixSeam model={model} /> : undefined}
+      coverCorner={model.msdRange ? <MsdRange range={model.msdRange} /> : undefined}
       // Opens on the diff the card summarises (its hardest), so the modal's
       // header and rating panel start on the number the card shows.
       onOpen={onOpen ? () => onOpen(model.hardest === entry || !entry.diffs?.length ? entry : {
@@ -457,6 +502,7 @@ export function MapCardFrame({
   version,
   coverOverlay,
   seam,
+  coverCorner,
   onOpen,
   children,
 }: {
@@ -473,6 +519,8 @@ export function MapCardFrame({
   coverOverlay?: ReactNode;
   /** A strip along the cover's bottom edge; the art then ends there instead of dissolving into the body. */
   seam?: ReactNode;
+  /** Sits at the right end of the title line (the search card's MSD range). */
+  coverCorner?: ReactNode;
   onOpen?: () => void;
   children: ReactNode;
 }) {
@@ -515,17 +563,20 @@ export function MapCardFrame({
           ) : <span />}
           {status ? <BeatmapStatusBadge status={status} /> : null}
         </div>
-        <div className={`absolute left-3.5 right-3.5 ${seam ? "bottom-2.5" : "bottom-1"}`}>
-          <div className="truncate text-[16px] font-extrabold leading-tight text-white drop-shadow-md">{song.title}</div>
-          <div className="truncate text-[12px] leading-tight text-white/70">
-            {song.artist}
-            {version ? (
-              <>
-                <span aria-hidden className="mx-1.5 inline-block h-2.5 w-px bg-white/30 align-[-1px]" />
-                <span className="text-white/85">{stripKeymodePrefix(version)}</span>
-              </>
-            ) : null}
+        <div className={`absolute left-3.5 right-3.5 flex items-end gap-3 ${seam ? "bottom-2.5" : "bottom-1"}`}>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[16px] font-extrabold leading-tight text-white drop-shadow-md">{song.title}</div>
+            <div className="truncate text-[12px] leading-tight text-white/70">
+              {song.artist}
+              {version ? (
+                <>
+                  <span aria-hidden className="mx-1.5 inline-block h-2.5 w-px bg-white/30 align-[-1px]" />
+                  <span className="text-white/85">{stripKeymodePrefix(version)}</span>
+                </>
+              ) : null}
+            </div>
           </div>
+          {coverCorner}
         </div>
       </div>
       {seam}
