@@ -250,22 +250,23 @@ function msdRange(diffs: LiveMapSearchEntry[], rate?: "ht" | "dt" | ""): [MsdEnd
   return [ends[0], ends[ends.length - 1]];
 }
 
-// A light edge for busy covers; msdColor already lifts the dark colours.
-const MSD_HALO = "0 0 2px rgba(0,0,0,0.6), 0 1px 2px rgba(0,0,0,0.6)";
-
-// The MSD range in the cover's corner, each end in its own colour.
+// The MSD range in the cover's corner, each end in its own colour, on the
+// keymode badge's dark backing (no text colour holds up on every cover),
+// slanted with the italic numbers.
 function MsdRange({ range }: { range: [MsdEnd, MsdEnd] }) {
   const [lo, hi] = range;
   const same = lo.value.toFixed(1) === hi.value.toFixed(1);
   return (
-    <span className="shrink-0 text-[19px] font-bold italic leading-none tabular-nums" style={{ textShadow: MSD_HALO }} title="MSD">
-      {same ? null : (
-        <>
-          <span style={{ color: msdColor(lo.value, lo.keyCount) }}>{lo.value.toFixed(1)}</span>
-          <span className="text-white/70">-</span>
-        </>
-      )}
-      <span style={{ color: msdColor(hi.value, hi.keyCount) }}>{hi.value.toFixed(1)}</span>
+    <span className="flex shrink-0 -skew-x-12 rounded bg-black/35 py-0.5 pl-1 pr-2 backdrop-blur-[2px]" title="MSD">
+      <span className="inline-block skew-x-12 text-[17px] font-bold italic leading-none tabular-nums">
+        {same ? null : (
+          <>
+            <span style={{ color: msdColor(lo.value, lo.keyCount) }}>{lo.value.toFixed(1)}</span>
+            <span className="text-white/70">-</span>
+          </>
+        )}
+        <span style={{ color: msdColor(hi.value, hi.keyCount) }}>{hi.value.toFixed(1)}</span>
+      </span>
     </span>
   );
 }
