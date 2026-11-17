@@ -9,7 +9,7 @@ import { footprints, onHeldGround } from "../../../../../backend/src/shared/boar
    loaded as they come into view and kept up to date from the live stream.
 
    What keeps it cheap:
-   - Each tier is painted once per size into a sprite (gradient, rim and
+   - Each tier is painted once per size into a sprite (flat colour, rim and
      shadow baked in), and a card is one drawImage of its sprite. Nothing is
      stroked, filled or blurred per card.
    - Frames are drawn on request only, at most one per animation frame, and
@@ -215,35 +215,18 @@ function sprite(card: { tier: string | null; tint: number }, lod: number): Sprit
   const g = canvas.getContext("2d")!;
   g.translate(pad, pad);
   const radius = w * 0.1;
-  const fill = g.createLinearGradient(0, 0, w * 0.7, h);
-  fill.addColorStop(0, paint.light);
-  fill.addColorStop(0.5, paint.mid);
-  fill.addColorStop(1, paint.dark);
+  // one flat colour, so cards laid as pixels read as their colour
   if (lod >= 24) {
     g.shadowColor = "rgba(0,0,0,0.5)";
     g.shadowBlur = w * 0.09;
     g.shadowOffsetY = w * 0.04;
   }
-  g.fillStyle = fill;
+  g.fillStyle = paint.mid;
   g.beginPath();
   g.roundRect(0, 0, w, h, radius);
   g.fill();
   g.shadowColor = "transparent";
-  if (lod >= 24) {
-    // the art window and the light catching the top edge
-    g.fillStyle = "rgba(0,0,0,0.2)";
-    g.beginPath();
-    g.roundRect(w * 0.09, h * 0.07, w * 0.82, h * 0.58, radius * 0.6);
-    g.fill();
-    const shine = g.createLinearGradient(0, 0, 0, h * 0.4);
-    shine.addColorStop(0, "rgba(255,255,255,0.28)");
-    shine.addColorStop(1, "rgba(255,255,255,0)");
-    g.fillStyle = shine;
-    g.beginPath();
-    g.roundRect(0, 0, w, h * 0.4, [radius, radius, 0, 0]);
-    g.fill();
-  }
-  g.strokeStyle = "rgba(255,255,255,0.4)";
+  g.strokeStyle = "rgba(0,0,0,0.25)";
   g.lineWidth = Math.max(0.75, w / 70);
   g.beginPath();
   g.roundRect(0.5, 0.5, w - 1, h - 1, radius);
