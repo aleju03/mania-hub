@@ -39,7 +39,6 @@ const RICE = msg`Rice`;
 const TIERS = ["--", "-", "", "+", "++"] as const;
 const REASONS: Array<{ id: string; label: MessageDescriptor }> = [
   { id: "vibro", label: msg`Vibro / mash` },
-  { id: "gimmick", label: msg`Gimmick` },
   { id: "joke", label: msg`Joke or broken` },
   { id: "rate_only", label: msg`Only at this rate` },
 ];
@@ -243,7 +242,7 @@ export function ChartLabelForm({ context, existing, onSaved, onWithdrawn, onCanc
   const [level, setLevel] = useState<number | null>(existing?.suggestedLevel ?? null);
   const [tier, setTier] = useState<string>(existing?.suggestedTier ?? "");
   const [rateable, setRateable] = useState<ChartLabelRateable | null>(existing?.rateable ?? null);
-  const [reasons, setReasons] = useState<string[]>(existing?.rateableReasons ?? []);
+  const [reasons, setReasons] = useState<string[]>(() => (existing?.rateableReasons ?? []).filter((id) => REASONS.some((reason) => reason.id === id)));
   const [note, setNote] = useState(existing?.note ?? "");
   const [state, setState] = useState<"idle" | "sending" | "error" | "capped">("idle");
 

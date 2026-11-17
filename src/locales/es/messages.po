@@ -11635,8 +11635,8 @@ msgid "Gifts ({0})"
 msgstr "Regalos ({0})"
 
 #: src/components/maps/ChartLabelReport.tsx
-msgid "Gimmick"
-msgstr "Gimmick"
+#~ msgid "Gimmick"
+#~ msgstr "Gimmick"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Give it a name."

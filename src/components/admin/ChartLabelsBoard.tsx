@@ -128,6 +128,7 @@ function ReportLine({ report, group }: { report: ChartLabelGroupReport; group: C
         </div>
         {says.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
+            <span className="mr-1 text-[11px] text-osu-f1">says</span>
             {says.map((value) => <Pill key={value}>{value}</Pill>)}
           </div>
         )}
@@ -169,7 +170,7 @@ function GroupCard({ group, onStatus, busy }: { group: ChartLabelGroup; onStatus
     : group.closedBy == null ? null
     : `${group.status === "dismissed" ? "Dismissed" : "Marked fixed"} by you${group.closedAt ? ` ${formatDay(group.closedAt)}` : ""}`;
   return (
-    <article className={`rounded-xl border border-osu-b3/25 bg-osu-b5/40 ${group.status === "open" ? "" : "opacity-80 hover:opacity-100"}`}>
+    <article className={`overflow-hidden rounded-xl bg-osu-b4/60 ${group.status === "open" ? "" : "opacity-80 hover:opacity-100"}`}>
       <div className="flex flex-wrap items-start gap-3 px-3.5 py-3">
         <span className="flex h-10 w-14 shrink-0 items-center justify-center">
           {image ? <img src={image} alt="" className="h-9 w-auto max-w-full object-contain" /> : null}
@@ -231,7 +232,7 @@ function GroupCard({ group, onStatus, busy }: { group: ChartLabelGroup; onStatus
           )}
         </div>
       </div>
-      <div className="divide-y divide-white/[0.05] border-t border-white/[0.07]">
+      <div className="divide-y divide-white/[0.05] bg-osu-b6/45">
         {group.reports.map((report) => <ReportLine key={report.id} report={report} group={group} />)}
       </div>
     </article>
@@ -359,7 +360,7 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
             {commentsOnly ? "No comments here." : status === "open" ? "No open reports." : "Nothing here."}
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {shown.map((group) => (
               <GroupCard
                 key={`${group.beatmapId}:${group.rate}`}
