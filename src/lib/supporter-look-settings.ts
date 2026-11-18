@@ -712,6 +712,76 @@ export const rememberLavaEmail = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const LAVA_CHECKOUT_MONTHS = [1, 3, 6, 12] as const;
+export type LavaCheckoutMonths = (typeof LAVA_CHECKOUT_MONTHS)[number];
+export const LAVA_CHECKOUT_CURRENCIES = ["RUB", "USD", "EUR"] as const;
+export type LavaCheckoutCurrency = (typeof LAVA_CHECKOUT_CURRENCIES)[number];
+
+/* lava.top stamps the payment with its own clock, so the start of a checkout is taken a minute early. */
+const LAVA_CHECKOUT_CLOCK_SLACK_MS = 60_000;
+const LAVA_RETURN_WITHOUT_START_MS = 30 * 60_000;
+
+const LAVA_CHECKOUT_ERRORS: Record<string, string> = {
+  invalid_email: LAVA_CLAIM_ERRORS.invalid_email,
+  invalid_tier: "Pick a length.",
+  invalid_currency: "Pick a currency.",
+  rate_limited: "That's a few payments started today; try again tomorrow.",
+  unavailable: "lava.top can't take a payment right now; try again later.",
+};
+
+/* An invoice made through lava.top's API for the viewer: the length and
+   currency they picked, and the email lava.top sends the receipt to. The
+   backend puts their osu! id on it, so the payment links to them. Answers
+   the URL to pay on, and a time from just before the invoice was made:
+   a lava.top payment of theirs after it is this one (checkLavaPayment). */
+export const createLavaCheckout = createServerFn({ method: "POST" })
+  .validator((data: { email?: unknown; months?: unknown; currency?: unknown }) => {
+    const email = typeof data?.email === "string" ? data.email.trim() : "";
+    if (!email || email.length > 254 || !email.includes("@")) throw new Error(LAVA_CHECKOUT_ERRORS.invalid_email);
+    if (!(LAVA_CHECKOUT_MONTHS as readonly unknown[]).includes(data?.months)) throw new Error(LAVA_CHECKOUT_ERRORS.invalid_tier);
+    if (!(LAVA_CHECKOUT_CURRENCIES as readonly unknown[]).includes(data?.currency)) throw new Error(LAVA_CHECKOUT_ERRORS.invalid_currency);
+    return { email, months: data.months as LavaCheckoutMonths, currency: data.currency as LavaCheckoutCurrency };
+  })
+  .handler(async ({ data }): Promise<{ paymentUrl: string; startedAt: number }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const startedAt = Date.now() - LAVA_CHECKOUT_CLOCK_SLACK_MS;
+    const response = await fetch(`${viewer.base}/api/supporters/self/lava-checkout`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, username: viewer.username, email: data.email, months: data.months, currency: data.currency }),
+    });
+    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; paymentUrl?: unknown } | null;
+    if (!response.ok || body?.ok !== true) throw new Error(LAVA_CHECKOUT_ERRORS[String(body?.error)] ?? `Server ${response.status}`);
+    if (typeof body.paymentUrl !== "string" || !/^https:\/\//.test(body.paymentUrl)) throw new Error(LAVA_CHECKOUT_ERRORS.unavailable);
+    return { paymentUrl: body.paymentUrl, startedAt };
+  });
+
+/* Asks the backend to look for the viewer's lava.top payment now (it checks
+   lava.top's invoices). `paid` is whether a lava.top payment of theirs has
+   arrived since `since` (createLavaCheckout's startedAt), so someone who was
+   a supporter already is not told it arrived before it has. Without `since`
+   (back from lava.top in another browser) the last half hour counts. */
+export const checkLavaPayment = createServerFn({ method: "POST" })
+  .validator((data: { since?: unknown } | undefined) => ({ since: typeof data?.since === "number" && Number.isFinite(data.since) && data.since > 0 ? data.since : null }))
+  .handler(async ({ data }): Promise<{ paid: boolean; supporter: boolean; expiresAt: number | null }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/lava-check`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, username: viewer.username }),
+    });
+    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; supporter?: unknown; expiresAt?: unknown; lavaPaidAt?: unknown } | null;
+    if (!response.ok || body?.ok !== true) throw new Error(String(body?.error ?? `Server ${response.status}`));
+    const lavaPaidAt = typeof body.lavaPaidAt === "number" && Number.isFinite(body.lavaPaidAt) ? body.lavaPaidAt : null;
+    return {
+      paid: lavaPaidAt != null && lavaPaidAt >= (data.since ?? Date.now() - LAVA_RETURN_WITHOUT_START_MS),
+      supporter: body.supporter === true,
+      expiresAt: typeof body.expiresAt === "number" && Number.isFinite(body.expiresAt) ? body.expiresAt : null,
+    };
+  });
+
 const FRAME_ERRORS: Record<string, string> = {
   not_supporter: "Your supporter time has run out.",
   too_many_submissions: "That's five frames today; try again tomorrow.",

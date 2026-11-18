@@ -53,6 +53,7 @@ import { parseProfileThemeOptions, profileThemeStyle, type ProfileThemeOptions }
 import { registerWorkshopFrames } from "../lib/supporter-avatar-frames";
 import { rememberViewerSupporter } from "../lib/viewer-supporter";
 import { CompanionSection, ProfileStatsSection, SupporterPerks } from "../components/supporter/SupporterExtras";
+import { LavaCheckLine, readLavaCheckoutStart, useLavaPaymentCheck } from "../components/supporter/SupportCheckout";
 import { NO_PACK_STYLE } from "../lib/supporter-pack-style";
 import {
   fetchSupporterLookState,
@@ -168,7 +169,11 @@ export const Route = createFileRoute("/supporter")({
       ],
     };
   },
-  validateSearch: (search: Record<string, unknown>): { s?: SupporterSection } => (isSupporterSection(search.s) && search.s !== "theme" ? { s: search.s } : {}),
+  /* lava=done: lava.top's invoice sends the buyer back here once they pay (SupportCheckout's LavaApiPay). */
+  validateSearch: (search: Record<string, unknown>): { s?: SupporterSection; lava?: "done" } => ({
+    ...(isSupporterSection(search.s) && search.s !== "theme" ? { s: search.s } : {}),
+    ...(search.lava === "done" ? { lava: "done" as const } : {}),
+  }),
   component: SupporterPage,
 });
 
@@ -190,7 +195,8 @@ function SupporterPage() {
   /* The reels while a roll spins: what each spinning slot shows this tick. */
   const [reel, setReel] = useState<Loadout | null>(null);
   /* The open section, from the URL: a slot's items, or one of the page's other sections. */
-  const section: SupporterSection = Route.useSearch().s ?? "theme";
+  const search = Route.useSearch();
+  const section: SupporterSection = search.s ?? "theme";
   const navigate = useNavigate({ from: "/supporter" });
   const openSection = useCallback((next: SupporterSection) => {
     trackOnce(`supporter_section_${next}`);
@@ -210,6 +216,15 @@ function SupporterPage() {
   const reelTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   /* Bumped when a gift code turns the viewer into a supporter, to load the page again as one. */
   const [reload, setReload] = useState(0);
+  /* Back from paying on lava.top (?lava=done): the payment is looked for
+     until it arrives, then the page loads again as a supporter. Read once,
+     so opening a section, which drops the param, does not stop it. */
+  const [lavaReturn] = useState(() => search.lava === "done");
+  const lavaCheck = useLavaPaymentCheck(viewer?.id, () => setReload((n) => n + 1));
+  const startLavaCheck = lavaCheck.start;
+  useEffect(() => {
+    if (lavaReturn && viewer) startLavaCheck("now", readLavaCheckoutStart());
+  }, [lavaReturn, viewer?.id, startLavaCheck]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!viewer) return;
@@ -651,13 +666,14 @@ function SupporterPage() {
         <div className="mx-auto max-w-[1200px] px-3 py-6 sm:px-5 sm:py-8 xl:max-w-[1440px]">
           {!viewer ? (
             <p className="py-10 text-center text-[13px] text-osu-f1">
-              <a href={`/api/auth/osu?next=${encodeURIComponent("/supporter")}`} className="font-semibold text-osu-pink-light hover:underline">
+              <a href={`/api/auth/osu?next=${encodeURIComponent(lavaReturn ? "/supporter?lava=done" : "/supporter")}`} className="font-semibold text-osu-pink-light hover:underline">
                 {t`Log in with osu!`}
               </a>{" "}
               {t`to set up your avatar frame, name tag and card look.`}
             </p>
           ) : (
             <>
+              {lavaReturn ? <LavaCheckLine status={lavaCheck.status} className="mb-4 text-[13px]" /> : null}
               {/* Only someone browsing in preview needs telling up front; a supporter's thanks, rank and gift code have their own section. */}
               {state && !state.supporter ? (
                 <div className="mb-6">

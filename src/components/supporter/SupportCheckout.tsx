@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { plural } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
@@ -8,9 +9,22 @@ import { useAuth } from "../../lib/auth-context";
 import { track } from "../../lib/analytics";
 import { readEdgeCountry } from "../../lib/country-cookie";
 import { GOOGLE_RRM_PUBLICATION_ID, startGoogleContributions } from "../../lib/google-contributions";
-import { claimGoogleContribution, claimPayments, rememberLavaEmail, type PaymentClaimProvider } from "../../lib/supporter-look-settings";
+import {
+  checkLavaPayment,
+  claimGoogleContribution,
+  claimPayments,
+  createLavaCheckout,
+  LAVA_CHECKOUT_CURRENCIES,
+  LAVA_CHECKOUT_MONTHS,
+  rememberLavaEmail,
+  type LavaCheckoutCurrency,
+  type LavaCheckoutMonths,
+  type PaymentClaimProvider,
+} from "../../lib/supporter-look-settings";
+import { rememberViewerSupporter } from "../../lib/viewer-supporter";
 import { useNearView } from "./SupportMotion";
 import { KofiNameSteps } from "./KofiNameSteps";
+import { requestSupporterWelcome } from "./SupporterWelcome";
 
 /* Where a visitor pays, at the end of /support: a choice of Ko-fi, Google's
    checkout (admins only for now) and lava.top, with the one that fits the
@@ -27,11 +41,33 @@ export const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
 const LAVA_MEMBERSHIP_URL: string | null = "https://app.lava.top/products/603971ba-4480-486a-98da-56ac49111836/93f366c4-0444-4c22-8cab-091697845ba6";
 const LAVA_PAGE_URL = "https://app.lava.top/mania-tracker";
 const LAVA_FOR_EVERYONE = true;
+/* Signed-in buyers pay on an invoice the site makes through lava.top's API
+   (LavaApiPay) instead of the public page above, whose payments never reach
+   the site. Admins only while this is false; once true, a signed-out visitor
+   is asked to sign in rather than given the public link. */
+const LAVA_API_CHECKOUT_FOR_EVERYONE = true;
 
-// lava.top's payment webhook names the buyer by email only (its docs list no
-// UTM tags on it), so a signed-in visitor gives the email they will pay with
-// first (LavaPay) and the payment links by it. The link still carries their
-// osu! id, read if lava.top ever sends it back (backend LAVA_UTM_PREFIX).
+/* The Supporter offer's price for each length, in each currency lava.top
+   takes. Shown only: lava.top charges its own listed price, so these follow
+   any change made there. */
+const LAVA_PRICES: Record<LavaCheckoutCurrency, Record<LavaCheckoutMonths, number>> = {
+  RUB: { 1: 330, 3: 990, 6: 1980, 12: 3300 },
+  USD: { 1: 4.03, 3: 12.08, 6: 24.16, 12: 40.26 },
+  EUR: { 1: 3.66, 3: 10.99, 6: 21.98, 12: 36.63 },
+};
+
+function lavaPrice(currency: LavaCheckoutCurrency, months: LavaCheckoutMonths): string {
+  const value = LAVA_PRICES[currency][months];
+  const whole = Number.isInteger(value);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency, currencyDisplay: "narrowSymbol", minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 }).format(value);
+}
+
+// lava.top's payment webhook names the buyer by email and passes back the
+// invoice's `clientUtm`. Invoices made through the API (LavaApiPay) carry the
+// osu! id there as utm_content (backend LAVA_UTM_PREFIX), so their payments
+// link by it. Payments on the public page have not been seen to reach the
+// webhook or the API at all; the old flow (LavaPay) still records the email
+// the visitor will pay with first, and its link carries the same UTM tags.
 function lavaUrl(viewerId: number | null | undefined): string {
   const base = LAVA_MEMBERSHIP_URL ?? LAVA_PAGE_URL;
   if (!viewerId) return base;
@@ -181,6 +217,240 @@ function LavaPay({ viewerId }: { viewerId: number }) {
   );
 }
 
+const LAVA_CHECK_EVERY_MS = 20_000;
+const LAVA_CHECK_FOR_MS = 5 * 60_000;
+
+export type LavaCheckStatus = "idle" | "waiting" | "paid" | "missing";
+
+/* When the viewer's last lava.top checkout started (createLavaCheckout's
+   startedAt), kept for the tab lava.top sends them back to. */
+const LAVA_CHECKOUT_STARTED_KEY = "lava-checkout-started";
+const LAVA_CHECKOUT_STARTED_TTL_MS = 24 * 60 * 60_000;
+
+function rememberLavaCheckoutStart(startedAt: number) {
+  try {
+    window.localStorage.setItem(LAVA_CHECKOUT_STARTED_KEY, String(startedAt));
+  } catch {
+    // no storage: the return page falls back to the last half hour
+  }
+}
+
+export function readLavaCheckoutStart(): number | null {
+  try {
+    const at = Number(window.localStorage.getItem(LAVA_CHECKOUT_STARTED_KEY));
+    return Number.isFinite(at) && at > Date.now() - LAVA_CHECKOUT_STARTED_TTL_MS ? at : null;
+  } catch {
+    return null;
+  }
+}
+
+/* Asks the backend whether the viewer's lava.top payment has arrived (it
+   looks at lava.top's invoices when asked), every 20 seconds for up to 5
+   minutes while the tab is in view, and stops once a payment made since
+   `since` is there. start("on-return") waits for the tab to come back into
+   view first, as after the payment tab opens; start("now") asks straight
+   away. The 5 minutes count from the first ask. */
+export function useLavaPaymentCheck(viewerId: number | null | undefined, onPaid?: () => void): { status: LavaCheckStatus; start: (when: "now" | "on-return", since: number | null) => void } {
+  const [status, setStatus] = useState<LavaCheckStatus>("idle");
+  const control = useRef<((when: "now" | "on-return", since: number | null) => void) | null>(null);
+  const onPaidRef = useRef(onPaid);
+  onPaidRef.current = onPaid;
+
+  useEffect(() => {
+    if (!viewerId) return;
+    let alive = true;
+    let armed = false;
+    let asking = false;
+    let deadline: number | null = null;
+    let since: number | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const clearTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    };
+    const giveUp = () => {
+      armed = false;
+      clearTimer();
+      setStatus("missing");
+    };
+    const ask = () => {
+      clearTimer();
+      if (!alive || !armed || asking || document.visibilityState !== "visible") return;
+      if (deadline === null) deadline = Date.now() + LAVA_CHECK_FOR_MS;
+      else if (Date.now() >= deadline) return giveUp();
+      asking = true;
+      checkLavaPayment({ data: since == null ? {} : { since } })
+        .then((result) => result.paid ? result : null)
+        .catch(() => null)
+        .then((paid) => {
+          asking = false;
+          if (!alive || !armed) return;
+          if (paid) {
+            armed = false;
+            setStatus("paid");
+            rememberViewerSupporter(viewerId, paid.expiresAt);
+            requestSupporterWelcome();
+            onPaidRef.current?.();
+            return;
+          }
+          if (Date.now() + LAVA_CHECK_EVERY_MS > (deadline ?? 0)) return giveUp();
+          timer = setTimeout(ask, LAVA_CHECK_EVERY_MS);
+        });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") ask();
+      else clearTimer();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    control.current = (when, from) => {
+      clearTimer();
+      armed = true;
+      deadline = null;
+      since = from;
+      setStatus("waiting");
+      if (when === "now") ask();
+    };
+    return () => {
+      alive = false;
+      armed = false;
+      clearTimer();
+      control.current = null;
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [viewerId]);
+
+  const start = useCallback((when: "now" | "on-return", since: number | null) => control.current?.(when, since), []);
+  return { status, start };
+}
+
+/* The check's one line, once the payment is there. Looking for it and not
+   finding it say nothing: someone who closed lava.top without paying is
+   not told about a payment they never made. */
+export function LavaCheckLine({ status, className = "text-[12px]" }: { status: LavaCheckStatus; className?: string }) {
+  const { t } = useLingui();
+  if (status !== "paid") return null;
+  return <p role="status" className={`${className} text-osu-l2`}>{t`Thank you! Your supporter time is on.`}</p>;
+}
+
+/* The signed-in way to pay on lava.top once LAVA_API_CHECKOUT_FOR_EVERYONE
+   (admins before then): a length and a currency, and the email lava.top
+   sends the receipt to. The backend makes an invoice through lava.top's API
+   with the viewer's osu! id on it, and the tab opened inside the click goes
+   to its payment page. Back on this tab, the payment is looked for. */
+function LavaApiPay({ viewerId }: { viewerId: number }) {
+  const { t } = useLingui();
+  const [months, setMonths] = useState<LavaCheckoutMonths>(1);
+  const [picked, setPicked] = useState<LavaCheckoutCurrency | null>(null);
+  const [rubles, setRubles] = useState(false);
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const check = useLavaPaymentCheck(viewerId);
+  useEffect(() => {
+    let cancelled = false;
+    getSupportUsesLava()
+      .then((value) => !cancelled && setRubles(value))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const currency: LavaCheckoutCurrency = picked ?? (rubles ? "RUB" : "USD");
+  const lengthLabel = (value: LavaCheckoutMonths) => (value === 12 ? t`1 year` : t`${plural(value, { one: "# month", other: "# months" })}`);
+  /* Every length is a lava.top membership: it charges again after that long. */
+  const renews = months === 12
+    ? t`Renews every year until you cancel it on lava.top.`
+    : t`${plural(months, { one: "Renews every month until you cancel it on lava.top.", other: "Renews every # months until you cancel it on lava.top." })}`;
+  return (
+    <form
+      className="flex w-full max-w-[360px] flex-col items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!email.trim() || busy) return;
+        const tab = window.open("", "_blank");
+        setBusy(true);
+        setError(null);
+        createLavaCheckout({ data: { email: email.trim(), months, currency } })
+          .then(({ paymentUrl, startedAt }) => {
+            track("support_lava_open");
+            rememberLavaCheckoutStart(startedAt);
+            if (tab) {
+              tab.opener = null;
+              tab.location.href = paymentUrl;
+              check.start("on-return", startedAt);
+            } else {
+              window.location.href = paymentUrl;
+            }
+          })
+          .catch((reason: unknown) => {
+            tab?.close();
+            setError(reason instanceof Error ? reason.message : String(reason));
+          })
+          .finally(() => setBusy(false));
+      }}
+    >
+      <div role="radiogroup" aria-label={t`Length`} className="grid w-full grid-cols-4 gap-1">
+        {LAVA_CHECKOUT_MONTHS.map((value) => {
+          const on = value === months;
+          return (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => setMonths(value)}
+              className={`cursor-pointer rounded-lg px-1 py-2 text-center transition-colors ${on ? "bg-osu-b2 text-white" : "text-osu-l2 hover:bg-white/[0.05] hover:text-white"}`}
+            >
+              <span className="block text-[13px] font-bold">{lengthLabel(value)}</span>
+              <span className={`block text-[12px] tabular-nums ${on ? "text-osu-l2" : "text-osu-f1"}`}>{lavaPrice(currency, value)}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div role="radiogroup" aria-label={t`Currency`} className="flex gap-1">
+        {LAVA_CHECKOUT_CURRENCIES.map((value) => {
+          const on = value === currency;
+          return (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => setPicked(value)}
+              className={`h-7 cursor-pointer rounded-md px-3 text-[12px] font-semibold transition-colors ${on ? "bg-osu-b2 text-white" : "text-osu-f1 hover:bg-white/[0.05] hover:text-white"}`}
+            >
+              {value}
+            </button>
+          );
+        })}
+      </div>
+      <label htmlFor="lava-pay-email" className="mt-1 max-w-[320px] text-[12px] text-osu-f1">{t`lava.top sends the receipt to this email.`}</label>
+      <input
+        id="lava-pay-email"
+        type="email"
+        autoComplete="email"
+        required
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        placeholder={t`Email`}
+        maxLength={254}
+        className="h-8 w-full rounded-md bg-osu-b5 px-2.5 text-[12.5px] text-white outline-none ring-1 ring-inset ring-white/[0.08] placeholder:text-osu-f1 focus:ring-osu-pink/60"
+      />
+      <button
+        type="submit"
+        disabled={busy}
+        className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-osu-pink px-5 py-2.5 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:cursor-default disabled:opacity-50"
+      >
+        {t`Pay on lava.top`}
+        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+      <p className="text-[12px] text-osu-f1">{renews}</p>
+      <LavaCheckLine status={check.status} />
+      {error && <p className="text-[12px] text-osu-red-light">{error}</p>}
+    </form>
+  );
+}
+
 /* A payment that reached no account (lava.top paid outside the button's
    link or signed out, Ko-fi under a name and message that match no osu!
    username); the payer names it here by the email they paid with. */
@@ -300,17 +570,23 @@ export function useSupportMethods() {
 /* What to do so the payment reaches the account, beside the checkout. */
 export function SupportMethodSteps({ method }: { method: SupportMethod }) {
   const { t } = useLingui();
-  const signedIn = !!useAuth().viewer;
+  const auth = useAuth();
+  const signedIn = !!auth.viewer;
   if (method === "kofi") return <KofiNameSteps />;
+  const lavaApi = LAVA_API_CHECKOUT_FOR_EVERYONE || (signedIn && auth.isAdmin);
   return (
     <p className="mt-2 text-[14px] leading-relaxed text-osu-l2">
       {method === "google"
         ? signedIn
           ? t`Pay with Google here. Your supporter time starts as soon as the payment goes through.`
           : t`Sign in first, then pay with Google here, so your supporter time reaches your account.`
-        : signedIn
-          ? t`Give the email you'll pay with, then pay on lava.top. The payment finds your account by that email, so your supporter time reaches it on its own.`
-          : t`Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account.`}
+        : lavaApi
+          ? signedIn
+            ? t`Pick a length and a currency, then pay on lava.top. Your supporter time starts once lava.top confirms the payment.`
+            : t`Sign in first, then pay on lava.top here, so your supporter time reaches your account.`
+          : signedIn
+            ? t`Give the email you'll pay with, then pay on lava.top. The payment finds your account by that email, so your supporter time reaches it on its own.`
+            : t`Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account.`}
     </p>
   );
 }
@@ -364,8 +640,18 @@ export function SupportCheckout({ methods, method, onMethod }: { methods: Suppor
         <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
           {viewerId ? (
             <>
-              <LavaPay viewerId={viewerId} />
+              {LAVA_API_CHECKOUT_FOR_EVERYONE || auth.isAdmin ? <LavaApiPay viewerId={viewerId} /> : <LavaPay viewerId={viewerId} />}
               <PaymentClaim provider="lava" />
+            </>
+          ) : LAVA_API_CHECKOUT_FOR_EVERYONE ? (
+            <>
+              <p className="max-w-[300px] text-[12.5px] text-osu-f1">{t`Sign in first so it counts toward your account.`}</p>
+              <a
+                href={`/api/auth/osu?next=${encodeURIComponent("/support#checkout")}`}
+                className="inline-flex items-center gap-1.5 rounded-full bg-osu-pink px-5 py-2.5 text-[13px] font-semibold text-white transition hover:brightness-110"
+              >
+                {t`Log in with osu!`}
+              </a>
             </>
           ) : (
             <>

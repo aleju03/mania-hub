@@ -1843,6 +1843,10 @@ msgstr "{mod}: {pct}% of plays"
 msgid "{months, plural, one {about # month} other {about # months}}"
 msgstr "{months, plural, one {about # month} other {about # months}}"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "{months, plural, one {Renews every month until you cancel it on lava.top.} other {Renews every # months until you cancel it on lava.top.}}"
+msgstr "{months, plural, one {Renews every month until you cancel it on lava.top.} other {Renews every # months until you cancel it on lava.top.}}"
+
 #: src/lib/changelog.ts
 #: src/lib/format.ts
 msgid "{months} months ago"
@@ -2328,6 +2332,10 @@ msgstr "{username}'s top <0>{label}</0> plays"
 #: src/components/player/ActivityPanel.tsx
 msgid "{value, plural, one {# map} other {# maps}}"
 msgstr "{value, plural, one {# map} other {# maps}}"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "{value, plural, one {# month} other {# months}}"
+msgstr "{value, plural, one {# month} other {# months}}"
 
 #: src/components/player/ActivityPanel.tsx
 #~ msgid "{value, plural, one {# pass} other {# passes}}"
@@ -2994,6 +3002,7 @@ msgstr "1 rate per chart"
 msgid "1 using it"
 msgstr "1 using it"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/SupportDaysPreview.tsx
 msgid "1 year"
 msgstr "1 year"
@@ -8504,6 +8513,10 @@ msgstr "Ctrl/Cmd-click images to add or remove them."
 #: src/components/player/InsightModals.tsx
 msgid "Cumulative"
 msgstr "Cumulative"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Currency"
+msgstr "Currency"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Current"
@@ -14083,6 +14096,10 @@ msgstr "lava.top asks for your email when you pay. Type the same one here, so th
 msgid "lava.top only sells supporter time as a membership of 1, 3, 6 or 12 months that renews until you cancel it there. To pay once, use Ko-fi."
 msgstr "lava.top only sells supporter time as a membership of 1, 3, 6 or 12 months that renews until you cancel it there. To pay once, use Ko-fi."
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "lava.top sends the receipt to this email."
+msgstr "lava.top sends the receipt to this email."
+
 #: src/components/supporter/SupportPlans.tsx
 msgid "lava.top's Supporter membership renews by itself. You can cancel any time on lava.top."
 msgstr "lava.top's Supporter membership renews by itself. You can cancel any time on lava.top."
@@ -14267,6 +14284,7 @@ msgstr "Legendary charms and endless runs"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/components/supporter/SupportCheckout.tsx
 #: src/routes/maps.tsx
 msgid "Length"
 msgstr "Length"
@@ -14980,6 +14998,7 @@ msgstr "Log in to upload"
 #: src/components/me/GoalsPanel.tsx
 #: src/components/me/MyDataPanel.tsx
 #: src/components/player/ActivityPanel.tsx
+#: src/components/supporter/SupportCheckout.tsx
 #: src/routes/supporter.tsx
 msgid "Log in with osu!"
 msgstr "Log in with osu!"
@@ -19558,6 +19577,10 @@ msgstr "pick a difficulty below"
 msgid "Pick a layer to change it, or click a picture on the stage."
 msgstr "Pick a layer to change it, or click a picture on the stage."
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pick a length and a currency, then pay on lava.top. Your supporter time starts once lava.top confirms the payment."
+msgstr "Pick a length and a currency, then pay on lava.top. Your supporter time starts once lava.top confirms the payment."
+
 #: src/components/player/FeaturedPlays.tsx
 msgid "Pick a play"
 msgstr "Pick a play"
@@ -21960,6 +21983,10 @@ msgstr "Rendering the {selectedKeymode}K playfield..."
 msgid "Renews every month"
 msgstr "Renews every month"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Renews every year until you cancel it on lava.top."
+msgstr "Renews every year until you cancel it on lava.top."
+
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Repeat preview"
 msgstr "Repeat preview"
@@ -24257,6 +24284,10 @@ msgstr "Sign in first so it counts toward your account."
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account."
 msgstr "Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first, then pay on lava.top here, so your supporter time reaches your account."
+msgstr "Sign in first, then pay on lava.top here, so your supporter time reaches your account."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Sign in first, then pay with Google here, so your supporter time reaches your account."
