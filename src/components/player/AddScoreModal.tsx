@@ -6,18 +6,19 @@ import {
   fetchLiveMapSearch,
   loadLiveMapSearchEntry,
   submitLiveMissingScore,
-  submitLiveMamesScore,
-  isMamesLink,
+  submitLiveServerScore,
+  privateServerOfLink,
   beatmapIdFromLink,
-  fetchLiveMamesPlays,
+  fetchLiveServerPlays,
   fetchLiveScoreImportStatuses,
   type LiveScoreSubmissionResult,
   type LiveMapSearchEntry,
   type LiveScoreSubmissionFailure,
   type LiveScoreSubmissionPlay,
-  type LiveMamesPlay,
-  type LiveMamesPlayList,
-  type LiveMamesPlaysResult,
+  type LivePrivateServer,
+  type LiveServerPlay,
+  type LiveServerPlayList,
+  type LiveServerPlaysResult,
 } from "../../lib/live-backend";
 import { track } from "../../lib/analytics";
 import { formatAccuracy, formatPP, formatTimeAgo } from "../../lib/format";
@@ -34,8 +35,8 @@ import {
   type LeaderboardImportStatus,
 } from "../../lib/leaderboard-import";
 import { StatusChip } from "../maps/FilterChips";
-import { MamestagramMark } from "../ui/CompanellaMark";
-import { changeOwnMamesLink, fetchOwnMamesLink, type MamesLink, type MamesLinkError } from "../../lib/mamestagram";
+import { ServerMark } from "../ui/CompanellaMark";
+import { changeOwnServerLink, fetchOwnServerLink, type ServerAccountLink, type ServerAccountLinkError } from "../../lib/server-account-links";
 import type { OsuScore } from "../../lib/types";
 import { useNoDans } from "../../store";
 import { RecentPlayRatingCells } from "./RecentPlayRatingCells";
@@ -119,17 +120,36 @@ function ratingScore(item: AcceptedPlay): OsuScore | null {
   } as unknown as OsuScore;
 }
 
+/* The private servers whose plays the dialog takes, in the order their
+   sections show. Only Mamestagram can list one chart's plays. */
+const PRIVATE_SERVERS: readonly LivePrivateServer[] = ["mamestagram", "torii"];
+const SERVER_NAMES: Record<LivePrivateServer, string> = { mamestagram: "Mamestagram", torii: "Torii" };
+
+interface ServerSection {
+  /* The account linked to this profile, whose plays the dialog lists: null
+     until the first list answers. */
+  linked: boolean | null;
+  /* The owner's link panel is open. */
+  open: boolean;
+  reload: number;
+  /* Closed, the section is one row and asks the server nothing. */
+  expanded: boolean;
+  list: LiveServerPlayList;
+}
+
+const CLOSED_SECTION: ServerSection = { linked: null, open: false, reload: 0, expanded: false, list: "best" };
+
 export function AddScoreModal({
   userId,
   username,
-  hasMamesProfile = false,
+  serverProfiles = [],
   onClose,
   onSubmitted,
 }: {
   userId: number;
   username: string;
-  /** The profile links a Mamestagram profile (ServerLinks), the account the owner can link here. */
-  hasMamesProfile?: boolean;
+  /** The private servers the profile links (ServerLinks) whose accounts the owner can link here. */
+  serverProfiles?: readonly string[];
   onClose: () => void;
   /** A score was newly stored (not an already-tracked resubmission). */
   onSubmitted?: () => void;
@@ -146,16 +166,15 @@ export function AddScoreModal({
   const [accepted, setAccepted] = useState<AcceptedPlay[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const mountedRef = useRef(true);
-  /* Only the profile's owner can link their Mamestagram account. */
+  /* Only the profile's owner can link their private server accounts. */
   const isOwner = auth.viewer?.id === userId;
-  const [mamesOpen, setMamesOpen] = useState(false);
-  /* The Mamestagram account linked to this profile, whose plays the dialog
-     lists: null until the first list answers. */
-  const [mamesLinked, setMamesLinked] = useState<boolean | null>(null);
-  const [mamesList, setMamesList] = useState<LiveMamesPlayList>("best");
+  const servers = PRIVATE_SERVERS.filter((server) => serverProfiles.includes(server));
+  const [sections, setSections] = useState<Record<LivePrivateServer, ServerSection>>({ mamestagram: CLOSED_SECTION, torii: CLOSED_SECTION });
+  const updateSection = (server: LivePrivateServer, patch: Partial<ServerSection> | ((section: ServerSection) => Partial<ServerSection>)) => {
+    setSections((current) => ({ ...current, [server]: { ...current[server], ...(typeof patch === "function" ? patch(current[server]) : patch) } }));
+  };
+  /* The chart a pasted beatmap link named, whose Mamestagram plays are listed. */
   const [mamesMap, setMamesMap] = useState<number | null>(null);
-  const [mamesReload, setMamesReload] = useState(0);
-  const [mamesExpanded, setMamesExpanded] = useState(false);
 
   useBodyScrollLock(true);
 
@@ -190,10 +209,11 @@ export function AddScoreModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const failureMessage = (reason: LiveScoreSubmissionFailure, owner?: string | null, mames = false): string => {
+  const failureMessage = (reason: LiveScoreSubmissionFailure, owner?: string | null, server: LivePrivateServer | null = null): string => {
+    const name = server ? SERVER_NAMES[server] : "";
     switch (reason) {
       case "invalid_link":
-        return mames ? t`That doesn't look like a Mamestagram score link.` : t`That doesn't look like an osu! score link.`;
+        return server ? t`That doesn't look like a ${name} score link.` : t`That doesn't look like an osu! score link.`;
       case "score_not_found":
         return t`No score found at that link.`;
       case "not_mania":
@@ -215,13 +235,15 @@ export function AddScoreModal({
       case "failed":
         return t`Could not send that. Try again.`;
       case "mames_not_linked":
+      case "torii_not_linked":
         return !isOwner
-          ? t`That Mamestagram account isn't linked to an osu! account here.`
-          : hasMamesProfile
-            ? t`Link your Mamestagram account below first.`
-            : t`Add your Mamestagram profile next to your name first.`;
+          ? t`That ${name} account isn't linked to an osu! account here.`
+          : server && servers.includes(server)
+            ? t`Link your ${name} account below first.`
+            : t`Add your ${name} profile next to your name first.`;
       case "mames_unavailable":
-        return t`Mamestagram didn't answer. Try again later.`;
+      case "torii_unavailable":
+        return t`${name} didn't answer. Try again later.`;
       case "beatmap_not_found":
         return t`That chart isn't on osu!.`;
       case "chart_outdated":
@@ -255,21 +277,21 @@ export function AddScoreModal({
     if (result.play.beatmapId != null) void fillEntry(key, result.play.beatmapId);
   };
 
-  /* A play picked from the Mamestagram list. Null when it was added, else
-     what went wrong. */
-  const addMamesPlay = async (scoreId: number): Promise<string | null> => {
+  /* A play picked from a server's list. Null when it was added, else what
+     went wrong. */
+  const addServerPlay = async (server: LivePrivateServer, scoreId: number): Promise<string | null> => {
     let result: LiveScoreSubmissionResult;
     try {
-      result = await submitLiveMamesScore(userId, { scoreId });
+      result = await submitLiveServerScore(server, userId, { scoreId });
     } catch {
       result = { ok: false, reason: "failed" };
     }
     if (result.ok) {
-      acceptPlay(result, `mames:${scoreId}:${Date.now()}`);
+      acceptPlay(result, `${server}:${scoreId}:${Date.now()}`);
       return null;
     }
     track("add_score_failed", { add_score_player: username, add_score_reason: result.reason });
-    return failureMessage(result.reason, result.owner, true);
+    return failureMessage(result.reason, result.owner, server);
   };
 
   const settleSubmission = (item: QueuedScore, result: LiveScoreSubmissionResult) => {
@@ -279,8 +301,11 @@ export function AddScoreModal({
       if (mountedRef.current) setSubmissions((current) => current.filter((queued) => queued.key !== item.key));
     } else {
       track("add_score_failed", { add_score_player: username, add_score_reason: result.reason });
-      if (result.reason === "mames_not_linked" && isOwner && mountedRef.current) setMamesOpen(true);
-      updateSubmission(item.key, { status: "failed", jobId: undefined, error: failureMessage(result.reason, result.owner, isMamesLink(item.link)) });
+      const server = privateServerOfLink(item.link);
+      if ((result.reason === "mames_not_linked" || result.reason === "torii_not_linked") && server && isOwner && mountedRef.current) {
+        updateSection(server, { open: true });
+      }
+      updateSubmission(item.key, { status: "failed", jobId: undefined, error: failureMessage(result.reason, result.owner, server) });
     }
   };
 
@@ -294,8 +319,9 @@ export function AddScoreModal({
         const item = queueRef.current[0];
         updateSubmission(item.key, { status: "sending" });
         try {
-          const result = isMamesLink(item.link)
-            ? await submitLiveMamesScore(userId, { link: item.link })
+          const server = privateServerOfLink(item.link);
+          const result = server
+            ? await submitLiveServerScore(server, userId, { link: item.link })
             : await submitLiveMissingScore(userId, item.link);
           if (result.ok && "queued" in result) {
             updateSubmission(item.key, { status: "queued", jobId: result.jobId });
@@ -352,11 +378,10 @@ export function AddScoreModal({
     const value = raw.trim();
     if (!value) return;
     // A beatmap link lists the linked Mamestagram account's plays on that chart.
-    const beatmapId = mamesLinked ? beatmapIdFromLink(value) : null;
+    const beatmapId = sections.mamestagram.linked ? beatmapIdFromLink(value) : null;
     if (beatmapId != null) {
       setMamesMap(beatmapId);
-      setMamesList("map");
-      setMamesExpanded(true);
+      updateSection("mamestagram", { list: "map", expanded: true });
       setLink("");
       return;
     }
@@ -509,7 +534,7 @@ export function AddScoreModal({
                 event.preventDefault();
                 void send(text);
               }}
-              placeholder={mamesLinked ? t`paste a score or beatmap link for ${username}` : t`paste a score link for ${username}`}
+              placeholder={sections.mamestagram.linked ? t`paste a score or beatmap link for ${username}` : t`paste a score link for ${username}`}
               spellCheck={false}
               autoComplete="off"
               aria-label={t`osu! score link`}
@@ -536,30 +561,35 @@ export function AddScoreModal({
             )}
           </form>
 
-          {hasMamesProfile && mamesLinked !== false ? (
-            <MamesPlays
-              key={mamesReload}
-              userId={userId}
-              list={mamesList}
-              beatmapId={mamesMap}
-              expanded={mamesExpanded}
-              isOwner={isOwner}
-              onExpanded={setMamesExpanded}
-              onList={setMamesList}
-              onLinked={setMamesLinked}
-              onAdd={addMamesPlay}
-            />
-          ) : null}
-          {isOwner && hasMamesProfile && mamesLinked === false ? (
-            <MamesLinkPanel
-              open={mamesOpen}
-              onOpen={() => setMamesOpen(true)}
-              onLinked={() => {
-                setMamesLinked(null);
-                setMamesReload((value) => value + 1);
-              }}
-            />
-          ) : null}
+          {servers.map((server) => {
+            const section = sections[server];
+            if (section.linked !== false) {
+              return (
+                <ServerPlays
+                  key={`${server}:${section.reload}`}
+                  server={server}
+                  userId={userId}
+                  list={section.list}
+                  beatmapId={server === "mamestagram" ? mamesMap : null}
+                  expanded={section.expanded}
+                  isOwner={isOwner}
+                  onExpanded={(expanded) => updateSection(server, { expanded })}
+                  onList={(list) => updateSection(server, { list })}
+                  onLinked={(linked) => updateSection(server, { linked })}
+                  onAdd={(scoreId) => addServerPlay(server, scoreId)}
+                />
+              );
+            }
+            return isOwner ? (
+              <ServerLinkPanel
+                key={server}
+                server={server}
+                open={section.open}
+                onOpen={() => updateSection(server, { open: true })}
+                onLinked={() => updateSection(server, (current) => ({ linked: null, reload: current.reload + 1 }))}
+              />
+            ) : null;
+          })}
 
           {auth.canUseAdminFeatures ? <LeaderboardImportPanel /> : null}
         </motion.div>
@@ -568,54 +598,57 @@ export function AddScoreModal({
   );
 }
 
-/* ----------------------------------------------------- Mamestagram plays
+/* ------------------------------------------------- private server plays
 
    Plays on Mamestagram have no page of their own, so there is no link to
-   paste: the dialog lists the linked account's plays instead, its best, its
-   latest, or its plays on a chart whose beatmap link was pasted. */
+   paste, and a Torii player would have to go find each one: the dialog lists
+   the linked account's plays instead, its best, its latest, or (Mamestagram)
+   its plays on a chart whose beatmap link was pasted. */
 
-type MamesRowState = { kind: "adding" } | { kind: "added" } | { kind: "failed"; message: string };
+type ServerRowState = { kind: "adding" } | { kind: "added" } | { kind: "failed"; message: string };
 
-function MamesPlays({ userId, list, beatmapId, expanded, isOwner, onExpanded, onList, onLinked, onAdd }: {
+function ServerPlays({ server, userId, list, beatmapId, expanded, isOwner, onExpanded, onList, onLinked, onAdd }: {
+  server: LivePrivateServer;
   userId: number;
-  list: LiveMamesPlayList;
+  list: LiveServerPlayList;
   beatmapId: number | null;
-  /* Closed, the section is one row and asks Mamestagram nothing. */
+  /* Closed, the section is one row and asks the server nothing. */
   expanded: boolean;
   isOwner: boolean;
   onExpanded: (expanded: boolean) => void;
-  onList: (list: LiveMamesPlayList) => void;
+  onList: (list: LiveServerPlayList) => void;
   onLinked: (linked: boolean) => void;
   onAdd: (scoreId: number) => Promise<string | null>;
 }) {
   const { t } = useLingui();
   const locale = useLocale();
-  const [result, setResult] = useState<LiveMamesPlaysResult | null>(null);
-  const [mamesName, setMamesName] = useState<string | null>(null);
-  const [rows, setRows] = useState<Record<number, MamesRowState>>({});
+  const name = SERVER_NAMES[server];
+  const [result, setResult] = useState<LiveServerPlaysResult | null>(null);
+  const [accountName, setAccountName] = useState<string | null>(null);
+  const [rows, setRows] = useState<Record<number, ServerRowState>>({});
   const [unlinking, setUnlinking] = useState(false);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     setResult(null);
-    void fetchLiveMamesPlays(userId, expanded ? list : "account", expanded && list === "map" ? beatmapId : null).then((value) => {
+    void fetchLiveServerPlays(server, userId, expanded ? list : "account", expanded && list === "map" ? beatmapId : null).then((value) => {
       if (cancelled) return;
       setResult(value);
       if (value.ok) {
-        setMamesName(value.mamesName);
+        setAccountName(value.accountName);
         onLinked(true);
-      } else if (value.reason === "mames_not_linked") {
+      } else if (value.reason === "not_linked") {
         onLinked(false);
       }
     });
     return () => { cancelled = true; };
     // The callbacks are the parent's setters; only the list asked for matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, expanded, list, beatmapId]);
+  }, [server, userId, expanded, list, beatmapId]);
 
   // Nothing to show until the account is known to be linked.
-  if (!mamesName) return null;
+  if (!accountName) return null;
 
   const add = async (scoreId: number) => {
     setRows((current) => ({ ...current, [scoreId]: { kind: "adding" } }));
@@ -626,9 +659,9 @@ function MamesPlays({ userId, list, beatmapId, expanded, isOwner, onExpanded, on
   const unlink = async () => {
     setUnlinking(true);
     try {
-      const changed = await changeOwnMamesLink({ data: { action: "unlink" } });
+      const changed = await changeOwnServerLink({ data: { server, action: "unlink" } });
       if (changed.ok) {
-        track("mames_unlinked");
+        track(server === "mamestagram" ? "mames_unlinked" : "torii_unlinked");
         onLinked(false);
       }
     } catch {
@@ -638,16 +671,16 @@ function MamesPlays({ userId, list, beatmapId, expanded, isOwner, onExpanded, on
     }
   };
 
-  const tabs: Array<{ id: LiveMamesPlayList; label: string }> = [
+  const tabs: Array<{ id: LiveServerPlayList; label: string }> = [
     { id: "best", label: t`Best` },
     { id: "recent", label: t`Recent` },
     ...(beatmapId != null ? [{ id: "map" as const, label: t`This chart` }] : []),
   ];
 
   const listError = result && !result.ok
-    ? result.reason === "beatmap_not_found" ? t`That chart isn't on Mamestagram.`
+    ? result.reason === "beatmap_not_found" ? t`That chart isn't on ${name}.`
       : result.reason === "rate_limited" ? t`Too many requests right now. Try again later.`
-      : t`Mamestagram didn't answer. Try again later.`
+      : t`${name} didn't answer. Try again later.`
     : null;
   const needle = query.trim().toLowerCase();
   const plays = result?.ok
@@ -663,9 +696,9 @@ function MamesPlays({ userId, list, beatmapId, expanded, isOwner, onExpanded, on
           aria-expanded={expanded}
           className="group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-left"
         >
-          <MamestagramMark className="h-5 w-5" />
-          <span className="truncate text-[12px] font-semibold text-osu-l1 group-hover:text-white">{t`Plays from Mamestagram`}</span>
-          <span className="truncate text-[12px] text-osu-f1">{mamesName}</span>
+          <ServerMark server={server} className="h-5 w-5" />
+          <span className="truncate text-[12px] font-semibold text-osu-l1 group-hover:text-white">{t`Plays from ${name}`}</span>
+          <span className="truncate text-[12px] text-osu-f1">{accountName}</span>
           <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform group-hover:text-white ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
         </button>
         <div className="flex shrink-0 items-center gap-3">
@@ -719,12 +752,12 @@ function MamesPlays({ userId, list, beatmapId, expanded, isOwner, onExpanded, on
               <p className="px-4 py-4 text-[12px] text-osu-f1 sm:px-5">{listError}</p>
             ) : plays.length === 0 ? (
               <p className="px-4 py-4 text-[12px] text-osu-f1 sm:px-5">
-                {needle ? t`No plays match.` : list === "map" ? t`No Mamestagram plays on this chart.` : t`No plays here.`}
+                {needle ? t`No plays match.` : list === "map" ? t`No ${name} plays on this chart.` : t`No plays here.`}
               </p>
             ) : (
               <div className="divide-y divide-white/[0.06]">
                 {plays.map((play) => (
-                  <MamesPlayRow key={play.scoreId} play={play} state={rows[play.scoreId]} locale={locale} onAdd={() => void add(play.scoreId)} />
+                  <ServerPlayRow key={play.scoreId} play={play} state={rows[play.scoreId]} locale={locale} onAdd={() => void add(play.scoreId)} />
                 ))}
               </div>
             )}
@@ -735,7 +768,7 @@ function MamesPlays({ userId, list, beatmapId, expanded, isOwner, onExpanded, on
   );
 }
 
-function MamesPlayRow({ play, state, locale, onAdd }: { play: LiveMamesPlay; state: MamesRowState | undefined; locale: AppLocale; onAdd: () => void }) {
+function ServerPlayRow({ play, state, locale, onAdd }: { play: LiveServerPlay; state: ServerRowState | undefined; locale: AppLocale; onAdd: () => void }) {
   const { t } = useLingui();
   const mods = getModDisplayList(play.mods);
   const added = play.added || state?.kind === "added";
@@ -770,39 +803,40 @@ function MamesPlayRow({ play, state, locale, onAdd }: { play: LiveMamesPlay; sta
   );
 }
 
-/* ------------------------------------------------------ Mamestagram link
+/* -------------------------------------------------- private server link
 
-   The owner's own Mamestagram account, the one their Mamestagram profile link
-   points at. Mamestagram has no login to hand out, so the proof is a code the
-   owner puts on their Mamestagram userpage. */
+   The owner's own account on a private server, the one their profile link for
+   that server points at. The servers have no login to hand out, so the proof
+   is a code the owner puts on their userpage there. */
 
-function MamesLinkPanel({ open, onOpen, onLinked }: { open: boolean; onOpen: () => void; onLinked: () => void }) {
+function ServerLinkPanel({ server, open, onOpen, onLinked }: { server: LivePrivateServer; open: boolean; onOpen: () => void; onLinked: () => void }) {
   const { t } = useLingui();
-  const [link, setLink] = useState<MamesLink | null>(null);
+  const name = SERVER_NAMES[server];
+  const [link, setLink] = useState<ServerAccountLink | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    fetchOwnMamesLink()
+    fetchOwnServerLink({ data: { server } })
       .then((value) => { if (!cancelled) setLink(value); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, []);
+  }, [server]);
 
-  const errorMessage = (code: MamesLinkError): string => {
+  const errorMessage = (code: ServerAccountLinkError): string => {
     switch (code) {
       case "no_profile_link":
-        return t`Add your Mamestagram profile next to your name first.`;
+        return t`Add your ${name} profile next to your name first.`;
       case "code_missing":
         return t`The code isn't on that userpage yet.`;
-      case "mames_player_not_found":
-        return t`Your Mamestagram profile link doesn't lead to a player.`;
-      case "mames_taken":
-        return t`That Mamestagram account is linked to another osu! account.`;
-      case "mames_unavailable":
-        return t`Mamestagram didn't answer. Try again later.`;
+      case "player_not_found":
+        return t`Your ${name} profile link doesn't lead to a player.`;
+      case "taken":
+        return t`That ${name} account is linked to another osu! account.`;
+      case "unavailable":
+        return t`${name} didn't answer. Try again later.`;
       case "rate_limited":
         return t`Too many tries. Try again in a minute.`;
       case "failed":
@@ -814,9 +848,9 @@ function MamesLinkPanel({ open, onOpen, onLinked }: { open: boolean; onOpen: () 
     setBusy(true);
     setError(null);
     try {
-      const result = await changeOwnMamesLink({ data: { action: "verify" } });
+      const result = await changeOwnServerLink({ data: { server, action: "verify" } });
       if (result.ok) {
-        track("mames_linked");
+        track(server === "mamestagram" ? "mames_linked" : "torii_linked");
         onLinked();
       } else {
         setError(errorMessage(result.error));
@@ -837,8 +871,8 @@ function MamesLinkPanel({ open, onOpen, onLinked }: { open: boolean; onOpen: () 
         onClick={onOpen}
         className="flex w-full cursor-pointer items-center gap-2.5 border-t border-white/[0.07] px-4 py-3 text-left text-[12px] text-osu-f1 transition-colors hover:text-white sm:px-5"
       >
-        <MamestagramMark className="h-5 w-5" />
-        {t`Link your Mamestagram account`}
+        <ServerMark server={server} className="h-5 w-5" />
+        {t`Link your ${name} account`}
       </button>
     );
   }
@@ -846,9 +880,9 @@ function MamesLinkPanel({ open, onOpen, onLinked }: { open: boolean; onOpen: () 
   return (
     <div className="border-t border-white/[0.07] px-4 py-3.5 sm:px-5">
       <div className="flex items-center gap-2.5">
-        <MamestagramMark className="h-5 w-5" />
+        <ServerMark server={server} className="h-5 w-5" />
         <p className="text-[12px] text-osu-l2">
-          {t`Put this code on your Mamestagram userpage, then press Verify.`}
+          {t`Put this code on your ${name} userpage, then press Verify.`}
         </p>
       </div>
       <div className="mt-3 flex items-center gap-2">
@@ -1395,7 +1429,7 @@ function ScorePanel({ item, rating, locale }: { item: AcceptedPlay; rating: Rece
             {play.pp != null ? <span className="font-bold text-osu-pink-light">{formatPP(play.pp, locale)}</span> : null}
             {entry?.keyCount ? <span className="font-bold text-osu-yellow">{entry.keyCount}K</span> : null}
             {play.endedAt ? <span className="text-osu-f1">{formatTimeAgo(play.endedAt, locale)}</span> : null}
-            {play.source === "mamestagram" ? <MamestagramMark className="h-4 w-4" /> : null}
+            {play.source ? <ServerMark server={play.source} className="h-4 w-4" /> : null}
           </div>
         </div>
         <div className="min-w-0 max-w-[55%] text-right">
@@ -1455,7 +1489,7 @@ function AcceptedRow({ item, rating }: { item: AcceptedPlay; rating: RecentPlayR
       animate={{ opacity: 1, height: "auto" }}
       transition={{ duration: 0.22, ease: "easeOut" }}
     >
-      {play.source === "mamestagram" ? <MamestagramMark className="h-3.5 w-3.5 self-center" /> : null}
+      {play.source ? <ServerMark server={play.source} className="h-3.5 w-3.5 self-center" /> : null}
       <span className="truncate text-[12.5px] font-semibold text-osu-l1">{title}</span>
       {version ? <span className="hidden shrink-0 truncate text-[11px] text-osu-f1 sm:inline">[{version}]</span> : null}
       {mods.length > 0 ? (

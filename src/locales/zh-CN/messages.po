@@ -1862,6 +1862,10 @@ msgstr "{name} 及以上"
 msgid "{name} claimed your gift week. Every $4 you give brings a new code."
 msgstr "{name} 领取了你赠送的一周。你每支持 $4 就会获得一个新兑换码。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "{name} didn't answer. Try again later."
+msgstr "{name} 没有响应，请稍后再试。"
+
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
 msgstr "{name} 有 {count} 个 7K 最佳成绩。"
@@ -4237,8 +4241,12 @@ msgid "Add to the list"
 msgstr "加入列表"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Add your Mamestagram profile next to your name first."
-msgstr "请先在你的名字旁添加 Mamestagram 个人资料链接。"
+msgid "Add your {name} profile next to your name first."
+msgstr "请先在你的名字旁添加 {name} 个人资料链接。"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Add your Mamestagram profile next to your name first."
+#~ msgstr "请先在你的名字旁添加 Mamestagram 个人资料链接。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "added"
@@ -14376,12 +14384,20 @@ msgid "Link URL (optional)"
 msgstr "链接地址(可选)"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Link your Mamestagram account"
-msgstr "绑定你的 Mamestagram 账号"
+msgid "Link your {name} account"
+msgstr "绑定你的 {name} 账号"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Link your Mamestagram account below first."
-msgstr "请先在下方绑定你的 Mamestagram 账号。"
+msgid "Link your {name} account below first."
+msgstr "请先在下方绑定你的 {name} 账号。"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Link your Mamestagram account"
+#~ msgstr "绑定你的 Mamestagram 账号"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Link your Mamestagram account below first."
+#~ msgstr "请先在下方绑定你的 Mamestagram 账号。"
 
 #. placeholder {0}: E.handstream[band]
 #: src/lib/chain-run.ts
@@ -15190,8 +15206,8 @@ msgid "Malay"
 msgstr "马来语"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Mamestagram didn't answer. Try again later."
-msgstr "Mamestagram 没有响应，请稍后再试。"
+#~ msgid "Mamestagram didn't answer. Try again later."
+#~ msgstr "Mamestagram 没有响应，请稍后再试。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "Mamestagram doesn't say which rate that play was at, so it can't be added."
@@ -16663,6 +16679,10 @@ msgstr "现在没有{0}的谱面"
 msgid "No {keyFilter}K collections yet."
 msgstr "还没有 {keyFilter}K 的收藏夹。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "No {name} plays on this chart."
+msgstr "这张谱面上没有 {name} 成绩。"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "No {selectedKeymode}K preview yet."
 msgstr "还没有 {selectedKeymode}K 预览。"
@@ -16903,8 +16923,8 @@ msgid "No level yet. It comes from your top plays."
 msgstr "暂无水平数据，它来自你的最佳成绩。"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "No Mamestagram plays on this chart."
-msgstr "这张谱面上没有 Mamestagram 成绩。"
+#~ msgid "No Mamestagram plays on this chart."
+#~ msgstr "这张谱面上没有 Mamestagram 成绩。"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No mania difficulties"
@@ -19839,6 +19859,10 @@ msgstr "玩过"
 msgid "Played it x{0}"
 msgstr "玩过 x{0}"
 
+#: src/components/ui/CompanellaMark.tsx
+msgid "Played on {name}"
+msgstr "在 {name} 上游玩"
+
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Played on {playedOn}"
 msgstr "游玩于 {playedOn}"
@@ -19848,8 +19872,8 @@ msgid "played on Lazer"
 msgstr "在 Lazer 上游玩"
 
 #: src/components/ui/CompanellaMark.tsx
-msgid "Played on Mamestagram"
-msgstr "在 Mamestagram 上游玩"
+#~ msgid "Played on Mamestagram"
+#~ msgstr "在 Mamestagram 上游玩"
 
 #: src/components/ui/LazerBadge.tsx
 #~ msgid "Played on osu!lazer"
@@ -19999,8 +20023,12 @@ msgstr "每个国家/地区前 100 名的成绩会被自动记录。你还不在
 #~ msgstr ""
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Plays from Mamestagram"
-msgstr "来自 Mamestagram 的成绩"
+msgid "Plays from {name}"
+msgstr "来自 {name} 的成绩"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Plays from Mamestagram"
+#~ msgstr "来自 Mamestagram 的成绩"
 
 #: src/components/maps/ChartLabelReport.tsx
 msgid "Plays like"
@@ -20728,8 +20756,12 @@ msgid "Put it on my profile"
 msgstr "放到我的主页"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Put this code on your Mamestagram userpage, then press Verify."
-msgstr "把这段代码放到你的 Mamestagram 个人页面上，然后点击验证。"
+msgid "Put this code on your {name} userpage, then press Verify."
+msgstr "把这段代码放到你的 {name} 个人页面上，然后点击验证。"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Put this code on your Mamestagram userpage, then press Verify."
+#~ msgstr "把这段代码放到你的 Mamestagram 个人页面上，然后点击验证。"
 
 #. placeholder {0}: CHAIN_RULES.rowMax
 #: src/components/packs/run/chain/ChainHowTo.tsx
@@ -26249,6 +26281,14 @@ msgstr "谢谢，已记录。点击旗帜可修改你的回答。"
 msgid "Thanks, the report was sent."
 msgstr "谢谢，举报已发送。"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "That {name} account is linked to another osu! account."
+msgstr "这个 {name} 账号已绑定到另一个 osu! 账号。"
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That {name} account isn't linked to an osu! account here."
+msgstr "这个 {name} 账号尚未在这里绑定 osu! 账号。"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That address cannot be loaded."
 msgstr "这个地址无法加载。"
@@ -26266,8 +26306,12 @@ msgid "That chart has been updated on osu! since the play."
 msgstr "这张谱面在这次游玩之后已在 osu! 上更新。"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "That chart isn't on Mamestagram."
-msgstr "这张谱面不在 Mamestagram 上。"
+msgid "That chart isn't on {name}."
+msgstr "这张谱面不在 {name} 上。"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "That chart isn't on Mamestagram."
+#~ msgstr "这张谱面不在 Mamestagram 上。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "That chart isn't on osu!."
@@ -26322,8 +26366,12 @@ msgid "That does not look like a Discord invite link."
 msgstr "这看起来不像是 Discord 邀请链接。"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "That doesn't look like a Mamestagram score link."
-msgstr "这看起来不是 Mamestagram 的成绩链接。"
+msgid "That doesn't look like a {name} score link."
+msgstr "这看起来不是 {name} 的成绩链接。"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "That doesn't look like a Mamestagram score link."
+#~ msgstr "这看起来不是 Mamestagram 的成绩链接。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "That doesn't look like an osu! score link."
@@ -26408,12 +26456,12 @@ msgid "That listing no longer exists."
 msgstr "这个条目已经不存在了。"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "That Mamestagram account is linked to another osu! account."
-msgstr "这个 Mamestagram 账号已绑定到另一个 osu! 账号。"
+#~ msgid "That Mamestagram account is linked to another osu! account."
+#~ msgstr "这个 Mamestagram 账号已绑定到另一个 osu! 账号。"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "That Mamestagram account isn't linked to an osu! account here."
-msgstr "这个 Mamestagram 账号尚未在这里绑定 osu! 账号。"
+#~ msgid "That Mamestagram account isn't linked to an osu! account here."
+#~ msgstr "这个 Mamestagram 账号尚未在这里绑定 osu! 账号。"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "That picture is empty."
@@ -31335,6 +31383,10 @@ msgstr "你的"
 #~ msgid "Your {0} edition"
 #~ msgstr "你的{0}特别版"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Your {name} profile link doesn't lead to a player."
+msgstr "你的 {name} 个人资料链接没有指向任何玩家。"
+
 #: src/routes/recommendations.tsx
 msgid "your {yourPp}pp"
 msgstr "你的 {yourPp}pp"
@@ -31570,8 +31622,8 @@ msgid "Your lowest rating is {0}."
 msgstr "你最低的评分是 {0}。"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Your Mamestagram profile link doesn't lead to a player."
-msgstr "你的 Mamestagram 个人资料链接没有指向任何玩家。"
+#~ msgid "Your Mamestagram profile link doesn't lead to a player."
+#~ msgstr "你的 Mamestagram 个人资料链接没有指向任何玩家。"
 
 #: src/routes/recommendations.tsx
 msgid "your marks"

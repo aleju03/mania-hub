@@ -5,6 +5,7 @@ import { parseProfilePlays, type ProfilePlays } from "./profile-plays";
 import { PACK_MAX_PLAYER_CARDS, PACK_MAX_PLAYER_IDS } from "./pack-limits";
 import { createServerFn } from "@tanstack/react-start";
 import type { CardMotif } from "./card-motif";
+import { detectPrivateServer } from "./private-servers";
 import { isSupporterAvatarFrame, parseFrameDan, parseWorkshopFrameArt, registerWorkshopFrames, type FrameDan, type SupporterAvatarFrameId } from "./supporter-avatar-frames";
 import { parseSubmittedFrames, type SubmittedFrame } from "./workshop-frames";
 import { isSupporterNameFont, type SupporterNameFontId } from "./supporter-name-fonts";
@@ -4064,9 +4065,11 @@ export type LiveScoreSubmissionFailure =
   | "osu_unavailable"
   | "rate_limited"
   | "failed"
-  /* Mamestagram links only (submitLiveMamesScore). */
+  /* Private server links only (submitLiveServerScore). */
   | "mames_not_linked"
   | "mames_unavailable"
+  | "torii_not_linked"
+  | "torii_unavailable"
   | "beatmap_not_found"
   | "chart_outdated"
   | "chart_unavailable"
@@ -4076,7 +4079,7 @@ export type LiveScoreSubmissionFailure =
 const SCORE_SUBMISSION_FAILURES = new Set<LiveScoreSubmissionFailure>([
   "invalid_link", "score_not_found", "not_mania", "not_owned", "not_passed",
   "player_untracked", "player_not_found", "osu_unavailable",
-  "mames_not_linked", "mames_unavailable", "beatmap_not_found", "chart_outdated", "chart_unavailable", "unsupported_mods", "rate_unknown",
+  "mames_not_linked", "mames_unavailable", "torii_not_linked", "torii_unavailable", "beatmap_not_found", "chart_outdated", "chart_unavailable", "unsupported_mods", "rate_unknown",
 ]);
 
 export interface LiveScoreSubmissionPlay {
@@ -4099,9 +4102,9 @@ export interface LiveScoreSubmissionPlay {
      dialog can ask for the play's MSD and dan. Absent on older backends. */
   legacyScoreId?: number | null;
   keyCount?: number | null;
-  /* Set on a play added from a Mamestagram score link, whose scoreId is
-     Mamestagram's own. */
-  source?: "mamestagram";
+  /* Set on a play added from a private server, whose scoreId is that
+     server's own. */
+  source?: LivePrivateServer;
 }
 
 export type LiveScoreSubmissionResult =
@@ -4128,16 +4131,21 @@ export async function submitLiveMissingScore(userId: number, link: string): Prom
   return postScoreSubmission("/api/score-submissions", userId, { link });
 }
 
-/* A Mamestagram play, by link or by its id from a play list, credited to the
-   osu! account that linked the play's Mamestagram account. Answered at once,
-   never queued. */
-export async function submitLiveMamesScore(userId: number, play: { link: string } | { scoreId: number }): Promise<LiveScoreSubmissionResult> {
-  return await postScoreSubmission("/api/mamestagram/scores", userId, play) as LiveScoreSubmissionResult;
+/* The private servers "Add a missing score" takes plays from, each through
+   its own backend routes (/api/<server>/...). */
+export type LivePrivateServer = "mamestagram" | "torii";
+
+/* A private server play, by link or by its id from a play list, credited to
+   the osu! account that linked the play's account on that server. Answered at
+   once, never queued. */
+export async function submitLiveServerScore(server: LivePrivateServer, userId: number, play: { link: string } | { scoreId: number }): Promise<LiveScoreSubmissionResult> {
+  return await postScoreSubmission(`/api/${server}/scores`, userId, play) as LiveScoreSubmissionResult;
 }
 
-export type LiveMamesPlayList = "best" | "recent" | "map";
+/* "map" is Mamestagram's only. */
+export type LiveServerPlayList = "best" | "recent" | "map";
 
-export interface LiveMamesPlay {
+export interface LiveServerPlay {
   scoreId: number;
   beatmapId: number | null;
   title: string | null;
@@ -4150,31 +4158,35 @@ export interface LiveMamesPlay {
   added: boolean;
 }
 
-export type LiveMamesPlaysResult =
-  | { ok: true; mamesName: string | null; plays: LiveMamesPlay[] }
-  | { ok: false; reason: "mames_not_linked" | "mames_unavailable" | "rate_limited" | "beatmap_not_found" | "failed" };
+export type LiveServerPlaysResult =
+  | { ok: true; accountName: string | null; plays: LiveServerPlay[] }
+  | { ok: false; reason: "not_linked" | "unavailable" | "rate_limited" | "beatmap_not_found" | "failed" };
 
-/* The plays of the Mamestagram account linked to a profile: its best, its
-   latest, or its plays on one chart. */
-/* "account" names the linked account without listing anything, so a closed
-   list costs Mamestagram no request. */
-export async function fetchLiveMamesPlays(userId: number, list: LiveMamesPlayList | "account", beatmapId?: number | null): Promise<LiveMamesPlaysResult> {
+/* The plays of the account on `server` linked to a profile: its best, its
+   latest, or (Mamestagram) its plays on one chart. "account" names the linked
+   account without listing anything, so a closed list costs the server no
+   request. */
+export async function fetchLiveServerPlays(server: LivePrivateServer, userId: number, list: LiveServerPlayList | "account", beatmapId?: number | null): Promise<LiveServerPlaysResult> {
   const base = getLiveBackendUrl();
   if (!base) return { ok: false, reason: "failed" };
   const query = new URLSearchParams({ userId: String(userId), list, ...(beatmapId ? { beatmapId: String(beatmapId) } : {}) });
   let response: Response;
   try {
-    response = await fetch(`${base}/api/mamestagram/plays?${query}`, { credentials: "omit" });
+    response = await fetch(`${base}/api/${server}/plays?${query}`, { credentials: "omit" });
   } catch {
     return { ok: false, reason: "failed" };
   }
   const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
-  if (response.ok && payload?.ok === true) return payload as unknown as LiveMamesPlaysResult;
+  if (response.ok && payload?.ok === true) {
+    const name = payload.mamesName ?? payload.toriiName;
+    return { ok: true, accountName: typeof name === "string" ? name : null, plays: Array.isArray(payload.plays) ? payload.plays as LiveServerPlay[] : [] };
+  }
   const reason = payload?.error;
   return {
     ok: false,
-    reason: reason === "mames_not_linked" || reason === "mames_unavailable" || reason === "rate_limited" || reason === "beatmap_not_found"
-      ? reason
+    reason: reason === "mames_not_linked" || reason === "torii_not_linked" ? "not_linked"
+      : reason === "mames_unavailable" || reason === "torii_unavailable" ? "unavailable"
+      : reason === "rate_limited" || reason === "beatmap_not_found" ? reason
       : response.status === 429 ? "rate_limited" : "failed",
   };
 }
@@ -4200,15 +4212,10 @@ export function beatmapIdFromLink(link: string): number | null {
   return raw && Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-/* True for a link on Mamestagram's domain. */
-export function isMamesLink(link: string): boolean {
-  const trimmed = link.trim();
-  try {
-    const { hostname } = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
-    return hostname === "mamesosu.net" || hostname.endsWith(".mamesosu.net");
-  } catch {
-    return false;
-  }
+/* The private server a link is on, of the ones the dialog takes plays from, or null. */
+export function privateServerOfLink(link: string): LivePrivateServer | null {
+  const key = detectPrivateServer(link)?.key;
+  return key === "mamestagram" || key === "torii" ? key : null;
 }
 
 async function postScoreSubmission(path: string, userId: number, play: { link: string } | { scoreId: number }): Promise<LiveScoreSubmissionResponse> {

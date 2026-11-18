@@ -1873,6 +1873,10 @@ msgstr "{name} and up"
 msgid "{name} claimed your gift week. Every $4 you give brings a new code."
 msgstr "{name} claimed your gift week. Every $4 you give brings a new code."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "{name} didn't answer. Try again later."
+msgstr "{name} didn't answer. Try again later."
+
 #: src/lib/streak-game.ts
 msgid "{name} had {count} 7K top plays."
 msgstr "{name} had {count} 7K top plays."
@@ -4252,8 +4256,12 @@ msgid "Add to the list"
 msgstr "Add to the list"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Add your Mamestagram profile next to your name first."
-msgstr "Add your Mamestagram profile next to your name first."
+msgid "Add your {name} profile next to your name first."
+msgstr "Add your {name} profile next to your name first."
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Add your Mamestagram profile next to your name first."
+#~ msgstr "Add your Mamestagram profile next to your name first."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "added"
@@ -14410,12 +14418,20 @@ msgid "Link URL (optional)"
 msgstr "Link URL (optional)"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Link your Mamestagram account"
-msgstr "Link your Mamestagram account"
+msgid "Link your {name} account"
+msgstr "Link your {name} account"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Link your Mamestagram account below first."
-msgstr "Link your Mamestagram account below first."
+msgid "Link your {name} account below first."
+msgstr "Link your {name} account below first."
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Link your Mamestagram account"
+#~ msgstr "Link your Mamestagram account"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Link your Mamestagram account below first."
+#~ msgstr "Link your Mamestagram account below first."
 
 #. placeholder {0}: E.handstream[band]
 #: src/lib/chain-run.ts
@@ -15224,8 +15240,8 @@ msgid "Malay"
 msgstr "Malay"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Mamestagram didn't answer. Try again later."
-msgstr "Mamestagram didn't answer. Try again later."
+#~ msgid "Mamestagram didn't answer. Try again later."
+#~ msgstr "Mamestagram didn't answer. Try again later."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "Mamestagram doesn't say which rate that play was at, so it can't be added."
@@ -16697,6 +16713,10 @@ msgstr "No {0} maps right now"
 msgid "No {keyFilter}K collections yet."
 msgstr "No {keyFilter}K collections yet."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "No {name} plays on this chart."
+msgstr "No {name} plays on this chart."
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "No {selectedKeymode}K preview yet."
 msgstr "No {selectedKeymode}K preview yet."
@@ -16937,8 +16957,8 @@ msgid "No level yet. It comes from your top plays."
 msgstr "No level yet. It comes from your top plays."
 
 #: src/components/player/AddScoreModal.tsx
-msgid "No Mamestagram plays on this chart."
-msgstr "No Mamestagram plays on this chart."
+#~ msgid "No Mamestagram plays on this chart."
+#~ msgstr "No Mamestagram plays on this chart."
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "No mania difficulties"
@@ -19873,6 +19893,10 @@ msgstr "Played it"
 msgid "Played it x{0}"
 msgstr "Played it x{0}"
 
+#: src/components/ui/CompanellaMark.tsx
+msgid "Played on {name}"
+msgstr "Played on {name}"
+
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Played on {playedOn}"
 msgstr "Played on {playedOn}"
@@ -19882,8 +19906,8 @@ msgid "played on Lazer"
 msgstr "played on Lazer"
 
 #: src/components/ui/CompanellaMark.tsx
-msgid "Played on Mamestagram"
-msgstr "Played on Mamestagram"
+#~ msgid "Played on Mamestagram"
+#~ msgstr "Played on Mamestagram"
 
 #: src/components/ui/LazerBadge.tsx
 #~ msgid "Played on osu!lazer"
@@ -20033,8 +20057,12 @@ msgstr "Plays are recorded automatically for the top 100 of each country. You're
 #~ msgstr "Plays Companella sends show on the tracker and your profile. Their replays stay private to you."
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Plays from Mamestagram"
-msgstr "Plays from Mamestagram"
+msgid "Plays from {name}"
+msgstr "Plays from {name}"
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Plays from Mamestagram"
+#~ msgstr "Plays from Mamestagram"
 
 #: src/components/maps/ChartLabelReport.tsx
 msgid "Plays like"
@@ -20762,8 +20790,12 @@ msgid "Put it on my profile"
 msgstr "Put it on my profile"
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Put this code on your Mamestagram userpage, then press Verify."
-msgstr "Put this code on your Mamestagram userpage, then press Verify."
+msgid "Put this code on your {name} userpage, then press Verify."
+msgstr "Put this code on your {name} userpage, then press Verify."
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "Put this code on your Mamestagram userpage, then press Verify."
+#~ msgstr "Put this code on your Mamestagram userpage, then press Verify."
 
 #. placeholder {0}: CHAIN_RULES.rowMax
 #: src/components/packs/run/chain/ChainHowTo.tsx
@@ -26291,6 +26323,14 @@ msgstr "Thanks, noted. Tap the flag to change your answer."
 msgid "Thanks, the report was sent."
 msgstr "Thanks, the report was sent."
 
+#: src/components/player/AddScoreModal.tsx
+msgid "That {name} account is linked to another osu! account."
+msgstr "That {name} account is linked to another osu! account."
+
+#: src/components/player/AddScoreModal.tsx
+msgid "That {name} account isn't linked to an osu! account here."
+msgstr "That {name} account isn't linked to an osu! account here."
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That address cannot be loaded."
 msgstr "That address cannot be loaded."
@@ -26308,8 +26348,12 @@ msgid "That chart has been updated on osu! since the play."
 msgstr "That chart has been updated on osu! since the play."
 
 #: src/components/player/AddScoreModal.tsx
-msgid "That chart isn't on Mamestagram."
-msgstr "That chart isn't on Mamestagram."
+msgid "That chart isn't on {name}."
+msgstr "That chart isn't on {name}."
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "That chart isn't on Mamestagram."
+#~ msgstr "That chart isn't on Mamestagram."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "That chart isn't on osu!."
@@ -26364,8 +26408,12 @@ msgid "That does not look like a Discord invite link."
 msgstr "That does not look like a Discord invite link."
 
 #: src/components/player/AddScoreModal.tsx
-msgid "That doesn't look like a Mamestagram score link."
-msgstr "That doesn't look like a Mamestagram score link."
+msgid "That doesn't look like a {name} score link."
+msgstr "That doesn't look like a {name} score link."
+
+#: src/components/player/AddScoreModal.tsx
+#~ msgid "That doesn't look like a Mamestagram score link."
+#~ msgstr "That doesn't look like a Mamestagram score link."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "That doesn't look like an osu! score link."
@@ -26450,12 +26498,12 @@ msgid "That listing no longer exists."
 msgstr "That listing no longer exists."
 
 #: src/components/player/AddScoreModal.tsx
-msgid "That Mamestagram account is linked to another osu! account."
-msgstr "That Mamestagram account is linked to another osu! account."
+#~ msgid "That Mamestagram account is linked to another osu! account."
+#~ msgstr "That Mamestagram account is linked to another osu! account."
 
 #: src/components/player/AddScoreModal.tsx
-msgid "That Mamestagram account isn't linked to an osu! account here."
-msgstr "That Mamestagram account isn't linked to an osu! account here."
+#~ msgid "That Mamestagram account isn't linked to an osu! account here."
+#~ msgstr "That Mamestagram account isn't linked to an osu! account here."
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "That picture is empty."
@@ -31385,6 +31433,10 @@ msgstr "your"
 #~ msgid "Your {0} edition"
 #~ msgstr "Your {0} edition"
 
+#: src/components/player/AddScoreModal.tsx
+msgid "Your {name} profile link doesn't lead to a player."
+msgstr "Your {name} profile link doesn't lead to a player."
+
 #: src/routes/recommendations.tsx
 msgid "your {yourPp}pp"
 msgstr "your {yourPp}pp"
@@ -31620,8 +31672,8 @@ msgid "Your lowest rating is {0}."
 msgstr "Your lowest rating is {0}."
 
 #: src/components/player/AddScoreModal.tsx
-msgid "Your Mamestagram profile link doesn't lead to a player."
-msgstr "Your Mamestagram profile link doesn't lead to a player."
+#~ msgid "Your Mamestagram profile link doesn't lead to a player."
+#~ msgstr "Your Mamestagram profile link doesn't lead to a player."
 
 #: src/routes/recommendations.tsx
 msgid "your marks"

@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { I18nProvider } from "@lingui/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getI18n, loadLocaleCatalog } from "../../lib/i18n";
-import { fetchLiveMamesPlays, fetchLiveScoreImportStatuses, submitLiveMamesScore, submitLiveMissingScore, type LiveScoreSubmissionResult } from "../../lib/live-backend";
+import { fetchLiveServerPlays, fetchLiveScoreImportStatuses, submitLiveServerScore, submitLiveMissingScore, type LiveScoreSubmissionResult } from "../../lib/live-backend";
 import { AddScoreModal } from "./AddScoreModal";
 import { useRecentPlayRatingLookup } from "./recent-play-ratings";
 
@@ -11,12 +11,12 @@ vi.mock("../../lib/live-backend", () => ({
   submitLiveMissingScore: vi.fn(),
   fetchLiveScoreImportStatuses: vi.fn(),
   loadLiveMapSearchEntry: vi.fn().mockResolvedValue(null),
-  submitLiveMamesScore: vi.fn(),
-  fetchLiveMamesPlays: vi.fn(),
-  isMamesLink: () => false,
+  submitLiveServerScore: vi.fn(),
+  fetchLiveServerPlays: vi.fn(),
+  privateServerOfLink: () => null,
   beatmapIdFromLink: () => null,
 }));
-vi.mock("../../lib/mamestagram", () => ({ fetchOwnMamesLink: vi.fn(), changeOwnMamesLink: vi.fn() }));
+vi.mock("../../lib/server-account-links", () => ({ fetchOwnServerLink: vi.fn(), changeOwnServerLink: vi.fn() }));
 vi.mock("../../lib/analytics", () => ({ track: vi.fn() }));
 vi.mock("../../lib/auth-context", () => ({ useAuth: () => ({ canUseAdminFeatures: false }) }));
 vi.mock("../../lib/locale-context", () => ({ useLocale: () => "en" }));
@@ -206,42 +206,45 @@ describe("AddScoreModal queue", () => {
   });
 });
 
-describe("AddScoreModal Mamestagram plays", () => {
+describe("AddScoreModal private server plays", () => {
   it("lists the linked account's plays and adds one by its id", async () => {
-    vi.mocked(fetchLiveMamesPlays).mockResolvedValue({
+    vi.mocked(fetchLiveServerPlays).mockImplementation(async (server) => server === "mamestagram" ? {
       ok: true,
-      mamesName: "MamesPlayer",
+      accountName: "MamesPlayer",
       plays: [{
         scoreId: 4242, beatmapId: 77, title: "Chart 4242", version: "Hard", keyCount: 7,
         accuracy: 0.91735, rank: "A", mods: [], playedAt: null, added: false,
       }],
-    });
+    } : { ok: false, reason: "not_linked" });
     const added = success(4242);
     if (!added.ok) throw new Error("unreachable");
     added.play = { ...added.play, title: "Chart 4242", scoreUrl: null, source: "mamestagram" };
-    vi.mocked(submitLiveMamesScore).mockResolvedValueOnce(added);
+    vi.mocked(submitLiveServerScore).mockResolvedValueOnce(added);
     const view = render(
       <I18nProvider i18n={getI18n("en")}>
-        <AddScoreModal userId={123} username="Player" hasMamesProfile onClose={vi.fn()} />
+        <AddScoreModal userId={123} username="Player" serverProfiles={["mamestagram", "torii"]} onClose={vi.fn()} />
       </I18nProvider>,
     );
     await act(async () => {});
     // Closed, it only names the account.
-    expect(fetchLiveMamesPlays).toHaveBeenCalledWith(123, "account", null);
+    expect(fetchLiveServerPlays).toHaveBeenCalledWith("mamestagram", 123, "account", null);
+    expect(fetchLiveServerPlays).toHaveBeenCalledWith("torii", 123, "account", null);
+    // Torii is not linked, and a visitor cannot link it.
+    expect(view.queryByRole("button", { name: /Torii/ })).toBeNull();
     expect(view.queryByRole("button", { name: "Add" })).toBeNull();
     await act(async () => fireEvent.click(view.getByRole("button", { name: /Plays from Mamestagram/ })));
-    expect(fetchLiveMamesPlays).toHaveBeenLastCalledWith(123, "best", null);
+    expect(fetchLiveServerPlays).toHaveBeenLastCalledWith("mamestagram", 123, "best", null);
     expect(view.getByText("MamesPlayer")).toBeTruthy();
     await act(async () => fireEvent.click(view.getByRole("button", { name: "Add" })));
-    expect(submitLiveMamesScore).toHaveBeenCalledWith(123, { scoreId: 4242 });
+    expect(submitLiveServerScore).toHaveBeenCalledWith("mamestagram", 123, { scoreId: 4242 });
     expect(view.getAllByText("added").length).toBeGreaterThan(0);
   });
 
   it("shows nothing for a profile without a linked Mamestagram account", async () => {
-    vi.mocked(fetchLiveMamesPlays).mockResolvedValue({ ok: false, reason: "mames_not_linked" });
+    vi.mocked(fetchLiveServerPlays).mockResolvedValue({ ok: false, reason: "not_linked" });
     const view = render(
       <I18nProvider i18n={getI18n("en")}>
-        <AddScoreModal userId={123} username="Player" hasMamesProfile onClose={vi.fn()} />
+        <AddScoreModal userId={123} username="Player" serverProfiles={["mamestagram"]} onClose={vi.fn()} />
       </I18nProvider>,
     );
     await act(async () => {});

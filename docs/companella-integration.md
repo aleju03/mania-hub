@@ -116,6 +116,8 @@ Backend, all under `backend/src/integrations/companella/`:
 | `replay-import.ts` | Admin replay imports: a player's `.osr` files dropped on `/admin/bridgers?tab=import`, staged as ordinary submissions and fed to the lane a few at a time (see "Admin replay imports"). |
 | `manual-scores.ts` | Plays an admin enters by hand on `/admin/players?tab=add`, with no replay: staged as submissions the ordinary job rates (see "Admin manual entries"). |
 | `mamestagram.ts` | Mamestagram plays in "Add a missing score": the account link, the rate-limited API client, the cached play lists, and staging a play as a manual entry (see "Mamestagram plays"). |
+| `torii.ts` | Torii plays in "Add a missing score", the same way (see "Torii plays"). |
+| `private-server-client.ts` | The rate limiter both servers' clients share. |
 | `analysis.ts` | Per-play MSD / SSR / LN / chart-dan through the existing engines. |
 | `preview.ts` | The experimental aggregate, and its deduplication. |
 | `process.ts` | The job body: validate, store, match, analyze, recompute. |
@@ -1432,6 +1434,40 @@ Mamestagram".
   a User-Agent naming the site. A 429 pauses every request for its
   `Retry-After` (10 minutes without one), a Cloudflare challenge for 30
   minutes. Nothing is crawled or synced.
+
+## Torii plays
+
+"Add a missing score" also takes plays from Torii, a private osu! server that
+runs its own copy of the osu! website (`https://torii-web.shikkesora.com`,
+`TORII_WEB_ORIGIN`, empty turns it off). A play becomes a manual entry under
+the account's `torii` installation with provenance `torii`, the same way as a
+Mamestagram play; rows carry Torii's logo and the details line reads "via
+Torii".
+
+- **Account link.** The account is the one the owner's Torii profile link
+  names (`user_server_links`, `/users/<id or name>`). The backend hands out a
+  code (`companella_torii_links`), the owner puts it on their Torii userpage,
+  and the profile page (`/users/<account>/mania`, the `profile-page`
+  element's `data-initial-data`) must show it in `user.page`. One Torii
+  account links to one osu! account. Unlinking keeps the plays already
+  added. Link routes: `/api/torii/link/<userId>`, bridge token only.
+- **Adding.** Torii plays have pages, so a pasted `/scores/<id>` link is
+  read as JSON from that page (one request): osu!'s beatmap id and md5,
+  lazer's judgement counts (`perfect`, `great`, `good`, `ok`, `meh`, `miss`)
+  and mods with their settings. `POST /api/torii/scores` with `scoreId` or
+  `link`, on the score-submission rate buckets. Fails, other modes, converts,
+  automated or contradictory mods and a chart whose current osu! file differs
+  from the one played are refused. A play with a `legacy_score_id` was set
+  on stable and is stored as a stable play without lazer's Classic mod. The
+  idempotency key is `torii:<score id>`. Torii's pp is not shown.
+- **Picking a play.** `GET /api/torii/plays?userId=&list=best|recent` lists
+  a linked account's best 100 or latest 100 passes (the website's
+  `/users/<id>/scores/best|recent`), cached for 10 minutes with the plays in
+  them.
+- **Requests.** The same limiter as Mamestagram's, its own instance: one at
+  a time, at least a second apart, at most `TORII_REQUESTS_PER_MINUTE`
+  (default 20), pausing on a 429 or a Cloudflare challenge. Nothing is
+  crawled or synced.
 
 ## Retention and quotas
 
