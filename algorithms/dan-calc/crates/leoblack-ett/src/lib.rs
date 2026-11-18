@@ -1,7 +1,14 @@
+#[cfg(not(any(feature = "jit", feature = "aot", feature = "native")))]
+compile_error!("leoblack-ett needs the `jit`, `aot` or `native` feature to run MinaCalc");
+
+#[cfg(any(feature = "jit", feature = "aot"))]
 pub mod engine;
+#[cfg(feature = "native")]
+pub mod native;
 pub mod versions;
 
 pub use leoblack_parser::{OsuFileParser, ParseStatus};
+#[cfg(any(feature = "jit", feature = "aot"))]
 pub use engine::{precompile_all, ImportCalls};
 pub use versions::{EttVersion, DEFAULT_ETTERNA_VERSION, NON_4K_ETTERNA_FALLBACK_VERSION};
 
@@ -167,6 +174,21 @@ fn apply_mod(chart: &mut OsuFileParser, cvt_flag: Option<&str>) {
     }
 }
 
+#[cfg(feature = "native")]
+const ENGINE: &str = "native";
+#[cfg(not(feature = "native"))]
+const ENGINE: &str = "wasm";
+
+#[cfg(feature = "native")]
+fn run(version: EttVersion, keycount: i32, rate: f64, goal: f64, masks: &[u32], times: &[f32]) -> Result<[f32; 8], EttError> {
+    native::run(version, keycount, rate, goal, masks, times).map_err(|message| EttError { message })
+}
+
+#[cfg(not(feature = "native"))]
+fn run(version: EttVersion, keycount: i32, rate: f64, goal: f64, masks: &[u32], times: &[f32]) -> Result<[f32; 8], EttError> {
+    engine::with_instance(version, |inst| inst.run(keycount, rate, goal, masks, times)).map_err(|e| EttError { message: e.message })
+}
+
 pub fn analyze_etterna_from_text(osu_text: &str, options: &EttOptions) -> Result<EttResult, EttError> {
     analyze_etterna_from_parsed(OsuFileParser::parse(osu_text), options)
 }
@@ -190,21 +212,19 @@ pub fn analyze_etterna_from_parsed(mut chart: OsuFileParser, options: &EttOption
             etterna_version: None,
             etterna_version_fallback_reason: None,
             values: [0.0; 8],
-            engine: "wasm",
+            engine: ENGINE,
         });
     }
 
     let compute_once = || -> Result<(versions::ResolvedVersion, [f64; 8]), EttError> {
         let resolved = versions::resolve_for_keycount(options.etterna_version.as_deref(), keycount);
-        let raw = engine::with_instance(resolved.version, |inst| {
-            inst.run(jsmath::to_int32(keycount), options.music_rate, options.score_goal, &masks, &seconds)
-        })
-        .map_err(|e| EttError { message: e.message })?;
+        let raw = run(resolved.version, jsmath::to_int32(keycount), options.music_rate, options.score_goal, &masks, &seconds)?;
         Ok((resolved, map_output_values(&raw)))
     };
 
     let (mut resolved, mut official) = compute_once()?;
     if is_floor_output(&official) {
+        #[cfg(not(feature = "native"))]
         engine::evict(resolved.version);
         (resolved, official) = compute_once()?;
     }
@@ -217,6 +237,6 @@ pub fn analyze_etterna_from_parsed(mut chart: OsuFileParser, options: &EttOption
         etterna_version: Some(resolved.version),
         etterna_version_fallback_reason: resolved.fallback_reason,
         values: sanitize_to_display(&official),
-        engine: "wasm",
+        engine: ENGINE,
     })
 }
