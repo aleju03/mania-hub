@@ -4088,6 +4088,10 @@ msgid "Add a country or region"
 msgstr "添加国家或地区"
 
 #: src/components/discord/FeedPlayersModal.tsx
+msgid "Add a country to pick its players."
+msgstr "添加一个国家来选择其玩家。"
+
+#: src/components/discord/FeedPlayersModal.tsx
 msgid "Add a country to pick or leave out its players."
 msgstr "添加一个国家来选择或排除其中的玩家。"
 
@@ -15099,6 +15103,10 @@ msgid "Lowest dan"
 msgstr "最低段位"
 
 #: src/routes/discord.tsx
+msgid "Lowest MSD"
+msgstr "最低 MSD"
+
+#: src/routes/discord.tsx
 msgid "Lowest pp"
 msgstr "最低 pp"
 
@@ -16146,6 +16154,10 @@ msgstr "msd"
 #~ msgid "MSD"
 #~ msgstr "MSD"
 
+#: src/routes/discord.tsx
+msgid "MSD {minMsd} and up"
+msgstr "MSD {minMsd} 及以上"
+
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "MSD and dan on recent plays"
 #~ msgstr "在最近成绩中显示 MSD 和段位"
@@ -17088,6 +17100,10 @@ msgstr "没有隐藏的玩家。"
 msgid "No players match."
 msgstr "没有匹配的玩家。"
 
+#: src/routes/discord.tsx
+msgid "No players yet"
+msgstr "还没有玩家"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "No plays here."
 msgstr "这里没有成绩。"
@@ -17521,6 +17537,10 @@ msgstr "没有被封禁的人。"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nobody we track has a scored run on this map. Search a player, or paste a score link."
 msgstr "我们追踪的玩家里没有人在这张谱面上有成绩。搜索一位玩家，或粘贴成绩链接。"
+
+#: src/routes/discord.tsx
+#~ msgid "Nobody yet"
+#~ msgstr "还没有人"
 
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "Nobody yet."
@@ -20200,6 +20220,10 @@ msgid "Posts each new line of the website's changelog."
 msgstr "发布网站更新日志的每一条新内容。"
 
 #: src/routes/discord.tsx
+msgid "Posts every pass from the players you pick."
+msgstr "发布你选择的玩家的每个通过成绩。"
+
+#: src/routes/discord.tsx
 msgid "Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty."
 msgstr "发布玩家正在刷 pp 的新上架谱面，以及给出的 pp 高于其难度的新 4K 和 7K 谱面。"
 
@@ -21409,6 +21433,7 @@ msgstr "{countryName} 最近的 osu!mania Snipe。"
 msgid "Recent osu!mania snipes."
 msgstr "最近的 osu!mania Snipe。"
 
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 msgid "Recent plays"
 msgstr "最近游玩"
@@ -27084,6 +27109,10 @@ msgstr "谱面段位 +1.37"
 msgid "the chart's level +1.5"
 msgstr "谱面段位 +1.5"
 
+#: src/routes/discord.tsx
+msgid "The chart's MSD at the speed it was played."
+msgstr "谱面在游玩速度下的 MSD。"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "The checker is busy. Save again in a moment."
 msgstr "检查器正忙，请稍后再保存。"
@@ -30639,6 +30668,10 @@ msgstr "送哪一份"
 #: src/routes/discord.tsx
 msgid "Which maps"
 msgstr "哪些谱面"
+
+#: src/routes/discord.tsx
+msgid "Which MSD counts"
+msgstr "按哪个 MSD 计算"
 
 #: src/routes/discord.tsx
 msgid "Which plays"

@@ -555,6 +555,8 @@ function HintButton({ label, children }: { label: string; children: ReactNode })
 }
 
 const FILTER_KEYS = [4, 5, 6, 7, 8, 9, 10];
+// Recent plays posts whatever its players play, so every keymode is offered.
+const RECENT_FILTER_KEYS = Array.from({ length: 18 }, (_, index) => index + 1);
 const KEYMODE_TOP_CHOICES = [0, 100, 50];
 
 // The keymodes with dan courses, and the lowest level a Dan clears feed can
@@ -609,15 +611,15 @@ function danLevelChoices(keys: number[], current: number): number[] {
 }
 // Feeds with a row of filters under their channel: the feeds of players'
 // plays, and New farm maps (keymodes and stars).
-const FILTERED_FEEDS = ["top_play", "dan_clear", "goal", "new_map"];
+const FILTERED_FEEDS = ["top_play", "recent_play", "dan_clear", "goal", "new_map"];
 
-type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "mix"; excluded: BotFeedPlayer[]; countries: string[]; minDan: number; nearClears: boolean; minStars: number; maxStars: number; mapsMode: "farm" | "all"; ppAccuracy: number; ppClient: PpClient };
+type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "mix"; excluded: BotFeedPlayer[]; countries: string[]; minDan: number; nearClears: boolean; minMsd: number; minStars: number; maxStars: number; mapsMode: "farm" | "all"; ppAccuracy: number; ppClient: PpClient };
 type SavedFeedFilters = Omit<TopPlayFilterState, "players" | "excluded"> & { players: number[]; excluded: number[] };
 
 function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
   return {
     minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [], playersMode: sub.playersMode ?? "only", excluded: sub.excluded ?? [],
-    countries: sub.countries ?? [], minDan: sub.minDan ?? 0, nearClears: sub.nearClears ?? true,
+    countries: sub.countries ?? [], minDan: sub.minDan ?? 0, nearClears: sub.nearClears ?? true, minMsd: sub.minMsd ?? 0,
     minStars: sub.minStars ?? 0, maxStars: sub.maxStars ?? 0, mapsMode: sub.mapsMode ?? "farm", ppAccuracy: sub.ppAccuracy ?? DEFAULT_PP_ACCURACY, ppClient: sub.ppClient ?? "stable",
   };
 }
@@ -680,9 +682,11 @@ function PpFloor({ minPp, accuracy, client, disabled, onChange }: {
 // lowest level, near clears and a player list. New farm maps: farm maps or
 // every ranked set, keymodes and a star range. Changes show at once and save in
 // order behind the scenes, since each save waits on Discord for a few seconds.
-function TopPlayFilters({ sub, channelName, onSave }: {
+function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
   sub: BotServer["subscriptions"][number];
   channelName?: string;
+  /** The server's country, where picking players opens. */
+  defaultCountry?: string | null;
   onSave: (filters: SavedFeedFilters) => Promise<boolean>;
 }) {
   const { t } = useLingui();
@@ -714,6 +718,13 @@ function TopPlayFilters({ sub, channelName, onSave }: {
   const feedCountry = sub.country === "GLOBAL" ? null : sub.country;
   const summarizePlayers = useFeedPlayersSummary();
   const danClears = sub.feedType === "dan_clear";
+  // Recent plays posts only the players it lists, picked one by one.
+  const recent = sub.feedType === "recent_play";
+  const noDans = useNoDans();
+  const [minMsdDraft, setMinMsdDraft] = useState(filters.minMsd ? String(filters.minMsd) : "");
+  useEffect(() => setMinMsdDraft(sub.minMsd ? String(sub.minMsd) : ""), [sub.minMsd]);
+  const draftMsd = Math.min(50, Math.max(0, Math.round((Number(minMsdDraft) || 0) * 100) / 100));
+  const commitMsd = () => { if (draftMsd !== filters.minMsd) save({ minMsd: draftMsd }); };
   // A Goals feed only has its players to choose.
   const goals = sub.feedType === "goal";
   const newMaps = sub.feedType === "new_map";
@@ -741,7 +752,7 @@ function TopPlayFilters({ sub, channelName, onSave }: {
         <span className={label}><Trans>Keys</Trans></span>
         <div className="flex flex-wrap items-center gap-1">
           <button type="button" className={chip(keys.length === 0, keys.length > 0)} onClick={() => { if (keys.length) save({ keys: [] }); }}><Trans>All</Trans></button>
-          {(danClears ? DAN_FILTER_KEYS : FILTER_KEYS).map((k) => (
+          {(danClears ? DAN_FILTER_KEYS : recent ? RECENT_FILTER_KEYS : FILTER_KEYS).map((k) => (
             <button
               key={k}
               type="button"
@@ -782,6 +793,45 @@ function TopPlayFilters({ sub, channelName, onSave }: {
             onChange={(minPp, ppAccuracy, ppClient) => save({ minPp, ppAccuracy, ppClient })}
           />
         </div>
+      ) : recent ? (
+        <>
+          {noDans ? null : (
+            <div className={row}>
+              <span className={label}><Trans>Lowest dan</Trans></span>
+              <SelectMenu
+                value={String(minDan)}
+                ariaLabel={t`Lowest dan`}
+                onChange={(value) => save({ minDan: Number(value) })}
+                options={danLevelChoices(keys, minDan).map((n) => {
+                  const name = danLevelName(n, keys);
+                  return {
+                    value: String(n),
+                    label: n === 0 ? t`Any dan` : t`${name} and up`,
+                    leading: n === 0 ? undefined : <DanLevelBadges level={n} keys={keys} />,
+                  };
+                })}
+              />
+            </div>
+          )}
+          <div className={row}>
+            <span className={label}><Trans>Lowest MSD</Trans></span>
+            <div className="flex items-center gap-1.5">
+              <input
+                value={minMsdDraft}
+                inputMode="decimal"
+                aria-label={t`Lowest MSD`}
+                onChange={(event) => setMinMsdDraft(event.target.value.replace(/[^0-9.]/g, "").slice(0, 5))}
+                onKeyDown={(event) => { if (event.key === "Enter") commitMsd(); }}
+                onBlur={commitMsd}
+                placeholder="0"
+                className="w-16 rounded-md bg-osu-b4 px-2 py-1 text-[13px] text-white outline-none focus:ring-1 focus:ring-osu-pink/60"
+              />
+              <HintButton label={t`Which MSD counts`}>
+                <Trans>The chart's MSD at the speed it was played.</Trans>
+              </HintButton>
+            </div>
+          </div>
+        </>
       ) : danClears ? (
         <>
           <div className={row}>
@@ -846,7 +896,7 @@ function TopPlayFilters({ sub, channelName, onSave }: {
       <div className={row}>
         <span className={label}><Trans>Players</Trans></span>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] text-osu-l2">{summarizePlayers(savedScope(playersMode, players, countries, feedCountry), players.length, excluded.length)}</span>
+          <span className="text-[13px] text-osu-l2">{summarizePlayers(recent ? { everywhere: false, whole: [] } : savedScope(playersMode, players, countries, feedCountry), players.length, recent ? 0 : excluded.length)}</span>
           <button type="button" onClick={() => setPicking(true)} className="rounded-md bg-osu-pink px-2.5 py-1 text-[13px] font-semibold text-white hover:brightness-110">
             <Trans>Choose players</Trans>
           </button>
@@ -862,6 +912,8 @@ function TopPlayFilters({ sub, channelName, onSave }: {
           mode={playersMode}
           countries={countries}
           feedCountry={feedCountry}
+          picksOnly={recent}
+          startCountry={defaultCountry}
           onSave={(next) => save({ players: next.players, excluded: next.excluded, playersMode: next.mode, countries: next.countries })}
           onClose={() => setPicking(false)}
         />
@@ -1062,6 +1114,7 @@ function ServerSkeleton() {
 
 const FEED_NAMES: Record<string, ReturnType<typeof msg>> = {
   top_play: msg`Top plays`,
+  recent_play: msg`Recent plays`,
   dan_clear: msg`Dan clears`,
   goal: msg`Goals`,
   new_map: msg`New farm maps`,
@@ -1070,6 +1123,7 @@ const FEED_NAMES: Record<string, ReturnType<typeof msg>> = {
 
 const FEED_HINTS: Record<string, ReturnType<typeof msg>> = {
   top_play: msg`Posts a player's new top play, a play that enters their best 200.`,
+  recent_play: msg`Posts every pass from the players you pick.`,
   dan_clear: msg`Posts a player's near clear, clear or overclear of a dan course or practice chart.`,
   goal: msg`Posts a goal when its player completes it.`,
   new_map: msg`Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty.`,
@@ -1112,6 +1166,7 @@ function SummaryParts({ parts }: { parts: ReactNode[] }) {
 // A feed's filters in one line, read from what is saved.
 function FeedSummary({ sub }: { sub: ServerSub }) {
   const { i18n } = useLingui();
+  const noDans = useNoDans();
   const keys = sub.keys ?? [];
   const parts: ReactNode[] = sub.feedType === "goal" ? [] : [keys.length ? keys.map((k) => `${k}K`).join(", ") : <Trans>All keys</Trans>];
   if (sub.feedType === "new_map") {
@@ -1119,6 +1174,17 @@ function FeedSummary({ sub }: { sub: ServerSub }) {
     const min = sub.minStars ?? 0;
     const max = sub.maxStars ?? 0;
     parts.push(min && max ? <Trans>{min}★ to {max}★</Trans> : min ? <Trans>{min}★ and up</Trans> : max ? <Trans>Up to {max}★</Trans> : <Trans>Any stars</Trans>);
+    return <SummaryParts parts={parts} />;
+  }
+  if (sub.feedType === "recent_play") {
+    if (!noDans) {
+      const name = danLevelName(sub.minDan ?? 0, keys);
+      parts.push(sub.minDan ? <Trans>{name} and up</Trans> : <Trans>Any dan</Trans>);
+    }
+    const minMsd = sub.minMsd ?? 0;
+    if (minMsd) parts.push(<Trans>MSD {minMsd} and up</Trans>);
+    const listed = sub.players?.length ?? 0;
+    parts.push(listed ? <Plural value={listed} one="# player" other="# players" /> : <Trans>No players yet</Trans>);
     return <SummaryParts parts={parts} />;
   }
   if (sub.feedType === "goal") {
@@ -1285,6 +1351,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                           <TopPlayFilters
                             sub={sub}
                             channelName={channel.name}
+                            defaultCountry={country === "GLOBAL" ? null : country}
                             onSave={(filters) => send({ feedFilters: { channelId: channel.id, feedType: feed, ...filters } }, false)}
                           />
                         </div>
@@ -1383,6 +1450,7 @@ const PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
 
 const FEED_PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
   { id: "feed-top-plays", label: FEED_NAMES.top_play },
+  { id: "feed-recent-plays", label: FEED_NAMES.recent_play },
   { id: "feed-dan-clears", label: FEED_NAMES.dan_clear },
   { id: "feed-goals", label: FEED_NAMES.goal },
   { id: "feed-new-maps", label: FEED_NAMES.new_map },

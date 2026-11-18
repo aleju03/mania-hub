@@ -4076,6 +4076,10 @@ msgid "Add a country or region"
 msgstr "Agregar un país o región"
 
 #: src/components/discord/FeedPlayersModal.tsx
+msgid "Add a country to pick its players."
+msgstr "Agrega un país para elegir sus jugadores."
+
+#: src/components/discord/FeedPlayersModal.tsx
 msgid "Add a country to pick or leave out its players."
 msgstr "Agrega un país para elegir o dejar fuera a sus jugadores."
 
@@ -15087,6 +15091,10 @@ msgid "Lowest dan"
 msgstr "Dan mínimo"
 
 #: src/routes/discord.tsx
+msgid "Lowest MSD"
+msgstr "MSD mínimo"
+
+#: src/routes/discord.tsx
 msgid "Lowest pp"
 msgstr "pp mínimo"
 
@@ -16134,6 +16142,10 @@ msgstr "msd"
 #~ msgid "MSD"
 #~ msgstr "MSD"
 
+#: src/routes/discord.tsx
+msgid "MSD {minMsd} and up"
+msgstr "MSD {minMsd} o más"
+
 #: src/components/settings/SettingsPanel.tsx
 #~ msgid "MSD and dan on recent plays"
 #~ msgstr "MSD y dan en plays recientes"
@@ -17076,6 +17088,10 @@ msgstr "No hay jugadores ocultos."
 msgid "No players match."
 msgstr "Ningún jugador coincide."
 
+#: src/routes/discord.tsx
+msgid "No players yet"
+msgstr "Todavía no hay jugadores"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "No plays here."
 msgstr "No hay plays aquí."
@@ -17509,6 +17525,10 @@ msgstr "No hay nadie baneado."
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Nobody we track has a scored run on this map. Search a player, or paste a score link."
 msgstr "Nadie de los que trackeamos tiene una run con score en este mapa. Busca a un jugador o pega un enlace de score."
+
+#: src/routes/discord.tsx
+#~ msgid "Nobody yet"
+#~ msgstr "Nadie todavía"
 
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "Nobody yet."
@@ -20188,6 +20208,10 @@ msgid "Posts each new line of the website's changelog."
 msgstr "Publica cada línea nueva del changelog del sitio."
 
 #: src/routes/discord.tsx
+msgid "Posts every pass from the players you pick."
+msgstr "Publica cada pass de los jugadores que elijas."
+
+#: src/routes/discord.tsx
 msgid "Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty."
 msgstr "Publica mapas recién rankeados en los que los jugadores están ganando pp, y charts nuevos de 4K y 7K que dan más pp de lo que pide su dificultad."
 
@@ -21397,6 +21421,7 @@ msgstr "Snipes recientes de osu!mania en {countryName}."
 msgid "Recent osu!mania snipes."
 msgstr "Snipes recientes de osu!mania."
 
+#: src/routes/discord.tsx
 #: src/routes/maps.tsx
 msgid "Recent plays"
 msgstr "Plays recientes"
@@ -27072,6 +27097,10 @@ msgstr "el nivel del chart +1.37"
 msgid "the chart's level +1.5"
 msgstr "el nivel del chart +1.5"
 
+#: src/routes/discord.tsx
+msgid "The chart's MSD at the speed it was played."
+msgstr "El MSD del chart a la velocidad en que se jugó."
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "The checker is busy. Save again in a moment."
 msgstr "El verificador está ocupado. Guarda de nuevo en un momento."
@@ -30627,6 +30656,10 @@ msgstr "Qué copia"
 #: src/routes/discord.tsx
 msgid "Which maps"
 msgstr "Qué mapas"
+
+#: src/routes/discord.tsx
+msgid "Which MSD counts"
+msgstr "Qué MSD cuenta"
 
 #: src/routes/discord.tsx
 msgid "Which plays"

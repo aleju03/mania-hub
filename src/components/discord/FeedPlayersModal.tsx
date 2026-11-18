@@ -67,9 +67,10 @@ export function useFeedPlayersSummary() {
  * Who a feed posts. The left side lists countries, each taken whole (with
  * players left out) or not at all (with players picked from it). The right side
  * is the chosen country's tracked players, highest pp first, and a tick there
- * always means the player posts.
+ * always means the player posts. With `picksOnly` (Recent plays) countries are
+ * only for browsing: nothing is taken whole, and only ticked players post.
  */
-export function FeedPlayersModal({ title, players, excluded: initialExcluded, mode: initialMode, countries: initialCountries, max, feedCountry, onSave, onClose }: {
+export function FeedPlayersModal({ title, players, excluded: initialExcluded, mode: initialMode, countries: initialCountries, max, feedCountry, picksOnly = false, startCountry = null, onSave, onClose }: {
   title: string;
   players: BotFeedPlayer[];
   excluded: BotFeedPlayer[];
@@ -79,17 +80,25 @@ export function FeedPlayersModal({ title, players, excluded: initialExcluded, mo
   max: number;
   /** The feed's one country, or null when it is Global. */
   feedCountry: string | null;
+  /** Players are only picked one by one; no country is taken whole. */
+  picksOnly?: boolean;
+  /** A country to open on when nothing is picked yet. */
+  startCountry?: string | null;
   onSave: (choice: FeedPlayersChoice) => void;
   onClose: () => void;
 }) {
   const { t } = useLingui();
   useBodyScrollLock(true);
   const summarize = useFeedPlayersSummary();
-  const start = useMemo(() => savedScope(initialMode, players, initialCountries, feedCountry), [initialMode, players, initialCountries, feedCountry]);
+  const start = useMemo<Scope>(
+    () => (picksOnly ? { everywhere: false, whole: [] } : savedScope(initialMode, players, initialCountries, feedCountry)),
+    [picksOnly, initialMode, players, initialCountries, feedCountry],
+  );
   const [everywhere, setEverywhere] = useState(start.everywhere);
   const [whole, setWhole] = useState<string[]>(start.whole);
   // Countries on the list with nothing picked yet.
-  const [browsing, setBrowsing] = useState<string[]>([]);
+  const [browsing, setBrowsing] = useState<string[]>(() =>
+    picksOnly && players.length === 0 && startCountry && /^[A-Z]{2}$/.test(startCountry) ? [startCountry] : []);
   const [added, setAdded] = useState<BotFeedPlayer[]>(players);
   const [excluded, setExcluded] = useState<BotFeedPlayer[]>(initialExcluded);
 
@@ -195,6 +204,14 @@ export function FeedPlayersModal({ title, players, excluded: initialExcluded, mo
     }
     const region = getRegionDef(code);
     if (!region) return;
+    if (picksOnly) {
+      setBrowsing((prev) => [...prev, ...region.countries.filter((c) => !listed.includes(c) && !prev.includes(c))]);
+      setGroups((prev) => (prev.includes(region.code) ? prev : [...prev, region.code]));
+      setView(region.code);
+      setPinned(pinnedFor(region.code));
+      setQuery("");
+      return;
+    }
     const codes = region.countries.filter((c) => !whole.includes(c));
     setWhole((prev) => [...prev, ...codes]);
     setAdded((prev) => prev.filter((p) => !p.countryCode || !codes.includes(p.countryCode)));
@@ -292,7 +309,8 @@ export function FeedPlayersModal({ title, players, excluded: initialExcluded, mo
   };
 
   const scope: Scope = { everywhere, whole };
-  const nobody = !everywhere && whole.length === 0 && added.length === 0;
+  // An empty pick list posts everyone in scope, except where only picks post.
+  const nobody = !picksOnly && !everywhere && whole.length === 0 && added.length === 0;
   const sameIds = (a: BotFeedPlayer[], b: BotFeedPlayer[]) => a.length === b.length && a.every((p, i) => p.id === b[i]?.id);
   const changed = everywhere !== start.everywhere
     || whole.join(",") !== start.whole.join(",")
@@ -364,7 +382,7 @@ export function FeedPlayersModal({ title, players, excluded: initialExcluded, mo
               onChange={(value) => { if (value) addPlace(value); }}
             />
             <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:min-h-0 sm:flex-1 sm:flex-col sm:gap-0.5 sm:overflow-y-auto sm:px-0">
-              {feedCountry == null ? placeRow(EVERYWHERE, t`Every country`, everywhere ? { label: excluded.length ? t`All but ${excluded.length}` : t`Everyone`, active: true } : { label: t`None`, active: false }) : null}
+              {feedCountry == null && !picksOnly ? placeRow(EVERYWHERE, t`Every country`, everywhere ? { label: excluded.length ? t`All but ${excluded.length}` : t`Everyone`, active: true } : { label: t`None`, active: false }) : null}
               {topLevel > 1 ? placeRow(ALL_VIEW, t`All countries`, stateOf(listed)) : null}
               {groupRows.rows.map((group) => {
                 const open = expanded.includes(group.code);
@@ -380,6 +398,9 @@ export function FeedPlayersModal({ title, players, excluded: initialExcluded, mo
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {view === ALL_VIEW ? null : (
               <div className="flex items-center gap-3 border-b border-white/[0.07] pb-2">
+                {picksOnly ? (
+                  <span className="truncate px-1.5 py-1 text-[14px] font-bold text-white">{viewName}</span>
+                ) : (
                 <button
                   type="button"
                   role="checkbox"
@@ -393,6 +414,7 @@ export function FeedPlayersModal({ title, players, excluded: initialExcluded, mo
                   </span>
                   <span className="truncate text-[14px] font-bold text-white"><Trans>Everyone in {viewName}</Trans></span>
                 </button>
+                )}
                 {view === EVERYWHERE ? null : (
                   <button type="button" onClick={() => removeCountries(viewCountries)} className="ml-auto shrink-0 text-[12px] font-semibold text-osu-f1 hover:text-white">
                     <Trans>Remove</Trans>
@@ -413,7 +435,7 @@ export function FeedPlayersModal({ title, players, excluded: initialExcluded, mo
 
             <div className="mt-1 min-h-[160px] flex-1 overflow-y-auto">
               {!viewCountries.length ? (
-                <p className="px-1.5 py-6 text-[13px] text-osu-f1"><Trans>Add a country to pick or leave out its players.</Trans></p>
+                <p className="px-1.5 py-6 text-[13px] text-osu-f1">{picksOnly ? <Trans>Add a country to pick its players.</Trans> : <Trans>Add a country to pick or leave out its players.</Trans>}</p>
               ) : !rows.length ? (
                 <p className="px-1.5 py-6 text-[13px] text-osu-f1">{loading ? <Trans>Loading</Trans> : <Trans>No tracked players here.</Trans>}</p>
               ) : (
