@@ -60,25 +60,27 @@ function endIfLeft() {
 export function ProfilePreviewBar({ supporter, onEnd }: { supporter: boolean; onEnd: () => void }) {
   return (
     <div data-supporter-preview className="pointer-events-none fixed inset-x-0 bottom-4 z-[90] flex justify-center px-3">
-      <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-osu-b3/95 px-4 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur">
-        <p className="text-[13px] text-osu-l2">
+      <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 rounded-2xl border border-white/10 bg-osu-b3/95 px-3 py-2 sm:px-4 sm:py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur">
+        <p className="text-center text-[13px] text-osu-l2">
           <span className="font-semibold text-white"><Trans>Supporter preview</Trans></span>
-          <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden />
-          <Trans>Only you can see this</Trans>
+          <span className="hidden sm:inline">
+            <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden />
+            <Trans>Only you can see this</Trans>
+          </span>
         </p>
-        <div className="flex items-center gap-2">
-          <Link to="/supporter" className="rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-white/15">
+        <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-2">
+          <Link to="/supporter" className="whitespace-nowrap rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-white/15">
             <Trans>Back to supporter</Trans>
           </Link>
           {!supporter ? (
-            <Link to="/support" className="rounded-full bg-osu-pink px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-osu-pink-light">
+            <Link to="/support" className="whitespace-nowrap rounded-full bg-osu-pink px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-osu-pink-light">
               <Trans>Become a supporter</Trans>
             </Link>
           ) : null}
           <button
             type="button"
             onClick={onEnd}
-            className="cursor-pointer rounded-full px-3 py-1.5 text-[12px] font-semibold text-osu-f1 transition-colors hover:text-white"
+            className="cursor-pointer whitespace-nowrap rounded-full px-3 py-1.5 text-[12px] font-semibold text-osu-f1 transition-colors hover:text-white"
           >
             <Trans>End preview</Trans>
           </button>
