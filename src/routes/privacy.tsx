@@ -83,7 +83,7 @@ function PrivacyPage() {
         </LegalParagraph>
         <LegalParagraph>
           <Trans>
-            If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and
+            If you pay through Ko-fi or lava.top, the site receives the amount, currency, and
             date of the payment, the name and message you gave, and a code made from your email
             address (never the address itself), used to recognise a repeat payment or a refund. An
             email you type on the Support page before paying on lava.top is kept the same way, as a

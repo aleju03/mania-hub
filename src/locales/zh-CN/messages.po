@@ -12894,8 +12894,8 @@ msgstr "如果你加载 osu! 好友，本站会用 friends.read 权限重新登�
 #~ msgstr ""
 
 #: src/routes/privacy.tsx
-msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
-msgstr "如果你通过 Ko-fi、Google 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及由你邮箱地址生成的一串代码（绝不是地址本身），用于识别重复付款或退款。你在 Support 页面付款前在 lava.top 一栏填写的邮箱也只以代码形式保存，只用于把那笔付款关联到你的账号。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
+msgid "If you pay through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+msgstr "如果你通过 Ko-fi 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及由你邮箱地址生成的一串代码（绝不是地址本身），用于识别重复付款或退款。你在 Support 页面付款前在 lava.top 一栏填写的邮箱也只以代码形式保存，只用于把那笔付款关联到你的账号。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
 
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."

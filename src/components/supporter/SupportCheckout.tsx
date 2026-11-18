@@ -271,9 +271,9 @@ export type SupportMethod = "kofi" | "google" | "lava";
 /* Google's checkout. It refuses every host but mania-tracker.com, so
    locally it only shows its button. A claim that fails on the spot falls
    back to the order number from Google's receipt, and every claim is checked
-   against the Publisher Center export. Admins only until the payments
-   profile has a USD bank account to pay out to. */
-const GOOGLE_FOR_EVERYONE = false;
+   against the Publisher Center export. Hidden from everyone, admins
+   included, until the payments profile has a USD bank account to pay out to. */
+const GOOGLE_OFFERED = false;
 
 /* The methods this visitor can pick, and the one picked first: lava.top
    where Ko-fi cannot take a card, Ko-fi everywhere else. Null while the
@@ -290,7 +290,7 @@ export function useSupportMethods() {
       cancelled = true;
     };
   }, []);
-  const google = !!GOOGLE_RRM_PUBLICATION_ID && (GOOGLE_FOR_EVERYONE || auth.isAdmin);
+  const google = GOOGLE_OFFERED && !!GOOGLE_RRM_PUBLICATION_ID;
   const lava = LAVA_FOR_EVERYONE || auth.isAdmin;
   const methods: SupportMethod[] = ["kofi", ...(google ? ["google" as const] : []), ...(lava ? ["lava" as const] : [])];
   const initial: SupportMethod | null = lavaFirst == null ? null : lavaFirst && lava ? "lava" : "kofi";
