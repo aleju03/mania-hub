@@ -14,7 +14,9 @@ import {
   importAdminKofiCsv,
   linkAdminDonation,
   loadAdminSupporters,
+  recordAdminPayment,
   unlinkAdminDonation,
+  type AdminPaymentProvider,
   type AdminDonationRow,
   type AdminSupporterRow,
   type AdminSupportersView,
@@ -153,6 +155,14 @@ export function SupportersPanel() {
     return `${days > 0 ? "Added" : "Took"} ${Math.abs(days)} days ${days > 0 ? "to" : "from"} ${result.username ?? label}.`;
   });
 
+  const recordPayment = (row: AdminSupporterRow, payment: ManualPayment) => run(async () => {
+    const name = row.username ?? `#${row.userId}`;
+    const result = await recordAdminPayment({ data: { query: `#${row.userId}`, ...payment } });
+    const money = formatMoney(payment.amount, payment.currency);
+    if (result.usdCents == null) return `Recorded ${money} for ${name}. It counts no time until a rate for ${payment.currency} is known.`;
+    return `Recorded ${money} for ${name}.${result.expiresAt ? ` Supporter until ${formatDate(result.expiresAt)}.` : ""}`;
+  });
+
   const pinRank = (row: AdminSupporterRow, rank: number | null) => run(async () => {
     await setAdminSupporterRank({ data: { userId: row.userId, rank } });
     const name = row.username ?? `#${row.userId}`;
@@ -269,6 +279,7 @@ export function SupportersPanel() {
                     onGrant={(days) => grant(`#${row.userId}`, days, row.username ?? `#${row.userId}`)}
                     onClearMotif={() => clearMotif(row)}
                     onPinRank={(rank) => pinRank(row, rank)}
+                    onRecordPayment={(payment) => recordPayment(row, payment)}
                   />
                 ))}
               </AnimatePresence>
@@ -362,6 +373,61 @@ export function SupportersPanel() {
   );
 }
 
+interface ManualPayment {
+  provider: AdminPaymentProvider;
+  amount: number;
+  currency: string;
+  occurredAt: number;
+  monthly: boolean;
+}
+
+const PAYMENT_PROVIDER_OPTIONS: SelectMenuOption<AdminPaymentProvider>[] = [
+  { value: "lava", label: "lava.top" },
+  { value: "kofi", label: "Ko-fi" },
+];
+const PAYMENT_CURRENCY_OPTIONS: SelectMenuOption<string>[] = ["USD", "RUB", "EUR"].map((code) => ({ value: code, label: code }));
+const PAYMENT_FIELD_CLASS = "h-7 w-full rounded-md bg-osu-b5 px-2 text-[12px] text-white outline-none ring-1 ring-inset ring-white/[0.08] focus:ring-osu-pink/60";
+
+function localDay(ms: number): string {
+  const date = new Date(ms);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/* A payment the provider took and never reported (a sale on lava.top's
+   public page), written as that supporter's own payment. Today's date
+   records it as of now; an earlier day as of that day's noon. */
+function RecordPaymentForm({ busy, onRecord }: { busy: boolean; onRecord: (payment: ManualPayment) => void }) {
+  const [provider, setProvider] = useState<AdminPaymentProvider>("lava");
+  const [amount, setAmount] = useState("4.03");
+  const [currency, setCurrency] = useState("USD");
+  const [day, setDay] = useState(() => localDay(Date.now()));
+  const [monthly, setMonthly] = useState(true);
+  const value = Number(amount);
+  const at = day === localDay(Date.now()) ? Date.now() : new Date(`${day}T12:00:00`).getTime();
+  const ready = Number.isFinite(value) && value > 0 && Number.isFinite(at);
+  return (
+    <form
+      className="mt-2.5 space-y-1.5 border-t border-white/[0.07] pt-2.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (ready && !busy) onRecord({ provider, amount: value, currency, occurredAt: at, monthly });
+      }}
+    >
+      <SelectMenu value={provider} options={PAYMENT_PROVIDER_OPTIONS} disabled={busy} onChange={setProvider} ariaLabel="Paid on" block />
+      <div className="flex gap-1.5">
+        <input type="number" inputMode="decimal" min="0" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} aria-label="Amount" className={`${PAYMENT_FIELD_CLASS} min-w-0 flex-1 tabular-nums`} />
+        <SelectMenu value={currency} options={PAYMENT_CURRENCY_OPTIONS} disabled={busy} onChange={setCurrency} ariaLabel="Currency" />
+      </div>
+      <input type="date" value={day} max={localDay(Date.now())} onChange={(event) => setDay(event.target.value)} aria-label="Paid on day" className={PAYMENT_FIELD_CLASS} />
+      <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-osu-l2">
+        <input type="checkbox" checked={monthly} onChange={(event) => setMonthly(event.target.checked)} className="accent-osu-pink" />
+        Monthly subscription
+      </label>
+      <button type="submit" disabled={busy || !ready} className={CHIP_CLASS}>Record payment</button>
+    </form>
+  );
+}
+
 function SupporterTile({
   row,
   now,
@@ -371,6 +437,7 @@ function SupporterTile({
   onGrant,
   onClearMotif,
   onPinRank,
+  onRecordPayment,
 }: {
   row: AdminSupporterRow;
   now: number;
@@ -380,7 +447,9 @@ function SupporterTile({
   onGrant: (days: number) => void;
   onClearMotif: () => void;
   onPinRank: (rank: number | null) => void;
+  onRecordPayment: (payment: ManualPayment) => void;
 }) {
+  const [paying, setPaying] = useState(false);
   const daysLeft = row.active ? (row.expiresAt - now) / DAY_MS : 0;
   const fill = Math.min(1, daysLeft / FULL_RING_DAYS);
   const radius = 36;
@@ -453,7 +522,9 @@ function SupporterTile({
               {row.active ? (
                 <button type="button" disabled={busy} onClick={() => onGrant(-30)} className={CHIP_CLASS}>-30 days</button>
               ) : null}
+              <button type="button" disabled={busy} onClick={() => setPaying((value) => !value)} aria-expanded={paying} className={CHIP_CLASS}>Payment</button>
             </div>
+            {paying ? <RecordPaymentForm busy={busy} onRecord={onRecordPayment} /> : null}
             {row.active ? (
               <div className="mt-2.5 flex items-center gap-2 text-[12px] text-osu-l2">
                 Rank

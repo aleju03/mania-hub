@@ -108,6 +108,27 @@ export const grantAdminSupporterDays = createServerFn({ method: "POST" })
   })
   .handler(({ data }) => adminRequest<{ ok: true; userId: number; username: string | null }>("/api/admin/supporters/grant", data));
 
+export const ADMIN_PAYMENT_PROVIDERS = ["lava", "kofi"] as const;
+export type AdminPaymentProvider = (typeof ADMIN_PAYMENT_PROVIDERS)[number];
+
+/* A payment the provider took but never reported to the site, written as an
+   ordinary payment of that account (backend features/supporter-manual-payments.ts). */
+export const recordAdminPayment = createServerFn({ method: "POST" })
+  .validator((data: { query?: unknown; provider?: unknown; amount?: unknown; currency?: unknown; occurredAt?: unknown; monthly?: unknown }) => {
+    const query = typeof data?.query === "string" ? data.query.trim().slice(0, 64) : "";
+    const provider = ADMIN_PAYMENT_PROVIDERS.find((name) => name === data?.provider);
+    const amount = Number(data?.amount);
+    const currency = typeof data?.currency === "string" ? data.currency.trim().toUpperCase() : "";
+    const occurredAt = Number(data?.occurredAt);
+    if (!query) throw new Error("Enter an osu! username or #user-id.");
+    if (!provider) throw new Error("Pick where it was paid.");
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter the amount paid.");
+    if (!/^[A-Z]{3}$/.test(currency)) throw new Error("Pick a currency.");
+    if (!Number.isFinite(occurredAt) || occurredAt <= 0) throw new Error("Pick the day it was paid.");
+    return { query, provider, amount, currency, occurredAt, monthly: data?.monthly === true };
+  })
+  .handler(({ data }) => adminRequest<{ ok: true; userId: number; username: string | null; externalId: string; usdCents: number | null; expiresAt: number | null }>("/api/admin/supporters/record-payment", data));
+
 export const importAdminKofiCsv = createServerFn({ method: "POST" })
   .validator((data: { csv?: unknown }) => {
     const csv = typeof data?.csv === "string" ? data.csv : "";
