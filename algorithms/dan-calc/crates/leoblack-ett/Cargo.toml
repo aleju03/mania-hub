@@ -8,21 +8,30 @@ publish.workspace = true
 [features]
 default = ["jit", "legacy-builds"]
 # MinaCalc's wasm is compiled when it is first used: cranelift is in the binary.
-jit = ["wasmtime/cranelift"]
+jit = ["dep:wasmtime", "wasmtime/cranelift"]
 # MinaCalc's wasm is compiled for the target when the crate is built, and only
 # loaded when it is used: no compiler in the binary and no wait on first use.
 # Takes over from `jit` when both are on.
-aot = ["dep:wasmtime"]
+aot = ["dep:wasmtime", "dep:wasmtime-build"]
 # MinaCalc 0.68.0 and 0.70.0, which dan-calc's `estimate` never uses (it runs
 # 0.72.3, 0.74.0 and 0.75.0). Without them, asking for one is an error.
 legacy-builds = []
+# MinaCalc 0.72.3, 0.74.0 and 0.75.0 built from Etterna's C++ (`native/`)
+# instead of run as wasm: no wasmtime, and memory is freed after every run.
+# Needs a C++20 compiler. Takes over from `jit` and `aot` when they are on too.
+native = ["dep:cc"]
 
 [dependencies]
-wasmtime = { version = "49", default-features = false, features = ["runtime", "std"] }
+wasmtime = { version = "49", default-features = false, features = ["runtime", "std"], optional = true }
 jsmath = { path = "../../../prism/crates/jsmath" }
 leoblack-parser = { path = "../leoblack-parser" }
 
 [build-dependencies]
 # The same wasmtime, with its compiler, for the build script of `aot`. Its
 # features stay out of the binary's wasmtime (Cargo's resolver 2).
-wasmtime = { version = "49", default-features = false, features = ["cranelift", "std"], optional = true }
+wasmtime-build = { package = "wasmtime", version = "49", default-features = false, features = ["cranelift", "std"], optional = true }
+cc = { version = "1.2", optional = true }
+
+[[example]]
+name = "native_parity"
+required-features = ["native", "jit"]

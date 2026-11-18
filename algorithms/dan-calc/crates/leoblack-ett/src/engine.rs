@@ -5,9 +5,6 @@ use wasmtime::{Caller, Config, Engine, Instance as WasmInstance, Linker, Memory,
 
 use crate::versions::{EttVersion, ALL_VERSIONS};
 
-#[cfg(not(any(feature = "jit", feature = "aot")))]
-compile_error!("leoblack-ett needs the `jit` or the `aot` feature to run MinaCalc");
-
 /// The MinaCalc builds, one per distinct wasm: 0.72.0 and 0.72.3 are the
 /// same build, byte for byte, so they share one (see [`build`]).
 const BUILDS: usize = 5;

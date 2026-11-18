@@ -31,6 +31,13 @@ Both give the same results. With `aot` the build script compiles for the target 
 
 `legacy-builds` (default) keeps MinaCalc 0.68.0 and 0.70.0 in the binary. `estimate` never uses them (it runs 0.72.3, 0.74.0 and 0.75.0), so the example above, with `default-features = false`, leaves them out: about 1.3 MB less with `aot`, 0.4 MB with `jit`.
 
+`native` builds MinaCalc from Etterna's C++ instead, so there's no wasmtime at all. The results are the same, bit for bit, and the binary is about 3 MB smaller than with `aot`. It also uses far less memory: the wasm builds keep about 50 MB after their first 4K chart and grow past 150 MB over a few dozen, while native MinaCalc frees what it used after every chart. It needs a C++20 compiler. See `crates/leoblack-ett/native/README.md` for how its sources differ from Etterna's.
+
+```toml
+[dependencies]
+dan-calc = { git = "https://github.com/aleju03/mania-hub", branch = "main", default-features = false, features = ["native"] }
+```
+
 ## Use
 
 ```rust
@@ -67,6 +74,7 @@ if let Some(dan) = result.primary {
 | `primary` | The headline dan, the one the site shows first. `None` when the chart can't be rated |
 | `rice` | The rice dan, when there is one |
 | `ln` | The LN dan, when there is one. Hybrid charts can have both |
+| `hybrid` | Whether the chart is a rice-and-LN hybrid: the site shows both dans only for those, and the primary alone otherwise |
 | `supported` | `false` for keymodes other than 4K, 6K and 7K |
 | `key_count` | The chart's keymode |
 | `msd` | The chart's MSD per skillset at that rate, as `(name, value)` pairs |
