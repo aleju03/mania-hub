@@ -10,7 +10,7 @@ Which charts and plays player ratings leave out, and why. Thresholds and the cor
   - **clean**: rated as is.
   - **adjusted**: the proven sections are cut from the calculator input (no timestamp stitching) and the rest is rated with a conservative retained-note goal (all original accuracy loss goes to the remaining notes; dan clear accuracy uses the same adjustment). The original accuracy stays beside `vibroAdjustment`.
   - **excluded** (vibro): kept out of player ratings and stored in `plays_json.vibroExcluded` (`chart_vibro` for the base chart, `rate_vibro` for the played rate).
-  - **unrateable** (`jumptrill`, `stacked_heads`, `flam_chords`, read by `isUnrateableExclusion`; `map_search_index.vibro = 2`): nothing in the chart is past a human hand, the rating just cannot follow it. Players see "unrateable", not vibro.
+  - **unrateable** (`jumptrill`, `stacked_heads`, `flam_chords`, `mash`, `quads_only`, `hand_blocks`, read by `isUnrateableExclusion`; `map_search_index.vibro = 2`): nothing in the chart is past a human hand, the rating just cannot follow it. Players see "unrateable", not vibro.
   - **rated jumptrill** (4K only, `isRatedJumptrill`, `RateVibroCheck.jumptrill`): a chart the jumptrill rule alone excludes whose bursts are written as jumps (90% of burst notes in same-row hand jumps). MinaCalc reads the jumps that are played, so the play is rated in full and stored with `jumptrill: true`; the dan clear rules refuse it (`jumptrill` reject). A jumptrill written as a roll or stream stays unrateable. Companella imports keep the old behaviour: unrated on any jumptrill chart.
 - A flagged chart keeps its MSD; only player ratings skip it.
 
@@ -44,6 +44,7 @@ Fast chordjack whose fingers release between hits is not vibro: the finger and h
 
 - **5K and wider**: the jumptrill rule (`analyzeWideJumptrill`), each hand being its half of the keys (an odd keymode's middle key joins the hand it is pressed with). Past the share is unrateable. Other keymodes otherwise keep the legacy policy.
 - **4K past 10% holds**: the section scan does not run. The motion arms read note heads only (`analyzeHoldVibro`), and a chart they exclude is flagged vibro, never trimmed. The 4K jumptrill rule also applies.
+- **Hand blocks** (5K and wider, `hasHandBlockBody` through `analyzeCollapsedNotes`): a chart with 85% of its notes in rows that press every key of one hand, or of both, with an odd keymode's middle key set aside. Unrateable at every rate, like a 4K chart of quads. It runs on the Prism keymodes too.
 - **Stacked heads** (any keymode, `analyzeStackedHeads`): a stack of `DAN_INELIGIBLE_STACKED_HEAD_MIN` objects is unrateable.
 - **Flam chords** (4K, `analyzeCollapsedNotes`): chords written as rows a few ms apart that a player strikes together. Only chord-only presses count, holding a large share of the notes. A single note flammed onto a chord is ordinary writing. The finger-free guard keeps fast rolls from pairing into jumps.
 - **LN vibro** (`detectLnVibro`): staggered hold spam, judged by the LN rules (see [LN analysis](../ln-skill.md)).
