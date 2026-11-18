@@ -686,8 +686,15 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
                                   )}
                                 </span>
                                 {sectionLabel ? (
-                                  <span className="max-w-full truncate text-[15px] font-black leading-none text-white">
-                                    {sectionBeyond ? ">" : section.verified ? "" : "~"}{sectionLabel}
+                                  <span className="flex max-w-full items-baseline gap-1.5">
+                                    <span className="min-w-0 truncate text-[15px] font-black leading-none text-white">
+                                      {sectionBeyond ? ">" : section.verified ? "" : "~"}{sectionLabel}
+                                    </span>
+                                    {section.dan && !sectionBeyond ? (
+                                      <span className="shrink-0 text-[11px] leading-none tabular-nums text-osu-f1">
+                                        {formatDanValue(section.dan.rawDan)}
+                                      </span>
+                                    ) : null}
                                   </span>
                                 ) : (
                                   <span className="text-[11px] leading-none text-osu-f1">
