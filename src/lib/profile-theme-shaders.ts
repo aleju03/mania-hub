@@ -284,9 +284,13 @@ vec3 theme(vec2 uv, vec2 p, float t) {
   float aspect = u_res.x / u_res.y;
   // the sky and sun belong to the hero and scroll away with it, leaving the grid
   float hz = .05 + min(u_scroll, 1.);
-  // the grid, worked out for every pixel so its derivatives hold at the horizon
-  float dy = max(hz - p.y, 1e-3);
-  float z = .3 / dy;
+  // the grid, worked out for every pixel so its derivatives hold at the horizon.
+  // Its horizon stops just above the top edge: one sitting higher would bring
+  // the floor so close that a cell outgrows the screen, leaving one line
+  // standing and single lines flashing past.
+  float dy = max(min(hz, .58) - p.y, 1e-3);
+  // past the hero the cells shrink, so the grid behind the content stays a grid
+  float z = .3 / dy * mix(1., 3., smoothstep(.3, 1.3, u_scroll));
   vec2 g = vec2((p.x - (u_pointer.x - .5) * .25) * z * 1.6, z + t * 1.4);
   vec2 a = abs(fract(g - .5) - .5) / max(fwidth(g), 1e-4);
   vec3 col;
