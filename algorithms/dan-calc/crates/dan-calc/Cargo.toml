@@ -17,6 +17,9 @@ aot = ["chart-pipeline/aot"]
 # MinaCalc 0.68.0 and 0.70.0, which `estimate` never uses: leave them out
 # (with `default-features = false`) for a smaller binary.
 legacy-builds = ["chart-pipeline/legacy-builds"]
+# MinaCalc built from Etterna's C++ instead of run as wasm: no wasmtime, and
+# its memory is freed after every estimate. Use with `default-features = false`.
+native = ["chart-pipeline/native"]
 
 [dependencies]
 chart-pipeline = { path = "../chart-pipeline", default-features = false }

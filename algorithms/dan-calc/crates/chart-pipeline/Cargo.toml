@@ -11,6 +11,7 @@ default = ["jit", "legacy-builds"]
 jit = ["leoblack-ett/jit"]
 aot = ["leoblack-ett/aot"]
 legacy-builds = ["leoblack-ett/legacy-builds"]
+native = ["leoblack-ett/native"]
 
 [dependencies]
 jsmath = { path = "../../../prism/crates/jsmath" }
