@@ -57,7 +57,7 @@ mod native {
 mod aot {
     use std::{env, fs, path::Path};
 
-    use wasmtime_build::{Config, Engine, OptLevel};
+    use wasmtime::{Config, Engine, OptLevel};
 
     pub fn precompile() {
         println!("cargo::rerun-if-changed=minacalc");

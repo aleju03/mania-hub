@@ -12,7 +12,7 @@ jit = ["dep:wasmtime", "wasmtime/cranelift"]
 # MinaCalc's wasm is compiled for the target when the crate is built, and only
 # loaded when it is used: no compiler in the binary and no wait on first use.
 # Takes over from `jit` when both are on.
-aot = ["dep:wasmtime", "dep:wasmtime-build"]
+aot = ["dep:wasmtime"]
 # MinaCalc 0.68.0 and 0.70.0, which dan-calc's `estimate` never uses (it runs
 # 0.72.3, 0.74.0 and 0.75.0). Without them, asking for one is an error.
 legacy-builds = []
@@ -28,8 +28,9 @@ leoblack-parser = { path = "../leoblack-parser" }
 
 [build-dependencies]
 # The same wasmtime, with its compiler, for the build script of `aot`. Its
-# features stay out of the binary's wasmtime (Cargo's resolver 2).
-wasmtime-build = { package = "wasmtime", version = "49", default-features = false, features = ["cranelift", "std"], optional = true }
+# features stay out of the binary's wasmtime (Cargo's resolver 2). It has to
+# share the name above, which also builds it for `jit`, unused there.
+wasmtime = { version = "49", default-features = false, features = ["cranelift", "std"], optional = true }
 cc = { version = "1.2", optional = true }
 
 [[example]]
