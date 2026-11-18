@@ -102,6 +102,27 @@ function Spoiler({ children }: { children: ReactNode }) {
   );
 }
 
+// gg sans advance widths (regular, 1000 units to the em), the same table the
+// bot pads judgement counts with (backend/src/discord/format.ts). gg sans isn't
+// served here, so a count padded with no-break spaces is laid out at Discord's
+// widths, one box per character, or its columns land off by the fallback
+// font's wider digits.
+const GG_SANS_WIDTHS: Record<string, number> = {
+  "0": 584, "1": 356, "2": 519, "3": 546, "4": 556, "5": 536, "6": 535, "7": 458, "8": 528, "9": 535, ",": 242, "\u00a0": 220,
+};
+
+function GgSansRun({ text }: { text: string }) {
+  return (
+    <span style={{ whiteSpace: "nowrap" }}>
+      {Array.from(text, (char, index) => (
+        <span key={index} style={{ display: "inline-block", width: `${GG_SANS_WIDTHS[char] / 1000}em`, textAlign: "center" }}>
+          {char === "\u00a0" ? null : char}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 const LINK_LABEL = String.raw`((?:\[[^\]]*\]|[^\[\]]|\](?=[^\[]*\]))*)`;
 const LINK_TARGET = String.raw`<?((?:\([^)]*\)|[^\s\\]|\\.)*?)>?`;
 
@@ -111,6 +132,7 @@ function rules(jumbo: boolean): InlineRule[] {
   if (!jumbo && inlineRules) return inlineRules;
   const list: InlineRule[] = [
     { re: /^\\([^0-9A-Za-z\s])/, render: (m) => m[1] },
+    { re: /^[\d,]*\u00a0[\d,\u00a0]*/, render: (m, key) => <GgSansRun key={key} text={m[0]} /> },
     {
       // A pill sent as two halves: kept on one line, as one piece.
       re: /^<(a?):(\w{2,30}_s?l):(\d{15,25})>\u2060?<(a?):(\w{2,30}_s?r):(\d{15,25})>/,
