@@ -6841,6 +6841,7 @@ msgstr "clear"
 #: src/components/player/BestScoresControls.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/tools/StableAccCalculator.tsx
 #: src/routes/maps.tsx
 msgid "Clear"
 msgstr "Clear"
@@ -14135,6 +14136,10 @@ msgstr "Layout"
 #: src/routes/skins.tsx
 msgid "lazer"
 msgstr "lazer"
+
+#: src/components/tools/StableAccCalculator.tsx
+msgid "Lazer"
+msgstr "Lazer"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer accuracy is recalculated from the judgements into the stable formula used here: a lazer 95.5% is the same hits as a stable 96%. Both clients are held to the same bar."
@@ -25252,6 +25257,18 @@ msgstr "SSR card"
 #: src/routes/skins.tsx
 msgid "stable"
 msgstr "stable"
+
+#: src/components/tools/StableAccCalculator.tsx
+msgid "Stable"
+msgstr "Stable"
+
+#: src/components/tools/StableAccCalculator.tsx
+msgid "stable acc calculator"
+msgstr "stable acc calculator"
+
+#: src/routes/stable-acc.tsx
+msgid "Stable acc calculator"
+msgstr "Stable acc calculator"
 
 #: src/routes/snipes.tsx
 msgid "Stable and lazer scores are on separate boards because their scoring is different."
