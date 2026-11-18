@@ -1,4 +1,4 @@
-import { type ChartSkillInfo, CLUSTER_SHARE_MIN, INVERSE_MOD_PATTERNS, type StoredPlaySsr, DAN_MIN_OD, isUnverifiableRevision, hybridRiceCreditFor, hybridLnCreditFor, ezWindowScale, playedOnLazer, playSlotKey, headlineFromSkillsets, headlineAlwaysFromClears, dominantSkillset, pickSkillsets, BASE_MSD_SKILLSETS, playLnSkillsets, PATTERN_TAG_MIN_SCORE, danSkillsetBucketsForClear, SKILL_RATING_SKILLSETS, hasHandstreamEndurance, RICE_MSD_SKILLSETS } from "./skill-ratings";
+import { type ChartSkillInfo, CLUSTER_SHARE_MIN, INVERSE_MOD_PATTERNS, type StoredPlaySsr, DAN_MIN_OD, isUnverifiableRevision, hybridRiceCreditFor, hybridLnCreditFor, ezWindowScale, playedOnLazer, playSlotKey, headlineFromSkillsets, headlineAlwaysFromClears, dominantSkillset, pickSkillsets, BASE_MSD_SKILLSETS, playLnSkillsets, PATTERN_TAG_MIN_SCORE, danSkillsetBucketsForClear, SKILL_RATING_SKILLSETS, hasHandstreamEndurance, RICE_MSD_SKILLSETS, readsAsFlow } from "./skill-ratings";
 import { chartIsLn } from "../dan-estimator/ln-effective";
 import type { MotionFeatures } from "../classification/motion-features";
 import { calculateScoreV2Accuracy, calculateStableAccuracy, getDisplayedAccuracy, type OscScore } from "../chart/score";
@@ -104,11 +104,28 @@ const TRILL_JACK_CORROBORATED_SHARE = 0.15;
 
 const TRILL_RUNNER_UP_MIN_LENGTH_SECONDS = 240;
 
-function trillIsJack(chart: ChartSkillInfo | undefined): boolean {
+function trillIsJack(chart: ChartSkillInfo | undefined, values: Record<string, number> | undefined): boolean {
   if (chart?.clusterTrill !== true) return false;
+  if (handstreamLedTrill(chart, values) && readsAsFlow(chart.clusterBpm, chart.motion?.roll4)) return false;
   if (chart.chordjackScore >= TRILL_JACK_MIN_CHORDJACK) return true;
   return chart.chordjackScore >= TRILL_JACK_CORROBORATED_CHORDJACK
     && (chart.jackShare ?? 0) >= TRILL_JACK_CORROBORATED_SHARE;
+}
+function handstreamLedTrill(chart: ChartSkillInfo | undefined, values?: Record<string, number>): boolean {
+  if (chart?.clusterTrill !== true) return false;
+  const read = chart.msdValues ?? values;
+  return dominantSkillset(read) === "Handstream" || hasHandstreamEndurance(read);
+}
+const HANDSTREAM_TECH_MAX_LEAD = 1.5;
+const ANCHORED_TECH_MIN_ANCHOR = 0.1;
+function anchoredTechHandstream(chart: ChartSkillInfo | undefined, values?: Record<string, number>): boolean {
+  if (chart?.techCategory !== true) return false;
+  if (!readsAsFlow(chart.clusterBpm, chart.motion?.roll4)) return false;
+  const anchor = chart.motion?.anchor;
+  if (anchor == null || !(anchor >= ANCHORED_TECH_MIN_ANCHOR)) return false;
+  const read = chart.msdValues ?? values;
+  if (dominantSkillset(read) !== "Handstream" && !hasHandstreamEndurance(read)) return false;
+  return Number(read?.Handstream ?? 0) - Number(read?.Technical ?? 0) <= HANDSTREAM_TECH_MAX_LEAD;
 }
 
 const STAMINA_TILE_JACK_VETO_SHARE = 0.30;
@@ -223,6 +240,7 @@ export function danOdFloorFor(floor: number, chart: Pick<ChartSkillInfo, "od" | 
 export type DanClearRejectReason =
   | "chart_unanalyzed"
   | "chart_ineligible"
+  | "jumptrill"
   | "chart_vibro"
   | "rate_vibro"
   | "low_od"
@@ -315,6 +333,10 @@ export function collectDanClears(
       : { tileValues };
     if (!info.danEligible) {
       reject(play, "chart_ineligible", aimed);
+      continue;
+    }
+    if (play.jumptrill) {
+      reject(play, "jumptrill", aimed);
       continue;
     }
     if (isUnverifiableRevision(play, info)) {
@@ -415,13 +437,12 @@ export function danClearAverageWindowFor(_side: "rc" | "ln", _keyCount: number):
 
 const DAN_STRAY_CLEAR_REFERENCE = 5;
 const DAN_STRAY_CLEAR_GAP = 5;
-const DAN_STRAY_CLEAR_MAX_IGNORED = 3;
 
 export function danIgnoredStrayCount(sortedDesc: number[]): number {
   const reference = sortedDesc.slice(0, DAN_STRAY_CLEAR_REFERENCE);
   if (reference.length === 0) return 0;
   const cut = reference.reduce((sum, value) => sum + value, 0) / reference.length - DAN_STRAY_CLEAR_GAP;
-  const room = Math.min(DAN_STRAY_CLEAR_MAX_IGNORED, sortedDesc.length - DAN_CLEAR_QUORUM);
+  const room = sortedDesc.length - DAN_CLEAR_QUORUM;
   let ignored = 0;
   while (ignored < room && sortedDesc[sortedDesc.length - 1 - ignored] < cut) ignored += 1;
   return ignored;
@@ -733,7 +754,7 @@ function bucketsForClear(
   values: Record<string, number> | undefined,
   rate = 1,
 ): DanSkillsetBucket[] {
-  if (chart?.jackDemand === true || trillIsJack(chart)) {
+  if (chart?.jackDemand === true || trillIsJack(chart, values)) {
     const jack = buckets.find((bucket) => bucket.id === "jack" && bucket.skillsets != null);
     if (jack) return resolveTilesForClear([jack], buckets, chart, values);
   }
@@ -741,6 +762,10 @@ function bucketsForClear(
     (bucket) => bucket.skillsets != null && bucket.tags.length > 0 && chartBelongsToTagBucket(bucket, chart),
   );
   if (override != null) return resolveTilesForClear([override], buckets, chart, values);
+  if (anchoredTechHandstream(chart, values)) {
+    const tech = buckets.find((bucket) => bucket.id === "tech" && bucket.skillsets != null);
+    if (tech) return resolveTilesForClear([tech], buckets, chart, values);
+  }
   if (chart?.handstreamEndurance === true && chart.techCategory === false
     && chart.clusterTrill === false && !jackContaminated(chart.jackShare, headlineSparesJackVeto(chart))) {
     const stamina = buckets.find((bucket) => bucket.id === "stamina" && bucket.skillsets != null);
@@ -976,6 +1001,7 @@ function jackContaminated(jackShare: number | null, headlineSpared = false): boo
 function headlineSparesJackVeto(chart: ChartSkillInfo | undefined): boolean {
   if (!chart) return false;
   if (chart.handstreamCluster === true) return true;
+  if (chart.techCategory !== true && handstreamLedTrill(chart)) return true;
   return chart.jumpstreamCluster === true && chart.techCategory !== true && chart.clusterTrill !== true;
 }
 

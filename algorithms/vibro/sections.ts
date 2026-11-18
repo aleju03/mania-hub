@@ -26,7 +26,9 @@ export type VibroReason =
   | "stacked_heads"
   | "flam_chords"
   | "sustained_density"
-  | "mash";
+  | "impossible_wall"
+  | "mash"
+  | "quads_only";
 
 export interface VibroSection {
   startTime: number;
@@ -48,7 +50,7 @@ export interface VibroAnalysis {
   reasonShares: Partial<Record<VibroReason, number>>;
 }
 
-const UNRATEABLE_REASONS: ReadonlySet<string> = new Set<VibroReason>(["jumptrill", "stacked_heads", "flam_chords", "mash"]);
+const UNRATEABLE_REASONS: ReadonlySet<string> = new Set<VibroReason>(["jumptrill", "stacked_heads", "flam_chords", "mash", "quads_only"]);
 
 export function isUnrateableExclusion(analysis: Pick<VibroAnalysis, "status" | "reasonShares"> | null | undefined): boolean {
   if (analysis?.status !== "excluded") return false;
@@ -76,18 +78,36 @@ export function analyzeStackedHeads(map: ManiaBeatmap, rate = 1): VibroAnalysis 
 const FLAM_PRESS_MS = 40;
 const FLAM_FINGER_FREE_MS = 100;
 const FLAM_CHART_SHARE = 0.3;
+const QUADS_ONLY_NOTE_SHARE = 0.85;
+const QUADS_ONLY_MAX_CHANGE_SHARE = 0.4;
+
+export function hasQuadsOnlyBody(map: ManiaBeatmap): boolean {
+  if (map.keyCount !== 4 || !map.notes.length) return false;
+  const masks = new Map<number, number>();
+  for (const note of map.notes) masks.set(note.time, (masks.get(note.time) ?? 0) | (1 << note.column));
+  const rows = [...masks.keys()].sort((a, b) => a - b).map((time) => masks.get(time)!);
+  let quadRows = 0;
+  let changes = 0;
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i] === 15) quadRows++;
+    if (i > 0 && rows[i] !== rows[i - 1]) changes++;
+  }
+  return quadRows * 4 >= map.notes.length * QUADS_ONLY_NOTE_SHARE && changes < rows.length * QUADS_ONLY_MAX_CHANGE_SHARE;
+}
 
 export function analyzeCollapsedNotes(map: ManiaBeatmap, rate = 1): VibroAnalysis | null {
   if (map.keyCount !== 4 || !map.notes.length || !Number.isFinite(rate) || rate <= 0) return null;
   const taps = buildVibroScan({ ...map, notes: map.notes.filter((note) => !note.isHold) }, rate);
-  if (!taps.times.length || countFlamChordNotes(taps) < map.notes.length * FLAM_CHART_SHARE) return null;
+  const reason: VibroReason | null = taps.times.length && countFlamChordNotes(taps) >= map.notes.length * FLAM_CHART_SHARE ? "flam_chords"
+    : hasQuadsOnlyBody(map) ? "quads_only" : null;
+  if (!reason) return null;
   const scan = buildVibroScan(map, rate);
   const activeDurationMs = measureActiveDuration(scan);
   return {
     version: VIBRO_SECTION_VERSION, status: "excluded",
-    sections: [{ startTime: scan.times[0], endTime: scan.times.at(-1)!, reasons: ["flam_chords"] }],
+    sections: [{ startTime: scan.times[0], endTime: scan.times.at(-1)!, reasons: [reason] }],
     excludedDurationMs: activeDurationMs, activeDurationMs, timeShare: 1, noteShare: 1, judgementShare: 1,
-    remainingNotes: 0, repeatShare: 0, reasonShares: { flam_chords: 1 },
+    remainingNotes: 0, repeatShare: 0, reasonShares: { [reason]: 1 },
   };
 }
 
@@ -164,6 +184,7 @@ export function analyzeVibroSections(map: ManiaBeatmap, rate = 1): VibroAnalysis
   scanFastRolls(scan, countFastFingerReturns(scan, 70));
   scanExtremeDensity(scan);
   scanSustainedDensity(scan);
+  scanImpossibleWalls(scan);
   scanRecurringRepetitions(scan);
 
   result.reasonShares = measureReasonShares(scan.intervals, rate, result.activeDurationMs);
@@ -235,7 +256,6 @@ function scanConsecutiveRows(
 
 const REPEATED_ROW_GAP_MS = 92;
 const repeatedRowGapMs = (mask: number) => mask === 15 ? REPEATED_QUAD_GAP_MS : REPEATED_ROW_GAP_MS;
-
 const SLOW_QUAD_GAP_MS = 105;
 
 const IDLE_WALL_MIN_ROWS = 12;
@@ -280,16 +300,30 @@ function scanRepeatedRows(scan: VibroScan): void {
   24, "sustained_jack");
 }
 
+const QUAD_BURST_ALONE_GAP_MS = 99;
+const QUAD_BURST_ALONE_SHARE = 2 / 3;
 const QUAD_BODY_TIERS = [
-  { gapMs: 125, minRows: 12, share: 0.25 },
-  { gapMs: 100, minRows: 3, share: 0.3 },
+  { gapMs: 125, minRows: 12, share: 0.25, aloneShare: 0 },
+  { gapMs: REPEATED_QUAD_GAP_MS, minRows: 3, share: 0.3, aloneShare: 0 },
+  { gapMs: QUAD_BURST_ALONE_GAP_MS, minRows: 3, share: 0.3, aloneShare: QUAD_BURST_ALONE_SHARE },
 ] as const;
+
+export function hasQuadsAtBurstLine(map: ManiaBeatmap, rate = 1): boolean {
+  if (map.keyCount !== 4 || !usesSectionVibro(map) || !Number.isFinite(rate) || rate <= 0) return false;
+  const { times, rows } = buildVibroScan(map, rate);
+  for (let i = 1; i < times.length; i++) {
+    const gap = times[i] - times[i - 1];
+    if (rows[i] === 15 && rows[i - 1] === 15 && gap > REPEATED_QUAD_GAP_MS * rate && gap <= QUAD_BURST_ALONE_GAP_MS * rate) return true;
+  }
+  return false;
+}
 
 function scanQuadBody(scan: VibroScan): void {
   const { times, rows, prefixNotes, rate } = scan;
   for (const tier of QUAD_BODY_TIERS) {
     const walls: Array<[number, number]> = [];
     let wallNotes = 0;
+    let aloneNotes = 0;
     let start = -1;
     for (let i = 0; i <= times.length; i++) {
       const quad = i < times.length && rows[i] === 15;
@@ -297,10 +331,13 @@ function scanQuadBody(scan: VibroScan): void {
       if (start >= 0 && i - start >= tier.minRows) {
         walls.push([start, i - 1]);
         wallNotes += (i - start) * 4;
+        const inPassage = start > 0 && times[start] - times[start - 1] <= SLOW_QUAD_GAP_MS * rate
+          && i < times.length && times[i] - times[i - 1] <= SLOW_QUAD_GAP_MS * rate;
+        if (!inPassage) aloneNotes += (i - start) * 4;
       }
       start = quad ? i : -1;
     }
-    if (wallNotes < prefixNotes.at(-1)! * tier.share) continue;
+    if (wallNotes < prefixNotes.at(-1)! * tier.share || aloneNotes < wallNotes * tier.aloneShare) continue;
     for (const [first, last] of walls) addSection(scan, times[first], times[last], "repeated_wall");
   }
 }
@@ -370,9 +407,46 @@ const JUMPTRILL_MIN_PRESSES = 8;
 const JUMPTRILL_FULL_SHARE = 0.75;
 const JUMPTRILL_CHART_SHARE = 0.3;
 
+const SUSTAINED_PAIR_PRESS_MS = 38;
+const SUSTAINED_PAIR_GAP_MS = 76;
+const SUSTAINED_PAIR_MIN_MS = 3000;
+const SUSTAINED_PAIR_FULL_SHARE = 0.95;
+const SUSTAINED_PAIR_CHART_SHARE = 0.4;
+
+function fourKeyJumptrillBursts(
+  times: readonly number[], rows: readonly number[], rate: number, totalNotes: number,
+): { bursts: VibroSection[]; burstNotes: number; jumpNotes: number } | null {
+  const hands: [number, number] = [0b0011, 0b1100];
+  const plain = findJumptrillBursts(times, rows, rate, hands, -1, JUMPTRILL_GAP_MS);
+  if (plain.burstNotes >= totalNotes * JUMPTRILL_CHART_SHARE) return plain;
+  const sustained = findJumptrillBursts(times, rows, rate, hands, -1, SUSTAINED_PAIR_GAP_MS, SUSTAINED_PAIR_PRESS_MS, SUSTAINED_PAIR_MIN_MS, SUSTAINED_PAIR_FULL_SHARE);
+  if (sustained.burstNotes >= totalNotes * SUSTAINED_PAIR_CHART_SHARE) return sustained;
+  return null;
+}
+
+export function hasSustainedPairJumptrill(map: ManiaBeatmap, rate = 1): boolean {
+  if (map.keyCount !== 4 || !map.notes.length || !Number.isFinite(rate) || rate <= 0) return false;
+  const read = buildVibroScan(usesSectionVibro(map) ? map : { ...map, notes: map.notes.filter((note) => !note.isHold) }, rate);
+  return findJumptrillBursts(read.times, read.rows, rate, [0b0011, 0b1100], -1, SUSTAINED_PAIR_GAP_MS, SUSTAINED_PAIR_PRESS_MS, SUSTAINED_PAIR_MIN_MS, SUSTAINED_PAIR_FULL_SHARE)
+    .burstNotes >= map.notes.length * SUSTAINED_PAIR_CHART_SHARE;
+}
+
+const JUMPTRILL_WRITTEN_SHARE = 0.9;
+
+export function isRatedJumptrill(
+  map: ManiaBeatmap, rate: number, analysis: Pick<VibroAnalysis, "status" | "reasonShares"> | null | undefined,
+): boolean {
+  if (map.keyCount !== 4 || analysis?.status !== "excluded") return false;
+  const reasons = Object.keys(analysis.reasonShares ?? {});
+  if (reasons.length !== 1 || reasons[0] !== "jumptrill") return false;
+  const read = buildVibroScan(usesSectionVibro(map) ? map : { ...map, notes: map.notes.filter((note) => !note.isHold) }, rate);
+  const found = fourKeyJumptrillBursts(read.times, read.rows, rate, map.notes.length);
+  return found != null && found.jumpNotes >= found.burstNotes * JUMPTRILL_WRITTEN_SHARE;
+}
+
 function scanJumptrills(scan: VibroScan): void {
-  const { bursts, burstNotes } = findJumptrillBursts(scan.times, scan.rows, scan.rate, [0b0011, 0b1100], -1, JUMPTRILL_GAP_MS);
-  if (burstNotes >= scan.prefixNotes.at(-1)! * JUMPTRILL_CHART_SHARE) scan.intervals.push(...bursts);
+  const found = fourKeyJumptrillBursts(scan.times, scan.rows, scan.rate, scan.prefixNotes.at(-1)!);
+  if (found) scan.intervals.push(...found.bursts);
 }
 
 function findJumptrillBursts(
@@ -382,7 +456,10 @@ function findJumptrillBursts(
   handMasks: readonly [number, number],
   middleColumn: number,
   gapMs: number,
-): { bursts: VibroSection[]; burstNotes: number } {
+  pressMs = JUMPTRILL_PRESS_MS,
+  minSpanMs = 0,
+  fullShare = JUMPTRILL_FULL_SHARE,
+): { bursts: VibroSection[]; burstNotes: number; jumpNotes: number } {
   type Press = { start: number; end: number; hand: number; mask: number };
   const presses: Press[] = [];
   const open: (Press | null)[] = [null, null];
@@ -393,7 +470,7 @@ function findJumptrillBursts(
       if (sides[0] && !sides[1]) sides[0] |= middleBit;
       else if (sides[1] && !sides[0]) sides[1] |= middleBit;
       else if (!sides[0] && !sides[1]) {
-        const hand = [0, 1].find((h) => open[h] && times[i] - open[h]!.start <= JUMPTRILL_PRESS_MS * rate && !(open[h]!.mask & middleBit));
+        const hand = [0, 1].find((h) => open[h] && times[i] - open[h]!.start <= pressMs * rate && !(open[h]!.mask & middleBit));
         if (hand !== undefined) sides[hand] |= middleBit;
       }
     }
@@ -401,7 +478,7 @@ function findJumptrillBursts(
       const bits = sides[hand];
       if (!bits) continue;
       const press = open[hand];
-      if (press && times[i] - press.start <= JUMPTRILL_PRESS_MS * rate && !(press.mask & bits)) {
+      if (press && times[i] - press.start <= pressMs * rate && !(press.mask & bits)) {
         press.mask |= bits;
         press.end = times[i];
         continue;
@@ -413,19 +490,24 @@ function findJumptrillBursts(
   }
   const bursts: VibroSection[] = [];
   let burstNotes = 0;
+  let jumpNotes = 0;
   let start = 0;
   const full = (press: Press) => (press.mask & handMasks[press.hand]) === handMasks[press.hand];
   for (let i = 1; i <= presses.length; i++) {
     if (i < presses.length && presses[i].hand !== presses[i - 1].hand
       && presses[i].start - presses[i - 1].start <= gapMs * rate) continue;
     const run = presses.slice(start, i);
-    if (run.length >= JUMPTRILL_MIN_PRESSES && run.filter(full).length >= run.length * JUMPTRILL_FULL_SHARE) {
+    if (run.length >= JUMPTRILL_MIN_PRESSES && run.filter(full).length >= run.length * fullShare
+      && run.at(-1)!.end - run[0].start >= minSpanMs * rate) {
       bursts.push({ startTime: run[0].start, endTime: run.at(-1)!.end, reasons: ["jumptrill"] });
-      burstNotes += run.reduce((sum, press) => sum + bitCount(press.mask), 0);
+      for (const press of run) {
+        burstNotes += bitCount(press.mask);
+        if (full(press) && press.end === press.start) jumpNotes += bitCount(press.mask);
+      }
     }
     start = i;
   }
-  return { bursts, burstNotes };
+  return { bursts, burstNotes, jumpNotes };
 }
 
 export function analyzeHoldVibro(map: ManiaBeatmap, rate = 1): VibroAnalysis | null {
@@ -458,9 +540,11 @@ export function analyzeWideJumptrill(map: ManiaBeatmap, rate = 1): VibroAnalysis
   const scan = buildVibroScan(map, rate);
   const fourKey = map.keyCount === 4;
   const read = fourKey ? buildVibroScan({ ...map, notes: map.notes.filter((note) => !note.isHold) }, rate) : scan;
-  const { bursts, burstNotes } = findJumptrillBursts(read.times, read.rows, rate, handMasks, middleColumn,
-    fourKey ? JUMPTRILL_GAP_MS : WIDE_JUMPTRILL_GAP_MS);
-  if (burstNotes < map.notes.length * JUMPTRILL_CHART_SHARE) return null;
+  const found = fourKey
+    ? fourKeyJumptrillBursts(read.times, read.rows, rate, map.notes.length)
+    : findJumptrillBursts(read.times, read.rows, rate, handMasks, middleColumn, WIDE_JUMPTRILL_GAP_MS);
+  if (!found || (!fourKey && found.burstNotes < map.notes.length * JUMPTRILL_CHART_SHARE)) return null;
+  const { bursts, burstNotes } = found;
   const activeDurationMs = measureActiveDuration(scan);
   const sections = mergeSections(bursts);
   let excludedDurationMs = 0;
@@ -505,7 +589,7 @@ const ONE_FINGER_COVERAGE = 0.9;
 const ONE_FINGER_DOMINANCE = 0.4;
 const ONE_FINGER_SHARE = 0.25;
 
-function scanOneFingerBody(scan: VibroScan): void {
+function findOneFingerRuns(scan: VibroScan, gapMs: number, minHits: number): { runs: Array<[number, number]>; coveredNotes: number } {
   const { times, rows, prefixNotes, rate } = scan;
   const runs: Array<[number, number]> = [];
   const covered = new Uint8Array(times.length);
@@ -513,11 +597,11 @@ function scanOneFingerBody(scan: VibroScan): void {
     const indices = rows.flatMap((mask, i) => mask & (1 << column) ? [i] : []);
     let start = 0;
     for (let i = 1; i <= indices.length; i++) {
-      if (i < indices.length && times[indices[i]] - times[indices[i - 1]] <= ONE_FINGER_GAP_MS * rate) continue;
+      if (i < indices.length && times[indices[i]] - times[indices[i - 1]] <= gapMs * rate) continue;
       const count = i - start;
       const first = indices[start];
       const last = indices[i - 1];
-      if (count >= ONE_FINGER_MIN_HITS && count / (last - first + 1) >= ONE_FINGER_COVERAGE
+      if (count >= minHits && count / (last - first + 1) >= ONE_FINGER_COVERAGE
         && count / (prefixNotes[last + 1] - prefixNotes[first]) >= ONE_FINGER_DOMINANCE) {
         runs.push([first, last]);
         covered.fill(1, first, last + 1);
@@ -527,8 +611,13 @@ function scanOneFingerBody(scan: VibroScan): void {
   }
   let coveredNotes = 0;
   for (let i = 0; i < times.length; i++) if (covered[i]) coveredNotes += prefixNotes[i + 1] - prefixNotes[i];
-  if (coveredNotes < prefixNotes.at(-1)! * ONE_FINGER_SHARE) return;
-  for (const [first, last] of runs) addSection(scan, times[first], times[last], "isolated_jack");
+  return { runs, coveredNotes };
+}
+
+function scanOneFingerBody(scan: VibroScan): void {
+  const { runs, coveredNotes } = findOneFingerRuns(scan, ONE_FINGER_GAP_MS, ONE_FINGER_MIN_HITS);
+  if (coveredNotes < scan.prefixNotes.at(-1)! * ONE_FINGER_SHARE) return;
+  for (const [first, last] of runs) addSection(scan, scan.times[first], scan.times[last], "isolated_jack");
 }
 
 function scanRepeatedJackStreams(scan: VibroScan): void {
@@ -593,7 +682,6 @@ const SINGLE_FINGER_BANDS: readonly RepetitionBand[] = [
   { gapMs: 30, averageGapMs: 30, minHits: 4, minShare: 0, reason: "rapid_jack_burst" },
   { gapMs: 85, averageGapMs: 55, minHits: 9, minShare: 0, reason: "rapid_jack_burst" },
 ];
-
 const PAIR_LOCK_GAP_MS = 85;
 
 const PAIR_BANDS: readonly RepetitionBand[] = [
@@ -841,6 +929,29 @@ function scanSustainedDensity(scan: VibroScan): void {
   }
 }
 
+const IMPOSSIBLE_WALL_FINGER_RATE = 14.5;
+const IMPOSSIBLE_WALL_MIN_ROWS = 12;
+const IMPOSSIBLE_WALL_EXCLUDE_MS = 1000;
+
+export function hasImpossibleWall(map: ManiaBeatmap, rate = 1): boolean {
+  if (map.keyCount !== 4 || !Number.isFinite(rate) || rate <= 0) return false;
+  const scan = buildVibroScan(map, rate);
+  scanImpossibleWalls(scan);
+  return scan.intervals.length > 0;
+}
+
+function scanImpossibleWalls(scan: VibroScan): void {
+  const { times, rows, rate } = scan;
+  const maxGap = 1000 / IMPOSSIBLE_WALL_FINGER_RATE * rate;
+  let start = -1;
+  for (let i = 0; i <= times.length; i++) {
+    const quad = i < times.length && rows[i] === 15;
+    if (quad && start >= 0 && times[i] - times[i - 1] <= maxGap) continue;
+    if (start >= 0 && i - start >= IMPOSSIBLE_WALL_MIN_ROWS) addSection(scan, times[start], times[i - 1], "impossible_wall");
+    start = quad ? i : -1;
+  }
+}
+
 function mergeSections(intervals: VibroSection[], mergeTouching = true): VibroSection[] {
   const sections: VibroSection[] = [];
   for (const section of intervals.sort((a, b) => a.startTime - b.startTime)) {
@@ -886,7 +997,11 @@ function measureSectionCoverage(result: VibroAnalysis, map: ManiaBeatmap, scan: 
   result.timeShare = result.activeDurationMs > 0 ? result.excludedDurationMs / result.activeDurationMs : 1;
   const noteCap = result.repeatShare >= REPEAT_BODY_SHARE ? REPEAT_BODY_NOTE_CAP : 0.25;
   const hammered = measureChordRunShare(scan.rate > 1 ? { ...scan, rate: 1 } : scan) >= CHORD_RUN_BODY_SHARE;
-  result.status = !result.reasonShares.sustained_density && !hammered
+  const ownSpeed = scan.rate > 1 ? { ...scan, rate: 1 } : scan;
+  const jackBursts = hasJackBurstShape(ownSpeed);
+  const handLocked = hasHandLockShape(ownSpeed);
+  const impossibleWallMs = (result.reasonShares.impossible_wall ?? 0) * result.activeDurationMs;
+  result.status = !result.reasonShares.sustained_density && impossibleWallMs < IMPOSSIBLE_WALL_EXCLUDE_MS && !hammered && !jackBursts && !handLocked
     && result.timeShare <= 0.15 && result.noteShare <= noteCap
     && result.remainingNotes >= 300 && result.activeDurationMs - result.excludedDurationMs >= 20_000
     ? "adjusted" : "excluded";
@@ -934,6 +1049,63 @@ function measureChordRunShare(scan: VibroScan): number {
     start = i;
   }
   return notes / total;
+}
+
+const JACK_BURST_GAP_MS = 85;
+const JACK_BURST_MIN_HITS = 4;
+const JACK_BURST_BODY_SHARE = 0.25;
+
+function hasJackBurstShape(scan: VibroScan): boolean {
+  const total = scan.prefixNotes.at(-1)!;
+  return total > 0 && hasLightRows(scan)
+    && findOneFingerRuns(scan, JACK_BURST_GAP_MS, JACK_BURST_MIN_HITS).coveredNotes >= total * JACK_BURST_BODY_SHARE;
+}
+
+const LIGHT_ROWS_GAP_MS = 95;
+const LIGHT_ROWS_MAX_CHORD = 2.25;
+
+function hasLightRows({ times, prefixNotes, rate }: VibroScan): boolean {
+  let fastRows = 0;
+  let fastNotes = 0;
+  for (let i = 1; i < times.length; i++) {
+    if (times[i] - times[i - 1] > LIGHT_ROWS_GAP_MS * rate) continue;
+    fastRows++;
+    fastNotes += prefixNotes[i + 1] - prefixNotes[i];
+  }
+  return fastRows > 0 && fastNotes <= fastRows * LIGHT_ROWS_MAX_CHORD;
+}
+
+export function hasJackBurstBody(map: ManiaBeatmap, rate = 1): boolean {
+  if (map.keyCount !== 4 || !usesSectionVibro(map) || !Number.isFinite(rate) || rate <= 0) return false;
+  return hasJackBurstShape(buildVibroScan(map, rate > 1 ? 1 : rate));
+}
+
+const HAND_LOCK_GAP_MS = 95;
+const HAND_LOCK_MIN_ROWS = 4;
+const HAND_LOCK_BODY_SHARE = 0.25;
+
+function hasHandLockShape(scan: VibroScan): boolean {
+  const { times, rows, prefixNotes, rate } = scan;
+  const total = prefixNotes.at(-1)!;
+  if (total === 0) return false;
+  if (!hasLightRows(scan)) return false;
+  let locked = 0;
+  for (const shift of [0, 2]) {
+    let start = 0;
+    for (let i = 1; i <= rows.length; i++) {
+      const hand = (rows[i - 1] >> shift) & 3;
+      if (i < rows.length && ((rows[i] >> shift) & 3) === hand && hand !== 0
+        && times[i] - times[i - 1] <= HAND_LOCK_GAP_MS * rate) continue;
+      if (i - start >= HAND_LOCK_MIN_ROWS) locked += (i - start) * bitCount(hand);
+      start = i;
+    }
+  }
+  return locked >= total * HAND_LOCK_BODY_SHARE;
+}
+
+export function hasHandLockBody(map: ManiaBeatmap, rate = 1): boolean {
+  if (map.keyCount !== 4 || !usesSectionVibro(map) || !Number.isFinite(rate) || rate <= 0) return false;
+  return hasHandLockShape(buildVibroScan(map, rate > 1 ? 1 : rate));
 }
 
 function overlapsVibro(start: number, end: number, sections: VibroSection[]): boolean {

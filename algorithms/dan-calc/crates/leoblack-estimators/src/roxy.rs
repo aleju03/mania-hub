@@ -221,6 +221,7 @@ pub struct RoxyDebug {
     pub stats: RoxyStats,
     pub corrections: Corrections,
     pub streams: [StreamSummary; 7],
+    pub reference_daniel_result: Option<EstimatorResult>,
 }
 
 impl RoxyDebug {
@@ -245,6 +246,7 @@ pub struct RoxyScopeDebug {
     pub structural_numeric: Option<f64>,
     pub notes: usize,
     pub rows: usize,
+    pub reference_daniel_result: Option<EstimatorResult>,
 }
 
 pub const STREAM_NAMES: [&str; 7] = ["speed", "handStream", "jack", "chordjack", "tech", "stamina", "course"];
@@ -314,16 +316,18 @@ fn power_mean(values: &[f64], p: f64) -> f64 {
     jsmath::pow(acc / values.len() as f64, 1.0 / p)
 }
 
-fn top_tail_mean(sorted: &[f64], ratio: f64) -> f64 {
+fn top_tail_mean(sorted: &[f64], top_fraction: f64) -> f64 {
     if sorted.is_empty() {
         return 0.0;
     }
-    let count = jsmath::max(1.0, (sorted.len() as f64 * ratio).ceil()) as usize;
+    let frac = clamp(top_fraction, 0.01, 1.0);
+    let count = jsmath::max(1.0, jsmath::round(sorted.len() as f64 * frac));
+    let start = jsmath::max(0.0, sorted.len() as f64 - count) as usize;
     let mut sum = 0.0;
-    for &v in &sorted[sorted.len() - count..] {
+    for &v in &sorted[start..] {
         sum += v;
     }
-    sum / count as f64
+    sum / count
 }
 
 fn bit_count4(mask: u32) -> u32 {
@@ -1242,7 +1246,18 @@ fn stabilize_high_reference_predictions(p: References, structural: f64) -> Refer
     out
 }
 
-fn build_reference_predictions<U: Upstream>(up: &U, text: &str, meta_options: &EstimatorOptions, structural: f64) -> References {
+fn compact_daniel_result(result: &EstimatorResult) -> EstimatorResult {
+    EstimatorResult::basic(
+        if result.star.is_finite() { result.star } else { f64::NAN },
+        result.ln_ratio,
+        result.column_count,
+        result.est_diff.clone(),
+        result.numeric_difficulty,
+        result.numeric_difficulty_hint.clone(),
+    )
+}
+
+fn build_reference_predictions<U: Upstream>(up: &U, text: &str, meta_options: &EstimatorOptions, structural: f64) -> (References, Option<EstimatorResult>) {
     let reference_options = meta_options.clone();
     let parsed = up.parse(text, None).ok();
     let sunny_result = match meta_options.precomputed_sunny_result {
@@ -1269,7 +1284,8 @@ fn build_reference_predictions<U: Upstream>(up: &U, text: &str, meta_options: &E
         structural,
     );
     predictions.sunny = None;
-    predictions
+    let daniel = meta_options.include_reference_results.then(|| compact_daniel_result(&daniel_result));
+    (predictions, daniel)
 }
 
 const META_ALGOS: [&str; 4] = ["Azusa", "Sunny", "Daniel", "Roxy"];
@@ -1474,7 +1490,8 @@ fn compute_high_reference_structural_floor(refs: &References, nd: &NumericDetail
     })
 }
 
-fn scope_result(label: &str, code: &str, structural: f64, raw_numeric: f64, ln_ratio: f64, column_count: f64, notes: usize, rows: usize) -> EstimatorResult {
+#[allow(clippy::too_many_arguments)]
+fn scope_result(label: &str, code: &str, structural: f64, raw_numeric: f64, ln_ratio: f64, column_count: f64, notes: usize, rows: usize, reference_daniel_result: Option<EstimatorResult>) -> EstimatorResult {
     EstimatorResult {
         star: round_fixed(3.4 + 0.38 * structural, 4),
         ln_ratio: if ln_ratio.is_finite() { ln_ratio } else { 0.0 },
@@ -1489,6 +1506,7 @@ fn scope_result(label: &str, code: &str, structural: f64, raw_numeric: f64, ln_r
             structural_numeric: fmt4(Some(structural)),
             notes,
             rows,
+            reference_daniel_result,
         }))),
     }
 }
@@ -1565,12 +1583,18 @@ fn run_roxy_inner<U: Upstream>(up: &U, osu_text: &str, options: &EstimatorOption
     let nd = compute_roxy_numeric(&curve);
     let structural = round_fixed(nd.numeric, 2);
 
+    let cvt_raw = options.cvt_flag.as_deref().unwrap_or("").to_uppercase();
+    let reuse_sunny = options.precomputed_sunny_result.is_some()
+        && speed_rate == 1.0
+        && !cvt_raw.contains("IN")
+        && !cvt_raw.contains("HO")
+        && od_details.effective == OD_NEUTRAL;
     let meta_options = EstimatorOptions {
         od_flag: Some(OdFlag::Num(OD_NEUTRAL)),
-        precomputed_sunny_result: None,
+        precomputed_sunny_result: if reuse_sunny { options.precomputed_sunny_result } else { None },
         ..effective_options.clone()
     };
-    let refs = build_reference_predictions(up, analysis_text, &meta_options, structural);
+    let (refs, reference_daniel_result) = build_reference_predictions(up, analysis_text, &meta_options, structural);
     let features = build_roxy_meta_features(&refs, &nd, &curve, structural);
     let meta_numeric = evaluate_roxy_meta_model(&features);
 
@@ -1608,10 +1632,10 @@ fn run_roxy_inner<U: Upstream>(up: &U, osu_text: &str, options: &EstimatorOption
     }
 
     if final_numeric < SCOPE_MIN {
-        return Ok(scope_result(SCOPE_MIN_LABEL, "BelowScope", final_numeric, nd.raw_numeric, ln_ratio, column_count, taps.len(), rows.len()));
+        return Ok(scope_result(SCOPE_MIN_LABEL, "BelowScope", final_numeric, nd.raw_numeric, ln_ratio, column_count, taps.len(), rows.len(), reference_daniel_result));
     }
     if final_numeric >= SCOPE_MAX {
-        return Ok(scope_result(SCOPE_MAX_LABEL, "AboveScope", final_numeric, nd.raw_numeric, ln_ratio, column_count, taps.len(), rows.len()));
+        return Ok(scope_result(SCOPE_MAX_LABEL, "AboveScope", final_numeric, nd.raw_numeric, ln_ratio, column_count, taps.len(), rows.len(), reference_daniel_result));
     }
 
     let est_diff = numeric_to_roxy_rc_label(final_numeric);
@@ -1658,6 +1682,7 @@ fn run_roxy_inner<U: Upstream>(up: &U, osu_text: &str, options: &EstimatorOption
             stats: curve.stats.clone(),
             corrections: nd.corrections,
             streams: curve.summaries,
+            reference_daniel_result,
         }))),
     })
 }

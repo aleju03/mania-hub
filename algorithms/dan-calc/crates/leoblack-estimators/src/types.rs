@@ -51,6 +51,7 @@ pub struct EstimatorOptions<'a> {
     pub force_sunny_reference_ho: Option<bool>,
     pub precomputed_sunny_result: Option<&'a EstimatorResult>,
     pub precomputed_daniel_result: Option<&'a EstimatorResult>,
+    pub include_reference_results: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,6 +71,7 @@ pub trait ParsedView {
     fn column(&self, i: usize) -> f64;
     fn note_start(&self, i: usize) -> f64;
     fn note_type(&self, i: usize) -> f64;
+    fn note_end(&self, i: usize) -> f64;
 }
 
 #[derive(Clone, Debug)]
@@ -81,6 +83,7 @@ pub struct ParsedChart {
     pub columns: Vec<f64>,
     pub note_starts: Vec<f64>,
     pub note_types: Vec<f64>,
+    pub note_ends: Vec<f64>,
 }
 
 impl ParsedView for ParsedChart {
@@ -92,6 +95,7 @@ impl ParsedView for ParsedChart {
     fn column(&self, i: usize) -> f64 { self.columns.get(i).copied().unwrap_or(f64::NAN) }
     fn note_start(&self, i: usize) -> f64 { self.note_starts.get(i).copied().unwrap_or(f64::NAN) }
     fn note_type(&self, i: usize) -> f64 { self.note_types.get(i).copied().unwrap_or(f64::NAN) }
+    fn note_end(&self, i: usize) -> f64 { self.note_ends.get(i).copied().unwrap_or(f64::NAN) }
 }
 
 impl<T: ParsedView + ?Sized> ParsedView for std::rc::Rc<T> {
@@ -103,6 +107,7 @@ impl<T: ParsedView + ?Sized> ParsedView for std::rc::Rc<T> {
     fn column(&self, i: usize) -> f64 { (**self).column(i) }
     fn note_start(&self, i: usize) -> f64 { (**self).note_start(i) }
     fn note_type(&self, i: usize) -> f64 { (**self).note_type(i) }
+    fn note_end(&self, i: usize) -> f64 { (**self).note_end(i) }
 }
 
 pub trait Upstream {
@@ -163,6 +168,14 @@ pub struct CompanellaFusion {
     pub rc_est_diff: String,
     pub rc_numeric: Option<f64>,
     pub rc_numeric_hint: Option<String>,
+    pub xdc1_candidate: Option<Xdc1Candidate>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Xdc1Candidate {
+    pub est_diff: String,
+    pub numeric_difficulty: Option<f64>,
+    pub numeric_difficulty_hint: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

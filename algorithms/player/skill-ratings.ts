@@ -1,4 +1,5 @@
 import { DAN_MIN_OD_7K_LN, danMinOdFor, danOdFloorFor, type DanClearTarget, danOdFlagForPlay, DAN_SKILLSET_AVERAGE_MIN_BUCKETS, type DanSkillsetBucket, type DanClearEvidence, danSkillsetBucketsForPlay, tileValuesForPlay, INVERSE_MOD_VARIANT } from "./dan-clears";
+import { weightedMeanClusterBpm } from "../classification/jack-demand";
 import { analyzeLnSsrOnThread, checkRateVibroOnThread } from "../msd/inline";
 import { checkRateVibro, type RateVibroCheck } from "../vibro/rate";
 import { SSR_CALC_GOAL_CAP, SSR_EXTRAPOLATION_MAX_SLOPE, ssrGoalAnchors } from "../ln/ssr";
@@ -199,6 +200,7 @@ export interface StoredPlaySsr {
   rateVibroChecked?: number;
   vibroAdjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
   unrateable?: true;
+  jumptrill?: true;
   lnTailPass?: number;
   minaCalc?: string;
   lnSkill?: LnSkillResult;
@@ -626,6 +628,7 @@ export interface ChartSkillInfo {
   riceTiles?: string[] | null;
   clusterTrill: boolean | null;
   handstreamCluster: boolean | null;
+  clusterBpm?: number | null;
   jumpstreamCluster: boolean | null;
   handstreamEndurance?: boolean;
   msdValues?: Record<string, number> | null;
@@ -688,7 +691,7 @@ interface LeanClassificationJson {
   rc?: LeanHalfJson | null;
   ln?: LeanHalfJson | null;
   patterns?: Array<{ id?: unknown; score?: unknown }>;
-  jackDemand?: { detected?: unknown } | null;
+  jackDemand?: { detected?: unknown; reasons?: unknown } | null;
   clusters?: Array<{ pattern?: unknown; importance?: unknown; mixed?: unknown; label?: unknown }>;
   riceShape?: { twoBack?: unknown; techSections?: unknown; motifRepeat?: unknown; speedPeak?: unknown; rollSections?: unknown } | null;
   clusterCategory?: unknown;
@@ -740,6 +743,36 @@ const STREAM_CLUSTERS = /stream/i;
 export const CLUSTER_SHARE_MIN = 0.4;
 
 const TECH_CLUSTER_CATEGORY = /tech/i;
+const FAST_TECH_MIN_CLUSTER_BPM = 165;
+const TECH_FLOW_MIN_ROLL_SHARE = 0.04;
+export function readsAsFlow(clusterBpm: unknown, rollShare: unknown): boolean {
+  return Number(clusterBpm ?? NaN) >= FAST_TECH_MIN_CLUSTER_BPM || Number(rollShare ?? NaN) >= TECH_FLOW_MIN_ROLL_SHARE;
+}
+const JACK_LABEL_CATEGORY = /jack|quad/i;
+const CHORD_JACK_CLUSTER_LABEL = /chordjack|quad/i;
+const DUMP_MAX_MINIJACK_SHARE = 0.009;
+function jackDemandStands(
+  verdict: { detected?: unknown; reasons?: unknown } | null | undefined,
+  clusterCategory: unknown,
+  clusters: unknown,
+  miniJackShare: unknown,
+  rollShare: unknown,
+): boolean {
+  if (verdict?.detected !== true) return false;
+  const reasons = Array.isArray(verdict.reasons) ? verdict.reasons : [];
+  if (reasons.length === 1 && reasons[0] === "jack_through_chords") {
+    return !readsAsFlow(Array.isArray(clusters) ? weightedMeanClusterBpm(clusters) : null, rollShare);
+  }
+  if (reasons.length !== 1 || reasons[0] !== "jack_cluster_corroborated") return true;
+  if (typeof clusterCategory !== "string") return true;
+  if (!TECH_CLUSTER_CATEGORY.test(clusterCategory) || JACK_LABEL_CATEGORY.test(clusterCategory)) return true;
+  if (!readsAsFlow(Array.isArray(clusters) ? weightedMeanClusterBpm(clusters) : null, rollShare)) return true;
+  const miniJack = Number(miniJackShare);
+  if (miniJackShare == null || !Number.isFinite(miniJack) || miniJack >= DUMP_MAX_MINIJACK_SHARE) return true;
+  return Array.isArray(clusters) && clusters.some((cluster) => cluster?.pattern === "Jacks"
+    && typeof cluster.label === "string" && CHORD_JACK_CLUSTER_LABEL.test(cluster.label)
+    && Number(cluster.importance) > 0);
+}
 
 const RICE_TILE_JACK_SHARE = 0.5;
 const RICE_TILE_HYBRID_JACK_SHARE = 0.4;
@@ -769,6 +802,9 @@ const RICE_TILE_LIGHT_MAX_TECH_SECTIONS = 0.25;
 const RICE_TILE_LIGHT_TECH_MIXED_SHARE = 0.45;
 const RICE_TILE_LIGHT_JACK_SHARE = 0.15;
 const RICE_TILE_LIGHT_JACK_SCORE = 0.5;
+const RICE_TILE_LIGHT_RUN_SHARE = 0.25;
+const RICE_TILE_LIGHT_RUN_MAX_TWO_BACK = 0.35;
+const RICE_TILE_PRISM_TECH_LEAD = 2;
 
 const RICE_TILE_SPEED_PEAK = 0.2;
 
@@ -792,8 +828,8 @@ const RICE_TILE_DENSE_TECH_SECTIONS = 0.5;
 const RICE_TILE_BURST_SHARE = 0.25;
 const RICE_TILE_BURST_JACK_SHARE = 0.1;
 
-function riceTiles7k(keyCount: number | null, parsed: LeanClassificationJson | null, delayScore: number, bracketScore: number, jackScore: number): string[] | null {
-  const tiles = riceShapeTiles7k(keyCount, parsed, delayScore, bracketScore, jackScore);
+function riceTiles7k(keyCount: number | null, parsed: LeanClassificationJson | null, delayScore: number, bracketScore: number, jackScore: number, lightException = true): string[] | null {
+  const tiles = riceShapeTiles7k(keyCount, parsed, delayScore, bracketScore, jackScore, lightException);
   if (tiles == null || tiles.length !== 1) return tiles;
   const speedPeak = parsed?.riceShape?.speedPeak;
   if (tiles[0] === "stream" && typeof speedPeak === "number" && speedPeak >= RICE_TILE_SPEED_PEAK) return ["stream", "speed"];
@@ -801,8 +837,19 @@ function riceTiles7k(keyCount: number | null, parsed: LeanClassificationJson | n
   if (tiles[0] === "tech" && typeof rollSections === "number" && rollSections >= RICE_TILE_ROLL_SECTIONS) return ["tech", "speed"];
   return tiles;
 }
+function riceTilesWithPrism7k(keyCount: number | null, parsed: LeanClassificationJson | null, delayScore: number, bracketScore: number, jackScore: number, prismValues: Record<string, number> | undefined): string[] | null {
+  const tiles = riceTiles7k(keyCount, parsed, delayScore, bracketScore, jackScore);
+  if (tiles?.[0] !== "stream" || !prismTechLeads(prismValues)) return tiles;
+  return riceTiles7k(keyCount, parsed, delayScore, bracketScore, jackScore, false);
+}
+function prismTechLeads(values: Record<string, number> | undefined): boolean {
+  const read = (key: string) => (typeof values?.[key] === "number" ? values[key] : Number.NaN);
+  const technical = read("Technical");
+  return technical - read("Jumpstream") >= RICE_TILE_PRISM_TECH_LEAD
+    && technical >= read("Chordjack") && technical >= read("Speed");
+}
 
-function riceShapeTiles7k(keyCount: number | null, parsed: LeanClassificationJson | null, delayScore: number, bracketScore: number, jackScore: number): string[] | null {
+function riceShapeTiles7k(keyCount: number | null, parsed: LeanClassificationJson | null, delayScore: number, bracketScore: number, jackScore: number, lightException: boolean): string[] | null {
   if (keyCount !== 7) return null;
   const category = typeof parsed?.clusterCategory === "string" ? parsed.clusterCategory.trim() : "";
   const all = Array.isArray(parsed?.clusters) ? parsed.clusters : [];
@@ -864,12 +911,13 @@ function riceShapeTiles7k(keyCount: number | null, parsed: LeanClassificationJso
   }
   if (delayScore >= RICE_TILE_DELAY_JACK_SCORE && jack >= RICE_TILE_DELAY_JACK_SHARE) return ["speed", "jack"];
   const denseHeadline = RICE_TILE_DENSE_CATEGORY.test(category);
-  const lightHeadline = !denseHeadline && RICE_TILE_STREAM_CATEGORY.test(category) && (techSections ?? 0) < RICE_TILE_LIGHT_MAX_TECH_SECTIONS;
+  const lightHeadline = lightException && !denseHeadline && RICE_TILE_STREAM_CATEGORY.test(category) && (techSections ?? 0) < RICE_TILE_LIGHT_MAX_TECH_SECTIONS;
   if (jack < RICE_TILE_HYBRID_JACK_SHARE && !TECH_CLUSTER_CATEGORY.test(category) && (denseHeadline || lightHeadline)
     && mixed >= RICE_TILE_MIXED_SHARE && dense < RICE_TILE_MIXED_MAX_DENSE && twoBack != null && twoBack >= RICE_TILE_STREAM_TWO_BACK) {
     if (lightHeadline && mixed >= RICE_TILE_LIGHT_TECH_MIXED_SHARE) return ["tech", "stream"];
     const jacked = jack >= RICE_TILE_STREAM_JACK_SHARE
       || (lightHeadline && jack >= RICE_TILE_LIGHT_JACK_SHARE && jackScore >= RICE_TILE_LIGHT_JACK_SCORE);
+    if (lightHeadline && !jacked && singleStream >= RICE_TILE_LIGHT_RUN_SHARE && twoBack < RICE_TILE_LIGHT_RUN_MAX_TWO_BACK) return ["tech"];
     return jacked ? ["stream", "jack"] : ["stream"];
   }
   if (jack >= RICE_TILE_HYBRID_JACK_SHARE) return ["tech"];
@@ -966,6 +1014,8 @@ export function chartSkillInfoFromAnalysisRow(row: Record<string, unknown>): Cha
   const dtRawDan = readRawDan(danDt ?? undefined);
   const danHt = parseJson<StoredRateVerdict | null>(String(row.dan_ht_json ?? ""), null);
   const htRawDan = readRawDan(danHt ?? undefined);
+  const riceTiles = riceTilesWithPrism7k(keyCount, parsed, patternScores.get("delay") ?? 0, patternScores.get("bracket") ?? 0, patternScores.get("jack") ?? 0,
+    keyCount === 7 ? readChartJson<{ values?: Record<string, number> } | null>(row.msd_json, null)?.values : undefined);
   const chartMsd = keyCount === 4
     ? readChartJson<{ values?: Record<string, number>; lnSkill?: Partial<LnSkillResult> } | null>(row.msd_json, null)
     : null;
@@ -973,11 +1023,12 @@ export function chartSkillInfoFromAnalysisRow(row: Record<string, unknown>): Cha
     chartFamily: typeof row.family_key === "string" ? row.family_key : null,
     patterns: patternIds,
     lnPatterns: [...patternScores.entries()].filter(([id, score]) => LN_PATTERN_IDS.has(id) && score >= patternTagMinScore(id)).map(([id]) => id),
-    jackDemand: parsed?.jackDemand?.detected === true,
+    jackDemand: jackDemandStands(parsed?.jackDemand, parsed?.clusterCategory, parsed?.clusters, parsed?.motion?.miniJack, parsed?.motion?.roll4),
+    clusterBpm: Array.isArray(parsed?.clusters) ? weightedMeanClusterBpm(parsed.clusters) : null,
     jackShare,
     streamShare: clusterShare(parsed, STREAM_CLUSTERS),
     techCategory,
-    riceTiles: riceTiles7k(keyCount, parsed, patternScores.get("delay") ?? 0, patternScores.get("bracket") ?? 0, patternScores.get("jack") ?? 0),
+    riceTiles,
     clusterTrill: typeof parsed?.clusterCategory === "string" && parsed.clusterCategory.trim() !== ""
       ? TRILL_CLUSTER_CATEGORY.test(parsed.clusterCategory)
       : null,
@@ -1111,7 +1162,7 @@ export function rateVibroVerdictWithoutPpTrust(osuText: string, rate: number, ba
   adjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
 } | null {
   const check = checkRateVibro(osuText, rate, false, baseVibro);
-  return check ? { vibro: check.vibro, adjustment: check.adjustment } : null;
+  return check ? { vibro: check.vibro || check.jumptrill === true, adjustment: check.adjustment } : null;
 }
 
 export interface DanAttemptEntry {
@@ -1200,6 +1251,7 @@ export interface PlayerSkillScoreDetails {
   totalScore: number | null;
   rank: string | null;
   scoreUrl: string | null;
+  hasReplay?: boolean | null;
 }
 
 export type ModInput = string[] | OsuMod[];
@@ -1270,7 +1322,7 @@ export async function slotWinnerRejection(input: {
   ppBacked: boolean;
 }): Promise<
   | { rejection: "widened_windows" | "chart_vibro" | "not_native_mania" | "unsupported_keymode" | "chart_rewritten" | "invert_failed" | "rate_vibro" | "pending" }
-  | { rejection: null; ratedText: string; vibroAdjustment?: StoredPlaySsr["vibroAdjustment"] }> {
+  | { rejection: null; ratedText: string; vibroAdjustment?: StoredPlaySsr["vibroAdjustment"]; jumptrill?: true }> {
   if (input.odOverride != null && input.chartOd == null) {
     const floor = daRatingOdFloorFor(input.analysisKeyCount, input.inverse, { lnRatio: input.lnRatio, lnEffectiveRatio: input.lnEffectiveRatio });
     if (daWidensHitWindows(input.odOverride, parseOsuOd(input.osuText), floor)) return { rejection: "widened_windows" };
@@ -1290,7 +1342,7 @@ export async function slotWinnerRejection(input: {
     const check = await chartVibroAtRate(ratedText, input.rate, input.ppBacked, input.chartVibro);
     if (check?.vibro) return { rejection: "rate_vibro" };
     if (!check) return { rejection: "pending" };
-    return { rejection: null, ratedText, vibroAdjustment: check.adjustment };
+    return { rejection: null, ratedText, vibroAdjustment: check.adjustment, ...(check.jumptrill ? { jumptrill: true as const } : {}) };
   }
   return { rejection: null, ratedText };
 }

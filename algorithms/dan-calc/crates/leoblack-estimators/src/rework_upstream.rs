@@ -29,6 +29,7 @@ impl ParsedView for OsuFileParser {
     fn column(&self, i: usize) -> f64 { self.columns.get(i).copied().unwrap_or(f64::NAN) }
     fn note_start(&self, i: usize) -> f64 { self.note_starts.get(i).copied().unwrap_or(f64::NAN) }
     fn note_type(&self, i: usize) -> f64 { self.note_types.get(i).copied().unwrap_or(f64::NAN) }
+    fn note_end(&self, i: usize) -> f64 { self.note_ends.get(i).copied().unwrap_or(f64::NAN) }
 }
 
 #[derive(Clone, Copy, Debug)]

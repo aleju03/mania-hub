@@ -391,7 +391,7 @@ fn starts_with_word_ci(s: &str, word: &str) -> bool {
     !s[n..].chars().next().map_or(false, |c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-fn verdict_usable(verdict: &str) -> bool {
+pub(crate) fn verdict_usable(verdict: &str) -> bool {
     !verdict.is_empty() && !starts_with_word_ci(verdict, "Invalid") && !starts_with_word_ci(verdict, "Unknown")
 }
 
@@ -680,7 +680,16 @@ pub fn classify_chart(ctx: &ChartContext, input: &ClassifyInput) -> Result<Chart
         };
         let star = if base_star > 0.0 { base_star * jsmath::pow(rate, 0.7) } else { 0.0 };
         let dan_input = input.dan_input();
-        if let Some(e) = estimate_ln_dan(map, &dan_input, &analysis.features.metrics, star, analysis.features.duration_ms, rate, true) {
+        let metrics = &analysis.features.metrics;
+        let duration_ms = analysis.features.duration_ms;
+        let mut estimate = estimate_ln_dan(map, &dan_input, metrics, star, duration_ms, rate, true, true);
+        if estimate.is_none() {
+            if let Some(floor) = ln_from_tables.as_ref().filter(|h| h.boundary == Some("below")) {
+                estimate = estimate_ln_dan(map, &dan_input, metrics, star, duration_ms, rate, true, false)
+                    .filter(|e| e.raw_dan < floor.raw_dan);
+            }
+        }
+        if let Some(e) = estimate {
             ln = Some(DanVerdictHalf {
                 kind: "ln",
                 source: "inhouse-ln-knn",

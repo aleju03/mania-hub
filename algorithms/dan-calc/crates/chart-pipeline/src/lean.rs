@@ -1,7 +1,9 @@
 use dan_core::ln_effective::{LN_EFFECTIVE_MODEL_VERSION, LN_MIN_WORK_SHARE};
 use dan_core::motion_features::MotionFeatures;
 use dan_core::rice_shape::RiceShape;
+use dan_core::js::cmp_num;
 use dan_core::types::{DanFeatureMetrics, ManiaPatternHit};
+use dan_core::ManiaNote;
 
 use crate::classifier::{ChartClassification, DanVerdictHalf, Unported};
 use crate::hybrid::{rate_hybrid_ln_sections, HybridLnSectionsReading, HYBRID_LN_SECTIONS_VERSION};
@@ -38,7 +40,13 @@ pub struct Lean {
     pub ln_sections: Option<HybridLnSectionsReading>,
 }
 
-pub fn lean_classification(classification: ChartClassification, note_bpm: Option<f64>, motion: Option<MotionFeatures>, rice_shape: Option<RiceShape>) -> Lean {
+pub fn lean_classification(
+    classification: ChartClassification,
+    note_bpm: Option<f64>,
+    motion: Option<MotionFeatures>,
+    rice_shape: Option<RiceShape>,
+    chord_jack: Option<ChordJackRows>,
+) -> Lean {
     let clusters: Vec<LeanCluster> = classification
         .analysis
         .clusters
@@ -59,7 +67,7 @@ pub fn lean_classification(classification: ChartClassification, note_bpm: Option
         })
         .unwrap_or_default();
     let patterns = &classification.analysis.patterns;
-    let jack_demand = classify_four_key_jack_demand(classification.key_count, &patterns.metrics, &patterns.all_patterns, &clusters);
+    let jack_demand = classify_four_key_jack_demand(classification.key_count, &patterns.metrics, &patterns.all_patterns, &clusters, chord_jack.as_ref());
     Lean { note_bpm, motion, rice_shape, classification, jack_demand, clusters, ln_sections: None }
 }
 
@@ -293,6 +301,59 @@ const MARATHON_JACK_SCORE_MIN: f64 = 0.75;
 const MARATHON_JACK_PRESSURE_MIN: f64 = 175.0;
 const MARATHON_CHORD_RATIO_MIN: f64 = 0.45;
 const MARATHON_CHORD_OVERLAP_MIN: f64 = 0.55;
+const CHORD_JACK_MAX_GAP_MS: f64 = 200.0;
+const QUICK_ROW_MS: f64 = 65.0;
+const CHORD_JACK_ROW_SHARE_MIN: f64 = 0.20;
+const CHORD_JACK_QUICK_SHARE_MAX: f64 = 0.05;
+const CHORD_JACK_HOLD_SHARE_MAX: f64 = 0.10;
+const CHORD_JACK_MIN_NOTES: f64 = 300.0;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ChordJackRows {
+    pub notes: f64,
+    pub row_share: f64,
+    pub quick_share: f64,
+    pub hold_share: f64,
+}
+
+pub fn chord_jack_rows(notes: &[ManiaNote]) -> Option<ChordJackRows> {
+    if notes.is_empty() {
+        return None;
+    }
+    let mut sorted: Vec<&ManiaNote> = notes.iter().collect();
+    sorted.sort_by(|a, b| cmp_num(a.time, b.time));
+    let (mut rows, mut chord_jacks, mut quick, mut holds) = (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64);
+    let mut previous: u32 = 0;
+    let mut previous_time = 0.0_f64;
+    let mut index = 0;
+    while index < sorted.len() {
+        let time = sorted[index].time;
+        let mut mask: u32 = 0;
+        loop {
+            mask |= 1u32.wrapping_shl(sorted[index].column as u32);
+            if sorted[index].is_hold {
+                holds += 1.0;
+            }
+            index += 1;
+            if !(index < sorted.len() && sorted[index].time == time) {
+                break;
+            }
+        }
+        if rows > 0.0 {
+            let gap = time - previous_time;
+            if gap < QUICK_ROW_MS {
+                quick += 1.0;
+            }
+            if gap <= CHORD_JACK_MAX_GAP_MS && (mask & previous) != 0 && (mask.count_ones() >= 3 || previous.count_ones() >= 3) {
+                chord_jacks += 1.0;
+            }
+        }
+        rows += 1.0;
+        previous = mask;
+        previous_time = time;
+    }
+    Some(ChordJackRows { notes: notes.len() as f64, row_share: chord_jacks / rows, quick_share: quick / rows, hold_share: holds / notes.len() as f64 })
+}
 
 fn pattern_score(patterns: &[ManiaPatternHit], id: &str) -> f64 {
     let mut score = 0.0;
@@ -357,6 +418,7 @@ pub fn classify_four_key_jack_demand(
     metrics: &DanFeatureMetrics,
     patterns: &[ManiaPatternHit],
     clusters: &[LeanCluster],
+    chord_jack: Option<&ChordJackRows>,
 ) -> JackDemand {
     if key_count != 4 {
         return JackDemand { detected: false, reasons: Vec::new() };
@@ -394,5 +456,60 @@ pub fn classify_four_key_jack_demand(
     if marathon {
         reasons.push("jack_marathon");
     }
+    let through_chords = reasons.is_empty()
+        && chord_jack.map_or(false, |rows| {
+            rows.notes >= CHORD_JACK_MIN_NOTES
+                && rows.row_share >= CHORD_JACK_ROW_SHARE_MIN
+                && rows.quick_share <= CHORD_JACK_QUICK_SHARE_MAX
+                && rows.hold_share <= CHORD_JACK_HOLD_SHARE_MAX
+        });
+    if through_chords {
+        reasons.push("jack_through_chords");
+    }
     JackDemand { detected: !reasons.is_empty(), reasons }
+}
+
+#[cfg(test)]
+mod chord_jack_tests {
+    use super::*;
+
+    fn notes_of(pattern: &[&[i32]], interval_ms: f64, repeats: usize, hold: bool) -> Vec<ManiaNote> {
+        let mut notes = Vec::new();
+        for cycle in 0..repeats {
+            for (index, columns) in pattern.iter().enumerate() {
+                let time = 1000.0 + ((cycle * pattern.len() + index) as f64) * interval_ms;
+                for &column in columns.iter() {
+                    notes.push(ManiaNote { column, time, end_time: if hold { time + 50.0 } else { time }, is_hold: hold });
+                }
+            }
+        }
+        notes
+    }
+
+    #[test]
+    fn reads_rows_as_the_ts_does() {
+        let rows = chord_jack_rows(&notes_of(&[&[0], &[0, 1, 2], &[3], &[1]], 125.0, 50, false)).unwrap();
+        assert_eq!((rows.notes, rows.row_share, rows.quick_share, rows.hold_share), (300.0, 0.25, 0.0, 0.0));
+        assert_eq!(chord_jack_rows(&notes_of(&[&[0], &[0, 1], &[2], &[3]], 125.0, 50, false)).unwrap().row_share, 0.0);
+        assert_eq!(chord_jack_rows(&notes_of(&[&[0], &[0, 1, 2], &[3], &[1]], 210.0, 50, false)).unwrap().row_share, 0.0);
+        assert_eq!(chord_jack_rows(&notes_of(&[&[0], &[1], &[2], &[3]], 60.0, 50, false)).unwrap().quick_share, 199.0 / 200.0);
+        assert_eq!(chord_jack_rows(&notes_of(&[&[0], &[1]], 125.0, 50, true)).unwrap().hold_share, 1.0);
+        assert!(chord_jack_rows(&[]).is_none());
+    }
+
+    #[test]
+    fn the_arm_needs_every_leg_and_no_other_arm() {
+        let metrics = DanFeatureMetrics::default();
+        let fires = |rows: ChordJackRows, key_count: i32| classify_four_key_jack_demand(key_count, &metrics, &[], &[], Some(&rows)).reasons;
+        let base = ChordJackRows { notes: 1200.0, row_share: 0.21, quick_share: 0.01, hold_share: 0.0 };
+        assert_eq!(fires(base, 4), vec!["jack_through_chords"]);
+        assert!(fires(ChordJackRows { row_share: 0.19, ..base }, 4).is_empty());
+        assert!(fires(ChordJackRows { quick_share: 0.06, ..base }, 4).is_empty());
+        assert!(fires(ChordJackRows { hold_share: 0.11, ..base }, 4).is_empty());
+        assert!(fires(ChordJackRows { notes: 299.0, ..base }, 4).is_empty());
+        assert!(fires(base, 7).is_empty());
+        assert!(classify_four_key_jack_demand(4, &metrics, &[], &[], None).reasons.is_empty());
+        let dense = DanFeatureMetrics { chord_ratio: 0.78, chord_column_overlap_ratio: 0.68, two_back_column_rehit_excess: 0.35, ..DanFeatureMetrics::default() };
+        assert_eq!(classify_four_key_jack_demand(4, &dense, &[], &[], Some(&base)).reasons, vec!["dense_alternating_chords"]);
+    }
 }

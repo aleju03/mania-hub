@@ -1,10 +1,11 @@
 import { parseManiaBeatmap } from "../chart/beatmap";
 import { detectRateVibro } from "./detection";
-import { analyzeCollapsedNotes, analyzeStackedHeads, analyzeVibroSections, analyzeWideJumptrill, isUnrateableExclusion, usesSectionVibro, type VibroAnalysis } from "./sections";
+import { analyzeCollapsedNotes, analyzeStackedHeads, analyzeVibroSections, analyzeWideJumptrill, isRatedJumptrill, isUnrateableExclusion, usesSectionVibro, type VibroAnalysis } from "./sections";
 
 export interface RateVibroCheck {
   vibro: boolean;
   unrateable: boolean;
+  jumptrill?: true;
   adjustment?: Pick<VibroAnalysis, "excludedDurationMs" | "timeShare" | "noteShare" | "judgementShare">;
 }
 
@@ -13,6 +14,7 @@ export function checkRateVibro(osuText: string, rate: number, hasPpTrust: boolea
     const map = parseManiaBeatmap(osuText);
     const analysis = usesSectionVibro(map) ? analyzeVibroSections(map, rate)
       : analyzeStackedHeads(map, rate) ?? analyzeWideJumptrill(map, rate) ?? analyzeCollapsedNotes(map, rate);
+    if (isRatedJumptrill(map, rate, analysis)) return { vibro: false, unrateable: false, jumptrill: true };
     return {
       vibro: analysis ? analysis.status === "excluded"
         : (!hasPpTrust && baseVibro) || (rate !== 1 && detectRateVibro(map, rate)),

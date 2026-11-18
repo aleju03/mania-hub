@@ -863,6 +863,7 @@ export function estimateLnDan(
   durationMs: number,
   rate: number,
   allowCourseSegmentation = true,
+  requireLnSignal = true,
 ): LnDanEstimateResult | null {
   const metadata = normalize(`${map.title} ${map.version} ${input.title ?? ""} ${input.version ?? ""}`);
   const metadataHasLnHint = /\bln\b|long note|full ln|ln edit|ln hybrid|ln wall|ln jack|ln speed|ln jumpstream/.test(metadata);
@@ -889,7 +890,7 @@ export function estimateLnDan(
     && metrics.lnHoldDurationP90 >= 160
   );
   const lnCandidate = metadataLnSignal || chartLnSignal;
-  if (!lnCandidate) return null;
+  if (!lnCandidate && requireLnSignal) return null;
 
   if (allowCourseSegmentation) {
     const courseEstimate = estimateLnCourseFromComponents(map, input, starRating, rate);

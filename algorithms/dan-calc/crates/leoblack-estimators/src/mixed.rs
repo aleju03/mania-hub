@@ -1,9 +1,11 @@
 use crate::polaris::calibrate_rc_half;
 use crate::azusa::run_azusa;
 use crate::jsnum::{js_trim, round_fixed};
+use crate::marathon::compute_marathon_correction;
 use crate::rc_format::numeric_to_rc_label;
 use crate::roxy::run_roxy;
-use crate::types::{CompanellaFusion, CompanellaPlan, EstimatorDebug, EstimatorOptions, EstimatorResult, MixedResult, OnDisagree, Upstream};
+use crate::types::{CompanellaFusion, CompanellaPlan, EstimatorDebug, EstimatorOptions, EstimatorResult, MixedResult, OnDisagree, Upstream, Xdc1Candidate};
+use crate::xdc1::run_xdc1;
 
 const RC_AZUSA_COMPANELLA_FUSION_WEIGHT: f64 = 0.5;
 const LOW_BAND_COMPANELLA_STAR_MAX: f64 = 9.0;
@@ -16,6 +18,8 @@ const ANCHOR_HEAVY_SCREEN_MIN_RATE: f64 = 0.72;
 const ANCHOR_HEAVY_MIN_RATE: f64 = 0.78;
 const AZUSA_LOWER_SCREEN_MAX_DELTA: f64 = -0.55;
 const AZUSA_LOWER_MAX_DELTA: f64 = -0.7;
+const XDC1_RC_OVERRIDE_MIN_DELTA: f64 = 0.5;
+const XDC1_RC_FUSION_WEIGHT: f64 = 0.5;
 
 pub fn mode_tag_from_ln_ratio(ln_ratio: f64) -> &'static str {
     if !ln_ratio.is_finite() {
@@ -103,6 +107,72 @@ fn result_numeric_value(result: &EstimatorResult) -> Option<f64> {
     result.numeric_difficulty.filter(|v| v.is_finite())
 }
 
+fn xdc1_rc_preview<U: Upstream>(up: &U, osu_text: &str, options: &EstimatorOptions, parsed: Option<&U::Parsed>) -> Option<EstimatorResult> {
+    let r = run_xdc1(up, osu_text, options, parsed).ok()?;
+    if r.column_count != 4.0 {
+        return None;
+    }
+    let est = js_trim(&r.est_diff);
+    if est.is_empty() || starts_with_word_ci(est, "invalid") || starts_with_word_ci(est, "unsupported") {
+        return None;
+    }
+    result_numeric_value(&r)?;
+    Some(r)
+}
+
+fn has_active_marathon_correction(options: &EstimatorOptions, base_numeric: f64) -> bool {
+    let Some(mc) = &options.marathon_correction else {
+        return false;
+    };
+    if !mc.duration_s.is_finite() {
+        return false;
+    }
+    compute_marathon_correction(mc.duration_s, mc.ett_values.as_ref(), Some(base_numeric)) > 0.0
+}
+
+fn is_delta_at_least(delta: f64, threshold: f64) -> bool {
+    if !delta.is_finite() || !threshold.is_finite() {
+        return false;
+    }
+    jsmath::round(delta * 1e4) >= jsmath::round(threshold * 1e4)
+}
+
+struct RcOutcome {
+    selected: EstimatorResult,
+    actual: &'static str,
+    est_diff: String,
+    numeric: Option<f64>,
+    hint: Option<String>,
+}
+
+fn fused_rc_outcome(base: &EstimatorResult, xdc1_numeric: f64, base_numeric: f64, actual: &'static str) -> RcOutcome {
+    let fused = round_fixed(xdc1_numeric * XDC1_RC_FUSION_WEIGHT + base_numeric * (1.0 - XDC1_RC_FUSION_WEIGHT), 2);
+    RcOutcome { selected: base.clone(), actual, est_diff: numeric_to_rc_label(fused), numeric: Some(fused), hint: None }
+}
+
+fn resolve_roxy_xdc1<U: Upstream>(up: &U, osu_text: &str, options: &EstimatorOptions, parsed: Option<&U::Parsed>, roxy: &EstimatorResult) -> Option<RcOutcome> {
+    let roxy_numeric = result_numeric_value(roxy)?;
+    if has_active_marathon_correction(options, roxy_numeric) {
+        return None;
+    }
+    let preview = xdc1_rc_preview(up, osu_text, options, parsed)?;
+    let xdc1_numeric = result_numeric_value(&preview)?;
+    Some(fused_rc_outcome(roxy, xdc1_numeric, roxy_numeric, "Roxy+XDC1"))
+}
+
+fn resolve_high_azusa_xdc1<U: Upstream>(up: &U, osu_text: &str, options: &EstimatorOptions, parsed: Option<&U::Parsed>, azusa: &EstimatorResult) -> Option<RcOutcome> {
+    let azusa_numeric = result_numeric_value(azusa)?;
+    if azusa_numeric < RC_FUSION_LOW_BAND_MAX || has_active_marathon_correction(options, azusa_numeric) {
+        return None;
+    }
+    let preview = xdc1_rc_preview(up, osu_text, options, parsed)?;
+    Some(fused_rc_outcome(azusa, result_numeric_value(&preview)?, azusa_numeric, "XDC1+Azusa"))
+}
+
+fn roxy_reference_daniel(roxy: &EstimatorResult) -> Option<&EstimatorResult> {
+    roxy_debug(roxy).and_then(|d| d.reference_daniel_result.as_ref())
+}
+
 fn roxy_debug(result: &EstimatorResult) -> Option<&crate::roxy::RoxyDebug> {
     match &result.debug {
         Some(EstimatorDebug::Roxy(d)) => Some(d),
@@ -162,7 +232,7 @@ pub fn should_prefer_azusa_rc_result(roxy: &EstimatorResult, azusa: Option<&Esti
     lift || damp || crossing
 }
 
-fn low_band_plan(rc: &EstimatorResult, ln_ratio: f64, ln_difficulty: &str, on_disagree: OnDisagree) -> CompanellaPlan {
+fn low_band_plan(rc: &EstimatorResult, ln_ratio: f64, ln_difficulty: &str, on_disagree: OnDisagree, xdc1_candidate: Option<Xdc1Candidate>) -> CompanellaPlan {
     CompanellaPlan {
         ln_ratio,
         ln_difficulty: ln_difficulty.to_string(),
@@ -171,6 +241,7 @@ fn low_band_plan(rc: &EstimatorResult, ln_ratio: f64, ln_difficulty: &str, on_di
             rc_est_diff: rc.est_diff.clone(),
             rc_numeric: result_numeric_value(rc),
             rc_numeric_hint: rc.numeric_difficulty_hint.clone(),
+            xdc1_candidate,
         }),
     }
 }
@@ -229,18 +300,19 @@ pub fn run_mixed<U: Upstream>(up: &U, osu_text: &str, options: &EstimatorOptions
     let mut plan: Option<CompanellaPlan> = None;
 
     if mode_tag == "RC" {
-        let roxy_options = EstimatorOptions { precomputed_sunny_result: Some(sunny), ..options.clone() };
+        let roxy_options = EstimatorOptions { precomputed_sunny_result: Some(sunny), include_reference_results: true, ..options.clone() };
         let roxy = run_roxy(up, osu_text, &roxy_options, parsed);
+        let roxy_daniel = roxy_reference_daniel(&roxy).cloned();
+        let azusa_options = EstimatorOptions { precomputed_daniel_result: roxy_daniel.as_ref(), ..azusa_options.clone() };
         if can_use_rc_result(Some(&roxy)) {
             est_diff = roxy.est_diff.clone();
             numeric = roxy.numeric_difficulty;
             hint = roxy.numeric_difficulty_hint.clone();
             actual = "Roxy";
             let evaluate = !in_enabled && !has_explicit_od && should_evaluate_azusa_rc_preference(&roxy);
-            selected = roxy;
             if evaluate {
                 let azusa = run_azusa(up, osu_text, &azusa_options, parsed).ok();
-                if should_prefer_azusa_rc_result(&selected, azusa.as_ref()) {
+                if should_prefer_azusa_rc_result(&roxy, azusa.as_ref()) {
                     let azusa = azusa.unwrap();
                     est_diff = azusa.est_diff.clone();
                     numeric = azusa.numeric_difficulty;
@@ -248,6 +320,18 @@ pub fn run_mixed<U: Upstream>(up: &U, osu_text: &str, options: &EstimatorOptions
                     actual = "Azusa";
                     selected = azusa;
                 }
+            }
+            if actual == "Roxy" && !in_enabled && !has_explicit_od {
+                if let Some(o) = resolve_roxy_xdc1(up, osu_text, options, parsed, &roxy) {
+                    selected = o.selected;
+                    actual = o.actual;
+                    est_diff = o.est_diff;
+                    numeric = o.numeric;
+                    hint = o.hint;
+                }
+            }
+            if actual == "Roxy" {
+                selected = roxy;
             }
         } else if !in_enabled {
             let azusa = run_azusa(up, osu_text, &azusa_options, parsed).ok();
@@ -257,17 +341,34 @@ pub fn run_mixed<U: Upstream>(up: &U, osu_text: &str, options: &EstimatorOptions
                 numeric = azusa.numeric_difficulty;
                 hint = azusa.numeric_difficulty_hint.clone();
                 actual = "Azusa";
+                let mut high_fused = None;
                 if sunny.star < LOW_BAND_COMPANELLA_STAR_MAX {
-                    plan = Some(low_band_plan(&azusa, ln_ratio, &ln_difficulty, OnDisagree::Azusa));
+                    let xdc1_candidate = None;
+                    plan = Some(low_band_plan(&azusa, ln_ratio, &ln_difficulty, OnDisagree::Azusa, xdc1_candidate));
+                } else if !has_explicit_od {
+                    high_fused = resolve_high_azusa_xdc1(up, osu_text, options, parsed, &azusa);
                 }
                 selected = azusa;
-            } else if let Ok(daniel) = up.daniel(osu_text, options, parsed) {
-                if daniel.column_count == 4.0 && !is_daniel_too_low_difficulty(&daniel.est_diff) {
-                    est_diff = daniel.est_diff.clone();
-                    numeric = daniel.numeric_difficulty;
-                    hint = daniel.numeric_difficulty_hint.clone();
-                    actual = "Daniel";
-                    selected = daniel;
+                if let Some(o) = high_fused {
+                    selected = o.selected;
+                    actual = o.actual;
+                    est_diff = o.est_diff;
+                    numeric = o.numeric;
+                    hint = o.hint;
+                }
+            } else {
+                let daniel = match roxy_daniel {
+                    Some(d) => Ok(d),
+                    None => up.daniel(osu_text, options, parsed),
+                };
+                if let Ok(daniel) = daniel {
+                    if daniel.column_count == 4.0 && !is_daniel_too_low_difficulty(&daniel.est_diff) {
+                        est_diff = daniel.est_diff.clone();
+                        numeric = daniel.numeric_difficulty;
+                        hint = daniel.numeric_difficulty_hint.clone();
+                        actual = "Daniel";
+                        selected = daniel;
+                    }
                 }
             }
         }
@@ -284,7 +385,7 @@ pub fn run_mixed<U: Upstream>(up: &U, osu_text: &str, options: &EstimatorOptions
                     rc_numeric = azusa.numeric_difficulty;
                     rc_hint = azusa.numeric_difficulty_hint.clone();
                     actual = "Azusa";
-                    plan = Some(low_band_plan(&azusa, ln_ratio, &ln_difficulty, OnDisagree::Companella));
+                    plan = Some(low_band_plan(&azusa, ln_ratio, &ln_difficulty, OnDisagree::Companella, None));
                 } else {
                     plan = Some(CompanellaPlan { ln_ratio, ln_difficulty: ln_difficulty.clone(), fusion: None });
                     actual = "Companella";
@@ -356,6 +457,19 @@ pub fn apply_companella_to_mixed_result(mixed: &MixedResult, companella: &Compan
         }
         let w = RC_AZUSA_COMPANELLA_FUSION_WEIGHT;
         let fused = round_fixed(rc_numeric * w + companella_numeric * (1.0 - w), 2);
+        if let Some(c) = &fusion.xdc1_candidate {
+            let xdc1_numeric = c.numeric_difficulty.filter(|v| v.is_finite()).unwrap_or(f64::NAN);
+            if is_delta_at_least(xdc1_numeric - fused, XDC1_RC_OVERRIDE_MIN_DELTA) {
+                let mut out = replace(
+                    compose_difficulty_from_rc_ln(&c.est_diff, &plan.ln_difficulty, plan.ln_ratio),
+                    c.numeric_difficulty,
+                    c.numeric_difficulty_hint.clone(),
+                    "XDC1",
+                );
+                out.actual_estimator_algorithm = "XDC1";
+                return out;
+            }
+        }
         return replace(compose_difficulty_from_rc_ln(&numeric_to_rc_label(fused), &plan.ln_difficulty, plan.ln_ratio), Some(fused), None, "Azusa+Companella");
     }
     replace(

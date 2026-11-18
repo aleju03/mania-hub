@@ -125,7 +125,17 @@ fn parse_hit_objects(lines: &[&str]) -> Vec<HitObject> {
             out.push(HitObject::Circle { x, time });
         }
     }
+    out.sort_by(|a, b| {
+        let (ta, tb) = (hit_object_time(a), hit_object_time(b));
+        ta.partial_cmp(&tb).unwrap_or(std::cmp::Ordering::Equal)
+    });
     out
+}
+
+fn hit_object_time(o: &HitObject) -> f64 {
+    match o {
+        HitObject::Hold { time, .. } | HitObject::Circle { time, .. } => *time,
+    }
 }
 
 #[inline]

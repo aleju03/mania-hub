@@ -12,6 +12,7 @@ pub mod rework_upstream;
 pub mod roxy;
 pub mod roxy_meta;
 pub mod types;
+pub mod xdc1;
 
 pub use azusa::run_azusa;
 pub use companella::{classify_companella_difficulty, companella_estimate_from_raw, companella_features, companella_raw, CompanellaEstimate};
@@ -22,3 +23,4 @@ pub use rework_utils::{est_diff, est_diff2, estimate_daniel_dan};
 pub use roxy::{canonicalize_osu_timing, run_roxy};
 pub use rework_upstream::{DanIndexTable, ReworkUpstream};
 pub use types::*;
+pub use xdc1::run_xdc1;

@@ -288,7 +288,6 @@ function splitVerdict(verdict: string): { rcText: string; lnText: string | null 
 }
 
 const ROXY_RAW_FLOOR_PIN = -2.45;
-
 const SUNNY_LOW_END_MAX_STAR = 3.0;
 
 function isRoxyFloorPinned(mixed: LeoBlackReworkResult): boolean {
@@ -298,7 +297,6 @@ function isRoxyFloorPinned(mixed: LeoBlackReworkResult): boolean {
 }
 
 const AZUSA_SUSPECT_MIN_NUMERIC = 2;
-
 const AZUSA_SUNNY_REFERENCE_MAX_NUMERIC = 6.84;
 
 function isAzusaLowEndSuspect(mixed: LeoBlackReworkResult): boolean {
@@ -536,7 +534,11 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
   if (!ln && map.keyCount === 4) {
     const baseStarRating = Number.isFinite(input.starRating) ? Math.max(0, input.starRating ?? 0) : 0;
     const starRating = baseStarRating > 0 ? baseStarRating * Math.pow(rate, 0.7) : 0;
-    const lnEstimate = estimateLnDan(map, input, features.metrics, starRating, features.durationMs, rate);
+    let lnEstimate = estimateLnDan(map, input, features.metrics, starRating, features.durationMs, rate);
+    if (!lnEstimate && lnFromTables?.boundary === "below") {
+      const ungated = estimateLnDan(map, input, features.metrics, starRating, features.durationMs, rate, true, false);
+      if (ungated && ungated.rawDan < lnFromTables.rawDan) lnEstimate = ungated;
+    }
     if (lnEstimate) {
       ln = {
         kind: "ln",

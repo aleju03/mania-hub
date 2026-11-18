@@ -933,7 +933,7 @@ fn estimate_ln_course_from_components(
         let component_input = DanEstimateInput { total_length: Some(component.total_length / 1000.0), ..input.clone() };
         let features = extract_dan_features(component, &component_input, rate);
         if let Some(e) =
-            estimate_ln_dan(component, &component_input, &features.metrics, star_rating, features.duration_ms, rate, false)
+            estimate_ln_dan(component, &component_input, &features.metrics, star_rating, features.duration_ms, rate, false, true)
         {
             estimates.push(e);
         }
@@ -959,6 +959,7 @@ pub fn estimate_ln_dan(
     duration_ms: f64,
     rate: f64,
     allow_course_segmentation: bool,
+    require_ln_signal: bool,
 ) -> Option<LnDanEstimateResult> {
     let metadata = normalize(&format!(
         "{} {} {} {}",
@@ -976,7 +977,7 @@ pub fn estimate_ln_dan(
         && m.ln_chord_pressure >= 0.12)
         || (m.hold_ratio >= 0.28 && m.ln_density >= 0.16 && m.ln_release_pressure >= 22.0 && m.ln_chord_pressure >= 0.25)
         || (m.hold_ratio >= 0.34 && m.ln_density >= 0.1 && m.ln_overlap_pressure >= 0.75 && m.ln_hold_duration_p90 >= 160.0);
-    if !(metadata_ln_signal || chart_ln_signal) {
+    if !(metadata_ln_signal || chart_ln_signal) && require_ln_signal {
         return None;
     }
 

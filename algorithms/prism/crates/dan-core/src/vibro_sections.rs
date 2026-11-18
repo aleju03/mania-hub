@@ -27,7 +27,9 @@ pub enum VibroReason {
     StackedHeads,
     FlamChords,
     SustainedDensity,
+    ImpossibleWall,
     Mash,
+    QuadsOnly,
 }
 
 impl VibroReason {
@@ -51,7 +53,9 @@ impl VibroReason {
             Self::StackedHeads => "stacked_heads",
             Self::FlamChords => "flam_chords",
             Self::SustainedDensity => "sustained_density",
+            Self::ImpossibleWall => "impossible_wall",
             Self::Mash => "mash",
+            Self::QuadsOnly => "quads_only",
         }
     }
 }
@@ -101,7 +105,7 @@ impl VibroAnalysis {
     }
 }
 
-pub const UNRATEABLE_REASONS: [&str; 4] = ["jumptrill", "stacked_heads", "flam_chords", "mash"];
+pub const UNRATEABLE_REASONS: [&str; 5] = ["jumptrill", "stacked_heads", "flam_chords", "mash", "quads_only"];
 
 pub fn is_unrateable_exclusion(analysis: Option<&VibroAnalysis>) -> bool {
     match analysis {
@@ -141,6 +145,19 @@ pub fn analyze_stacked_heads(map: &ManiaBeatmap, rate: f64) -> Option<VibroAnaly
 const FLAM_PRESS_MS: f64 = 40.0;
 const FLAM_FINGER_FREE_MS: f64 = 100.0;
 const FLAM_CHART_SHARE: f64 = 0.3;
+const QUADS_ONLY_NOTE_SHARE: f64 = 0.85;
+const QUADS_ONLY_MAX_CHANGE_SHARE: f64 = 0.4;
+
+pub fn has_quads_only_body(map: &ManiaBeatmap) -> bool {
+    if map.key_count != 4 || map.notes.is_empty() {
+        return false;
+    }
+    let (_, rows) = decompose(map);
+    let quad_rows = rows.iter().filter(|&&mask| mask == 15).count();
+    let changes = rows.windows(2).filter(|pair| pair[0] != pair[1]).count();
+    (quad_rows * 4) as f64 >= map.notes.len() as f64 * QUADS_ONLY_NOTE_SHARE
+        && (changes as f64) < rows.len() as f64 * QUADS_ONLY_MAX_CHANGE_SHARE
+}
 
 pub fn analyze_collapsed_notes(map: &ManiaBeatmap, rate: f64) -> Option<VibroAnalysis> {
     if map.key_count != 4 || map.notes.is_empty() || !rate.is_finite() || rate <= 0.0 {
@@ -149,9 +166,13 @@ pub fn analyze_collapsed_notes(map: &ManiaBeatmap, rate: f64) -> Option<VibroAna
     let mut tap_map = clone_without_notes(map);
     tap_map.notes = map.notes.iter().filter(|note| !note.is_hold).copied().collect();
     let taps = build_vibro_scan(&tap_map, rate);
-    if taps.times.is_empty() || count_flam_chord_notes(&taps) < map.notes.len() as f64 * FLAM_CHART_SHARE {
+    let reason = if !taps.times.is_empty() && count_flam_chord_notes(&taps) >= map.notes.len() as f64 * FLAM_CHART_SHARE {
+        VibroReason::FlamChords
+    } else if has_quads_only_body(map) {
+        VibroReason::QuadsOnly
+    } else {
         return None;
-    }
+    };
     let scan = build_vibro_scan(map, rate);
     let active_duration_ms = measure_active_duration(&scan);
     Some(VibroAnalysis {
@@ -160,7 +181,7 @@ pub fn analyze_collapsed_notes(map: &ManiaBeatmap, rate: f64) -> Option<VibroAna
         sections: vec![VibroSection {
             start_time: scan.times[0],
             end_time: scan.times[scan.times.len() - 1],
-            reasons: vec![VibroReason::FlamChords],
+            reasons: vec![reason],
         }],
         excluded_duration_ms: active_duration_ms,
         active_duration_ms,
@@ -169,7 +190,7 @@ pub fn analyze_collapsed_notes(map: &ManiaBeatmap, rate: f64) -> Option<VibroAna
         judgement_share: 1.0,
         remaining_notes: 0.0,
         repeat_share: 0.0,
-        reason_shares: vec![(VibroReason::FlamChords, 1.0)],
+        reason_shares: vec![(reason, 1.0)],
     })
 }
 
@@ -284,6 +305,7 @@ pub fn analyze_vibro_sections(map: &ManiaBeatmap, rate: f64) -> VibroAnalysis {
     scan_fast_rolls(&mut scan, &returns);
     scan_extreme_density(&mut scan);
     scan_sustained_density(&mut scan);
+    scan_impossible_walls(&mut scan);
     scan_recurring_repetitions(&mut scan);
 
     result.reason_shares = measure_reason_shares(&scan.intervals, rate, result.active_duration_ms);
@@ -437,13 +459,20 @@ fn scan_repeated_rows(scan: &mut VibroScan) {
     );
 }
 
-const QUAD_BODY_TIERS: [(f64, usize, f64); 2] = [(125.0, 12, 0.25), (100.0, 3, 0.3)];
+const QUAD_BURST_ALONE_GAP_MS: f64 = 99.0;
+const QUAD_BURST_ALONE_SHARE: f64 = 2.0 / 3.0;
+const QUAD_BODY_TIERS: [(f64, usize, f64, f64); 3] = [
+    (125.0, 12, 0.25, 0.0),
+    (REPEATED_QUAD_GAP_MS, 3, 0.3, 0.0),
+    (QUAD_BURST_ALONE_GAP_MS, 3, 0.3, QUAD_BURST_ALONE_SHARE),
+];
 
 fn scan_quad_body(scan: &mut VibroScan) {
     let n = scan.times.len();
-    for &(gap_ms, min_rows, share) in &QUAD_BODY_TIERS {
+    for &(gap_ms, min_rows, share, alone_share) in &QUAD_BODY_TIERS {
         let mut walls: Vec<(usize, usize)> = Vec::new();
         let mut wall_notes = 0f64;
+        let mut alone_notes = 0f64;
         let mut start: isize = -1;
         for i in 0..=n {
             let quad = i < n && scan.rows[i] == 15;
@@ -451,12 +480,20 @@ fn scan_quad_body(scan: &mut VibroScan) {
                 continue;
             }
             if start >= 0 && i - start as usize >= min_rows {
-                walls.push((start as usize, i - 1));
-                wall_notes += ((i - start as usize) * 4) as f64;
+                let first = start as usize;
+                walls.push((first, i - 1));
+                wall_notes += ((i - first) * 4) as f64;
+                let in_passage = first > 0
+                    && scan.times[first] - scan.times[first - 1] <= SLOW_QUAD_GAP_MS * scan.rate
+                    && i < n
+                    && scan.times[i] - scan.times[i - 1] <= SLOW_QUAD_GAP_MS * scan.rate;
+                if !in_passage {
+                    alone_notes += ((i - first) * 4) as f64;
+                }
             }
             start = if quad { i as isize } else { -1 };
         }
-        if wall_notes < scan.total_notes() * share {
+        if wall_notes < scan.total_notes() * share || alone_notes < wall_notes * alone_share {
             continue;
         }
         for (first, last) in walls {
@@ -552,10 +589,52 @@ const JUMPTRILL_GAP_MS: f64 = 65.0;
 const JUMPTRILL_MIN_PRESSES: usize = 8;
 const JUMPTRILL_FULL_SHARE: f64 = 0.75;
 const JUMPTRILL_CHART_SHARE: f64 = 0.3;
+const SUSTAINED_PAIR_PRESS_MS: f64 = 38.0;
+const SUSTAINED_PAIR_GAP_MS: f64 = 76.0;
+const SUSTAINED_PAIR_MIN_MS: f64 = 3000.0;
+const SUSTAINED_PAIR_FULL_SHARE: f64 = 0.95;
+const SUSTAINED_PAIR_CHART_SHARE: f64 = 0.4;
+
+fn four_key_jumptrill_bursts(times: &[f64], rows: &[i32], rate: f64, total_notes: f64) -> Option<(Vec<VibroSection>, f64, f64)> {
+    let hands = [0b0011, 0b1100];
+    let plain = find_jumptrill_bursts(times, rows, rate, hands, -1, JUMPTRILL_GAP_MS, JUMPTRILL_PRESS_MS, 0.0, JUMPTRILL_FULL_SHARE);
+    if plain.1 >= total_notes * JUMPTRILL_CHART_SHARE {
+        return Some(plain);
+    }
+    let sustained = find_jumptrill_bursts(times, rows, rate, hands, -1, SUSTAINED_PAIR_GAP_MS, SUSTAINED_PAIR_PRESS_MS, SUSTAINED_PAIR_MIN_MS, SUSTAINED_PAIR_FULL_SHARE);
+    if sustained.1 >= total_notes * SUSTAINED_PAIR_CHART_SHARE {
+        return Some(sustained);
+    }
+    None
+}
+
+const JUMPTRILL_WRITTEN_SHARE: f64 = 0.9;
+
+pub fn is_rated_jumptrill(map: &ManiaBeatmap, rate: f64, analysis: Option<&VibroAnalysis>) -> bool {
+    let Some(a) = analysis else { return false };
+    if map.key_count != 4 || a.status != VibroStatus::Excluded {
+        return false;
+    }
+    if a.reason_shares.len() != 1 || a.reason_shares[0].0 != VibroReason::Jumptrill {
+        return false;
+    }
+    let taps;
+    let read = if uses_section_vibro(map) {
+        build_vibro_scan(map, rate)
+    } else {
+        let mut tap_map = clone_without_notes(map);
+        tap_map.notes = map.notes.iter().filter(|note| !note.is_hold).copied().collect();
+        taps = tap_map;
+        build_vibro_scan(&taps, rate)
+    };
+    match four_key_jumptrill_bursts(&read.times, &read.rows, rate, map.notes.len() as f64) {
+        Some((_, burst_notes, jump_notes)) => jump_notes >= burst_notes * JUMPTRILL_WRITTEN_SHARE,
+        None => false,
+    }
+}
 
 fn scan_jumptrills(scan: &mut VibroScan) {
-    let (bursts, burst_notes) = find_jumptrill_bursts(&scan.times, &scan.rows, scan.rate, [0b0011, 0b1100], -1, JUMPTRILL_GAP_MS);
-    if burst_notes >= scan.total_notes() * JUMPTRILL_CHART_SHARE {
+    if let Some((bursts, _, _)) = four_key_jumptrill_bursts(&scan.times, &scan.rows, scan.rate, scan.total_notes()) {
         scan.intervals.extend(bursts);
     }
 }
@@ -575,7 +654,10 @@ fn find_jumptrill_bursts(
     hand_masks: [i32; 2],
     middle_column: i32,
     gap_ms: f64,
-) -> (Vec<VibroSection>, f64) {
+    press_ms: f64,
+    min_span_ms: f64,
+    full_share: f64,
+) -> (Vec<VibroSection>, f64, f64) {
     let mut presses: Vec<Press> = Vec::new();
     let mut open: [Option<usize>; 2] = [None, None];
     let middle_bit = if middle_column >= 0 { bit(middle_column) } else { 0 };
@@ -590,7 +672,7 @@ fn find_jumptrill_bursts(
                 let hand = (0..2).find(|&h| match open[h] {
                     Some(p) => {
                         let press = &presses[p];
-                        times[i] - press.start <= JUMPTRILL_PRESS_MS * rate && press.mask & middle_bit == 0
+                        times[i] - press.start <= press_ms * rate && press.mask & middle_bit == 0
                     }
                     None => false,
                 });
@@ -606,7 +688,7 @@ fn find_jumptrill_bursts(
             }
             if let Some(p) = open[hand] {
                 let press = &mut presses[p];
-                if times[i] - press.start <= JUMPTRILL_PRESS_MS * rate && press.mask & bits == 0 {
+                if times[i] - press.start <= press_ms * rate && press.mask & bits == 0 {
                     press.mask |= bits;
                     press.end = times[i];
                     continue;
@@ -618,6 +700,7 @@ fn find_jumptrill_bursts(
     }
     let mut bursts = Vec::new();
     let mut burst_notes = 0f64;
+    let mut jump_notes = 0f64;
     let mut start = 0usize;
     let full = |press: &Press| (press.mask & hand_masks[press.hand]) == hand_masks[press.hand];
     for i in 1..=presses.len() {
@@ -629,22 +712,24 @@ fn find_jumptrill_bursts(
         }
         let run = &presses[start..i];
         if run.len() >= JUMPTRILL_MIN_PRESSES
-            && run.iter().filter(|p| full(p)).count() as f64 >= run.len() as f64 * JUMPTRILL_FULL_SHARE
+            && run.iter().filter(|p| full(p)).count() as f64 >= run.len() as f64 * full_share
+            && run[run.len() - 1].end - run[0].start >= min_span_ms * rate
         {
             bursts.push(VibroSection {
                 start_time: run[0].start,
                 end_time: run[run.len() - 1].end,
                 reasons: vec![VibroReason::Jumptrill],
             });
-            let mut sum = 0f64;
             for p in run {
-                sum += bit_count(p.mask) as f64;
+                burst_notes += bit_count(p.mask) as f64;
+                if full(p) && p.end == p.start {
+                    jump_notes += bit_count(p.mask) as f64;
+                }
             }
-            burst_notes += sum;
         }
         start = i;
     }
-    (bursts, burst_notes)
+    (bursts, burst_notes, jump_notes)
 }
 
 pub fn analyze_hold_vibro(map: &ManiaBeatmap, rate: f64) -> Option<VibroAnalysis> {
@@ -716,12 +801,16 @@ pub fn analyze_wide_jumptrill(map: &ManiaBeatmap, rate: f64) -> Option<VibroAnal
     } else {
         &scan
     };
-    let gap_ms = if four_key { JUMPTRILL_GAP_MS } else { WIDE_JUMPTRILL_GAP_MS };
-    let (bursts, burst_notes) = find_jumptrill_bursts(&read.times, &read.rows, rate, hand_masks, middle_column, gap_ms);
     let n_notes = map.notes.len() as f64;
-    if burst_notes < n_notes * JUMPTRILL_CHART_SHARE {
-        return None;
-    }
+    let (bursts, burst_notes, _) = if four_key {
+        four_key_jumptrill_bursts(&read.times, &read.rows, rate, n_notes)?
+    } else {
+        let found = find_jumptrill_bursts(&read.times, &read.rows, rate, hand_masks, middle_column, WIDE_JUMPTRILL_GAP_MS, JUMPTRILL_PRESS_MS, 0.0, JUMPTRILL_FULL_SHARE);
+        if found.1 < n_notes * JUMPTRILL_CHART_SHARE {
+            return None;
+        }
+        found
+    };
     let active_duration_ms = measure_active_duration(&scan);
     let sections = merge_sections(&bursts, true);
     let mut excluded_duration_ms = 0f64;
@@ -793,7 +882,7 @@ fn column_indices(rows: &[i32], column: i32) -> Vec<usize> {
     (0..rows.len()).filter(|&i| rows[i] & b != 0).collect()
 }
 
-fn scan_one_finger_body(scan: &mut VibroScan) {
+fn find_one_finger_runs(scan: &VibroScan, rate: f64, gap_ms: f64, min_hits: usize) -> (Vec<(usize, usize)>, f64) {
     let n = scan.times.len();
     let mut runs: Vec<(usize, usize)> = Vec::new();
     let mut covered = vec![0u8; n];
@@ -801,13 +890,13 @@ fn scan_one_finger_body(scan: &mut VibroScan) {
         let indices = column_indices(&scan.rows, column);
         let mut start = 0usize;
         for i in 1..=indices.len() {
-            if i < indices.len() && scan.times[indices[i]] - scan.times[indices[i - 1]] <= ONE_FINGER_GAP_MS * scan.rate {
+            if i < indices.len() && scan.times[indices[i]] - scan.times[indices[i - 1]] <= gap_ms * rate {
                 continue;
             }
             let count = i - start;
             let first = indices[start];
             let last = indices[i - 1];
-            if count >= ONE_FINGER_MIN_HITS
+            if count >= min_hits
                 && count as f64 / (last - first + 1) as f64 >= ONE_FINGER_COVERAGE
                 && count as f64 / (scan.prefix_notes[last + 1] - scan.prefix_notes[first]) >= ONE_FINGER_DOMINANCE
             {
@@ -825,6 +914,11 @@ fn scan_one_finger_body(scan: &mut VibroScan) {
             covered_notes += scan.prefix_notes[i + 1] - scan.prefix_notes[i];
         }
     }
+    (runs, covered_notes)
+}
+
+fn scan_one_finger_body(scan: &mut VibroScan) {
+    let (runs, covered_notes) = find_one_finger_runs(scan, scan.rate, ONE_FINGER_GAP_MS, ONE_FINGER_MIN_HITS);
     if covered_notes < scan.total_notes() * ONE_FINGER_SHARE {
         return;
     }
@@ -1336,6 +1430,29 @@ fn scan_sustained_density(scan: &mut VibroScan) {
     }
 }
 
+const IMPOSSIBLE_WALL_FINGER_RATE: f64 = 14.5;
+const IMPOSSIBLE_WALL_MIN_ROWS: usize = 12;
+const IMPOSSIBLE_WALL_EXCLUDE_MS: f64 = 1000.0;
+
+fn scan_impossible_walls(scan: &mut VibroScan) {
+    let n = scan.times.len();
+    let max_gap = 1000.0 / IMPOSSIBLE_WALL_FINGER_RATE * scan.rate;
+    let mut start: Option<usize> = None;
+    for i in 0..=n {
+        let quad = i < n && scan.rows[i] == 15;
+        if let Some(s) = start {
+            if quad && scan.times[i] - scan.times[i - 1] <= max_gap {
+                continue;
+            }
+            if i - s >= IMPOSSIBLE_WALL_MIN_ROWS {
+                let (a, b) = (scan.times[s], scan.times[i - 1]);
+                add_section(scan, a, b, VibroReason::ImpossibleWall);
+            }
+        }
+        start = if quad { Some(i) } else { None };
+    }
+}
+
 fn merge_sections(intervals: &[VibroSection], merge_touching: bool) -> Vec<VibroSection> {
     let mut order: Vec<&VibroSection> = intervals.iter().collect();
     order.sort_by(|a, b| cmp_num(a.start_time, b.start_time));
@@ -1409,9 +1526,15 @@ fn measure_section_coverage(result: &mut VibroAnalysis, map: &ManiaBeatmap, scan
         if result.active_duration_ms > 0.0 { result.excluded_duration_ms / result.active_duration_ms } else { 1.0 };
     let note_cap = if result.repeat_share >= REPEAT_BODY_SHARE { REPEAT_BODY_NOTE_CAP } else { 0.25 };
     let hammered = measure_chord_run_share(scan, read_rate) >= CHORD_RUN_BODY_SHARE;
+    let jack_bursts = has_jack_burst_shape(scan, read_rate);
+    let hand_locked = has_hand_lock_shape(scan, read_rate);
     let sustained = result.reason_share(VibroReason::SustainedDensity).map_or(false, crate::js::truthy);
+    let impossible_wall_ms = result.reason_share(VibroReason::ImpossibleWall).unwrap_or(0.0) * result.active_duration_ms;
     result.status = if !sustained
+        && impossible_wall_ms < IMPOSSIBLE_WALL_EXCLUDE_MS
         && !hammered
+        && !jack_bursts
+        && !hand_locked
         && result.time_share <= 0.15
         && result.note_share <= note_cap
         && result.remaining_notes >= 300.0
@@ -1421,6 +1544,67 @@ fn measure_section_coverage(result: &mut VibroAnalysis, map: &ManiaBeatmap, scan
     } else {
         VibroStatus::Excluded
     };
+}
+
+const JACK_BURST_GAP_MS: f64 = 85.0;
+const JACK_BURST_MIN_HITS: usize = 4;
+const JACK_BURST_BODY_SHARE: f64 = 0.25;
+
+fn has_jack_burst_shape(scan: &VibroScan, rate: f64) -> bool {
+    let total = scan.total_notes();
+    total > 0.0
+        && has_light_rows(scan, rate)
+        && find_one_finger_runs(scan, rate, JACK_BURST_GAP_MS, JACK_BURST_MIN_HITS).1 >= total * JACK_BURST_BODY_SHARE
+}
+
+const LIGHT_ROWS_GAP_MS: f64 = 95.0;
+const LIGHT_ROWS_MAX_CHORD: f64 = 2.25;
+
+fn has_light_rows(scan: &VibroScan, rate: f64) -> bool {
+    let mut fast_rows = 0f64;
+    let mut fast_notes = 0f64;
+    for i in 1..scan.times.len() {
+        if scan.times[i] - scan.times[i - 1] > LIGHT_ROWS_GAP_MS * rate {
+            continue;
+        }
+        fast_rows += 1.0;
+        fast_notes += scan.prefix_notes[i + 1] - scan.prefix_notes[i];
+    }
+    fast_rows > 0.0 && fast_notes <= fast_rows * LIGHT_ROWS_MAX_CHORD
+}
+
+const HAND_LOCK_GAP_MS: f64 = 95.0;
+const HAND_LOCK_MIN_ROWS: usize = 4;
+const HAND_LOCK_BODY_SHARE: f64 = 0.25;
+
+fn has_hand_lock_shape(scan: &VibroScan, rate: f64) -> bool {
+    let n = scan.rows.len();
+    let total = scan.total_notes();
+    if total == 0.0 {
+        return false;
+    }
+    if !has_light_rows(scan, rate) {
+        return false;
+    }
+    let mut locked = 0f64;
+    for shift in [0u32, 2u32] {
+        let mut start = 0usize;
+        for i in 1..=n {
+            let hand = (scan.rows[i - 1] >> shift) & 3;
+            if i < n
+                && ((scan.rows[i] >> shift) & 3) == hand
+                && hand != 0
+                && scan.times[i] - scan.times[i - 1] <= HAND_LOCK_GAP_MS * rate
+            {
+                continue;
+            }
+            if i - start >= HAND_LOCK_MIN_ROWS {
+                locked += ((i - start) * bit_count(hand) as usize) as f64;
+            }
+            start = i;
+        }
+    }
+    locked >= total * HAND_LOCK_BODY_SHARE
 }
 
 fn measure_repeat_share(scan: &VibroScan, rate: f64) -> f64 {

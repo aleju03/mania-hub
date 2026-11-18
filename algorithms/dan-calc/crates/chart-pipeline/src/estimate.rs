@@ -5,7 +5,7 @@ use leoblack_parser::OsuFileParser;
 
 use crate::analysis::{guarded, PipelineError};
 use crate::classifier::{ChartContext, ClassifyInput, Unported};
-use crate::companella::classify_chart_with_companella;
+use crate::companella::classify_chart_primary_with_companella;
 use crate::json::{num, opt_str, str, stringify, Js, Obj};
 use crate::leoblack::PlayedOd;
 use crate::msd::{compute_msd, values_js, vibro_analysis_js, MsdOptions};
@@ -97,7 +97,7 @@ fn dan_estimate_inner(osu_text: &str, inputs: &DanEstimateInputs) -> Result<DanE
         ..Default::default()
     };
     let msd_values = msd.as_ref().map(|m| m.msd_values()).or(inputs.msd_values);
-    let classification = classify_chart_with_companella(&ctx, &input, msd_values)?;
+    let classification = classify_chart_primary_with_companella(&ctx, &input, msd_values)?;
     let estimate = classification.primary.as_ref().map(|p| EstimateVerdict {
         label: p.label.clone(),
         variant: p.variant,

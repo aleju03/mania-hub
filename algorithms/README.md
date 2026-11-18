@@ -61,13 +61,14 @@ if let Some(dan) = result.primary {
 
 `estimate` returns the headline dan (`primary`), the rice and LN dans when the chart has both, and the chart's MSD at that rate. `Options::od` takes `PlayedOd::Hr`, `PlayedOd::Ez` or an OD value, and `star_rating` defaults to the chart's osu! star rating computed from the file. `cargo run --release --example estimate -- chart.osu 1.2` prints the result for one chart.
 
-- `crates/leoblack-*` are LeoBlack's estimators ported to Rust: the parser, Sunny, Daniel, Azusa, Roxy, Mixed, Polaris, the Companella model, the pattern clustering and Interlude's star rating. `leoblack-ett` runs the MinaCalc builds LeoBlack uses as wasm under wasmtime.
+- `crates/leoblack-*` are LeoBlack's estimators ported to Rust: the parser, Sunny, Daniel, Azusa, Roxy, XDC1, Mixed, Polaris, the Companella model, the pattern clustering and Interlude's star rating. `leoblack-ett` runs the MinaCalc builds LeoBlack uses as wasm under wasmtime.
 - `crates/chart-pipeline` picks the engine per keymode, applies vibro detection, LN identity and the rate floor, and builds the verdict.
 - `crates/dan-calc` is the entry point above.
 
 ## External code
 
 - **LeoBlack** ([LeoBlackMT/osumania_map_analyser](https://github.com/LeoBlackMT/osumania_map_analyser), MIT): the Mixed, Sunny and LN estimators. Imported here as `leoblack/...`, and ported to Rust in `dan-calc/crates/leoblack-*` (license in `dan-calc/LICENSE-LEOBLACK`).
+- **XDC1** (TheBagelOfMan, MIT, through LeoBlack's port): the 4K rice estimator Mixed blends with Roxy. Ported to Rust in `dan-calc/crates/leoblack-estimators/src/xdc1.rs`.
 - **MinaCalc** ([Etterna](https://github.com/etternagame/etterna)): the MSD calculator, compiled to wasm. `msd/minacalc.ts` only declares the calls the rest of the code makes. `dan-calc/crates/leoblack-ett/minacalc` holds the wasm builds LeoBlack's estimators read.
 
 ## License

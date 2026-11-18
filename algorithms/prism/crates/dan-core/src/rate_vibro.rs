@@ -1,6 +1,6 @@
 use crate::beatmap::ManiaBeatmap;
 use crate::vibro_detection::detect_rate_vibro;
-use crate::vibro_sections::{analyze_collapsed_notes, analyze_stacked_heads, analyze_vibro_sections, analyze_wide_jumptrill, is_unrateable_exclusion, uses_section_vibro, VibroStatus};
+use crate::vibro_sections::{analyze_collapsed_notes, analyze_stacked_heads, analyze_vibro_sections, analyze_wide_jumptrill, is_rated_jumptrill, is_unrateable_exclusion, uses_section_vibro, VibroStatus};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RateVibroAdjustment {
@@ -14,6 +14,7 @@ pub struct RateVibroAdjustment {
 pub struct RateVibroCheck {
     pub vibro: bool,
     pub unrateable: bool,
+    pub jumptrill: bool,
     pub adjustment: Option<RateVibroAdjustment>,
 }
 
@@ -23,6 +24,9 @@ pub fn check_rate_vibro(map: &ManiaBeatmap, rate: f64, has_pp_trust: bool, base_
     } else {
         analyze_stacked_heads(map, rate).or_else(|| analyze_wide_jumptrill(map, rate)).or_else(|| analyze_collapsed_notes(map, rate))
     };
+    if is_rated_jumptrill(map, rate, analysis.as_ref()) {
+        return RateVibroCheck { vibro: false, unrateable: false, jumptrill: true, adjustment: None };
+    }
     let vibro = match &analysis {
         Some(a) => a.status == VibroStatus::Excluded,
         None => (!has_pp_trust && base_vibro) || (rate != 1.0 && detect_rate_vibro(map, rate)),
@@ -30,6 +34,7 @@ pub fn check_rate_vibro(map: &ManiaBeatmap, rate: f64, has_pp_trust: bool, base_
     RateVibroCheck {
         vibro,
         unrateable: is_unrateable_exclusion(analysis.as_ref()),
+        jumptrill: false,
         adjustment: analysis.as_ref().filter(|a| a.status == VibroStatus::Adjusted).map(|a| RateVibroAdjustment {
             excluded_duration_ms: a.excluded_duration_ms,
             time_share: a.time_share,

@@ -11,7 +11,7 @@ use leoblack_parser::OsuFileParser;
 use crate::classifier::{ChartContext, ClassifyInput, Unported};
 use crate::companella::classify_chart_with_companella;
 use crate::json::{stringify, Js, Obj};
-use crate::lean::{hybrid_ln_sections_for, lean_classification};
+use crate::lean::{chord_jack_rows, hybrid_ln_sections_for, lean_classification};
 use crate::msd::{compute_msd, MsdOptions};
 
 const LN_TAIL_MIN_RATIO: f64 = 0.02;
@@ -119,7 +119,7 @@ fn analyze_chart_inner(osu_text: &str, star_rating: f64, file_speed: f64) -> Res
         }
     });
 
-    let mut lean = lean_classification(classification, compute_note_bpm(osu_text), motion_features(&map.notes, kc as f64), rice_shape(&map.notes, kc as f64, map.timing_points.as_deref(), map.bpm));
+    let mut lean = lean_classification(classification, compute_note_bpm(osu_text), motion_features(&map.notes, kc as f64), rice_shape(&map.notes, kc as f64, map.timing_points.as_deref(), map.bpm), chord_jack_rows(&map.notes));
     lean.ln_sections = hybrid_ln_sections_for(&lean, osu_text)?;
     let primary = lean.primary();
     Ok(ChartAnalysisColumns {
@@ -150,7 +150,7 @@ fn rate_verdict_inner(osu_text: &str, rate: f64, star_rating: f64, file_speed: f
     let Some(msd) = compute_msd(osu_text, &options, &map, Some(&parsed)) else { return Ok(None) };
     let ctx = ChartContext::new(osu_text, &map, &parsed);
     let classification = classify_chart_with_companella(&ctx, &classify_input(&map, star_rating, Some(rate), file_speed), Some(msd.msd_values()))?;
-    let lean = lean_classification(classification, None, None, None);
+    let lean = lean_classification(classification, None, None, None, None);
     let verdict = lean.rate_verdict_js();
     let dan = if with_vibro_analysis {
         let vibro = lean.classification.analysis.vibro_analysis.as_ref().map_or(Js::Undefined, crate::msd::vibro_analysis_js);

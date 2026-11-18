@@ -1,11 +1,12 @@
 use dan_core::labels::rate_or_one;
+use dan_core::ln_effective::chart_is_ln;
 use leoblack_estimators::{classify_companella_difficulty, CompanellaEstimate, MsdValues};
 use leoblack_interlude::calculate_interlude_star_from_parser;
 use ln_skill::{ln_rating_identity_undecided, LnIdentityShares};
 
 use crate::classifier::{
     classify_chart, classify_chart_rc, is_marathon_correction_candidate, ChartClassification, ChartContext, ChartRcClassification,
-    ChartView, ClassifyInput, RcFloor, Unported,
+    ChartView, ClassifyInput, RcFloor, Unported, verdict_usable,
 };
 use crate::msd::{compute_msd, MsdOptions};
 
@@ -163,6 +164,23 @@ pub fn classify_chart_with_companella(
     input: &ClassifyInput,
     msd_values: Option<MsdValues>,
 ) -> Result<ChartClassification, Unported> {
+    classify_with_companella(ctx, input, msd_values, false)
+}
+
+pub fn classify_chart_primary_with_companella(
+    ctx: &ChartContext,
+    input: &ClassifyInput,
+    msd_values: Option<MsdValues>,
+) -> Result<ChartClassification, Unported> {
+    classify_with_companella(ctx, input, msd_values, true)
+}
+
+fn classify_with_companella(
+    ctx: &ChartContext,
+    input: &ClassifyInput,
+    msd_values: Option<MsdValues>,
+    primary_only: bool,
+) -> Result<ChartClassification, Unported> {
     let needs = |first: &ChartClassification| {
         ln_rating_identity_undecided(
             Some(first.key_count),
@@ -176,6 +194,17 @@ pub fn classify_chart_with_companella(
     };
     let resolved = resolve_companella(ctx, input, classify_chart, msd_values, Some(&needs))?;
     let Some(companella) = resolved.companella else { return Ok(resolved.first) };
+    if primary_only {
+        let unfloored = classify_chart(ctx, &ClassifyInput { companella: Some(companella.clone()), rc_floor: None, ..resolved.classify_input.clone() })?;
+        if primary_ignores_rc_floor(&unfloored) {
+            return Ok(unfloored);
+        }
+    }
     let rc_floor = companella_rc_floor(ctx, input)?;
     classify_chart(ctx, &ClassifyInput { companella: Some(companella), rc_floor, ..resolved.classify_input })
+}
+
+fn primary_ignores_rc_floor(c: &ChartClassification) -> bool {
+    let reads_ln = chart_is_ln(Some(c.key_count as f64), Some(c.ln_ratio), c.ln_effective_ratio) == Some(true);
+    reads_ln && c.ln.is_some() && c.verdict_text.as_deref().map_or(false, verdict_usable)
 }
