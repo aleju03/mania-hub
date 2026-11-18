@@ -59,6 +59,8 @@ pub struct Estimate {
     pub primary: Option<Dan>,
     pub rice: Option<Dan>,
     pub ln: Option<Dan>,
+    /// A rice-and-LN hybrid, the only charts the site shows both `rice` and `ln` for
+    pub hybrid: bool,
     pub msd: Option<Vec<(String, f64)>>,
     pub vibro: Option<VibroAnalysis>,
     pub ln_ratio: f64,
@@ -138,6 +140,7 @@ fn estimate_inner(osu_text: &str, options: &Options) -> Result<Estimate, Unporte
         primary: c.primary.as_ref().map(dan),
         rice: c.rc.as_ref().map(dan),
         ln: c.ln.as_ref().map(dan),
+        hybrid: chart_pipeline::lean::is_hybrid_chart(c.key_count, Some(c.ln_ratio), c.ln_rice_share, c.ln_work_share),
         msd: msd.map(|m| m.values),
         vibro: c.analysis.vibro_analysis.clone(),
         ln_ratio: c.ln_ratio,

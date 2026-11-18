@@ -74,6 +74,7 @@ if let Some(dan) = result.primary {
 | `primary` | The headline dan, the one the site shows first. `None` when the chart can't be rated |
 | `rice` | The rice dan, when there is one |
 | `ln` | The LN dan, when there is one. Hybrid charts can have both |
+| `hybrid` | Whether the chart is a rice-and-LN hybrid: the site shows both dans only for those, and the primary alone otherwise |
 | `supported` | `false` for keymodes other than 4K, 6K and 7K |
 | `key_count` | The chart's keymode |
 | `msd` | The chart's MSD per skillset at that rate, as `(name, value)` pairs |
