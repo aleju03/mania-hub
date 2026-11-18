@@ -28,7 +28,7 @@ Each beatmap/lane has a stored board in `country_beatmap_scores` (country + beat
 
 Two board modes (`getSnipeBoardMode` in `countries.ts`); only the first spends osu! calls:
 
-- **Seeded** (the `snipes` tier, CR only): a missing board is built by `seed_snipe_board` from roster users' scores, unless the map's leaderboard opened after `SNIPES_INGEST_SINCE`, in which case stored scores suffice (see `docs/backend.md`). An overtake by a sniper with no verified local history also checks the sniper's own osu! scores, so an older higher personal best cancels the snipe.
+- **Seeded** (the `snipes` tier, CR only, and only with `SNIPE_BOARD_SEEDING=1`; off by default, so production keeps every country tracked and snipe boards spend no osu! calls): a missing board is built by `seed_snipe_board` from roster users' scores, unless the map's leaderboard opened after `SNIPES_INGEST_SINCE`, in which case stored scores suffice (see `docs/backend.md`). An overtake by a sniper with no verified local history also checks the sniper's own osu! scores, so an older higher personal best cancels the snipe.
 - **Tracked** (every other `live` country and `GLOBAL`): the board holds only scores ingest has seen, so a first tracked play can count as a snipe over an older untracked best; the snipes page says so. The `GLOBAL` board (country code `GLOBAL`) takes the top 100 of the global rankings who also hold an official global rank of 100 or better. The GLOBAL SSE stream and `/api/events` carry only GLOBAL-board snipes (`isSnipeFromAnotherBoard`).
 
 Board read: `/api/snapshots/snipe-board?country=XX&beatmap=<id>&mods=DT,HD&lazer=1` (lane derived server-side; ordered by total score; `limit` up to 100, `total` always full). The frontend loads it when a `/snipes` row is expanded.
