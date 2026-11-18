@@ -706,7 +706,11 @@ decision, not a config flag someone can flip by accident.
 Imports are owner-scoped, with two public read-time views.
 
 Every account's imports that pass the checks show on the tracker and on the
-profile Recent tab (`public-feed.ts`), marked with the Companella icon. A play
+profile Recent tab (`public-feed.ts`), marked with the Companella icon. The
+Discord Recent plays feed posts the same listed imports of the players a
+channel lists, read through the same query (`discord/recent-plays.ts`); when
+osu!'s copy of a posted import arrives later (same player, map and total within
+the twin window), that copy does not post again. A play
 shows only when it is in this environment, not deleted, from the native client,
 with a `clear` review, `consistent_with_completed_play`, and its submission
 `accepted`, while the mode is on and the beta admits the account, and while the

@@ -223,8 +223,9 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
 
   return (
     <Panel title={<Trans>Your account</Trans>}>
-      <div className="flex flex-wrap items-center gap-3">
-        {account.connection?.discordAvatarUrl ? <img src={account.connection.discordAvatarUrl} alt="" className="h-10 w-10 rounded-full" /> : null}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+        {account.connection?.discordAvatarUrl ? <img src={account.connection.discordAvatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full" /> : null}
         <div className="min-w-0 flex-1 text-[14px] text-osu-l2">
           {linked ? (
             <span>
@@ -237,6 +238,8 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
             <Trans>Connect your Discord account to link it.</Trans>
           )}
         </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-3">
         {account.connection && !connectionLinked ? (
           <button type="button" disabled={busy || !account.oauthConfigured} onClick={() => void run(() => linkBotAccount())} className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white hover:brightness-110 disabled:opacity-50" style={{ backgroundColor: BLURPLE }}>
             <Trans>Link this account</Trans>
@@ -253,6 +256,7 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
             <Trans>Unlink</Trans>
           </button>
         ) : null}
+        </div>
       </div>
 
       {linked ? (
@@ -900,6 +904,11 @@ function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
           <button type="button" onClick={() => setPicking(true)} className="rounded-md bg-osu-pink px-2.5 py-1 text-[13px] font-semibold text-white hover:brightness-110">
             <Trans>Choose players</Trans>
           </button>
+          {recent ? (
+            <HintButton label={t`When plays post`}>
+              <Trans>Plays on unranked maps can post late or not at all. Plays sent through Hashi or Companella post right away.</Trans>
+            </HintButton>
+          ) : null}
         </div>
       </div>
       )}

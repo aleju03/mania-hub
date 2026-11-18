@@ -20074,6 +20074,10 @@ msgstr "Se juega como"
 msgid "Plays list"
 msgstr "Lista de jugadas"
 
+#: src/routes/discord.tsx
+msgid "Plays on unranked maps can post late or not at all. Plays sent through Hashi or Companella post right away."
+msgstr "Las plays en mapas unranked pueden publicarse tarde o no publicarse. Las plays enviadas con Hashi o Companella se publican al instante."
+
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Plays per session"
 #~ msgstr "Plays por sesión"
@@ -30621,6 +30625,10 @@ msgstr "Cuando me hacen snipe"
 #: src/routes/news_.companella.tsx
 #~ msgid "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
 #~ msgstr "Cuando osu! tiene la misma partida, tus ratings de skill leen tu timing desde el replay en vez de estimarlo a partir de tus judgements."
+
+#: src/routes/discord.tsx
+msgid "When plays post"
+msgstr "Cuándo se publican las plays"
 
 #: src/routes/privacy.tsx
 #~ msgid "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay."

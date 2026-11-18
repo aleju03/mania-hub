@@ -20086,6 +20086,10 @@ msgstr "实际类型"
 msgid "Plays list"
 msgstr "成绩列表"
 
+#: src/routes/discord.tsx
+msgid "Plays on unranked maps can post late or not at all. Plays sent through Hashi or Companella post right away."
+msgstr "非 Ranked 谱面上的成绩可能会延迟发布或不发布。通过 Hashi 或 Companella 发送的成绩会立即发布。"
+
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "Plays per session"
 #~ msgstr "每场游玩次数"
@@ -30633,6 +30637,10 @@ msgstr "被狙击时"
 #: src/routes/news_.companella.tsx
 #~ msgid "When osu! has the same play, your skill ratings read your timing from the replay instead of estimating it from your judgements."
 #~ msgstr "当 osu! 也有同一局成绩时，你的技能评分会直接读取回放中的击打时机，而不是根据判定数量来估算。"
+
+#: src/routes/discord.tsx
+msgid "When plays post"
+msgstr "成绩何时发布"
 
 #: src/routes/privacy.tsx
 #~ msgid "When signed in, you can stop tracking or delete your profile from <0>My Stats</0>. Stopping tracking records nothing new and keeps what was already recorded. Deleting your profile hides it right away and deletes your plays, stats and profile history 7 days later, unless you cancel before then. Your packs, skins, uploaded replays and collections stay."
