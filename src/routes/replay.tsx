@@ -6,7 +6,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
 import { getI18n } from "../lib/i18n";
-import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, submitCommunityBeatmap } from "../lib/osu";
+import { getReplayParsed, getBeatmapFile, getScore, lookupBeatmapByChecksum, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, submitCommunityBeatmap } from "../lib/osu";
 import { searchPlayers } from "../lib/player-search";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { loadReplayRenderer, preloadReplayRenderer } from "../lib/replay-renderer-loader";
@@ -89,7 +89,7 @@ import { ReplayCustomMediaControls } from "../components/replay/ReplayCustomMedi
 import { ReplayPlayerInfoControls } from "../components/replay/ReplayPlayerInfoControls";
 import { ReplayLeaderboardControls } from "../components/replay/ReplayLeaderboardControls";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
-import { extractReplayScoreIdFromFilename, scoreMatchesUploadedReplay, type UploadedReplayParseResult } from "../lib/replay-upload";
+import { extractReplayScoreIdFromFilename, scoreMatchesUploadedReplay, stableModBitmaskToMods, type UploadedReplayParseResult } from "../lib/replay-upload";
 import { getUploadedReplayBeatmapResolution, getUploadedReplayOpenData } from "../lib/uploaded-replay-open";
 import { unpackUploadedReplay, type UploadedReplayBeatmapResolution, type UploadedReplayPacked } from "../lib/uploaded-replay-payload";
 import { matchLocalBeatmapFile } from "../lib/replay-local-beatmap";
@@ -913,7 +913,7 @@ function ReplayPage() {
         beatmapFileFinalStatus = "unavailable";
       }
       const assetsStartMs = performance.now();
-      const beatmapFilePromise = score?.beatmap?.id
+      const beatmapFilePromise: Promise<Awaited<ReturnType<typeof getBeatmapFile>> | null> = score?.beatmap?.id
         ? getBeatmapFile({ data: { beatmapId: score.beatmap.id, beatmapsetId: score.beatmapset?.id, checksum: score.beatmap.checksum } })
           .then((result) => {
             beatmapFileMs = performance.now() - assetsStartMs;
@@ -940,12 +940,37 @@ function ReplayPage() {
       // An abandoned load neither updates the next viewer nor reports a result.
       if (signal.aborted) return;
 
+      // osu! can stop serving a score whose replay is still cached here (a
+      // restricted or deleted play), which leaves no score to name the chart.
+      // The .osr's own beatmap checksum still does, as for an uploaded replay.
+      let fallbackMeta: Awaited<ReturnType<typeof lookupBeatmapByChecksum>> = null;
+      let fallbackMods: OsuMod[] | null = null;
+      let chartResult = bmResult;
+      if (!score?.beatmap?.id && parsed.header.beatmapHash) {
+        setReplayBeatmapFileStatus("unknown");
+        fallbackMods = stableModBitmaskToMods(parsed.header.modsUsed ?? 0);
+        fallbackMeta = await lookupBeatmapByChecksum({ data: { checksum: parsed.header.beatmapHash } }).catch(() => null);
+        if (signal.aborted) return;
+        if (fallbackMeta?.id) {
+          chartResult = await getBeatmapFile({ data: {
+            beatmapId: fallbackMeta.id,
+            beatmapsetId: fallbackMeta.beatmapset_id ?? fallbackMeta.beatmapset?.id,
+            checksum: parsed.header.beatmapHash,
+          } }).catch(() => null);
+          if (signal.aborted) return;
+        }
+        beatmapFileFinalStatus = chartResult ? (chartResult.cacheStatus === "hit" ? "cached" : "fetched") : "unavailable";
+        setReplayBeatmapFileStatus(beatmapFileFinalStatus);
+      }
+
       setReplayLoadingStep("viewer");
       // Converts re-run the lazer conversion from the .osu file, so the parsed
       // chart's key count is authoritative (keymods included).
-      const parseKeyCount = score?.beatmap ? getManiaParseKeyCount(score.beatmap, score.mods) ?? undefined : undefined;
-      const parsedBeatmap = bmResult
-        ? parseCachedManiaBeatmap(score?.beatmap?.id ?? 0, bmResult.content, { keyCount: parseKeyCount })
+      const parseKeyCount = score?.beatmap
+        ? getManiaParseKeyCount(score.beatmap, score.mods) ?? undefined
+        : fallbackMeta ? getManiaParseKeyCount(fallbackMeta, fallbackMods ?? []) ?? undefined : undefined;
+      const parsedBeatmap = chartResult
+        ? parseCachedManiaBeatmap(score?.beatmap?.id ?? fallbackMeta?.id ?? 0, chartResult.content, { keyCount: parseKeyCount })
         : null;
       setReplay({
         header: parsed.header,
@@ -956,8 +981,11 @@ function ReplayPage() {
       });
       if (parsedBeatmap) {
         setBeatmap(parsedBeatmap);
-        setBeatmapFileContent(bmResult?.content ?? null);
+        setBeatmapFileContent(chartResult?.content ?? null);
       }
+      if (fallbackMods) setUploadedReplayMods(fallbackMods);
+      const fallbackSetId = fallbackMeta ? fallbackMeta.beatmapset_id ?? fallbackMeta.beatmapset?.id : undefined;
+      if (fallbackSetId) setUploadedBeatmapsetId(fallbackSetId);
 
       // Loads that cross the "Still loading" threshold report where the time
       // went, so slow-load complaints are diagnosable from the analytics feed
