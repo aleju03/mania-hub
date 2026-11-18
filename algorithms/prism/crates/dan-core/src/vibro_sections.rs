@@ -30,6 +30,7 @@ pub enum VibroReason {
     ImpossibleWall,
     Mash,
     QuadsOnly,
+    HandBlocks,
 }
 
 impl VibroReason {
@@ -56,6 +57,7 @@ impl VibroReason {
             Self::ImpossibleWall => "impossible_wall",
             Self::Mash => "mash",
             Self::QuadsOnly => "quads_only",
+            Self::HandBlocks => "hand_blocks",
         }
     }
 }
@@ -105,7 +107,7 @@ impl VibroAnalysis {
     }
 }
 
-pub const UNRATEABLE_REASONS: [&str; 5] = ["jumptrill", "stacked_heads", "flam_chords", "mash", "quads_only"];
+pub const UNRATEABLE_REASONS: [&str; 6] = ["jumptrill", "stacked_heads", "flam_chords", "mash", "quads_only", "hand_blocks"];
 
 pub fn is_unrateable_exclusion(analysis: Option<&VibroAnalysis>) -> bool {
     match analysis {
@@ -159,17 +161,43 @@ pub fn has_quads_only_body(map: &ManiaBeatmap) -> bool {
         && (changes as f64) < rows.len() as f64 * QUADS_ONLY_MAX_CHANGE_SHARE
 }
 
+const HAND_BLOCK_NOTE_SHARE: f64 = 0.85;
+
+pub fn has_hand_block_body(map: &ManiaBeatmap) -> bool {
+    if map.key_count < 5 || map.notes.is_empty() {
+        return false;
+    }
+    let half = map.key_count / 2;
+    let left = bit(half).wrapping_sub(1);
+    let right = left.wrapping_shl(((map.key_count - half) & 31) as u32);
+    let (_, rows) = decompose(map);
+    let mut block_notes = 0u32;
+    for &mask in &rows {
+        let hands = mask & (left | right);
+        if hands == left || hands == right || hands == (left | right) {
+            block_notes += mask.count_ones();
+        }
+    }
+    block_notes as f64 >= map.notes.len() as f64 * HAND_BLOCK_NOTE_SHARE
+}
+
 pub fn analyze_collapsed_notes(map: &ManiaBeatmap, rate: f64) -> Option<VibroAnalysis> {
-    if map.key_count != 4 || map.notes.is_empty() || !rate.is_finite() || rate <= 0.0 {
+    if map.key_count < 4 || map.notes.is_empty() || !rate.is_finite() || rate <= 0.0 {
         return None;
     }
-    let mut tap_map = clone_without_notes(map);
-    tap_map.notes = map.notes.iter().filter(|note| !note.is_hold).copied().collect();
-    let taps = build_vibro_scan(&tap_map, rate);
-    let reason = if !taps.times.is_empty() && count_flam_chord_notes(&taps) >= map.notes.len() as f64 * FLAM_CHART_SHARE {
-        VibroReason::FlamChords
-    } else if has_quads_only_body(map) {
-        VibroReason::QuadsOnly
+    let reason = if map.key_count == 4 {
+        let mut tap_map = clone_without_notes(map);
+        tap_map.notes = map.notes.iter().filter(|note| !note.is_hold).copied().collect();
+        let taps = build_vibro_scan(&tap_map, rate);
+        if !taps.times.is_empty() && count_flam_chord_notes(&taps) >= map.notes.len() as f64 * FLAM_CHART_SHARE {
+            VibroReason::FlamChords
+        } else if has_quads_only_body(map) {
+            VibroReason::QuadsOnly
+        } else {
+            return None;
+        }
+    } else if has_hand_block_body(map) {
+        VibroReason::HandBlocks
     } else {
         return None;
     };

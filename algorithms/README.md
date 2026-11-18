@@ -67,7 +67,7 @@ if let Some(dan) = result.primary {
 
 ## External code
 
-- **LeoBlack** ([LeoBlackMT/osumania_map_analyser](https://github.com/LeoBlackMT/osumania_map_analyser), MIT): the Mixed, Sunny and LN estimators. Imported here as `leoblack/...`, and ported to Rust in `dan-calc/crates/leoblack-*` (license in `dan-calc/LICENSE-LEOBLACK`).
+- **LeoBlack** ([LeoBlackMT/osumania_map_analyser](https://github.com/LeoBlackMT/osumania_map_analyser), MIT): the Mixed, Sunny and LN estimators. Imported here as `leoblack/...`, and ported to Rust in `dan-calc/crates/leoblack-*` (license in `dan-calc/LICENSE-LEOBLACK`). The parser reads the key count from CircleSize as osu! does, rounding half to even, where upstream truncates it.
 - **XDC1** (TheBagelOfMan, MIT, through LeoBlack's port): the 4K rice estimator Mixed blends with Roxy. Ported to Rust in `dan-calc/crates/leoblack-estimators/src/xdc1.rs`.
 - **MinaCalc** ([Etterna](https://github.com/etternagame/etterna)): the MSD calculator, compiled to wasm. `msd/minacalc.ts` only declares the calls the rest of the code makes. `dan-calc/crates/leoblack-ett/minacalc` holds the wasm builds LeoBlack's estimators read.
 

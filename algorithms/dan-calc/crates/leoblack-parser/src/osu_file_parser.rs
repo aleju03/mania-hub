@@ -154,7 +154,7 @@ impl OsuFileParser {
             if line.contains("CircleSize:") {
                 if let Some(cs_part) = split_second(line, ':') {
                     let cs = js_trim(cs_part);
-                    self.column_count = if cs == "0" { 10.0 } else { string_to_int(cs) };
+                    self.column_count = if cs == "0" { 10.0 } else { crate::key_count_from_circle_size(cs) };
                 }
             }
             if line.contains("Mode:") {

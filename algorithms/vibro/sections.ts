@@ -28,7 +28,8 @@ export type VibroReason =
   | "sustained_density"
   | "impossible_wall"
   | "mash"
-  | "quads_only";
+  | "quads_only"
+  | "hand_blocks";
 
 export interface VibroSection {
   startTime: number;
@@ -50,7 +51,7 @@ export interface VibroAnalysis {
   reasonShares: Partial<Record<VibroReason, number>>;
 }
 
-const UNRATEABLE_REASONS: ReadonlySet<string> = new Set<VibroReason>(["jumptrill", "stacked_heads", "flam_chords", "mash", "quads_only"]);
+const UNRATEABLE_REASONS: ReadonlySet<string> = new Set<VibroReason>(["jumptrill", "stacked_heads", "flam_chords", "mash", "quads_only", "hand_blocks"]);
 
 export function isUnrateableExclusion(analysis: Pick<VibroAnalysis, "status" | "reasonShares"> | null | undefined): boolean {
   if (analysis?.status !== "excluded") return false;
@@ -95,11 +96,34 @@ export function hasQuadsOnlyBody(map: ManiaBeatmap): boolean {
   return quadRows * 4 >= map.notes.length * QUADS_ONLY_NOTE_SHARE && changes < rows.length * QUADS_ONLY_MAX_CHANGE_SHARE;
 }
 
+const HAND_BLOCK_NOTE_SHARE = 0.85;
+
+export function hasHandBlockBody(map: ManiaBeatmap): boolean {
+  if (map.keyCount < 5 || !map.notes.length) return false;
+  const half = Math.floor(map.keyCount / 2);
+  const left = (1 << half) - 1;
+  const right = left << (map.keyCount - half);
+  const masks = new Map<number, number>();
+  for (const note of map.notes) masks.set(note.time, (masks.get(note.time) ?? 0) | (1 << note.column));
+  let blockNotes = 0;
+  for (const mask of masks.values()) {
+    const hands = mask & (left | right);
+    if (hands !== left && hands !== right && hands !== (left | right)) continue;
+    for (let bits = mask; bits; bits &= bits - 1) blockNotes++;
+  }
+  return blockNotes >= map.notes.length * HAND_BLOCK_NOTE_SHARE;
+}
+
 export function analyzeCollapsedNotes(map: ManiaBeatmap, rate = 1): VibroAnalysis | null {
-  if (map.keyCount !== 4 || !map.notes.length || !Number.isFinite(rate) || rate <= 0) return null;
-  const taps = buildVibroScan({ ...map, notes: map.notes.filter((note) => !note.isHold) }, rate);
-  const reason: VibroReason | null = taps.times.length && countFlamChordNotes(taps) >= map.notes.length * FLAM_CHART_SHARE ? "flam_chords"
-    : hasQuadsOnlyBody(map) ? "quads_only" : null;
+  if (map.keyCount < 4 || !map.notes.length || !Number.isFinite(rate) || rate <= 0) return null;
+  let reason: VibroReason | null;
+  if (map.keyCount === 4) {
+    const taps = buildVibroScan({ ...map, notes: map.notes.filter((note) => !note.isHold) }, rate);
+    reason = taps.times.length && countFlamChordNotes(taps) >= map.notes.length * FLAM_CHART_SHARE ? "flam_chords"
+      : hasQuadsOnlyBody(map) ? "quads_only" : null;
+  } else {
+    reason = hasHandBlockBody(map) ? "hand_blocks" : null;
+  }
   if (!reason) return null;
   const scan = buildVibroScan(map, rate);
   const activeDurationMs = measureActiveDuration(scan);

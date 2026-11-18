@@ -1,5 +1,5 @@
 use crate::osu_file_parser::split_lines;
-use crate::x_to_column;
+use crate::{key_count_from_circle_size, x_to_column};
 use jsmath::{js_parse_float, js_parse_int, js_sort_by, js_trim, number_to_string, to_int32};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -380,7 +380,7 @@ pub fn parse_osu_mania_from_text(osu_text: &str) -> Result<PatternChart, String>
         Some(v) if !v.is_empty() => v,
         _ => "4",
     };
-    let keys = js_parse_float(cs).trunc();
+    let keys = key_count_from_circle_size(cs);
 
     let timing_points = parse_timing_points(section(&secs, "TimingPoints"));
     let hit_objects = parse_hit_objects(section(&secs, "HitObjects"));
