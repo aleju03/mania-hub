@@ -157,7 +157,9 @@ challenge with `401` and a `DPoP-Nonce` header. The token and revocation
 endpoints challenge with `400 {"error":"use_dpop_nonce"}`,
 `WWW-Authenticate: DPoP error="use_dpop_nonce"` and a `DPoP-Nonce` header (RFC
 9449 §8), even when the server does not require nonces: a nonce that expired or
-was not issued by this server is always refused there. A retry after a network
+was not issued by this server is always refused there. A proof whose `iat` is
+out of window (the device clock is off) gets the same challenge, and a proof
+carrying a valid server nonce is accepted whatever its `iat`. A retry after a network
 failure uses the **same idempotency key and the same bytes**, but always a
 **new proof**.
 

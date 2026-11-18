@@ -200,12 +200,15 @@ but before the code is spent. A replayed proof over a real grant is
 `invalid_dpop_proof` and does not spend the code.
 
 Nonces at the OAuth endpoints: `/oauth/token` and `/oauth/revoke` answer a
-missing (when required), expired or foreign nonce with `400 use_dpop_nonce`,
+missing (when required), expired or foreign nonce, or an out-of-window `iat`
+(a client clock that is off), with `400 use_dpop_nonce`,
 `WWW-Authenticate: DPoP error="use_dpop_nonce"` and a fresh `DPoP-Nonce`
 (RFC 9449 section 8), even while `COMPANELLA_REQUIRE_PROOF_NONCE` is off. A
 server with no nonce secret answers `invalid_dpop_proof` instead, since asking
 for a nonce it cannot issue would loop the client. Revocation needs a proof
-signed by the key the token is bound to, on the same nonce terms.
+signed by the key the token is bound to, on the same nonce terms. A valid
+nonce replaces the `iat` window as the freshness bound, so used proof ids are
+kept for the longer of that window and the nonce lifetime.
 
 ## Submitting a play
 
