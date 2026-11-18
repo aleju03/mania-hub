@@ -982,18 +982,23 @@ export function MapDetailModal({
   // Invert rewrites the chart itself, so a play set under it is described by
   // the inverted chart: its MSD, dan, stars, LN count and preview.
   const playedInverse = !!(play && active && play.beatmapId === active.beatmapId && play.mods?.includes("IN"));
-  // Without a play, the chart can be read at DT or HT: the preview plays at
+  // The chart can be read at DT or HT: the preview plays at
   // that speed and the MSD and dan are rated there.
   // Each mod keeps the rate last typed into it, so turning it back on returns
   // to that rate.
   const [modRate, setModRate] = useState<number>(initialRate);
   const [htRate, setHtRate] = useState<number>(initialRate < 1 ? initialRate : 0.75);
   const [dtRate, setDtRate] = useState<number>(initialRate > 1 ? initialRate : 1.5);
-  useEffect(() => {
+  // A rate-modded play opens at its own rate, with its mod switched on; turning
+  // it off reads the chart at 1.0x. Kept apart from `modRate` and tied to the
+  // played rate, so switching diffs and back starts at the play's rate again.
+  const [playedOverride, setPlayedOverride] = useState<{ played: number; rate: number } | null>(null);
+  const seedRate = playedRate === 1 ? initialRate : playedRate;
+  useLayoutEffect(() => {
     setModRate(initialRate);
-    if (initialRate < 1) setHtRate(initialRate);
-    if (initialRate > 1) setDtRate(initialRate);
-  }, [entry?.beatmapId, initialRate]);
+    if (seedRate < 1) setHtRate(seedRate);
+    if (seedRate > 1) setDtRate(seedRate);
+  }, [entry?.beatmapId, initialRate, seedRate]);
   // The panel is centered, so a rate switch that changes its height would move
   // all of it. Switching pins its top where it was and lets it grow down.
   const panelRef = useRef<HTMLDivElement>(null);
@@ -1006,7 +1011,8 @@ export function MapDetailModal({
     pinPanel();
     if (rate < 1) setHtRate(rate);
     if (rate > 1) setDtRate(rate);
-    setModRate(rate);
+    if (playedRate === 1) setModRate(rate);
+    else setPlayedOverride({ played: playedRate, rate });
   };
   const pinKey = entry && active ? active.beatmapId : null;
   useEffect(() => {
@@ -1018,7 +1024,7 @@ export function MapDetailModal({
     window.addEventListener("resize", release);
     return () => window.removeEventListener("resize", release);
   }, [pinnedTop]);
-  const playRate = playedRate === 1 ? modRate : playedRate;
+  const playRate = playedRate === 1 ? modRate : playedOverride?.played === playedRate ? playedOverride.rate : playedRate;
   // BPM and length as the chart plays at that rate.
   const realBpmStat = active ? realBpm(active.bpm, active.noteBpm, playRate) : null;
   const ratePercent = Math.round(playRate * 100);
@@ -1104,10 +1110,10 @@ export function MapDetailModal({
   const diffStars = (diff: LiveMapSearchEntry) => (starScale === "sunny" ? diff.sunnyStars ?? diff.stars : diff.stars);
   const msdShown = !!(active?.msd || activeAnalysis?.msd || (offCatalog && rateMsd));
   // Both tails always show their rate, so turning one on never shifts the other.
-  const speedMods = playedRate === 1 && previewSet ? (
+  const speedMods = previewSet ? (
     <span className="flex items-center gap-1.5">
-      <SpeedModBadge mod="HT" rate={htRate} on={modRate < 1} min={0.5} max={0.99} onToggle={() => setSpeedRate(modRate < 1 ? 1 : htRate)} onRate={setSpeedRate} />
-      <SpeedModBadge mod="DT" rate={dtRate} on={modRate > 1} min={1.01} max={2} onToggle={() => setSpeedRate(modRate > 1 ? 1 : dtRate)} onRate={setSpeedRate} />
+      <SpeedModBadge mod="HT" rate={htRate} on={playRate < 1} min={0.5} max={0.99} onToggle={() => setSpeedRate(playRate < 1 ? 1 : htRate)} onRate={setSpeedRate} />
+      <SpeedModBadge mod="DT" rate={dtRate} on={playRate > 1} min={1.01} max={2} onToggle={() => setSpeedRate(playRate > 1 ? 1 : dtRate)} onRate={setSpeedRate} />
     </span>
   ) : null;
 
