@@ -458,6 +458,7 @@ export function SearchCard({ entry, onOpen, preview, rate, starScale }: CardProp
       beatmapsetId={entry.beatmapsetId}
       title={entry.title}
       artist={entry.artist}
+      creator={entry.creator}
       version={model.multi ? null : model.hardest.version}
       seam={model.mix.length > 0 ? <MixSeam model={model} /> : undefined}
       coverCorner={model.msdRange ? <MsdRange range={model.msdRange} /> : undefined}
@@ -500,6 +501,7 @@ export function MapCardFrame({
   beatmapsetId,
   title,
   artist,
+  creator,
   version,
   coverOverlay,
   seam,
@@ -514,6 +516,8 @@ export function MapCardFrame({
   beatmapsetId?: number | null;
   title: string;
   artist: string;
+  /** The set's mapper, so sets sharing a song and background tell apart. */
+  creator?: string | null;
   /** A one-diff card names its diff after the artist: a pack matched on a diff name otherwise shows only the pack's title. */
   version?: string | null;
   /** Drawn over the art, under the corner badges (the farmed tab's mod glyph). */
@@ -567,12 +571,19 @@ export function MapCardFrame({
         <div className={`absolute left-3.5 right-3.5 flex items-end gap-3 ${seam ? "bottom-2.5" : "bottom-1"}`}>
           <div className="min-w-0 flex-1">
             <div className="truncate text-[16px] font-extrabold leading-tight text-white drop-shadow-md">{song.title}</div>
-            <div className="truncate text-[12px] leading-tight text-white/70">
-              {song.artist}
+            {/* The artist gives way first, so the mapper and diff stay readable on a narrow card. */}
+            <div className="flex min-w-0 items-center text-[12px] leading-tight text-white/70">
+              <span className="min-w-0 shrink truncate">{song.artist}</span>
               {version ? (
                 <>
-                  <span aria-hidden className="mx-1.5 inline-block h-2.5 w-px bg-white/30 align-[-1px]" />
-                  <span className="text-white/85">{stripKeymodePrefix(version)}</span>
+                  <span aria-hidden className="mx-1.5 h-2.5 w-px shrink-0 bg-white/30" />
+                  <span className="min-w-0 max-w-[40%] shrink-0 truncate text-white/85">{stripKeymodePrefix(version)}</span>
+                </>
+              ) : null}
+              {creator ? (
+                <>
+                  <span aria-hidden className="mx-1.5 h-2.5 w-px shrink-0 bg-white/30" />
+                  <span className="min-w-0 max-w-[75%] shrink-0 truncate"><Trans>by <span className="text-white/85">{creator}</span></Trans></span>
                 </>
               ) : null}
             </div>

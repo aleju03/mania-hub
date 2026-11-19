@@ -3236,6 +3236,7 @@ function FarmedCard({
       beatmapsetId={map.beatmapsetId}
       title={map.title}
       artist={map.artist}
+      creator={map.creator}
       onOpen={onOpenDetails}
       coverOverlay={dominantModFile ? (
         <div className="pointer-events-none absolute inset-0 flex -translate-y-2.5 items-center justify-center">
@@ -3325,6 +3326,7 @@ function MostPlayedCard({
       beatmapsetId={map.beatmapsetId}
       title={map.title}
       artist={map.artist}
+      creator={map.creator}
       onOpen={onOpenDetails}
     >
       <MapTabCardBody
