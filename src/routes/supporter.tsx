@@ -813,6 +813,7 @@ function SupporterPage() {
                           {state.runStartedAt != null ? (
                             <SupporterRankLadder
                               runStartedAt={state.runStartedAt}
+                              pinned={state.rankPinned}
                               renewing={state.renewing}
                               fire={state.rankFire}
                               bestRank={state.bestRank}

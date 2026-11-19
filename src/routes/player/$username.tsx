@@ -28,7 +28,7 @@ import {
   peekLiveSupporterCompanion,
   peekLiveSupporterRenewing,
   peekLiveSupporterRankFire,
-  peekLiveSupporterRunStartedAt,
+  peekLiveSupporterRankPinned, peekLiveSupporterRunStartedAt,
   fetchRestrictedPpPlayerDirect,
   isLiveBackendConfigured,
   peekLiveSupporterFrame,
@@ -1190,6 +1190,8 @@ export function PlayerProfilePage({
     companion: SupporterCompanion | null;
     /* When their unbroken run began, for the rank beside the name. */
     runStartedAt: number | null;
+    /* An admin pinned the rank: no tenure or next rank in its tip. */
+    rankPinned: boolean;
     /* A monthly subscription renews them, marked on the rank. */
     renewing: boolean;
     patron: boolean;
@@ -1203,7 +1205,7 @@ export function PlayerProfilePage({
     const raw = loaderData?.cachedSupporterLook;
     if (!raw || !profileUserId) return null;
     const value = seedLiveSupporterLook(profileUserId, raw);
-    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null };
+    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, rankPinned: value.rankPinned, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null };
   });
   useEffect(() => {
     if (!profileUserId) return;
@@ -1225,6 +1227,7 @@ export function PlayerProfilePage({
         profilePlays: peekLiveSupporterProfileStats(profileUserId)?.plays ?? null,
         companion: peekLiveSupporterCompanion(profileUserId) ?? null,
         runStartedAt: peekLiveSupporterRunStartedAt(profileUserId) ?? null,
+        rankPinned: peekLiveSupporterRankPinned(profileUserId) ?? false,
         renewing: peekLiveSupporterRenewing(profileUserId) ?? false,
         patron: false,
         shownRank: null,
@@ -1233,7 +1236,7 @@ export function PlayerProfilePage({
       });
     }
     void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
-      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null });
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, rankPinned: value.rankPinned, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null });
     });
     return () => {
       alive = false;
@@ -1248,6 +1251,7 @@ export function PlayerProfilePage({
   const heroNameOutline = supporterFrame?.userId === profileUserId ? supporterFrame.nameOutline : null;
   const heroRunStartedAt = supporterFrame?.userId === profileUserId ? supporterFrame.runStartedAt : null;
   const heroRenewing = supporterFrame?.userId === profileUserId && supporterFrame.renewing;
+  const heroRankPinned = supporterFrame?.userId === profileUserId && supporterFrame.rankPinned;
   const heroPatron = supporterFrame?.userId === profileUserId && supporterFrame.patron;
   const heroShownRank = supporterFrame?.userId === profileUserId ? supporterFrame.shownRank : null;
   const heroRankFire = supporterFrame?.userId === profileUserId ? supporterFrame.rankFire : true;
@@ -2668,7 +2672,7 @@ export function PlayerProfilePage({
                 ) : (
                   <UsernameText username={user.display_name ?? user.username} avatarUrl={user.avatar_url} nameTag={supporterFrame?.userId === profileUserId ? { font: heroNameFont, outline: heroNameOutline } : undefined} className="min-w-0 truncate px-2 -mx-2 py-[0.3em] -my-[0.3em] text-[26px] font-black leading-none text-white sm:text-[40px]" />
                 )}
-                <SupporterRankBadge runStartedAt={heroRunStartedAt} renewing={heroRenewing} patron={heroPatron} shownRank={heroShownRank} own={!!auth.viewer && auth.viewer.id === profileUserId} fire={heroRankFire} onFireChange={canSetRankFire ? setRankFire : undefined} className="h-6 w-6 sm:h-8 sm:w-8" />
+                <SupporterRankBadge runStartedAt={heroRunStartedAt} pinned={heroRankPinned} renewing={heroRenewing} patron={heroPatron} shownRank={heroShownRank} own={!!auth.viewer && auth.viewer.id === profileUserId} fire={heroRankFire} onFireChange={canSetRankFire ? setRankFire : undefined} className="h-6 w-6 sm:h-8 sm:w-8" />
                 {showProfileCountryFlag ? (
                   <Link
                     to="/"

@@ -26,6 +26,8 @@ export interface SupporterLookState {
   expiresAt: number | null;
   /** When the current unbroken run began, which sets their rank; null unless active. */
   runStartedAt: number | null;
+  /** An admin pinned their rank: no tenure or next rank to show. */
+  rankPinned: boolean;
   /** A monthly subscription keeps their time renewing. */
   renewing: boolean;
   /** A renewing supporter whose subscription is $10 or more a payment. */
@@ -56,7 +58,7 @@ export interface SupporterLookState {
   frameArt?: Record<string, WorkshopFrameArt>;
 }
 
-const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, runStartedAt: null, renewing: false, patron: false, bestRank: 0, shownRank: null, rankFire: true, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, nameOutline: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
+const SIGNED_OUT: SupporterLookState = { signedIn: false, supporter: false, expiresAt: null, runStartedAt: null, rankPinned: false, renewing: false, patron: false, bestRank: 0, shownRank: null, rankFire: true, look: null, custom: null, frame: null, nameStyle: null, nameFont: null, nameOutline: null, profileTheme: null, profileThemeOptions: {}, packStyle: NO_PACK_STYLE };
 
 export async function requireViewer(): Promise<{ userId: number; username: string; base: string } | null> {
   const { readCurrentAuth } = await import("./auth-server");
@@ -68,13 +70,14 @@ export async function requireViewer(): Promise<{ userId: number; username: strin
 }
 
 function readState(body: unknown): SupporterLookState {
-  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; runStartedAt?: unknown; renewing?: unknown; patron?: unknown; bestRank?: unknown; shownRank?: unknown; rankFire?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; nameOutline?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown; frameArt?: unknown };
+  const raw = (body ?? {}) as { supporter?: unknown; expiresAt?: unknown; runStartedAt?: unknown; rankPinned?: unknown; renewing?: unknown; patron?: unknown; bestRank?: unknown; shownRank?: unknown; rankFire?: unknown; look?: unknown; custom?: unknown; frame?: unknown; nameStyle?: unknown; nameFont?: unknown; nameOutline?: unknown; profileTheme?: unknown; profileThemeOptions?: unknown; packStyle?: unknown; giftFrom?: unknown; frameArt?: unknown };
   const custom = parseSupporterLook(raw.custom ? { ...(raw.custom as object), motif: "custom" } : null);
   return {
     signedIn: true,
     supporter: raw.supporter === true,
     expiresAt: typeof raw.expiresAt === "number" && Number.isFinite(raw.expiresAt) ? raw.expiresAt : null,
     runStartedAt: raw.supporter === true && typeof raw.runStartedAt === "number" && Number.isFinite(raw.runStartedAt) ? raw.runStartedAt : null,
+    rankPinned: raw.supporter === true && raw.rankPinned === true,
     renewing: raw.supporter === true && raw.renewing === true,
     patron: raw.supporter === true && raw.renewing === true && raw.patron === true,
     bestRank: raw.supporter === true && Number.isInteger(raw.bestRank) ? Number(raw.bestRank) : 0,

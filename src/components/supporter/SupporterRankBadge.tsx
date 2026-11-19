@@ -104,11 +104,13 @@ function useTenure(runStartedAt: number | null): string {
    supporter turned the fire off (`fire` false); the tip still says it renews.
    On their own profile (`onFireChange` set) the tip holds that switch, so it
    stays open while the pointer or focus is inside it. A Gold supporter (a renewing
-   subscription of $10 or more) is named in the tip. */
-export function SupporterRankBadge({ runStartedAt, renewing = false, patron = false, shownRank = null, own = false, fire = true, onFireChange, className = "h-7 w-7" }: { runStartedAt: number | null; renewing?: boolean; patron?: boolean; /* an earlier rank they chose to show */ shownRank?: number | null; /* the viewer's own badge: only they are told which rank it shows */ own?: boolean; fire?: boolean; onFireChange?: (fire: boolean) => void; className?: string }) {
+   subscription of $10 or more) is named in the tip. A rank an admin pinned
+   (`pinned`) has no real run behind it, so its tip names only the rank. */
+export function SupporterRankBadge({ runStartedAt, pinned = false, renewing = false, patron = false, shownRank = null, own = false, fire = true, onFireChange, className = "h-7 w-7" }: { runStartedAt: number | null; pinned?: boolean; renewing?: boolean; patron?: boolean; /* an earlier rank they chose to show */ shownRank?: number | null; /* the viewer's own badge: only they are told which rank it shows */ own?: boolean; fire?: boolean; onFireChange?: (fire: boolean) => void; className?: string }) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
-  const tenure = useTenure(runStartedAt);
+  const runTenure = useTenure(runStartedAt);
+  const tenure = pinned ? "" : runTenure;
   if (runStartedAt == null) return null;
   const rank = supporterRank(runStartedAt);
   const gem = shownRank != null && SUPPORTER_RANKS[shownRank] ? SUPPORTER_RANKS[shownRank] : rank.def;
@@ -117,7 +119,7 @@ export function SupporterRankBadge({ runStartedAt, renewing = false, patron = fa
   const earlier = gem !== rank.def;
   const headline = own ? rank.def : gem;
   const name = headline.name;
-  const inARow = `${name}. ${tenure}`;
+  const inARow = tenure ? `${name}. ${tenure}` : name;
   const label = `${inARow}${renewing ? `. ${t`Renews every month`}` : ""}${patron ? `. ${t`Gold supporter`}` : ""}`;
   const fireSwitch = renewing && onFireChange ? onFireChange : undefined;
   return (
@@ -139,7 +141,7 @@ export function SupporterRankBadge({ runStartedAt, renewing = false, patron = fa
         <RankGem rank={gem} renewing={renewing && fire} className={className} />
       </button>
       {/* only while open: the day count would differ between the server render and hydration */}
-      {open ? <RankTip rank={rank} tenure={tenure} headline={headline} showNext={own || !earlier} patron={patron} shown={own && earlier ? gem : null} fire={fire} onFireChange={fireSwitch} /> : null}
+      {open ? <RankTip rank={rank} tenure={tenure} headline={headline} showNext={!pinned && (own || !earlier)} patron={patron} shown={own && earlier ? gem : null} fire={fire} onFireChange={fireSwitch} /> : null}
     </span>
   );
 }
@@ -158,7 +160,7 @@ function RankTip({ rank, tenure, headline, showNext, patron, shown, fire, onFire
     >
       <span className="block rounded-lg border border-white/10 bg-black/90 px-3 py-2 text-left text-[13px] font-normal leading-snug text-white shadow-xl">
         <span className="block font-semibold" style={{ color: headline.accent }}>{headline.name}</span>
-        <span className="block">{tenure}</span>
+        {tenure ? <span className="block">{tenure}</span> : null}
         {showNext ? (
           <span className="block text-white/60">
             {next ? t`${nextName} in ${plural(days, { one: "# day", other: "# days" })}` : t`The top rank`}
@@ -184,8 +186,10 @@ function RankTip({ rank, tenure, headline, showNext, patron, shown, fire, onFire
 /* All twelve ranks in a row on /supporter: the ones reached in colour, the
    current one larger, the rest still to come faded. Client-only (the page
    loads the viewer's state after mount), so the day count is safe here. */
-export function SupporterRankLadder({ runStartedAt, renewing = false, fire = true, bestRank, shownRank = null, onShow }: {
+export function SupporterRankLadder({ runStartedAt, pinned = false, renewing = false, fire = true, bestRank, shownRank = null, onShow }: {
   runStartedAt: number;
+  /* An admin pinned the rank: no tenure or next rank to name. */
+  pinned?: boolean;
   renewing?: boolean;
   fire?: boolean;
   /* The highest rank ever reached: gems up to it are unlocked and, with
@@ -207,10 +211,14 @@ export function SupporterRankLadder({ runStartedAt, renewing = false, fire = tru
     <div className="mt-4">
       <p className="text-[13px] text-osu-l2">
         <span className="font-semibold" style={{ color: rank.def.accent }}>{name}</span>
-        <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />
-        {tenure}
-        <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />
-        {next ? t`${nextName} in ${plural(days, { one: "# day", other: "# days" })}` : t`The top rank`}
+        {pinned ? null : (
+          <>
+            <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />
+            {tenure}
+            <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />
+            {next ? t`${nextName} in ${plural(days, { one: "# day", other: "# days" })}` : t`The top rank`}
+          </>
+        )}
         {renewing ? (
           <>
             <span className="mx-2 inline-block h-3 w-px translate-y-[2px] bg-white/15" aria-hidden="true" />

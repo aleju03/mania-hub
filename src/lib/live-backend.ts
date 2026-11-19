@@ -4976,6 +4976,8 @@ export interface SupporterProfileLook {
   look: SupporterLook | null;
   /* When their current unbroken run began, which sets their rank; null unless active. */
   runStartedAt: number | null;
+  /* An admin pinned their rank: no tenure or next rank to show. */
+  rankPinned: boolean;
   /* A monthly subscription keeps their time renewing. */
   renewing: boolean;
   /* A renewing supporter whose subscription is $10 or more a payment. */
@@ -5011,7 +5013,7 @@ export interface SupporterProfileLook {
   /* The figure beside their profile's numbers, null for none. */
   companion: SupporterCompanion | null;
 }
-const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, renewing: false, patron: false, shownRank: null, rankFire: true, frame: null, nameStyle: null, nameFont: null, nameOutline: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileSkillKeys: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null, shelf: [], username: null };
+const NO_SUPPORTER_LOOK: SupporterProfileLook = { look: null, runStartedAt: null, rankPinned: false, renewing: false, patron: false, shownRank: null, rankFire: true, frame: null, nameStyle: null, nameFont: null, nameOutline: null, profileTheme: null, profileThemeOptions: {}, customTheme: null, profileStats: null, profileSkillKeys: null, profileStatsData: {}, profilePlays: null, packStyle: NO_PACK_STYLE, companion: null, dan: null, shelf: [], username: null };
 interface SupporterLookCacheEntry {
   at: number;
   value: Promise<SupporterProfileLook>;
@@ -5100,6 +5102,7 @@ export function parseSupporterProfileLook(raw: unknown): SupporterProfileLook {
   return {
     look: parseSupporterLook(body.look ?? null),
     runStartedAt: typeof body.runStartedAt === "number" && Number.isFinite(body.runStartedAt) ? body.runStartedAt : null,
+    rankPinned: body.rankPinned === true,
     renewing: body.renewing === true,
     patron: body.renewing === true && body.patron === true,
     shownRank: Number.isInteger(body.shownRank) && Number(body.shownRank) >= 0 && Number(body.shownRank) < 12 ? Number(body.shownRank) : null,
@@ -5198,6 +5201,10 @@ export function peekLiveSupporterProfileThemeOptions(userId: number): ProfileThe
 
 export function peekLiveSupporterRunStartedAt(userId: number): number | null | undefined {
   return peekSettledLook(userId)?.runStartedAt;
+}
+
+export function peekLiveSupporterRankPinned(userId: number): boolean | undefined {
+  return peekSettledLook(userId)?.rankPinned;
 }
 
 export function peekLiveSupporterRenewing(userId: number): boolean | undefined {
