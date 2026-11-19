@@ -5,7 +5,9 @@ import { useLingui } from "@lingui/react/macro";
 import { avatarImageSrc } from "../ui/Avatar";
 import { frameOverhangMargins, SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { useAuth } from "../../lib/auth-context";
-import { listDraftsWithArt, type DraftSummary } from "../../lib/frame-editor/storage";
+import { deleteDraft, listDraftsWithArt, type DraftSummary } from "../../lib/frame-editor/storage";
+import { removeAccountDraft } from "../../lib/frame-drafts";
+import { ConfirmModal } from "../ui/ConfirmModal";
 import { deleteAdminFrame, loadAdminFrames, setAdminFrameListed, setAdminFrameReviewed } from "../../lib/admin-supporters";
 import { fetchLiveWorkshopFrames, forgetLiveSupporterLook, setSupporterFrameLocally } from "../../lib/live-backend";
 import {
@@ -393,6 +395,7 @@ export function WorkshopFrames() {
 function EditorEntry() {
   const { t } = useLingui();
   const [drafts, setDrafts] = useState<(DraftSummary & { url: string | null })[]>([]);
+  const [deleting, setDeleting] = useState<DraftSummary | null>(null);
   useEffect(() => {
     let urls: string[] = [];
     void listDraftsWithArt().then((list) => {
@@ -410,20 +413,45 @@ function EditorEntry() {
           <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1">{t`Your drafts`}</span>
           <div className="flex items-center gap-2">
             {drafts.map((draft) => (
-              <Link
-                key={draft.id}
-                to="/workshop/frames/editor"
-                search={{ draft: draft.id }}
-                title={draft.name || t`Untitled frame`}
-                className="h-14 w-14 overflow-hidden rounded-lg bg-[conic-gradient(#ffffff0d_25%,transparent_0_50%,#ffffff0d_0_75%,transparent_0)] bg-[length:10px_10px] ring-1 ring-white/[0.08] transition hover:ring-osu-pink/60"
-              >
-                {draft.url ? <img src={draft.url} alt="" className="h-full w-full object-contain" /> : null}
-              </Link>
+              <div key={draft.id} className="group relative">
+                <Link
+                  to="/workshop/frames/editor"
+                  search={{ draft: draft.id }}
+                  title={draft.name || t`Untitled frame`}
+                  className="block h-14 w-14 overflow-hidden rounded-lg bg-[conic-gradient(#ffffff0d_25%,transparent_0_50%,#ffffff0d_0_75%,transparent_0)] bg-[length:10px_10px] ring-1 ring-white/[0.08] transition hover:ring-osu-pink/60"
+                >
+                  {draft.url ? <img src={draft.url} alt="" className="h-full w-full object-contain" /> : null}
+                </Link>
+                <button
+                  type="button"
+                  aria-label={t`Delete draft`}
+                  title={t`Delete draft`}
+                  onClick={() => setDeleting(draft)}
+                  className="absolute -right-1.5 -top-1.5 grid h-5 w-5 cursor-pointer place-items-center rounded-full bg-osu-b3 text-[12px] leading-none text-osu-l2 shadow ring-1 ring-black/40 transition hover:bg-rose-500 hover:text-white [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+                >
+                  ×
+                </button>
+              </div>
             ))}
           </div>
         </div>
       ) : null}
       <Link to="/workshop/frames/editor" className="inline-flex h-10 items-center rounded-full bg-osu-pink px-6 text-[13px] font-semibold text-white transition hover:brightness-110">{t`Open the editor`}</Link>
+      {deleting ? (
+        <ConfirmModal
+          title={t`Delete this draft?`}
+          body={deleting.name ? t`${deleting.name} is deleted from this browser and your account.` : t`It's deleted from this browser and your account.`}
+          confirmLabel={t`Delete`}
+          cancelLabel={t`Cancel`}
+          danger
+          onClose={() => setDeleting(null)}
+          onConfirm={() => {
+            const id = deleting.id;
+            setDeleting(null);
+            void Promise.all([deleteDraft(id).catch(() => undefined), removeAccountDraft({ data: { id } }).catch(() => undefined)]).then(() => setDrafts((list) => list.filter((entry) => entry.id !== id)));
+          }}
+        />
+      ) : null}
     </section>
   );
 }

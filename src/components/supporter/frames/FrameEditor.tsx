@@ -1762,7 +1762,7 @@ export function FrameEditor({ draftId, frameId = null, onDraftId }: { draftId: s
     />
   ) : null;
   const historyPanel = <HistoryPanel steps={history.steps} position={history.position} onJump={history.jump} />;
-  const preview = <FramePreview still={exports.still} round={exports.round} video={null} overhang={exports.overhang} avatar={avatar} clear={exports.clear} />;
+  const preview = <FramePreview still={exports.still} round={exports.round} video={null} overhang={exports.overhang} avatar={avatar} clear={exports.clear} motion={state && animated ? { layers: state.doc.boards.square, pixels: state.pixels, assets: state.assets } : null} />;
 
   return (
     // fixed under the site nav, so nothing can scroll the page out from under it

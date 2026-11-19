@@ -9,6 +9,7 @@ import { makeStarter, STARTERS, type StarterId, type StarterNames } from "../../
 import { deleteDraft, listDraftsWithArt, type DraftSummary } from "../../../lib/frame-editor/storage";
 import { fetchAccountDrafts, removeAccountDraft } from "../../../lib/frame-drafts";
 import { FRAME_NAME_MAX } from "../../../lib/workshop-frames";
+import { ConfirmModal } from "../../ui/ConfirmModal";
 import { Switch } from "../../ui/Switch";
 import { EditorModal } from "./FrameTools";
 
@@ -54,6 +55,7 @@ export function StartDialog({ username, avatar, onStarter, onDraft, onPicture, o
   const named = { ...names, name: username ?? names.name };
   const [drafts, setDrafts] = useState<{ id: string; name: string; updatedAt: number; url: string | null; account: boolean }[] | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
   useEffect(() => {
     let urls: string[] = [];
     // this browser's drafts and the account's, the newest copy of each
@@ -120,10 +122,8 @@ export function StartDialog({ username, avatar, onStarter, onDraft, onPicture, o
                     type="button"
                     aria-label={t`Delete draft`}
                     title={t`Delete draft`}
-                    onClick={() => {
-                      void Promise.all([deleteDraft(draft.id).catch(() => undefined), username ? removeAccountDraft({ data: { id: draft.id } }).catch(() => undefined) : undefined]).then(() => setDrafts((list) => list?.filter((entry) => entry.id !== draft.id) ?? null));
-                    }}
-                    className="absolute right-2.5 top-2.5 hidden h-7 w-7 cursor-pointer place-items-center rounded-md bg-black/70 text-osu-l2 hover:text-rose-300 group-hover:grid"
+                    onClick={() => setDeleting(draft)}
+                    className="absolute right-2.5 top-2.5 grid h-7 w-7 cursor-pointer place-items-center rounded-md bg-black/70 text-osu-l2 hover:text-rose-300 [@media(hover:hover)]:hidden [@media(hover:hover)]:group-hover:grid"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -134,6 +134,21 @@ export function StartDialog({ username, avatar, onStarter, onDraft, onPicture, o
           </div>
         ) : null}
       </div>
+      {deleting ? (
+        <ConfirmModal
+          title={t`Delete this draft?`}
+          body={deleting.name ? t`${deleting.name} is deleted from this browser and your account.` : t`It's deleted from this browser and your account.`}
+          confirmLabel={t`Delete`}
+          cancelLabel={t`Cancel`}
+          danger
+          onClose={() => setDeleting(null)}
+          onConfirm={() => {
+            const id = deleting.id;
+            setDeleting(null);
+            void Promise.all([deleteDraft(id).catch(() => undefined), username ? removeAccountDraft({ data: { id } }).catch(() => undefined) : undefined]).then(() => setDrafts((list) => list?.filter((entry) => entry.id !== id) ?? null));
+          }}
+        />
+      ) : null}
       {onClose ? (
         <div className="flex justify-end border-t border-white/[0.07] px-5 py-3">
           <button type="button" onClick={onClose} className="h-9 cursor-pointer rounded-lg px-3.5 text-[12.5px] font-semibold text-osu-l2 hover:bg-white/[0.06] hover:text-white">{t`Cancel`}</button>

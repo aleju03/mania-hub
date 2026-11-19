@@ -1,5 +1,8 @@
 import { useLingui } from "@lingui/react/macro";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
+
+import { LOOP_SECONDS, WORKSHOP_SIZE, type Assets, type Layer, type Pixels } from "../../../lib/frame-editor/doc";
+import { composite } from "../../../lib/frame-editor/render";
 
 import { frameOverhangMargins, SupporterAvatarFrame } from "../../player/SupporterAvatarFrame";
 import { framedAvatarStyle, registerWorkshopFrames, WORKSHOP_FRAME_TEMPLATE, type SupporterAvatarFrameId } from "../../../lib/supporter-avatar-frames";
@@ -36,15 +39,48 @@ export function measureOverhang(canvas: HTMLCanvasElement): Overhang {
   return [reach(inset - x0), reach(inset - y0), reach(x1 + 1 - (inset + avatar)), reach(y1 + 1 - (inset + avatar))];
 }
 
-export function FramePreview({ still, round, video, overhang, avatar, clear }: {
+export function FramePreview({ still, round, video, overhang, avatar, clear, motion }: {
   still: string | null;
   round: string | null;
   video: string | null;
   overhang: Overhang;
   avatar: string | undefined;
   clear: { square: number | null; round: number | null };
+  /* the square board, when something in it moves: the previews play its loop live */
+  motion: { layers: Layer[]; pixels: Pixels; assets: Assets } | null;
 }) {
   const { t } = useLingui();
+  // one loop renders the frame at its upload size; every moving preview copies from it
+  const targets = useRef(new Set<HTMLCanvasElement>());
+  const latest = useRef(motion);
+  latest.current = motion;
+  const moving = !!motion;
+  useEffect(() => {
+    if (!moving) return;
+    const source = document.createElement("canvas");
+    source.width = source.height = WORKSHOP_SIZE;
+    const ctx = source.getContext("2d")!;
+    let frame = 0;
+    const tick = (now: number) => {
+      frame = requestAnimationFrame(tick);
+      const current = latest.current;
+      if (!current || document.hidden) return;
+      ctx.clearRect(0, 0, WORKSHOP_SIZE, WORKSHOP_SIZE);
+      composite(ctx, current.layers, { pixels: current.pixels, assets: current.assets, size: WORKSHOP_SIZE, time: ((now / 1000) / LOOP_SECONDS) % 1 });
+      for (const target of targets.current) {
+        const out = target.getContext("2d")!;
+        out.clearRect(0, 0, target.width, target.height);
+        out.drawImage(source, 0, 0, target.width, target.height);
+      }
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [moving]);
+  const register = useCallback((canvas: HTMLCanvasElement | null, previous: { current: HTMLCanvasElement | null }) => {
+    if (previous.current) targets.current.delete(previous.current);
+    previous.current = canvas;
+    if (canvas) targets.current.add(canvas);
+  }, []);
   useEffect(() => {
     if (still) registerWorkshopFrames({ [PREVIEW_ID]: { name: "", still, video, round, overhang } });
   }, [still, round, video, overhang]);
@@ -55,9 +91,9 @@ export function FramePreview({ still, round, video, overhang, avatar, clear }: {
         <div className="grid grid-cols-2 gap-2">
           {(["dark", "light"] as const).map((backdrop) => (
             <div key={backdrop} className={`flex flex-col items-center justify-center gap-3 rounded-lg py-4 ${backdrop === "dark" ? "bg-osu-b5" : "bg-[#d9dce6]"}`}>
-              <FramedAvatar avatar={avatar} size={84} live />
+              <FramedAvatar avatar={avatar} size={84} register={moving ? register : null} />
               <div className="flex items-end gap-3">
-                <FramedAvatar avatar={avatar} size={48} />
+                <FramedAvatar avatar={avatar} size={48} register={moving ? register : null} />
                 <FramedAvatar avatar={avatar} size={28} round />
               </div>
             </div>
@@ -83,14 +119,33 @@ export function FramePreview({ still, round, video, overhang, avatar, clear }: {
   );
 }
 
-function FramedAvatar({ avatar, size, live = false, round = false }: { avatar: string | undefined; size: number; live?: boolean; round?: boolean }) {
+/* The viewer's avatar wearing the frame. With `register`, the frame is a canvas the
+   preview's loop draws into, at the same box the site draws the frame's art in;
+   round ones stay still, as lists keep them. */
+function FramedAvatar({ avatar, size, round = false, register = null }: { avatar: string | undefined; size: number; round?: boolean; register?: ((canvas: HTMLCanvasElement | null, previous: { current: HTMLCanvasElement | null }) => void) | null }) {
   const frame = PREVIEW_ID as SupporterAvatarFrameId;
+  const previous = useRef<HTMLCanvasElement | null>(null);
+  // a stable ref callback, so the canvas stays registered across renders and leaves on unmount
+  const attach = useCallback((canvas: HTMLCanvasElement | null) => register?.(canvas, previous), [register]);
+  const box = `${(-I / A) * 100}%`;
+  const span = `${(T / A) * 100}%`;
   return (
     <div className="relative shrink-0" style={frameOverhangMargins(frame, `${size}px`)}>
       <div className="overflow-hidden bg-osu-b3" style={{ width: size, height: size, ...framedAvatarStyle(frame, { round }) }}>
         {avatar ? <img src={avatar} alt="" className="h-full w-full object-cover" /> : null}
       </div>
-      <SupporterAvatarFrame frame={frame} still={!live || round} round={round} />
+      {register && !round ? (
+        <canvas
+          ref={attach}
+          width={Math.round((size * T) / A) * 2}
+          height={Math.round((size * T) / A) * 2}
+          aria-hidden
+          className="pointer-events-none absolute max-w-none"
+          style={{ left: box, top: box, width: span, height: span }}
+        />
+      ) : (
+        <SupporterAvatarFrame frame={frame} still round={round} />
+      )}
     </div>
   );
 }

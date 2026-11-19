@@ -664,6 +664,12 @@ msgstr "{0} 的图标"
 #~ msgid "{0} imported plays counted"
 #~ msgstr ""
 
+#. placeholder {0}: deleting.name
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "{0} is deleted from this browser and your account."
+msgstr "{0} 会从这个浏览器和你的账号中删除。"
+
 #. placeholder {0}: published.name
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{0} is live"
@@ -6215,6 +6221,7 @@ msgstr "暂时无法连接机器人，请稍后刷新。"
 #: src/components/supporter/CustomThemeCredit.tsx
 #: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/report.tsx
 #: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
@@ -9143,6 +9150,7 @@ msgstr "延迟"
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
@@ -9168,6 +9176,7 @@ msgid "Delete area"
 msgstr "删除区域"
 
 #: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
 msgid "Delete draft"
 msgstr "删除草稿"
 
@@ -9223,6 +9232,11 @@ msgstr "删除皮肤"
 #: src/components/supporter/frames/FrameLayersPanel.tsx
 msgid "Delete the mask"
 msgstr "删除蒙版"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Delete this draft?"
+msgstr "删除这个草稿？"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Delete this imported play? Its replay is removed and the preview is recalculated."
@@ -13981,6 +13995,11 @@ msgstr "它从未发布过，因此主题会被删除。"
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
 msgstr "已经在你的收藏里了。"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "It's deleted from this browser and your account."
+msgstr "它会从这个浏览器和你的账号中删除。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "It's heavier than the limit."
@@ -33041,6 +33060,7 @@ msgid "Your Discord account is linked to <0>{0}</0>."
 msgstr "你的 Discord 账号已绑定到 <0>{0}</0>。"
 
 #: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
 msgid "Your drafts"
 msgstr "你的草稿"
 

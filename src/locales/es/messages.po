@@ -652,6 +652,12 @@ msgstr "Ícono de {0}"
 #~ msgid "{0} imported plays counted"
 #~ msgstr ""
 
+#. placeholder {0}: deleting.name
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "{0} is deleted from this browser and your account."
+msgstr "{0} se elimina de este navegador y de tu cuenta."
+
 #. placeholder {0}: published.name
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{0} is live"
@@ -6203,6 +6209,7 @@ msgstr "No se puede conectar con el bot ahora. Recarga en un momento."
 #: src/components/supporter/CustomThemeCredit.tsx
 #: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/report.tsx
 #: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
@@ -9131,6 +9138,7 @@ msgstr "Delay"
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
@@ -9156,6 +9164,7 @@ msgid "Delete area"
 msgstr "Eliminar área"
 
 #: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
 msgid "Delete draft"
 msgstr "Eliminar borrador"
 
@@ -9211,6 +9220,11 @@ msgstr "Eliminar skin"
 #: src/components/supporter/frames/FrameLayersPanel.tsx
 msgid "Delete the mask"
 msgstr "Eliminar la máscara"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Delete this draft?"
+msgstr "¿Eliminar este borrador?"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Delete this imported play? Its replay is removed and the preview is recalculated."
@@ -13969,6 +13983,11 @@ msgstr "Nunca se publicó, así que el tema se borra."
 #: src/components/packs/GiftInbox.tsx
 msgid "It's already in your collection."
 msgstr "Ya está en tu colección."
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "It's deleted from this browser and your account."
+msgstr "Se elimina de este navegador y de tu cuenta."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "It's heavier than the limit."
@@ -33029,6 +33048,7 @@ msgid "Your Discord account is linked to <0>{0}</0>."
 msgstr "Tu cuenta de Discord está vinculada a <0>{0}</0>."
 
 #: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
 msgid "Your drafts"
 msgstr "Tus borradores"
 
