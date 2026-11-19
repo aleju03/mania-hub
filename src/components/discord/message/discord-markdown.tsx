@@ -67,6 +67,11 @@ export function emojiUrl(id: string, animated: boolean): string {
   return `https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "webp"}?size=48&quality=lossless`;
 }
 
+// public/sw.js serves /images/ cache-first by full URL, so rebuilt emoji PNGs
+// (scripts/build-discord-emojis.mjs) need a bump here or browsers keep the old art.
+const EMOJI_ART_VERSION = 3;
+const localEmojiUrl = (name: string) => `/images/discord/emojis/${name}.png?v=${EMOJI_ART_VERSION}`;
+
 function Emoji({ name, id, animated, jumbo }: { name: string; id: string; animated: boolean; jumbo?: boolean }) {
   const size = jumbo ? "3rem" : "1.375em";
   // The bot sends a wide pill as a left and a right half (`_l`, `_r`); they touch
@@ -74,15 +79,16 @@ function Emoji({ name, id, animated, jumbo }: { name: string; id: string; animat
   const margin = /_s?l$/.test(name) ? "0 0 0 0.1em" : /_s?r$/.test(name) ? "0 0.05em 0 0" : "0 0.05em 0 0.1em";
   return (
     <img
-      // an all-zero id is an example's emoji: the site's own copy, with no trip to Discord
-      src={/^0+$/.test(id) ? `/images/discord/emojis/${name}.png` : emojiUrl(id, animated)}
+      // an all-zero id is an example's emoji: the site's own copy, with no trip to Discord.
+      // Local dev draws dan badges from the built PNGs too, so a rebuilt badge shows before it is uploaded.
+      src={/^0+$/.test(id) || (import.meta.env.DEV && name.startsWith("dan")) ? localEmojiUrl(name) : emojiUrl(id, animated)}
       alt={`:${name}:`}
       title={`:${name}:`}
       draggable={false}
       onError={(event) => {
         // Unregistered or foreign id: fall back to the PNG the emoji was built from.
         const img = event.currentTarget;
-        const local = `/images/discord/emojis/${name}.png`;
+        const local = localEmojiUrl(name);
         if (!img.src.endsWith(local)) img.src = local;
       }}
       style={{ width: size, height: size, objectFit: "contain", verticalAlign: "bottom", margin, display: "inline-block" }}

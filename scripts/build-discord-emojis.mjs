@@ -14,7 +14,7 @@
 // (add `dan` to write the dan badges alone)
 // Re-run after changing the source art or the catalog below.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import sharp from "sharp";
@@ -275,18 +275,24 @@ async function buildGain(color) {
 
 // Dan badges (emoji names `dan<keys>[ln]_<level>[_<tier>]_l` and `..._r`): every
 // level of each ladder that has art, plain and with each of its four tier
-// drawings (`m2` "--", `m1` "-", `p1` "+", `p2` "++"). The tier marks widen a
-// drawing past a square, and Discord fits an emoji into a square, so each is
-// written as a left and a right square the bot places side by side, like the
-// pills; a drawing that fits one square (squeezed a little if it must) is one
-// emoji. A level's five drawings share one crop and one scale, so the badge is
-// the same size at every tier unless it was squeezed. Mirrors DAN_LADDERS in
+// drawings (`m2` "--", `m1` "-", `p1` "+", `p2` "++"). Discord draws an inline
+// emoji in a 22px square, so every badge fills the square's height: the
+// level's plain drawing is DAN_EMBLEM tall, and each tier drawing keeps that
+// scale and position, its mark running to the right. A badge wider than a
+// square (a two-digit number, or a mark past the edge) is written as a left
+// and a right square the bot places side by side, like the pills; one that
+// stays inside it is one emoji. Mirrors DAN_LADDERS in
 // backend/src/discord/emojis.ts and getDanTierImageSrc in src/lib/dan-images.ts.
 // Ladder -> [folder under public/images/dans, file prefix, levels].
 const DAN_DIR = join(ROOT, "public/images/dans");
 const DAN_SIZE = 96;
-// How much wider than a square a drawing may be and still be drawn in one.
-const DAN_SQUEEZE = 1.3;
+// The plain drawing's height in the square; the margin left over takes a mark that sits a little higher.
+const DAN_EMBLEM = 92;
+// The 6K and 7K badges are a frame with the level inside it, and at 22px the
+// level reads small. They are drawn as large as the first square takes, the
+// frame's thin outer lines cut off at its top and bottom.
+const DAN_EMBLEM_FRAMED = Number(process.env.DAN_EMBLEM_FRAMED ?? 108);
+const DAN_FRAMED = new Set(["6k", "7k"]);
 const DAN_TIERS = { "": "", m2: "-low", m1: "-mid-low", p1: "-mid-high", p2: "-high" };
 const numbered = (from, to) => Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
 const SIXK = [...numbered(0, 9), "terra", "celestial", "mystery", "nihility", "finish"];
@@ -309,7 +315,8 @@ async function readDan(folder, file) {
     const { info } = await sharp(png).trim().toBuffer({ resolveWithObject: true });
     const left = -(info.trimOffsetLeft ?? 0);
     const top = -(info.trimOffsetTop ?? 0);
-    return { png, left, top, right: left + info.width, bottom: top + info.height };
+    const { width, height } = await sharp(png).metadata();
+    return { png, width, height, left, top, right: left + info.width, bottom: top + info.height };
   }
   throw new Error(`no dan badge at ${folder}/${file}`);
 }
@@ -319,23 +326,31 @@ async function buildDanLevel(folder, file) {
   const clear = { r: 0, g: 0, b: 0, alpha: 0 };
   const drawings = {};
   for (const [tier, suffix] of Object.entries(DAN_TIERS)) drawings[tier] = await readDan(folder, `${file}${suffix}`);
-  const all = Object.values(drawings);
-  const left = Math.min(...all.map((drawing) => drawing.left));
-  const top = Math.min(...all.map((drawing) => drawing.top));
-  const bottom = Math.max(...all.map((drawing) => drawing.bottom));
-  const widest = Math.max(...all.map((drawing) => drawing.right)) - left;
-  const scale = Math.min(DAN_SIZE / (bottom - top), (DAN_SIZE * 2) / widest);
+  // The tier drawings share the plain drawing's canvas, so its ink box places the badge in all five.
+  const base = drawings[""];
+  const baseHeight = base.bottom - base.top;
+  // Shrunk only when a tier drawing would not fit two squares.
+  const widest = Math.max(...Object.values(drawings).map((drawing) => drawing.right)) - base.left;
+  // The badge itself stays inside the first square: split across two, a thin
+  // outline showed its corner past the seam as a separate piece, and a wide
+  // number read twice the size of a framed badge. Only the tier mark spills.
+  const emblem = DAN_FRAMED.has(folder) ? DAN_EMBLEM_FRAMED : DAN_EMBLEM;
+  const scale = Math.min(emblem / baseHeight, DAN_SIZE / (base.right - base.left), (DAN_SIZE * 2) / widest);
+  const emblemTop = (DAN_SIZE - baseHeight * scale) / 2;
   const out = {};
   for (const [tier, drawing] of Object.entries(drawings)) {
-    const cut = await sharp(drawing.png).extract({ left, top, width: drawing.right - left, height: bottom - top }).png().toBuffer();
-    const width = (drawing.right - left) * scale;
-    // A drawing only a little wider than a square is drawn a little smaller in
-    // one square: spilling a sliver of its tier mark into a second square put
-    // a whole blank emoji between the badge and the text after it.
-    const squeeze = width > DAN_SIZE && width <= DAN_SIZE * DAN_SQUEEZE ? DAN_SIZE / width : 1;
-    const sized = await sharp(cut).resize({ width: Math.max(1, Math.round(width * squeeze)), height: Math.max(1, Math.round((bottom - top) * scale * squeeze)), fit: "fill" }).png().toBuffer();
+    // The part of the drawing that lands on the two squares.
+    const top = Math.max(0, Math.floor(base.top - emblemTop / scale));
+    const bottom = Math.min(drawing.height, Math.ceil(base.top + (DAN_SIZE - emblemTop) / scale));
+    const left = base.left;
+    const right = Math.min(drawing.width, drawing.right, Math.ceil(left + (DAN_SIZE * 2) / scale));
+    const cut = await sharp(drawing.png).extract({ left, top, width: right - left, height: bottom - top }).png().toBuffer();
+    const width = Math.min(DAN_SIZE * 2, Math.max(1, Math.round((right - left) * scale)));
+    const height = Math.min(DAN_SIZE, Math.max(1, Math.round((bottom - top) * scale)));
+    const sized = await sharp(cut).resize({ width, height, fit: "fill" }).png().toBuffer();
+    const y = Math.min(DAN_SIZE - height, Math.max(0, Math.round(emblemTop - (base.top - top) * scale)));
     const wide = await sharp({ create: { width: DAN_SIZE * 2, height: DAN_SIZE, channels: 4, background: clear } })
-      .composite([{ input: sized, left: 0, top: Math.round((DAN_SIZE - (bottom - top) * scale * squeeze) / 2) }])
+      .composite([{ input: sized, left: 0, top: y }])
       .png()
       .toBuffer();
     // Palette PNGs: the badges are gradients, and in full colour they weigh several times more.
@@ -368,6 +383,8 @@ async function writeHalves(name, png, { scale = 1, suffix = "" } = {}) {
 }
 
 async function writeDans() {
+  // A badge that became one emoji wide must not leave its old right square behind.
+  for (const name of await readdir(OUT_DIR)) if (/^dan\d+(ln)?_.*\.png$/.test(name)) await rm(join(OUT_DIR, name));
   let count = 0;
   const narrow = [];
   for (const [ladder, [folder, prefix, levels]] of Object.entries(DANS)) {
