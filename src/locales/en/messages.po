@@ -9939,6 +9939,10 @@ msgstr "Elite"
 msgid "Email"
 msgstr "Email"
 
+#: src/routes/discord.tsx
+msgid "Embed"
+msgstr "Embed"
+
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-pack-style.ts
 msgid "Ember"
@@ -13018,12 +13022,17 @@ msgstr "If your plays show a dan course pass, your dan for that side <0>cannot r
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/bbcode.tsx
+#: src/routes/discord.tsx
 msgid "Image"
 msgstr "Image"
 
 #: src/lib/replay-overlays.ts
 msgid "Image or GIF"
 msgstr "Image or GIF"
+
+#: src/routes/discord.tsx
+msgid "Image posts"
+msgstr "Image posts"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Image upload failed."
@@ -20278,6 +20287,10 @@ msgstr "Post a Discord server"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Post collection"
 msgstr "Post collection"
+
+#: src/routes/discord.tsx
+msgid "Post style"
+msgstr "Post style"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Post your Discord server"

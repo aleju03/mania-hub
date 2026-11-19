@@ -69,7 +69,7 @@ export interface BotServer {
   iconUrl: string | null;
   botPresent: boolean;
   channels: BotChannel[];
-  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number; players?: BotFeedPlayer[]; playersMode?: "only" | "mix"; excluded?: BotFeedPlayer[]; countries?: string[]; minDan?: number; nearClears?: boolean; minMsd?: number; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number; ppClient?: "stable" | "lazer" }>;
+  subscriptions: Array<{ channelId: string; feedType: string; country: string; minPp: number; keys?: number[]; keymodeTop?: number; players?: BotFeedPlayer[]; playersMode?: "only" | "mix"; excluded?: BotFeedPlayer[]; countries?: string[]; minDan?: number; nearClears?: boolean; minMsd?: number; imagePosts?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number; ppClient?: "stable" | "lazer" }>;
   settings: { defaultCountry: string | null; autoDanChannels: string[] };
 }
 
@@ -94,7 +94,7 @@ export interface BotServers {
 export interface BotServerChange {
   defaultCountry?: string | null;
   feed?: { channelId: string; feedType: string; on: boolean; country?: string };
-  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number; players: number[]; playersMode?: "only" | "mix"; excluded?: number[]; countries?: string[]; minDan?: number; nearClears?: boolean; minMsd?: number; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number; ppClient?: "stable" | "lazer" };
+  feedFilters?: { channelId: string; feedType: string; minPp: number; keys: number[]; keymodeTop: number; players: number[]; playersMode?: "only" | "mix"; excluded?: number[]; countries?: string[]; minDan?: number; nearClears?: boolean; minMsd?: number; imagePosts?: boolean; minStars?: number; maxStars?: number; mapsMode?: "farm" | "all"; ppAccuracy?: number; ppClient?: "stable" | "lazer" };
   autoDan?: { channelId: string; on: boolean };
 }
 
@@ -321,7 +321,7 @@ export const updateBotServer = createServerFn({ method: "POST" })
   });
 
 export const fetchBotPreview = createServerFn({ method: "GET" })
-  .validator((data: { view?: unknown }) => ({ view: typeof data?.view === "string" ? data.view.slice(0, 20) : "profile" }))
+  .validator((data: { view?: unknown }) => ({ view: typeof data?.view === "string" ? data.view.slice(0, 32) : "profile" }))
   .handler(async ({ data }): Promise<{ message: DiscordMessageJson | null }> => {
     const base = getServerLiveBackendUrl();
     if (!base) return { message: null };

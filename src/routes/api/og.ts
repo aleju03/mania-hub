@@ -31,6 +31,7 @@ import { getCountryName, isGlobalScope, isSupportedCountryCode, isSupportedCount
 import { getAssetOrigin } from "../../lib/origin";
 import { OVERJOY_RUN_OG_LAYOUT, renderOverjoyRunOg } from "../../lib/og-overjoy-run";
 import { drawPlayBanner, fetchPlayBannerSources, type PlayBannerStats } from "../../lib/play-banner";
+import { drawPlayCard, fetchPlayCardSources, playCardGradeFile, readPlayCard, type PlayCardData } from "../../lib/play-card";
 import { liveBridgeToken } from "../../lib/live-backend-tokens";
 import { drawRankingsBoard, fetchRankingsBoardAvatars, fetchRankingsBoardFlags, readRankingsBoard, type RankingsBoardRow } from "../../lib/rankings-board";
 import {
@@ -1906,6 +1907,52 @@ async function renderPlayBannerOg(
   const buffer = await pending;
   if (!buffer) return new Response(null, { status: 404, headers: { "Cache-Control": "public, max-age=300" } });
   return imageResponse(buffer, "image/jpeg", OG_CACHE_HEADER);
+}
+
+// The picture a Recent plays or Dan clears post is (lib/play-card.ts). Not
+// kept in R2: a play makes one URL, which Discord and the CDN keep by.
+const inFlightPlayCards = new Map<string, Promise<Buffer>>();
+const playCardIcons = new Map<string, Promise<string | null>>();
+
+// The grade pills and mod badges are a few dozen small files: read once each.
+function playCardIcon(request: Request, path: string, mime: string): Promise<string | null> {
+  const url = new URL(path, getAssetOrigin(request)).toString();
+  let pending = playCardIcons.get(url);
+  if (!pending) {
+    pending = (async () => {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      return `data:${mime};base64,${Buffer.from(await response.arrayBuffer()).toString("base64")}`;
+    })().catch(() => null);
+    playCardIcons.set(url, pending);
+    void pending.then((icon) => {
+      if (!icon) playCardIcons.delete(url);
+    });
+  }
+  return pending;
+}
+
+async function renderPlayCardOg(request: Request, key: string, data: PlayCardData): Promise<Response> {
+  let pending = inFlightPlayCards.get(key);
+  if (!pending) {
+    pending = (async () => {
+      const [fonts, sources, emblem, gradeIcon, modIcons] = await Promise.all([
+        loadOgFonts(request),
+        fetchPlayCardSources(data),
+        data.emblem ? fetchDanEmblemSource(request, data.emblem.label, data.emblem.family, data.emblem.keyCount).catch(() => null) : null,
+        playCardIcon(request, `/images/badges/score-ranks-v2019/${playCardGradeFile(data.grade)}.svg`, "image/svg+xml"),
+        Promise.all(data.mods.map((mod) => playCardIcon(request, `/images/discord/emojis/mod_${mod}.png`, "image/png"))),
+      ]);
+      // Only the drawing holds a render slot, not the waits on the image hosts.
+      return ogRenderGate.run(() => drawPlayCard({ data, ...sources, emblem, gradeIcon, modIcons, fonts }));
+    })().finally(() => {
+      inFlightPlayCards.delete(key);
+    });
+    inFlightPlayCards.set(key, pending);
+  }
+  // The bot posts the picture only once it has read a card back: a site that
+  // does not know this kind yet answers with its default card.
+  return imageResponse(await pending, "image/jpeg", OG_CACHE_HEADER, { "X-Og-Kind": "play-card" });
 }
 
 // The picture in the Discord bot's /rankings reply (lib/rankings-board.ts).
@@ -5463,6 +5510,18 @@ export const Route = createFileRoute("/api/og")({
             return await renderRankingsBoardOg(request, url.searchParams.get("d") ?? "", rows);
           } catch (err) {
             console.warn("[og] rankings board render failed", err);
+            return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
+          }
+        }
+
+        if (kind === "play-card") {
+          const payload = url.searchParams.get("d");
+          const data = readPlayCard(payload, url.searchParams.get("s"), liveBridgeToken());
+          if (!data || !payload) return new Response(null, { status: 400 });
+          try {
+            return await renderPlayCardOg(request, payload, data);
+          } catch (err) {
+            console.warn("[og] play card render failed", err);
             return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
           }
         }

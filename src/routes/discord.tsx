@@ -617,13 +617,13 @@ function danLevelChoices(keys: number[], current: number): number[] {
 // plays, and New farm maps (keymodes and stars).
 const FILTERED_FEEDS = ["top_play", "recent_play", "dan_clear", "goal", "new_map"];
 
-type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "mix"; excluded: BotFeedPlayer[]; countries: string[]; minDan: number; nearClears: boolean; minMsd: number; minStars: number; maxStars: number; mapsMode: "farm" | "all"; ppAccuracy: number; ppClient: PpClient };
+type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "mix"; excluded: BotFeedPlayer[]; countries: string[]; minDan: number; nearClears: boolean; minMsd: number; imagePosts: boolean; minStars: number; maxStars: number; mapsMode: "farm" | "all"; ppAccuracy: number; ppClient: PpClient };
 type SavedFeedFilters = Omit<TopPlayFilterState, "players" | "excluded"> & { players: number[]; excluded: number[] };
 
 function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
   return {
     minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [], playersMode: sub.playersMode ?? "only", excluded: sub.excluded ?? [],
-    countries: sub.countries ?? [], minDan: sub.minDan ?? 0, nearClears: sub.nearClears ?? true, minMsd: sub.minMsd ?? 0,
+    countries: sub.countries ?? [], minDan: sub.minDan ?? 0, nearClears: sub.nearClears ?? true, minMsd: sub.minMsd ?? 0, imagePosts: sub.imagePosts ?? false,
     minStars: sub.minStars ?? 0, maxStars: sub.maxStars ?? 0, mapsMode: sub.mapsMode ?? "farm", ppAccuracy: sub.ppAccuracy ?? DEFAULT_PP_ACCURACY, ppClient: sub.ppClient ?? "stable",
   };
 }
@@ -686,6 +686,62 @@ function PpFloor({ minPp, accuracy, client, disabled, onChange }: {
 // lowest level, near clears and a player list. New farm maps: farm maps or
 // every ranked set, keymodes and a star range. Changes show at once and save in
 // order behind the scenes, since each save waits on Discord for a few seconds.
+// The newest post of a feed in each style, read once a visit: the tiles of
+// every channel's picker show the same two.
+const postStyleSamples = new Map<string, Promise<DiscordMessageJson | null>>();
+
+function postStyleSample(view: string): Promise<DiscordMessageJson | null> {
+  let pending = postStyleSamples.get(view);
+  if (!pending) {
+    pending = fetchBotPreview({ data: { view } }).then((result) => result.message).catch(() => null);
+    postStyleSamples.set(view, pending);
+  }
+  return pending;
+}
+
+const POST_STYLE_SCALE = 0.5;
+const POST_STYLE_WIDTH = 440;
+
+/** A feed's two post styles as real posts at half size: the embed and the one image. */
+function PostStylePicker({ feed, image, onChange }: { feed: "recent_play" | "dan_clear"; image: boolean; onChange: (image: boolean) => void }) {
+  const view = feed === "dan_clear" ? "feed-dan-clears" : "feed-recent-plays";
+  const [samples, setSamples] = useState<Array<DiscordMessageJson | null> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([postStyleSample(view), postStyleSample(`${view}-image`)]).then((both) => {
+      if (!cancelled) setSamples(both);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [view]);
+  const tile = (on: boolean, name: ReactNode) => {
+    const sample = samples?.[on ? 1 : 0];
+    return (
+      <button
+        type="button"
+        aria-pressed={image === on}
+        onClick={() => { if (image !== on) onChange(on); }}
+        className={`rounded-lg p-1.5 text-left ${image === on ? "ring-2 ring-osu-pink" : "opacity-60 ring-1 ring-white/10 hover:opacity-100"}`}
+        style={{ backgroundColor: DISCORD.msg }}
+      >
+        <div className="pointer-events-none overflow-hidden rounded" style={{ width: POST_STYLE_WIDTH * POST_STYLE_SCALE, height: 150 }}>
+          <div style={{ width: POST_STYLE_WIDTH, zoom: POST_STYLE_SCALE }}>
+            {samples === null ? <PreviewSkeleton /> : sample ? <DiscordMessageBodyView body={sample} /> : null}
+          </div>
+        </div>
+        <div className={`mt-1.5 px-0.5 text-[12px] font-semibold ${image === on ? "text-white" : "text-osu-f1"}`}>{name}</div>
+      </button>
+    );
+  };
+  return (
+    <div className="flex flex-wrap gap-2.5">
+      {tile(false, <Trans>Embed</Trans>)}
+      {tile(true, <Trans>Image</Trans>)}
+    </div>
+  );
+}
+
 function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
   sub: BotServer["subscriptions"][number];
   channelName?: string;
@@ -718,7 +774,7 @@ function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
   };
   const chip = (active: boolean, interactive = true) =>
     `rounded-md px-2 py-0.5 text-[12px] font-semibold ${active ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"} ${interactive ? "hover:brightness-110" : "cursor-default"}`;
-  const { keys, keymodeTop, players, playersMode, excluded, countries, minDan, nearClears, mapsMode } = filters;
+  const { keys, keymodeTop, players, playersMode, excluded, countries, minDan, nearClears, imagePosts, mapsMode } = filters;
   const feedCountry = sub.country === "GLOBAL" ? null : sub.country;
   const summarizePlayers = useFeedPlayersSummary();
   const danClears = sub.feedType === "dan_clear";
@@ -735,6 +791,12 @@ function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
 
   const row = "flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3";
   const label = "shrink-0 text-[12px] text-osu-f1 sm:w-24";
+  const imagePostsRow = sub.feedType === "recent_play" || sub.feedType === "dan_clear" ? (
+    <div className="flex flex-col gap-1.5 sm:flex-row sm:gap-3">
+      <span className={`${label} sm:pt-1`}><Trans>Post style</Trans></span>
+      <PostStylePicker feed={sub.feedType} image={imagePosts} onChange={(on) => save({ imagePosts: on })} />
+    </div>
+  ) : null;
 
   return (
     <div className="grid gap-3 rounded-lg bg-osu-b5 px-3.5 py-3 text-[12px] text-osu-f1">
@@ -835,6 +897,7 @@ function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
               </HintButton>
             </div>
           </div>
+          {imagePostsRow}
         </>
       ) : danClears ? (
         <>
@@ -863,6 +926,7 @@ function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
               </HintButton>
             </div>
           </div>
+          {imagePostsRow}
         </>
       ) : (
         <>
@@ -1192,6 +1256,7 @@ function FeedSummary({ sub }: { sub: ServerSub }) {
     }
     const minMsd = sub.minMsd ?? 0;
     if (minMsd) parts.push(<Trans>MSD {minMsd} and up</Trans>);
+    if (sub.imagePosts) parts.push(<Trans>Image posts</Trans>);
     const listed = sub.players?.length ?? 0;
     parts.push(listed ? <Plural value={listed} one="# player" other="# players" /> : <Trans>No players yet</Trans>);
     return <SummaryParts parts={parts} />;
@@ -1202,6 +1267,7 @@ function FeedSummary({ sub }: { sub: ServerSub }) {
     const name = danLevelName(sub.minDan ?? 0, keys);
     parts.push(sub.minDan ? <Trans>{name} and up</Trans> : <Trans>Any dan</Trans>);
     if (sub.nearClears ?? true) parts.push(<Trans>Near clears</Trans>);
+    if (sub.imagePosts) parts.push(<Trans>Image posts</Trans>);
   } else {
     const top = sub.keymodeTop ?? 0;
     parts.push(top ? <Trans>Top {top} of the keymode</Trans> : <Trans>Any top play</Trans>);

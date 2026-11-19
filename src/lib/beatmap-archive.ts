@@ -533,6 +533,11 @@ export function findBeatmapArchiveFile(zip: JSZip, filename: string): JSZip.JSZi
   return null;
 }
 
+/** One file by HTTP range from the free mirrors: never a whole archive, and never osu.direct's budget. */
+export function extractBeatmapArchiveFileByRange(beatmapsetId: string, filename: string): Promise<Buffer> {
+  return extractArchiveFileByRange(beatmapsetId, filename, FREE_ARCHIVE_SOURCES);
+}
+
 export async function extractBeatmapArchiveFile(beatmapsetId: string, filename: string): Promise<Buffer> {
   try {
     return await extractArchiveFileByRange(beatmapsetId, filename, FREE_ARCHIVE_SOURCES);

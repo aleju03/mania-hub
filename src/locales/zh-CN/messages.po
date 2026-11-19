@@ -9924,6 +9924,10 @@ msgstr "精英"
 msgid "Email"
 msgstr "邮箱"
 
+#: src/routes/discord.tsx
+msgid "Embed"
+msgstr "嵌入消息"
+
 #: src/lib/supporter-name-styles.ts
 #: src/lib/supporter-pack-style.ts
 msgid "Ember"
@@ -12980,12 +12984,17 @@ msgstr "如果你的成绩显示你通过了某个段位，你在这一侧的段
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/routes/bbcode.tsx
+#: src/routes/discord.tsx
 msgid "Image"
 msgstr "图片"
 
 #: src/lib/replay-overlays.ts
 msgid "Image or GIF"
 msgstr "图片或 GIF"
+
+#: src/routes/discord.tsx
+msgid "Image posts"
+msgstr "图片消息"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Image upload failed."
@@ -20240,6 +20249,10 @@ msgstr "发布 Discord 服务器"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Post collection"
 msgstr "发布收藏夹"
+
+#: src/routes/discord.tsx
+msgid "Post style"
+msgstr "消息样式"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Post your Discord server"
