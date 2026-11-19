@@ -2437,6 +2437,10 @@ msgid "/profile"
 msgstr "/profile"
 
 #: src/routes/discord.tsx
+msgid "/profile replies with one image, unless you set image to false."
+msgstr "/profile 会以一张图片回复，除非你把 image 设为 false。"
+
+#: src/routes/discord.tsx
 msgid "/rankings"
 msgstr "/rankings"
 
@@ -20647,6 +20651,10 @@ msgstr "问题"
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Profile"
 msgstr "个人资料"
+
+#: src/routes/discord.tsx
+msgid "Profile as an image"
+msgstr "以图片显示个人资料"
 
 #: src/components/replay/ReplayPlayerInfoControls.tsx
 #: src/lib/signature-style.ts

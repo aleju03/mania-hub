@@ -32,6 +32,7 @@ import { getAssetOrigin } from "../../lib/origin";
 import { OVERJOY_RUN_OG_LAYOUT, renderOverjoyRunOg } from "../../lib/og-overjoy-run";
 import { drawPlayBanner, fetchPlayBannerSources, type PlayBannerStats } from "../../lib/play-banner";
 import { drawPlayCard, fetchPlayCardSources, playCardGradeFile, readPlayCard, type PlayCardData } from "../../lib/play-card";
+import { drawProfileCard, fetchProfileCardSources, readProfileCard, type ProfileCardData } from "../../lib/profile-card";
 import { liveBridgeToken } from "../../lib/live-backend-tokens";
 import { drawRankingsBoard, fetchRankingsBoardAvatars, fetchRankingsBoardFlags, readRankingsBoard, type RankingsBoardRow } from "../../lib/rankings-board";
 import {
@@ -1953,6 +1954,36 @@ async function renderPlayCardOg(request: Request, key: string, data: PlayCardDat
   // The bot posts the picture only once it has read a card back: a site that
   // does not know this kind yet answers with its default card.
   return imageResponse(await pending, "image/jpeg", OG_CACHE_HEADER, { "X-Og-Kind": "play-card" });
+}
+
+// The picture the Discord bot's /profile reply can be (lib/profile-card.ts).
+// Not kept in R2: the URL is the player's standing, and Discord and the CDN
+// hold their copies by URL.
+const inFlightProfileCards = new Map<string, Promise<Buffer>>();
+
+async function renderProfileCardOg(request: Request, key: string, data: ProfileCardData): Promise<Response> {
+  let pending = inFlightProfileCards.get(key);
+  if (!pending) {
+    pending = (async () => {
+      const badge = (label: string | null, family: string, keyCount: number) =>
+        label ? fetchDanEmblemSource(request, label, family, keyCount).catch(() => null) : null;
+      const [fonts, sources, emblems, gradeIcons, modIcons] = await Promise.all([
+        loadOgFonts(request),
+        fetchProfileCardSources(data),
+        Promise.all(data.modes.map(async (mode) => ({ rice: await badge(mode.rice, "dan", mode.keyCount), ln: await badge(mode.ln, "ln", mode.keyCount) }))),
+        Promise.all(data.plays.map((play) => playCardIcon(request, `/images/badges/score-ranks-v2019/${playCardGradeFile(play.grade)}.svg`, "image/svg+xml"))),
+        Promise.all(data.plays.map((play) => Promise.all(play.mods.map((mod) => playCardIcon(request, `/images/discord/emojis/mod_${mod}.png`, "image/png"))))),
+      ]);
+      // Only the drawing holds a render slot, not the waits on the image hosts.
+      return ogRenderGate.run(() => drawProfileCard({ data, ...sources, emblems, gradeIcons, modIcons, fonts }));
+    })().finally(() => {
+      inFlightProfileCards.delete(key);
+    });
+    inFlightProfileCards.set(key, pending);
+  }
+  // The bot sends the picture only once it has read a card back: a site that
+  // does not know this kind yet answers with its default card.
+  return imageResponse(await pending, "image/jpeg", OG_CACHE_HEADER, { "X-Og-Kind": "profile-card" });
 }
 
 // The picture in the Discord bot's /rankings reply (lib/rankings-board.ts).
@@ -5522,6 +5553,18 @@ export const Route = createFileRoute("/api/og")({
             return await renderPlayCardOg(request, payload, data);
           } catch (err) {
             console.warn("[og] play card render failed", err);
+            return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
+          }
+        }
+
+        if (kind === "profile-card") {
+          const payload = url.searchParams.get("d");
+          const data = readProfileCard(payload, url.searchParams.get("s"), liveBridgeToken());
+          if (!data || !payload) return new Response(null, { status: 400 });
+          try {
+            return await renderProfileCardOg(request, payload, data);
+          } catch (err) {
+            console.warn("[og] profile card render failed", err);
             return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
           }
         }

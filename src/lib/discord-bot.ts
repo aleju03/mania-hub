@@ -14,6 +14,8 @@ import type { DiscordMessageJson } from "../components/discord/message/DiscordMe
 export interface BotPreferences {
   defaultKeys: "4k" | "7k" | null;
   privateReplies: boolean;
+  /** /profile answers with one image in place of the text. */
+  profileImage: boolean;
 }
 
 export interface BotAccount {
@@ -247,6 +249,7 @@ export const saveBotPreferences = createServerFn({ method: "POST" })
     const patch: Partial<BotPreferences> = {};
     if (data && "defaultKeys" in data) patch.defaultKeys = data.defaultKeys === "4k" || data.defaultKeys === "7k" ? data.defaultKeys : null;
     if (data && "privateReplies" in data) patch.privateReplies = data.privateReplies === true;
+    if (data && "profileImage" in data) patch.profileImage = data.profileImage === true;
     return patch;
   })
   .handler(async ({ data }): Promise<BotAccount> => {

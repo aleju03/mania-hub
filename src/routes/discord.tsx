@@ -280,6 +280,15 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
             />
             <p className="mt-1.5 text-[12px] text-osu-f1"><Trans>Only you see the bot's replies to your commands, unless you set hidden to false.</Trans></p>
           </div>
+          <div>
+            <Toggle
+              checked={Boolean(account.settings?.profileImage)}
+              disabled={busy}
+              onChange={(value) => void run(() => saveBotPreferences({ data: { profileImage: value } }))}
+              label={<Trans>Profile as an image</Trans>}
+            />
+            <p className="mt-1.5 text-[12px] text-osu-f1"><Trans>/profile replies with one image, unless you set image to false.</Trans></p>
+          </div>
         </div>
       ) : null}
     </Panel>

@@ -2425,6 +2425,10 @@ msgid "/profile"
 msgstr "/profile"
 
 #: src/routes/discord.tsx
+msgid "/profile replies with one image, unless you set image to false."
+msgstr "/profile responde con una sola imagen, a menos que pongas image en false."
+
+#: src/routes/discord.tsx
 msgid "/rankings"
 msgstr "/rankings"
 
@@ -20635,6 +20639,10 @@ msgstr "Problemas"
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Profile"
 msgstr "Perfil"
+
+#: src/routes/discord.tsx
+msgid "Profile as an image"
+msgstr "Perfil como imagen"
 
 #: src/components/replay/ReplayPlayerInfoControls.tsx
 #: src/lib/signature-style.ts
