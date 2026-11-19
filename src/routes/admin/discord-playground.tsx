@@ -85,6 +85,7 @@ interface InteractionRequest {
   username: string;
   inGuild: boolean;
   manageGuild: boolean;
+  botCanPost: boolean;
   messageFlags?: number;
 }
 
@@ -183,6 +184,7 @@ interface PersistedState {
   actorId: string;
   inGuild: boolean;
   manageGuild: boolean;
+  botCanPost?: boolean;
   command: string;
   values: Record<string, Record<string, string>>;
   feedCountry: string;
@@ -275,6 +277,7 @@ function DiscordPlaygroundPage() {
   const [actorId, setActorId] = useState(persisted.actorId ?? "");
   const [inGuild, setInGuild] = useState(persisted.inGuild ?? true);
   const [manageGuild, setManageGuild] = useState(persisted.manageGuild ?? true);
+  const [botCanPost, setBotCanPost] = useState(persisted.botCanPost ?? true);
   const [commandName, setCommandName] = useState(persisted.command ?? "help");
   const [values, setValues] = useState<Record<string, Record<string, string>>>(persisted.values ?? {});
   const [feedCountry, setFeedCountry] = useState(persisted.feedCountry ?? "");
@@ -296,14 +299,14 @@ function DiscordPlaygroundPage() {
   useEffect(() => {
     const state: PersistedState = {
       entries: entries.filter((entry) => !entry.pending).slice(-MAX_ENTRIES),
-      actorId, inGuild, manageGuild, command: commandName, values, feedCountry, autoRerun, sampleDiscordId,
+      actorId, inGuild, manageGuild, botCanPost, command: commandName, values, feedCountry, autoRerun, sampleDiscordId,
     };
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
       // Storage full or blocked: the playground still works, it just forgets.
     }
-  }, [entries, actorId, inGuild, manageGuild, commandName, values, feedCountry, autoRerun, sampleDiscordId]);
+  }, [entries, actorId, inGuild, manageGuild, botCanPost, commandName, values, feedCountry, autoRerun, sampleDiscordId]);
 
   const loadInfo = useCallback(async () => {
     try {
@@ -334,7 +337,8 @@ function DiscordPlaygroundPage() {
     username: actor.name,
     inGuild,
     manageGuild,
-  }), [actor, inGuild, manageGuild]);
+    botCanPost,
+  }), [actor, inGuild, manageGuild, botCanPost]);
 
   const patchEntry = useCallback((id: string, patch: Partial<Entry>) => {
     setEntries((current) => current.map((entry) => entry.id === id ? { ...entry, ...patch } : entry));
@@ -572,6 +576,7 @@ function DiscordPlaygroundPage() {
             <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
               <Toggle checked={inGuild} onChange={setInGuild} label="In a server" />
               <Toggle checked={manageGuild} onChange={setManageGuild} label="Manage Server" disabled={!inGuild} />
+              <Toggle checked={botCanPost} onChange={setBotCanPost} label="Bot can post" disabled={!inGuild} />
             </div>
           </section>
 

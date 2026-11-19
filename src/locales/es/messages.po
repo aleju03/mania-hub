@@ -26813,6 +26813,10 @@ msgid "The bot can DM you when someone pulls your card, a player you follow sets
 msgstr "El bot te puede escribir por DM cuando alguien saca tu carta, un jugador que sigues hace una mejor jugada, rankean un mapa nuevo para farmear a tu nivel o te hacen snipe, y además manda un resumen semanal. Primero confirma tu cuenta de Discord arriba, para que sepa que la cuenta es tuya."
 
 #: src/routes/discord.tsx
+msgid "The bot can't send messages in this channel, so nothing posts here. Allow Send Messages for the bot in this channel's permissions."
+msgstr "El bot no puede mandar mensajes en este canal, así que aquí no se publica nada. Dale Enviar mensajes al bot en los permisos de este canal."
+
+#: src/routes/discord.tsx
 msgid "The bot isn't in this server"
 msgstr "El bot no está en este servidor"
 

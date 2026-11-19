@@ -26825,6 +26825,10 @@ msgid "The bot can DM you when someone pulls your card, a player you follow sets
 msgstr "机器人可以在有人抽到你的卡片、关注的玩家打出最佳成绩、上架了适合你水平的刷分图或你被狙击时私信你，还有每周回顾。请先在上方确认你的 Discord 账号，让它知道这个账号是你的。"
 
 #: src/routes/discord.tsx
+msgid "The bot can't send messages in this channel, so nothing posts here. Allow Send Messages for the bot in this channel's permissions."
+msgstr "机器人无法在此频道发送消息，所以这里不会发布任何内容。请在此频道的权限中为机器人开启“发送消息”。"
+
+#: src/routes/discord.tsx
 msgid "The bot isn't in this server"
 msgstr "机器人不在此服务器中"
 

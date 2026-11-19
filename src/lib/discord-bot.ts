@@ -59,6 +59,8 @@ export interface BotChannel {
   id: string;
   name: string;
   category: string | null;
+  /** False when the channel's permissions keep the bot from posting; null or missing when unknown. */
+  botCanPost?: boolean | null;
 }
 
 export interface BotServer {
