@@ -830,6 +830,32 @@ export const submitWorkshopFrame = createServerFn({ method: "POST" })
     return { frame };
   });
 
+/* Replaces the art and name of one of the viewer's own frames (from the frame
+   editor), keeping its id so whoever wears it gets the new version. */
+export const updateWorkshopFrame = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; name?: unknown; still?: unknown; video?: unknown; round?: unknown; overhang?: unknown }) => {
+    if (!isWorkshopFrameId(data?.id)) throw new Error("Pick a frame.");
+    const name = typeof data?.name === "string" ? data.name.replace(/\s+/g, " ").trim().slice(0, FRAME_NAME_MAX) : "";
+    if (!name) throw new Error("Give it a name.");
+    if (typeof data?.still !== "string") throw new Error("Upload its picture first.");
+    const overhang = Array.isArray(data?.overhang) && data.overhang.length === 4 ? data.overhang.map(Number) : null;
+    if (!overhang || overhang.some((n) => !Number.isFinite(n))) throw new Error("Upload its picture first.");
+    return { id: data.id, name, still: data.still, video: typeof data?.video === "string" ? data.video : null, round: typeof data?.round === "string" ? data.round : null, overhang };
+  })
+  .handler(async ({ data }): Promise<{ frame: SubmittedFrame }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("Log in first.");
+    const response = await fetch(`${viewer.base}/api/supporters/self/frames/update`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, ...data }),
+    });
+    const body = await response.json().catch(() => null) as { error?: unknown; frame?: unknown } | null;
+    const frame = parseSubmittedFrames(body?.frame ? [body.frame] : [])[0];
+    if (!response.ok || !frame) throw new Error(response.status === 404 ? "That frame isn't yours, or it was deleted." : FRAME_ERRORS[String(body?.error)] ?? `Server ${response.status}`);
+    return { frame };
+  });
+
 /* Takes down one of the viewer's own frames, off everyone wearing it. */
 export const deleteOwnWorkshopFrame = createServerFn({ method: "POST" })
   .validator((data: { id?: unknown }) => {

@@ -884,6 +884,8 @@ function assertReplayCacheKey(storageKey: string): void {
 const SKINS_PREFIX = "skins/";
 const BUG_REPORTS_PREFIX = "bug-reports/";
 const SHARED_CLIPS_PREFIX = "shared-clips/";
+/* Frame editor drafts kept on a player's account: frame-drafts/<user id>/<file>. Durable, no lifecycle rule. */
+const FRAME_DRAFTS_PREFIX = "frame-drafts/";
 
 type AdminBucketDef = {
   id: R2AdminBucketId;
@@ -912,6 +914,11 @@ const ADMIN_BUCKETS: AdminBucketDef[] = [
         prefix: BUG_REPORTS_PREFIX,
         label: "bug reports",
         deleteWarning: "Screenshots attached to a bug report. Deleting one leaves the report pointing at nothing; delete the report from /admin/bug-reports instead, which removes both.",
+      },
+      {
+        prefix: FRAME_DRAFTS_PREFIX,
+        label: "frame drafts",
+        deleteWarning: "A player's frame editor drafts, saved to their account. Deleting one loses their work; they can delete their own drafts from the editor.",
       },
       {
         prefix: SHARED_CLIPS_PREFIX,
@@ -1984,4 +1991,38 @@ export async function deleteR2AdminPrefix(
     deletedCount,
     deletedBytes,
   };
+}
+
+// ── Frame editor drafts ──
+// A player's drafts from the avatar frame editor (src/lib/frame-drafts-server.ts):
+// an index of them plus one gzipped JSON per draft, under their user id.
+
+function frameDraftKey(userId: number, file: string): string {
+  if (!Number.isSafeInteger(userId) || userId <= 0 || !/^[a-z0-9][a-z0-9.-]{0,63}$/.test(file)) throw new Error("Invalid frame draft key.");
+  return `${FRAME_DRAFTS_PREFIX}${userId}/${file}`;
+}
+
+export async function getFrameDraftObject(userId: number, file: string): Promise<Buffer | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+  try {
+    const object = await r2.send(new GetObjectCommand({ Bucket: REPLAY_CACHE_BUCKET, Key: frameDraftKey(userId, file) }));
+    const buffer = await readObjectBody(object.Body);
+    return buffer.length ? buffer : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function putFrameDraftObject(userId: number, file: string, body: Buffer): Promise<boolean> {
+  const r2 = getClient();
+  if (!r2) return false;
+  await r2.send(new PutObjectCommand({ Bucket: REPLAY_CACHE_BUCKET, Key: frameDraftKey(userId, file), Body: body, ContentType: "application/gzip", CacheControl: "private, no-store" }));
+  return true;
+}
+
+export async function deleteFrameDraftObject(userId: number, file: string): Promise<void> {
+  const r2 = getClient();
+  if (!r2) return;
+  await r2.send(new DeleteObjectCommand({ Bucket: REPLAY_CACHE_BUCKET, Key: frameDraftKey(userId, file) }));
 }

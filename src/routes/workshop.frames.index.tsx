@@ -9,7 +9,7 @@ import { getI18n } from "../lib/i18n";
 
 /* The workshop's avatar frames: make one, wear it, and browse the ones other
    supporters made (WorkshopFrames). */
-export const Route = createFileRoute("/workshop/frames")({
+export const Route = createFileRoute("/workshop/frames/")({
   head: ({ match }) => {
     const i18n = getI18n(match.context.locale);
     return { meta: [{ title: i18n._(msg`Avatar frames`) }, { name: "robots", content: "noindex, nofollow" }] };

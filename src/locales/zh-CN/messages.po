@@ -532,8 +532,10 @@ msgstr "已选 {0} 列"
 #~ msgid "{0} copies"
 #~ msgstr "{0} 张"
 
+#. placeholder {0}: entry.name
 #. placeholder {0}: selectedPreset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 msgid "{0} copy"
 msgstr "{0} 张"
 
@@ -676,6 +678,11 @@ msgstr "{0} 归你所有"
 #: src/routes/player/$username.tsx
 msgid "{0} keeps their skill ratings private."
 msgstr "{0} 未公开其技能评分。"
+
+#. placeholder {0}: layer.children.length
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "{0} layers drawn as one. Its opacity, blend, mask, effects, repeat and motion apply to all of them. Move, turn and resize it like any layer."
+msgstr "{0} 个图层作为一个整体绘制。它的不透明度、混合、蒙版、效果、重复和运动会作用于所有图层。可以像普通图层一样移动、旋转和缩放。"
 
 #. placeholder {0}: shown.rowsLeft
 #: src/components/packs/run/chain/ChainTable.tsx
@@ -915,6 +922,11 @@ msgstr "仅 {0}"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "{0} pack"
 msgstr "{0} 卡包"
+
+#. placeholder {0}: layer.name
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "{0} part"
+msgstr "{0} 局部"
 
 #. placeholder {0}: stats.owners.toLocaleString("en-US")
 #: src/components/packs/PackPulse.tsx
@@ -4073,6 +4085,7 @@ msgid "Activity is recorded for tracked players, and no one in this team is trac
 msgstr "活跃度只记录已追踪的玩家，这个战队还没有成员被追踪。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 msgid "Actual size"
 msgstr "实际大小"
 
@@ -4124,6 +4137,11 @@ msgstr "添加一个国家来选择或排除其中的玩家。"
 msgid "Add a loop (optional)"
 msgstr "添加循环动画（可选）"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Add a mask"
+msgstr "添加蒙版"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Add a message (optional)"
 msgstr "添加留言（可选）"
@@ -4156,6 +4174,10 @@ msgstr "添加截图"
 #: src/routes/report.tsx
 msgid "Add a screenshot or file"
 msgstr "添加截图或文件"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Add a shape, text or picture"
+msgstr "添加形状、文字或图片"
 
 #. placeholder {0}: diffs.length
 #: src/components/maps/UserCollectionEditor.tsx
@@ -4205,6 +4227,11 @@ msgstr "添加图片"
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Add its picture first."
 msgstr "请先添加图片。"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Add key"
+msgstr "添加关键帧"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Add layer"
@@ -4266,6 +4293,10 @@ msgstr "添加到 Discord"
 #~ msgid "Add to folder..."
 #~ msgstr "加入文件夹…"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Add to it"
+msgstr "添加"
+
 #: src/components/packs/SetsView.tsx
 msgid "Add to set"
 msgstr "添加到卡组"
@@ -4290,6 +4321,11 @@ msgstr "请先在你的名字旁添加 {name} 个人资料链接。"
 msgid "added"
 msgstr "已添加"
 
+#. placeholder {0}: added.name
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Added {0}"
+msgstr "添加了 {0}"
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
@@ -4304,6 +4340,10 @@ msgstr "正在加入…"
 #: src/lib/pack-run.ts
 msgid "Adds the notes it has kept, then keeps {0}% of the pack's notes."
 msgstr "先加上已存下的音符，再存下卡包音符的 {0}%。"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Adjust"
+msgstr "调整"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Adjust your image"
@@ -4467,6 +4507,10 @@ msgstr "全部键数"
 msgid "All keys"
 msgstr "全部键数"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "All layers"
+msgstr "所有图层"
+
 #: src/components/me/dynamic-renders/GalleryView.tsx
 msgid "All layouts"
 msgstr "全部布局"
@@ -4541,6 +4585,10 @@ msgstr "快好了..."
 #: src/routes/replay.tsx
 msgid "Almost there{elapsedLabel}"
 msgstr "快好了{elapsedLabel}"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Along the bottom"
+msgstr "沿底部"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "already a GOAT"
@@ -4624,6 +4672,7 @@ msgstr "始终全部揭晓"
 msgid "amber"
 msgstr "琥珀"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Amount"
 msgstr "数量"
@@ -4723,6 +4772,7 @@ msgstr "此外还有 {0} 次排在这些之后"
 msgid "Angel wings"
 msgstr "天使翅膀"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Angle"
 msgstr "角度"
@@ -4866,6 +4916,7 @@ msgstr "作用于所有图层之上"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 msgid "Apply"
 msgstr "应用"
 
@@ -4880,6 +4931,10 @@ msgstr "将选择应用到所有键数的预览"
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Apply picks to the {keymodeLabel} preview only"
 msgstr "仅将选择应用到 {keymodeLabel} 预览"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Apply the mask"
+msgstr "应用蒙版"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Apply to all columns"
@@ -4925,6 +4980,10 @@ msgstr "批准于"
 #: src/components/communities/field-options.tsx
 msgid "Arabic"
 msgstr "阿拉伯语"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Arc"
+msgstr "弧线"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Arcade"
@@ -5162,12 +5221,13 @@ msgstr "头像"
 msgid "Avatar frame"
 msgstr "头像框"
 
-#: src/routes/workshop.frames.tsx
+#: src/routes/workshop.frames.index.tsx
 msgid "avatar frames"
 msgstr "头像框"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/routes/support.tsx
-#: src/routes/workshop.frames.tsx
+#: src/routes/workshop.frames.index.tsx
 msgid "Avatar frames"
 msgstr "头像框"
 
@@ -5313,6 +5373,10 @@ msgstr "返回你的主题"
 
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "backdrop"
+msgstr "背景"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Backdrop"
 msgstr "背景"
 
 #: src/components/me/dynamic-renders/controls.tsx
@@ -5741,9 +5805,18 @@ msgstr "哥特体"
 msgid "Blacklight"
 msgstr "黑光"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Blank"
+msgstr "空白"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Blend"
 msgstr "混合"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Blending of {name}"
+msgstr "{name} 的混合"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
@@ -5774,6 +5847,8 @@ msgid "Blue screen"
 msgstr "蓝屏"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/ThemeReadabilityPanel.tsx
 msgid "Blur"
 msgstr "模糊"
@@ -5794,6 +5869,10 @@ msgstr "展板地图"
 #: src/routes/snipes.tsx
 msgid "Board spot <0>#{0}</0>"
 msgstr "榜单位置 <0>#{0}</0>"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Bob"
+msgstr "上下浮动"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -5910,11 +5989,13 @@ msgid "Bright idea"
 msgstr "好主意"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Brightness"
 msgstr "亮度"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Bring forward"
 msgstr "上移一层"
@@ -5974,8 +6055,14 @@ msgstr "浏览器偏好和本地缓存会一直留在你的设备上，直到它
 #~ msgstr ""
 
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Brush"
 msgstr "画笔"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Brush and colours"
+msgstr "画笔和颜色"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Bubble"
@@ -6126,6 +6213,7 @@ msgstr "暂时无法连接机器人，请稍后刷新。"
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/CustomThemeCredit.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/report.tsx
 #: src/routes/workshop.themes.gallery.tsx
@@ -6375,9 +6463,17 @@ msgstr "凯尔特体"
 msgid "Center"
 msgstr "居中"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Centre"
+msgstr "居中"
+
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Centre across"
 msgstr "中心横向"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Centre on the avatar"
+msgstr "在头像上居中"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Centre up"
@@ -6406,6 +6502,10 @@ msgstr "连锁的卡片计分两次。"
 #: src/components/supporter/loadout.ts
 msgid "Chains"
 msgstr "锁链"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Chalk"
+msgstr "粉笔"
 
 #. placeholder {0}: N.fever.factor
 #. placeholder {1}: N.fever.factor
@@ -6473,6 +6573,10 @@ msgstr "更换此项数据"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Changed"
 msgstr "改动"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Changed {name}"
+msgstr "修改了 {name}"
 
 #: src/routes/__root.tsx
 msgid "changelog"
@@ -6855,6 +6959,7 @@ msgstr "清除"
 #: src/components/player/BestScoresControls.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/tools/StableAccCalculator.tsx
 #: src/routes/maps.tsx
 msgid "Clear"
@@ -6904,6 +7009,10 @@ msgstr "清除格式"
 msgid "Clear in {0} rows or fewer."
 msgstr "在 {0} 行以内通关。"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Clear it"
+msgstr "清空"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Clear map search"
 msgstr "清除谱面搜索"
@@ -6948,6 +7057,10 @@ msgstr "通过回合"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Clear the search"
 msgstr "清除搜索"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Clear the selection, or delete the layer"
+msgstr "清除选区内容，或删除图层"
 
 #: src/lib/chain-run.ts
 msgid "Clear with your first row."
@@ -7002,6 +7115,10 @@ msgstr "通过"
 msgid "Clears pay shards to spend in the shop. Skip it this time."
 msgstr "通过回合会获得碎片，可以在商店里花。这次先跳过。"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "click"
+msgstr "点击"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
 msgstr "点击某一轨道即可选中。拖出框选区域可多选。按住 Shift 选择连续范围，Ctrl/Cmd 可切换选中。"
@@ -7009,6 +7126,10 @@ msgstr "点击某一轨道即可选中。拖出框选区域可多选。按住 Sh
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
 msgstr "点击音效即可试听。每个音符会播放谱面指定的采样，所以这些音效在回放里都能听到。"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Click a step to go back to it. The last 80 are kept."
+msgstr "点击某一步可以回到那一步。最多保留最近 80 步。"
 
 #: src/routes/discord.tsx
 #~ msgid "Click Add to Discord and pick a server where you have Manage Server."
@@ -7026,6 +7147,10 @@ msgstr "再点一次以放弃修改"
 msgid "Click an image first. Imagemap turns that image into clickable areas."
 msgstr "请先点击一张图片。Imagemap 会把这张图片变成可点击的区域。"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Click for corners, drag for curves. Click the first point to close, Enter to finish. Alt-drag a handle to break it."
+msgstr "点击添加尖角，拖动添加曲线。点击第一个点闭合，按 Enter 完成。按住 Alt 拖动控制柄可单独调整。"
+
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #~ msgid "Click here to read how dans are estimated"
 #~ msgstr "点击这里了解段位是如何估算的"
@@ -7037,6 +7162,10 @@ msgstr "请先点击一张图片。Imagemap 会把这张图片变成可点击的
 #: src/routes/hashi.tsx
 msgid "Click the chart icon on a play to see how it went. It reads the replay on your computer and shows your timing on each key and hand, how you let go of long notes, and where in the map you dropped. It also points out things worth fixing, like a bad offset or chords you roll, and compares the play with your last try on that map."
 msgstr "点一局成绩上的图表图标，就能看这局打得怎么样。它会在你的电脑上读取回放，显示你每个键位和每只手的击打时机、长条怎么放手的，以及在谱面哪里掉了。它还会指出值得改的地方，比如偏移没调好，或者多押被你按成了楼梯，并把这局和你在这张谱面上的上一次尝试做对比。"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Click to add text"
+msgstr "点击添加文字"
 
 #: src/routes/dan-estimates.tsx
 msgid "Click to group the numbered levels"
@@ -7071,9 +7200,17 @@ msgstr "点击升序排序"
 msgid "Click to sort descending"
 msgstr "点击降序排序"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Click to take a colour. Alt-click with the brush does the same."
+msgstr "点击取色。用画笔时按住 Alt 点击也可以取色。"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "click to view"
 msgstr "点击查看"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Click to zoom in, Alt-click to zoom out"
+msgstr "点击放大，按住 Alt 点击缩小"
 
 #: src/routes/dan-estimates.tsx
 msgid "Clicking your dan badge shows the course that set your estimate, when one did."
@@ -7099,6 +7236,11 @@ msgstr "片段"
 #: src/routes/clip.$id.tsx
 msgid "Clip not found"
 msgstr "找不到片段"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Clip to the layer below"
+msgstr "剪切到下方图层"
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunityReportModal.tsx
@@ -7131,6 +7273,7 @@ msgstr "找不到片段"
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/routes/discord.tsx
 #: src/routes/maps.tsx
@@ -7181,11 +7324,16 @@ msgstr "关闭设置"
 msgid "Close skill plays"
 msgstr "关闭技能成绩"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Close the group"
+msgstr "收起组"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "closed"
 msgstr "已结束"
 
 #: src/components/communities/CommunityCard.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/routes/communities_.$id.tsx
 msgid "Closed"
 msgstr "不开放"
@@ -7310,9 +7458,32 @@ msgid "Colors"
 msgstr "颜色"
 
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Colour"
 msgstr "颜色"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Colour burn"
+msgstr "颜色加深"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Colour cycle"
+msgstr "颜色循环"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Colour dodge"
+msgstr "颜色减淡"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Colour overlay"
+msgstr "颜色叠加"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Colour to clear"
+msgstr "颜色到透明"
 
 #. placeholder {0}: column + 1
 #. placeholder {0}: primarySelected + 1
@@ -7554,6 +7725,10 @@ msgstr "已以 {0} 的身份连接。"
 msgid "Connected as <0>{0}</0>. Link it to use commands without typing your name."
 msgstr "已连接为 <0>{0}</0>。绑定后使用指令无需输入用户名。"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Connected only"
+msgstr "仅连续区域"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "connected to Discord"
 msgstr "已连接 Discord"
@@ -7635,6 +7810,10 @@ msgstr "合约未达成：{name}"
 msgid "Contracts"
 msgstr "合约"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Contrast"
+msgstr "对比度"
+
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Control"
 msgstr "控制"
@@ -7666,6 +7845,8 @@ msgstr "总张数"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorDirectory.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Copies"
 msgstr "数量"
 
@@ -7685,6 +7866,7 @@ msgstr "图片会复制成多份，在卡面所有印刷内容的后方飘过，
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/replay/ShareClipButton.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/KofiNameSteps.tsx
 #: src/components/ui/MessageText.tsx
 msgid "Copy"
@@ -7755,6 +7937,14 @@ msgstr "复制链接地址"
 msgid "Copy share code"
 msgstr "复制分享码"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Copy the square frame here"
+msgstr "把方形头像框复制到这里"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "copy the square one"
+msgstr "复制方形版本"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Copy the theme spec"
 msgstr "复制主题规范"
@@ -7766,6 +7956,15 @@ msgstr "复制链接"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copying BBCode..."
 msgstr "正在复制 BBCode…"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Corner"
+msgstr "边角"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Corners"
+msgstr "四角"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Cost"
@@ -7927,6 +8126,7 @@ msgstr "无法连接服务器。没有任何改动。"
 msgid "Could not reach the server. Try again."
 msgstr "无法连接服务器，请重试。"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Could not read that picture."
 msgstr "无法读取这张图片。"
@@ -8228,6 +8428,10 @@ msgstr "无法播放谱面预览音频"
 #: src/components/packs/GoatPoll.tsx
 msgid "Couldn't reach the server."
 msgstr "无法连接服务器。"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Couldn't reach your account; this browser still has it."
+msgstr "无法连接你的账号；这个浏览器里仍然保存着。"
 
 #: src/routes/replay.tsx
 msgid "Couldn't read that beatmap file."
@@ -8574,6 +8778,14 @@ msgstr "光标"
 msgid "Cursor trail"
 msgstr "光标拖尾"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Curve"
+msgstr "弯曲"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Curve round the avatar"
+msgstr "沿头像弯曲"
+
 #: src/components/packs/collections/CardMarks.tsx
 #~ msgid "custom"
 #~ msgstr "特制"
@@ -8642,6 +8854,7 @@ msgstr "自定义回放皮肤"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 msgid "Cut"
 msgstr "截断"
 
@@ -8807,6 +9020,12 @@ msgstr "丹麦语"
 msgid "dark"
 msgstr "深色"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Dark"
+msgstr "深色"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Darken"
 msgstr "变暗"
@@ -8818,6 +9037,10 @@ msgstr "变暗"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Darkens the beatmap background so notes stay readable."
 msgstr "调暗谱面背景，让音符更清晰。"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Dash"
+msgstr "虚线长度"
 
 #: src/routes/legal.tsx
 msgid "Data Sources"
@@ -8920,6 +9143,8 @@ msgstr "延迟"
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/workshop.themes.gallery.tsx
@@ -8941,6 +9166,10 @@ msgstr "从你的上传中删除 {rowTitle}"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Delete area"
 msgstr "删除区域"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Delete draft"
+msgstr "删除草稿"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/RemovePlaysSheet.tsx
@@ -8967,6 +9196,10 @@ msgstr "删除图片"
 msgid "Delete imagemap"
 msgstr "删除 imagemap"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Delete key"
+msgstr "删除关键帧"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Delete my data"
 msgstr "删除我的数据"
@@ -8986,6 +9219,10 @@ msgstr "删除资料"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete skin"
 msgstr "删除皮肤"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Delete the mask"
+msgstr "删除蒙版"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Delete this imported play? Its replay is removed and the preview is recalculated."
@@ -9010,8 +9247,10 @@ msgstr "删除这个上传？它的分享链接会失效，文件也会被永久
 msgid "Delete what's new"
 msgstr "删除新增内容"
 
+#. placeholder {0}: removed.name
 #. placeholder {0}: selectedPreset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameHistory.tsx
 msgid "Deleted {0}"
 msgstr "已删除 {0}"
 
@@ -9100,6 +9339,10 @@ msgstr "对话框"
 #: src/lib/streak-game.ts
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
 msgstr "{hidden} 加入 osu! 比 {shown} 更早还是更晚？"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Difference"
+msgstr "差值"
 
 #. placeholder {0}: delta(entry.otherRatingChange, locale)
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
@@ -9223,6 +9466,10 @@ msgstr "关闭"
 msgid "display"
 msgstr "显示"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Distance"
+msgstr "距离"
+
 #: src/lib/supporter-name-styles.ts
 msgid "Dither"
 msgstr "抖动"
@@ -9345,10 +9592,12 @@ msgstr "圆点"
 msgid "Dot matrix"
 msgstr "点阵屏"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/lib/supporter-name-fonts.ts
 msgid "Dots"
 msgstr "圆点"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/loadout.ts
 msgid "Double line"
 msgstr "双线"
@@ -9418,6 +9667,10 @@ msgstr "重新下载"
 msgid "Download for {name}"
 msgstr "下载 {name} 版"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Download PNG"
+msgstr "下载 PNG"
+
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Download replay"
 msgstr "下载回放"
@@ -9434,6 +9687,10 @@ msgstr "下载 .osk"
 #: src/components/skins/SkinCard.tsx
 msgid "Download the .osk, {0}"
 msgstr "下载 .osk，{0}"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Download the loop (WebM)"
+msgstr "下载循环动画（WebM）"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Download the template"
@@ -9489,6 +9746,14 @@ msgstr "草稿已保存。准备好后再发布。"
 msgid "Draft saved. Your profile and the gallery keep what's published."
 msgstr "草稿已保存。你的主页和画廊仍显示已发布的版本。"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Drafts are saved as you work, in this browser and on your account."
+msgstr "草稿会在你编辑时自动保存到这个浏览器和你的账号。"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Drafts are saved in this browser as you work."
+msgstr "草稿会在你编辑时自动保存在这个浏览器里。"
+
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Drag a box round your cards or tap them one by one, then drag one to move them all."
 msgstr "框选你的卡牌，或逐张点选，然后拖动其中一张即可整体移动。"
@@ -9497,6 +9762,14 @@ msgstr "框选你的卡牌，或逐张点选，然后拖动其中一张即可整
 msgid "Drag a page or swipe to flip"
 msgstr "拖动书页或滑动来翻页"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Drag across the canvas, from the colour to clear"
+msgstr "在画布上拖动，从颜色过渡到透明"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Drag across the canvas, from the colour to the second colour"
+msgstr "在画布上拖动，从主颜色过渡到第二颜色"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag an .osr here, or click to browse"
 msgstr "把 .osr 拖到这里，或点击选择文件"
@@ -9504,6 +9777,10 @@ msgstr "把 .osr 拖到这里，或点击选择文件"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around, right-click one of yours to pick it up. Alt-click a pile to see every card in it."
 msgstr "从卡牌栏拖出卡牌。在展板上拖动可框选你的卡牌，右键拖动可平移视图，右键点击你的卡牌可将其收回。按住 Alt 点击卡堆可查看其中所有卡牌。"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Drag each corner on its own"
+msgstr "单独拖动每个角"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Drag over your cards to pick them back up."
@@ -9517,9 +9794,17 @@ msgstr "在你的卡牌上拖动即可收回。无论使用哪个工具，右键
 msgid "Drag the map's .osz here, or click to browse"
 msgstr "把谱面的 .osz 拖到这里，或点击选择文件"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Drag the playhead under the canvas to a moment and add a key. With a key picked, the move tool moves, turns and resizes the layer at that moment."
+msgstr "把画布下方的播放头拖到某一时刻并添加关键帧。选中关键帧后，移动工具会在那一时刻移动、旋转和缩放图层。"
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "drag to crop"
 msgstr "拖动以裁剪"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Drag to move around. Space does it from any tool."
+msgstr "拖动来移动画布。任何工具下按住空格也可以。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Drag to resize"
@@ -9552,13 +9837,25 @@ msgstr "抽卡"
 msgid "Draw it at least {0}px square (the template is {T}px)."
 msgstr "至少画成 {0}px 的正方形（模板为 {T}px）。"
 
+#: src/routes/workshop.index.tsx
+msgid "Draw it in the editor or on the template, add a loop if you like."
+msgstr "在编辑器里或模板上绘制，喜欢的话再加上循环动画。"
+
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Draw it on the template"
 msgstr "在模板上绘制"
 
 #: src/routes/workshop.index.tsx
-msgid "Draw it on the template, add a loop if you like."
-msgstr "在模板上绘制，喜欢的话再加一段循环动画。"
+#~ msgid "Draw it on the template, add a loop if you like."
+#~ msgstr "在模板上绘制，喜欢的话再加一段循环动画。"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Draw round what to select. Shift adds, Alt takes away."
+msgstr "圈出要选择的区域。Shift 添加，Alt 减去。"
+
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Draw something to see it on your avatar."
+msgstr "画点什么，就能在你的头像上看到效果。"
 
 #: src/components/packs/RevealStage.tsx
 msgid "Draw the next card"
@@ -9584,10 +9881,15 @@ msgstr "绘制中…"
 msgid "Drawings are protected from other players for their first day."
 msgstr "画作在第一天内受保护，其他玩家无法覆盖。"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Draws the layer again, evenly spaced round the avatar's centre. Mirror adds a flipped copy of each."
+msgstr "围绕头像中心均匀地重复绘制这个图层。镜像会为每份再加一个翻转的副本。"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Drop an .osk here, or click to browse"
 msgstr "把 .osk 拖到这里，或点击选择文件"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Drop or paste pictures here"
 msgstr "拖放或粘贴图片到这里"
@@ -9595,6 +9897,19 @@ msgstr "拖放或粘贴图片到这里"
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Drop the new .osk here, or click to browse"
 msgstr "把新的 .osk 拖到这里，或点击选择文件"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Drop the selection"
+msgstr "取消选择"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Drop the selection, then the layer"
+msgstr "取消选择，再取消选中图层"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Drop to add it as a layer"
+msgstr "松开以添加为图层"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Drop to add it as a picture layer"
@@ -9637,9 +9952,14 @@ msgstr "二重奏"
 msgid "Dumpstream"
 msgstr "塞爆"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Duplicate"
 msgstr "创建副本"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Duplicate, or the selection to a new layer"
+msgstr "复制图层，或把选区复制到新图层"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Duplicates"
@@ -9811,6 +10131,10 @@ msgstr "拿到 <0/>（<1/>）"
 msgid "Earn <0/> <1/> on {mapSlot}"
 msgstr "在 {mapSlot} 上拿到 <0/>（<1/>）"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Ease in and out"
+msgstr "缓入缓出"
+
 #: src/routes/recommendations.tsx
 msgid "easy"
 msgstr "易"
@@ -9833,6 +10157,8 @@ msgstr "回声"
 
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/communities_.$id.tsx
 #: src/routes/discord.tsx
 #: src/routes/workshop.themes.gallery.tsx
@@ -9865,6 +10191,10 @@ msgstr "编辑目标"
 msgid "Edit image"
 msgstr "编辑图片"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Edit its points with the pen. Drag a point to move it, drag a handle to bend the curve."
+msgstr "用钢笔编辑它的点。拖动点来移动，拖动控制柄来弯曲曲线。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Edit link…"
 msgstr "编辑链接…"
@@ -9888,6 +10218,10 @@ msgstr "编辑皮肤预览"
 #: src/components/communities/CommunityCard.tsx
 msgid "Edit your listing"
 msgstr "编辑你的条目"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Edited"
+msgstr "已编辑"
 
 #: src/components/player/LivePresence.tsx
 msgid "Editing"
@@ -9915,6 +10249,10 @@ msgstr "编辑内容只保存在这个浏览器里。复制结果，粘贴到你
 msgid "Effects"
 msgstr "特效"
 
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Effects on {name}"
+msgstr "{name} 的效果"
+
 #: src/components/BackendOfflineScreen.tsx
 msgid "Either restarting or under maintenance. Try again later."
 msgstr "正在重启或维护中。请稍后再试。"
@@ -9923,6 +10261,10 @@ msgstr "正在重启或维护中。请稍后再试。"
 #: src/lib/packs.ts
 msgid "Elite"
 msgstr "精英"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Ellipse"
+msgstr "椭圆"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Email"
@@ -10009,6 +10351,8 @@ msgid "Equal chance per player"
 msgstr "每位玩家等概率"
 
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Eraser"
 msgstr "橡皮擦"
 
@@ -10410,6 +10754,10 @@ msgstr "在整个网站中隐藏所有与段位相关的内容"
 msgid "Excluding (click to clear)"
 msgstr "已排除(点击清除)"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Exclusion"
+msgstr "排除"
+
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Exclusives"
 msgstr "专属"
@@ -10511,6 +10859,15 @@ msgstr "额外栏位"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Extra: practice charts set one skill directly"
 #~ msgstr "附加：练习谱面可以直接定下一个技能"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Eyedropper"
+msgstr "吸管"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Fade"
+msgstr "淡入淡出"
 
 #: src/lib/pack-run.ts
 msgid "Fade In"
@@ -10825,6 +11182,8 @@ msgstr "skin.ini 未使用的文件夹中的文件"
 msgid "Filipino"
 msgstr "菲律宾语"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Fill"
 msgstr "填充"
@@ -10840,6 +11199,18 @@ msgstr "在下面填入{label}的成绩"
 #: src/components/replay/ReplayControls.tsx
 msgid "Fill the playfield with a solid black background"
 msgstr "把游玩区域背景填成纯黑"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Fill with the colour"
+msgstr "用主颜色填充"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Fill with the second colour"
+msgstr "用第二颜色填充"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Filled"
+msgstr "填充"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Fills the stage and holds still, in place of the background."
@@ -10993,6 +11364,10 @@ msgstr "卡面"
 msgid "Finish at {0}x the target or more."
 msgstr "以目标的 {0} 倍或更高结束。"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Finish the path"
+msgstr "完成路径"
+
 #: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 msgid "Finish the round with rows of your own."
 msgstr "用你自己排的排来完成这一回合。"
@@ -11144,8 +11519,18 @@ msgid "Fish tank"
 msgstr "鱼缸"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Fit"
 msgstr "适应宽度"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Fit round the avatar"
+msgstr "贴合头像"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Fit to screen"
+msgstr "适应屏幕"
 
 #. placeholder {0}: CHAIN_ROUND_CHART.skill
 #: src/components/packs/run/chain/ChainScoring.tsx
@@ -11212,6 +11597,10 @@ msgstr "Flashlight"
 msgid "flat"
 msgstr "纯色"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Flat"
+msgstr "扁平"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Flat backdrop tinted with the skin's accent"
 msgstr "使用皮肤主色调的纯色背景"
@@ -11224,6 +11613,14 @@ msgstr "航空箱"
 msgid "Flip"
 msgstr "翻转"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Flip ⇅"
+msgstr "翻转 ⇅"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Flip ⇆"
+msgstr "翻转 ⇆"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Flip direction"
@@ -11233,6 +11630,7 @@ msgstr "反转排序方向"
 msgid "Flip horizontal"
 msgstr "水平翻转"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Flip horizontally"
 msgstr "水平翻转"
@@ -11241,6 +11639,7 @@ msgstr "水平翻转"
 msgid "Flip vertical"
 msgstr "垂直翻转"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Flip vertically"
 msgstr "垂直翻转"
@@ -11248,6 +11647,10 @@ msgstr "垂直翻转"
 #: src/lib/replay-overlays.ts
 msgid "Flipped"
 msgstr "翻转"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Flow"
+msgstr "流量"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Flowing ribbons of teal and violet."
@@ -11281,6 +11684,7 @@ msgstr "跟随指针"
 msgid "Follow SV changes"
 msgstr "跟随 SV 变化"
 
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/loadout.ts
 msgid "Font"
 msgstr "字体"
@@ -11403,6 +11807,11 @@ msgstr "四个特征"
 msgid "fps"
 msgstr "fps"
 
+#: src/routes/workshop.frames.editor.tsx
+msgid "Frame editor"
+msgstr "头像框编辑器"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Frame name"
 msgstr "头像框名称"
@@ -11411,6 +11820,7 @@ msgstr "头像框名称"
 msgid "frames"
 msgstr "帧"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/routes/workshop.index.tsx
 msgid "Frames"
 msgstr "头像框"
@@ -11630,6 +12040,10 @@ msgstr "疾风"
 msgid "Gallery"
 msgstr "画廊"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Gap"
+msgstr "间隔"
+
 #: src/lib/skill-axes.ts
 msgid "General"
 msgstr "综合"
@@ -11800,6 +12214,7 @@ msgid "Global tracker is ready"
 msgstr "全球追踪器已就绪"
 
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Glow"
 msgstr "光晕"
@@ -11808,9 +12223,17 @@ msgstr "光晕"
 msgid "Glow and retro"
 msgstr "发光与复古"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Glow colour"
+msgstr "光晕颜色"
+
 #: src/components/supporter/themes/LayerHandles.tsx
 msgid "Glow position"
 msgstr "光晕位置"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Glow ring"
+msgstr "光环"
 
 #: src/components/supporter/themes/LayerHandles.tsx
 msgid "Glow size"
@@ -11972,6 +12395,7 @@ msgstr "评级"
 msgid "Graded slab"
 msgstr "评级盒"
 
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/lib/signature-style.ts
 msgid "Gradient"
 msgstr "渐变"
@@ -12046,6 +12470,11 @@ msgstr "苦练"
 msgid "Groovy"
 msgstr "律动"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Group"
+msgstr "组"
+
 #: src/lib/chain-run.ts
 msgid "Grows with every clean row."
 msgstr "每排无断连都会成长。"
@@ -12098,6 +12527,11 @@ msgstr "三押"
 #~ msgid "Hand busy"
 #~ msgstr ""
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Hand tool"
+msgstr "抓手"
+
 #: src/lib/pattern-labels.ts
 msgid "Handjack"
 msgstr "三押叠"
@@ -12120,6 +12554,10 @@ msgstr "难"
 msgid "Hard"
 msgstr "Hard"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Hard light"
+msgstr "强光"
+
 #: src/lib/pack-run.ts
 msgid "Hard Rock"
 msgstr "Hard Rock"
@@ -12127,6 +12565,10 @@ msgstr "Hard Rock"
 #: src/components/packs/collections/RecordBoards.tsx
 #~ msgid "hardest cards to find"
 #~ msgstr "最难找到的卡片"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Hardness"
+msgstr "硬度"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Hardware encoding isn't available here. Smaller file uses your CPU."
@@ -12237,7 +12679,7 @@ msgstr "粗像素"
 msgid "Hebrew"
 msgstr "希伯来语"
 
-#: src/components/replay/ReplayCustomMediaControls.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #~ msgid "Height"
 #~ msgstr "高"
 
@@ -12260,6 +12702,10 @@ msgstr "羊群"
 #: src/components/supporter/loadout.ts
 msgid "Hex HUD"
 msgstr "六边形 HUD"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Hid {name}"
+msgstr "隐藏了 {name}"
 
 #: src/components/skins/SkinCard.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -12291,6 +12737,7 @@ msgstr "隐藏"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Hide"
 msgstr "隐藏"
@@ -12367,6 +12814,10 @@ msgstr "隐藏上架、approved 和 qualified 谱面上的成绩"
 msgid "Hide the {0} clears"
 msgstr "隐藏 {0} 的通过记录"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Hide the guides"
+msgstr "隐藏参考线"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Hide the keymodes with no note images"
 msgstr "隐藏没有音符图片的键数"
@@ -12390,6 +12841,14 @@ msgstr "隐藏叠加的个人资料"
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
 #~ msgstr "收起 ScoreV2 说明"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Hide your avatar"
+msgstr "隐藏你的头像"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Hides parts of the layer without erasing them. With a selection, the mask shows only what's selected."
+msgstr "隐藏图层的一部分而不擦除。有选区时，蒙版只显示选中的部分。"
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Hiding {grade}"
@@ -12457,6 +12916,7 @@ msgid "Hint"
 msgstr "提示条"
 
 #: src/components/player/SkillHistoryModal.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 msgid "History"
 msgstr "历程"
 
@@ -12620,6 +13080,10 @@ msgstr "按住以删除我的资料"
 msgid "Hold to delete this collection"
 msgstr "长按以删除这个收藏夹"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Hold to move the view from any tool"
+msgstr "任何工具下按住来移动视图"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "hold to recycle"
 msgstr "长按回收"
@@ -12639,6 +13103,10 @@ msgstr "长按回收所有重复卡，价值 {recyclable} 碎片"
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Hold to stop tracking"
 msgstr "按住以停止追踪"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Hold while moving to stop snapping"
+msgstr "移动时按住以取消吸附"
 
 #. placeholder {0}: formatNumber(completionCounts.owned)
 #. placeholder {1}: formatNumber(completionCounts.total)
@@ -12845,6 +13313,8 @@ msgstr "填入 https://... 会把图片包成链接"
 msgid "HUD"
 msgstr "HUD"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Hue"
 msgstr "色相"
@@ -12867,9 +13337,14 @@ msgstr "混合"
 msgid "Hybrid chart: {0}, {1}"
 msgstr "混合谱面：{0}，{1}"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "I understand"
 msgstr "我已了解"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "I understand I'm responsible for what I put in my frames, and that one breaking the <0>Terms</0> can be taken down."
+msgstr "我了解我需要对头像框中的内容负责，违反<0>条款</0>的头像框可能会被下架。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "I understand I'm responsible for what I put in my themes, and that one breaking the <0>Terms</0> can be taken down."
@@ -13154,6 +13629,10 @@ msgstr "多人游戏中"
 msgid "In osu!"
 msgstr "在 osu! 中"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "In perspective. Drag its corners with the move tool's Perspective mode."
+msgstr "已透视。用移动工具的透视模式拖动它的角。"
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "in queue"
 msgstr "排队中"
@@ -13202,6 +13681,14 @@ msgstr "已在你的收藏册中。"
 #: src/components/supporter/SupportPlans.tsx
 msgid "In your rank's tooltip, at $10 a month or more."
 msgstr "每月 $10 或以上时，显示在你的段位提示里。"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Include the loop"
+msgstr "包含循环动画"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Include the loop. It records for 3 seconds before uploading."
+msgstr "包含循环动画。上传前会录制 3 秒。"
 
 #: src/routes/skins.tsx
 msgid "includes"
@@ -13269,6 +13756,14 @@ msgstr "墨梅"
 #: src/routes/bbcode.tsx
 msgid "Inline code"
 msgstr "行内代码"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Inner"
+msgstr "内径"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Inner line"
+msgstr "内线"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Input overlay options"
@@ -13350,6 +13845,11 @@ msgstr "反键"
 msgid "Invert"
 msgstr "Invert"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Invert the selection"
+msgstr "反选"
+
 #: src/routes/communities_.$id.tsx
 msgid "invite"
 msgstr "邀请链接"
@@ -13384,6 +13884,7 @@ msgstr "它在多位访客的设备上崩溃过，在审查之前只显示静帧
 msgid "It flashes {0} times a second around {1}. Fast flashing can set off seizures: keep it to {FLASH_LIMIT} a second or fewer, or make the change gentler."
 msgstr "它在 {1} 附近每秒闪烁 {0} 次。快速闪烁可能诱发癫痫：请保持在每秒 {FLASH_LIMIT} 次或更少，或让变化更柔和。"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "It goes into everyone's picker right away, with your name on it."
 msgstr "它会立即进入所有人的选择器，并署上你的名字。"
@@ -13493,6 +13994,7 @@ msgstr "已应用到你的个人资料。"
 msgid "It's too late to cancel."
 msgstr "已经来不及取消了。"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "It's up: in your picker and everyone else's."
 msgstr "已上线：在你和所有人的选择器里。"
@@ -13502,6 +14004,7 @@ msgid "Italian"
 msgstr "意大利语"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/routes/bbcode.tsx
 msgid "Italic"
 msgstr "斜体"
@@ -13720,6 +14223,14 @@ msgstr "武士刀"
 msgid "Keep"
 msgstr "保留"
 
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Keep at least 60% of the avatar see-through."
+msgstr "至少让 60% 的头像保持可见。"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Keep editing"
+msgstr "继续编辑"
+
 #: src/components/communities/CommunityEditModal.tsx
 msgid "keep it"
 msgstr "保留"
@@ -13743,6 +14254,10 @@ msgstr "保留我的资料"
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Keep one"
 msgstr "选一张保留"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Keep only the overlap"
+msgstr "只保留重叠部分"
 
 #: src/components/packs/run/chain/ChainHud.tsx
 msgid "Keep playing"
@@ -13776,6 +14291,10 @@ msgstr "保留 {0} 张"
 #: src/components/replay/ReplayControls.tsx
 msgid "Keeps the layout you're watching."
 msgstr "保留当前观看时的布局。"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Keeps the old frame as it is."
+msgstr "保留原来的头像框不变。"
 
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -13829,9 +14348,23 @@ msgstr "键数分布"
 msgid "Key Split"
 msgstr "键数分布"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Keyboard shortcuts"
+msgstr "快捷键"
+
 #: src/lib/supporter-pack-style.ts
 msgid "Keycaps"
 msgstr "键帽"
+
+#. placeholder {0}: (key.t * LOOP_SECONDS).toFixed(2)
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Keyframe at {0}s"
+msgstr "{0} 秒处的关键帧"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Keyframes"
+msgstr "关键帧"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
@@ -13998,6 +14531,11 @@ msgstr "大"
 msgid "large gap"
 msgstr "差距较大"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Lasso"
+msgstr "套索"
+
 #. placeholder {0}: compact(judgement.plays)
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "last {0} plays"
@@ -14117,11 +14655,23 @@ msgstr "lava.top 会把收据发到这个邮箱。"
 msgid "lava.top's Supporter membership renews by itself. You can cancel any time on lava.top."
 msgstr "lava.top 的 Supporter 会员会自动续费。你可以随时在 lava.top 取消。"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Layer"
 msgstr "图层"
 
+#. placeholder {0}: s.doc.boards[b].length + 1
+#. placeholder {0}: walk(s.doc.boards[b]).length + 1
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Layer {0}"
+msgstr "图层 {0}"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Layer 1"
+msgstr "图层 1"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Layer menu"
 msgstr "图层菜单"
@@ -14130,6 +14680,9 @@ msgstr "图层菜单"
 msgid "layers"
 msgstr "个图层"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/loadout.ts
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
@@ -14301,6 +14854,7 @@ msgstr "传说护符和无尽模式"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/SupportCheckout.tsx
 #: src/routes/maps.tsx
 msgid "Length"
@@ -14352,6 +14906,7 @@ msgid "light"
 msgstr "浅色"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Light"
 msgstr "灯光"
@@ -14359,6 +14914,11 @@ msgstr "灯光"
 #: src/components/supporter/loadout.ts
 msgid "Light wings"
 msgstr "光之翼"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Lighten"
+msgstr "变亮"
 
 #: src/components/supporter/loadout.ts
 #: src/lib/supporter-pack-style.ts
@@ -14399,6 +14959,13 @@ msgstr "限制"
 msgid "line"
 msgstr "行"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Line"
+msgstr "线条"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Linear"
 msgstr "线性"
@@ -14500,6 +15067,10 @@ msgstr "收录于"
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there."
 msgstr "列表中的头像是圆形的。围绕模板中的圆再画一遍头像框，列表就会使用它；没有的话，你的头像在列表中保持方形。"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Lists show avatars round. Draw the frame again round the circle, or"
+msgstr "列表中的头像是圆形的。可以沿圆形重新绘制头像框，或者"
 
 #: src/components/communities/field-options.tsx
 msgid "Lithuanian"
@@ -14950,6 +15521,7 @@ msgstr "加载中…"
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/settings/LazySettingsPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
@@ -14981,6 +15553,10 @@ msgstr "本地文件"
 #: src/components/maps/MapDetailModal.tsx
 msgid "localized vibro detected"
 msgstr "检测到局部 vibro"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Lock"
+msgstr "锁定"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Lock for rolls"
@@ -15177,6 +15753,10 @@ msgstr "pp 从低到高"
 msgid "Lucky Strike"
 msgstr "幸运一击"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Luminosity"
+msgstr "明度"
+
 #: src/routes/__root.tsx
 msgid "made by"
 msgstr "作者"
@@ -15204,6 +15784,11 @@ msgstr "适配分辨率"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Made for, e.g. 1920x1080"
 msgstr "适配分辨率，例如 1920x1080"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Magic wand"
+msgstr "魔棒"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Magnetic case"
@@ -15248,6 +15833,10 @@ msgstr "要换一个新链接吗？"
 msgid "Make a theme"
 msgstr "制作主题"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Make an avatar frame"
+msgstr "制作头像框"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Make imagemap"
 msgstr "制作 imagemap"
@@ -15259,6 +15848,10 @@ msgstr "设为 {OSU_PROFILE_COLUMN_WIDTH}px 宽，正好是 osu! 个人资料栏
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Make it permanent if you can: a temporary invite hides your server the day it runs out, until you paste a new one."
 msgstr "尽量用永久邀请：临时邀请一到期，你的服务器就会被隐藏，直到你贴上新的链接。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Make one in the frame editor"
+msgstr "在头像框编辑器里制作"
 
 #: src/components/supporter/LoadoutSlots.tsx
 #: src/routes/workshop.index.tsx
@@ -15641,6 +16234,18 @@ msgstr "乱拍：准确率 {0}%，难度需求 {1}"
 #~ msgid "Mashed: <0>{0}%</0>"
 #~ msgstr ""
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Mask"
+msgstr "蒙版"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Mask on"
+msgstr "启用蒙版"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Mask on {name}"
+msgstr "{name} 的蒙版"
+
 #: src/components/packs/run/RunInfo.tsx
 msgid "Master sets"
 msgstr "大师套组"
@@ -15767,6 +16372,11 @@ msgstr "成员数"
 msgid "Members"
 msgstr "成员"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Merge down"
+msgstr "向下合并"
+
 #: src/lib/supporter-name-styles.ts
 msgid "Mesh gradient"
 msgstr "网格渐变"
@@ -15861,6 +16471,8 @@ msgstr "计入段位所需的最低准确率为 {floorText} {currency}。这次�
 msgid "Minimum required for dan credit is {floorText}. This play got {accText}."
 msgstr "计入段位所需的最低准确率为 {floorText}。这次成绩为 {accText}。"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/lib/pack-run.ts
 msgid "Mirror"
 msgstr "镜子"
@@ -15868,6 +16480,18 @@ msgstr "镜子"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Mirror (out and back)"
 msgstr "镜像(往返)"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Mirror four ways"
+msgstr "四向镜像"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Mirror left and right"
+msgstr "左右镜像"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Mirror top and bottom"
+msgstr "上下镜像"
 
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
@@ -15996,6 +16620,7 @@ msgstr "按月"
 msgid "more"
 msgstr "更多"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "More"
 msgstr "更多"
@@ -16158,11 +16783,18 @@ msgstr "最常用模组"
 msgid "Most worn"
 msgstr "最多人用"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Motion"
 msgstr "运动"
 
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Motion on {name}"
+msgstr "{name} 的运动"
+
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Move"
 msgstr "移动"
 
@@ -16178,9 +16810,22 @@ msgstr "将 {name} 向右移动"
 msgid "Move down"
 msgstr "下移"
 
+#. placeholder {0}: group.name
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Move into {0}"
+msgstr "移入 {0}"
+
 #: src/components/packs/run/RunCharmRail.tsx
 msgid "Move left"
 msgstr "左移"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Move on one axis, turn in 15° steps, keep shapes even"
+msgstr "沿一个方向移动，以 15° 为步长旋转，保持形状等比"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Move out of the group"
+msgstr "移出组"
 
 #: src/components/packs/run/RunCharmRail.tsx
 msgid "Move right"
@@ -16189,6 +16834,27 @@ msgstr "右移"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Move up"
 msgstr "上移"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Move, resize and turn"
+msgstr "移动、缩放和旋转"
+
+#. placeholder {0}: changed.name
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Moved {0}"
+msgstr "移动了 {0}"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Moved {name}"
+msgstr "移动了 {name}"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Moves in the loop"
+msgstr "在循环中运动"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Moving and drawing"
+msgstr "移动和绘制"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "MP4 isn't available here, so the file is WebM."
@@ -16242,6 +16908,10 @@ msgstr "MSD {minMsd} 及以上"
 #: src/lib/pack-run.ts
 msgid "Multiplayer"
 msgstr "多人游戏"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Multiply"
+msgstr "正片叠底"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
@@ -16317,6 +16987,8 @@ msgid "name"
 msgstr "名称"
 
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Name"
 msgstr "名称"
@@ -16336,6 +17008,10 @@ msgstr "为新卡组命名"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Name and description"
 msgstr "名称与简介"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Name arc"
+msgstr "弧形名字"
 
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
@@ -16503,6 +17179,14 @@ msgstr "适合我水平的新的刷分图"
 #~ msgid "New folder"
 #~ msgstr "新建文件夹"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "New frame"
+msgstr "新头像框"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "New frame..."
+msgstr "新头像框..."
+
 #: src/routes/workshop.index.tsx
 msgid "New frames"
 msgstr "新头像框"
@@ -16522,6 +17206,11 @@ msgstr "新的邀请链接"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "New link"
 msgstr "新链接"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "New paint layer"
+msgstr "新建绘画图层"
 
 #: src/components/supporter/SupportShowcase.tsx
 #~ msgid "new pb"
@@ -17005,6 +17694,10 @@ msgstr "无键数数据"
 msgid "No layers yet. Add one with +, or drop a picture on the stage."
 msgstr "还没有图层。点 + 添加一个，或把图片拖到画布上。"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "No layers yet. Paint with the brush, add a shape or text, or drop a picture on the canvas."
+msgstr "还没有图层。用画笔绘制、添加形状或文字，或者把图片拖到画布上。"
+
 #: src/routes/discord.tsx
 msgid "No level yet. It comes from your top plays."
 msgstr "暂无水平数据，它来自你的最佳成绩。"
@@ -17413,6 +18106,10 @@ msgstr "无替身"
 msgid "No streak this time."
 msgstr "这次没有连胜。"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "No symmetry"
+msgstr "无对称"
+
 #: src/routes/teams.tsx
 msgid "No teams match \"{query}\"."
 msgstr "没有与“{query}”匹配的战队。"
@@ -17668,6 +18365,7 @@ msgid "None yet. Yours could be the first."
 msgstr "还没有作品。你的可能是第一个。"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/goal-format.ts
 #: src/lib/pack-run.ts
@@ -18079,6 +18777,14 @@ msgstr "现在自己排一排：把国家、段位或技能组相同的卡排在
 msgid "Now x{0}"
 msgstr "现为 x{0}"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Nudge 10px"
+msgstr "微移 10px"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Nudge 1px"
+msgstr "微移 1px"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Numbered list"
@@ -18151,6 +18857,7 @@ msgid "off"
 msgstr "关闭"
 
 #: src/components/replay/ReplayControls.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Off"
 msgstr "关"
 
@@ -18165,6 +18872,10 @@ msgstr "关闭后你只计入人数统计。需要登录。"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Off the list, no download. Your replays still play in it."
 msgstr "不在列表中，也无法下载。你的回放仍然用它播放。"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Offset"
+msgstr "偏移"
 
 #: src/components/packs/GiftInbox.tsx
 #: src/components/packs/run/HandScore.tsx
@@ -18228,9 +18939,9 @@ msgstr "最早的最佳成绩"
 #~ msgid "on"
 #~ msgstr ""
 
-#: src/components/replay/ReplayControls.tsx
-#~ msgid "On"
-#~ msgstr "开"
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "On"
+msgstr "开"
 
 #. placeholder {0}: formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -18294,6 +19005,10 @@ msgstr "在 stable 上"
 #: src/components/supporter/SupportPlans.tsx
 msgid "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
 msgstr "在 Ko-fi 面板上，付款前勾选「Make this monthly」。你可以随时在 Ko-fi 上取消。"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "On the mask the brush hides the layer and the eraser brings it back. The gradient fades it out from where you start dragging."
+msgstr "在蒙版上，画笔会隐藏图层，橡皮擦会恢复显示。渐变会从你开始拖动的位置淡出。"
 
 #: src/components/player/LivePresence.tsx
 msgid "On the results screen"
@@ -18555,6 +19270,9 @@ msgstr "同一张谱面只有你最好的一个倍速成绩计入段位。这个
 
 #: src/components/me/dynamic-renders/controls.tsx
 #: src/components/replay/ReplayCustomMediaControls.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Opacity"
 msgstr "不透明度"
@@ -18607,6 +19325,10 @@ msgstr "在新标签页中打开 {0} 的战队页面"
 #: src/routes/player/$username.tsx
 msgid "Open {profileCountryName} home"
 msgstr "打开{profileCountryName}主页"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Open a picture as a layer..."
+msgstr "打开图片作为图层..."
 
 #: src/components/packs/PackSummary.tsx
 msgid "Open another"
@@ -18702,6 +19424,14 @@ msgstr "打开卡册"
 msgid "Open the day modal with simulated busy-day data"
 msgstr "用模拟的高强度数据打开当天弹窗"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Open the editor"
+msgstr "打开编辑器"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Open the group"
+msgstr "展开组"
+
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Open the in-browser replay viewer for a score."
 #~ msgstr "在浏览器里打开某个成绩的回放播放器。"
@@ -18743,6 +19473,10 @@ msgstr "开你自己的卡包"
 #: src/components/packs/PackMilestone.tsx
 #~ msgid "opened"
 #~ msgstr "已开启"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Opened"
+msgstr "打开"
 
 #. placeholder {0}: dateLabel(claim.dealtAt)
 #: src/components/packs/PackMilestone.tsx
@@ -18831,6 +19565,10 @@ msgstr "或选择其他玩家"
 msgid "or someone else"
 msgstr "或其他玩家"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Or upload one you drew elsewhere"
+msgstr "或者上传你在别处画好的"
+
 #: src/components/supporter/SupportShowcase.tsx
 msgid "Or upload one yourself (a 3D model, an image or a GIF) from your supporter page."
 msgstr "也可以在你的支持者页面自己上传一个（3D 模型、图片或 GIF 都行）。"
@@ -18842,6 +19580,11 @@ msgstr "或者把这段写进留言："
 #: src/components/layout/ThemePicker.tsx
 msgid "orange"
 msgstr "橙"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Orbit"
+msgstr "环绕"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Orbitron"
@@ -19040,7 +19783,15 @@ msgstr "排数用完了"
 msgid "Out of time."
 msgstr "时间到。"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Outer line"
+msgstr "外线"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/LoadoutSlots.tsx
 #: src/lib/supporter-name-fonts.ts
 msgid "Outline"
@@ -19049,6 +19800,14 @@ msgstr "描边"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Outline color"
 msgstr "描边颜色"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Outline colour"
+msgstr "描边颜色"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Outline only"
+msgstr "仅描边"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Outline width"
@@ -19126,6 +19885,10 @@ msgstr "Overjoy"
 #: src/lib/chain-run.ts
 msgid "Overkill"
 msgstr "碾压"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Overlay"
+msgstr "叠加"
 
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 msgid "Overlay scroll speed"
@@ -19248,9 +20011,56 @@ msgstr "已经在 lava.top 付款了？输入你付款时用的邮箱。"
 msgid "Paid with Google already?"
 msgstr "已经用 Google 付款了？"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Paint"
+msgstr "绘画"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Paint bucket"
+msgstr "油漆桶"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Paint bucket (again for the gradient)"
+msgstr "油漆桶（再按一次切换渐变）"
+
 #: src/components/supporter/loadout.ts
 msgid "Paint canvas"
 msgstr "画图画布"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Paint on it with the brush, fill it with the bucket, or erase."
+msgstr "用画笔绘制，用油漆桶填充，或者擦除。"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Paint the layer"
+msgstr "绘制图层"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Paint the mask"
+msgstr "绘制蒙版"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Paint the mask with the brush, eraser or gradient."
+msgstr "用画笔、橡皮擦或渐变绘制蒙版。"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Paint the mask: the brush hides, the eraser brings back"
+msgstr "绘制蒙版：画笔隐藏，橡皮擦恢复"
+
+#. placeholder {0}: layer.name
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Painted on {0}"
+msgstr "在 {0} 上绘制"
+
+#. placeholder {0}: layer.name
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Painted the mask of {0}"
+msgstr "绘制了 {0} 的蒙版"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Paints over the layer, keeping its shape. Gradients run across the whole canvas, so a sweep turns round the avatar."
+msgstr "在图层上覆盖颜色，保留其形状。渐变覆盖整个画布，所以扫描渐变会围绕头像旋转。"
 
 #. placeholder {0}: pct(E.bracket[band])
 #: src/lib/chain-run.ts
@@ -19384,6 +20194,10 @@ msgstr "贴一次就好，数据一变它自己重画。"
 msgid "Paste share code"
 msgstr "粘贴分享码"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Paste, as a new layer"
+msgstr "粘贴为新图层"
+
 #: src/routes/report.tsx
 msgid "Paste, drop or pick a screenshot or any file under 5MB."
 msgstr "可以粘贴、拖入或选择截图，或任何小于 5MB 的文件。"
@@ -19391,6 +20205,15 @@ msgstr "可以粘贴、拖入或选择截图，或任何小于 5MB 的文件。"
 #: src/routes/report.tsx
 #~ msgid "Paste, drop or pick a screenshot."
 #~ msgstr "可以粘贴、拖入或选择截图。"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Pasted"
+msgstr "粘贴的内容"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Path"
+msgstr "路径"
 
 #: src/lib/pack-run.ts
 msgid "Patriot"
@@ -19506,6 +20329,15 @@ msgstr "同水平在刷"
 msgid "peers hold"
 msgstr "玩家平均"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Pen"
+msgstr "钢笔"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Pen pressure"
+msgstr "笔压"
+
 #: src/components/supporter/loadout.ts
 msgid "Pencil test"
 msgstr "铅笔稿"
@@ -19593,6 +20425,10 @@ msgstr "表现分排名"
 msgid "Persian"
 msgstr "波斯语"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Perspective"
+msgstr "透视"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Phone"
 msgstr "手机"
@@ -19615,9 +20451,17 @@ msgstr "换一个文件"
 msgid "pick a difficulty below"
 msgstr "在下方选择难度"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Pick a layer inside a group on the canvas"
+msgstr "在画布上选中组内的图层"
+
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Pick a layer to change it, or click a picture on the stage."
 msgstr "选择一个图层进行修改，或点击画布上的图片。"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Pick a layer to change it. Its position, effects and motion show here."
+msgstr "选择一个图层来修改。它的位置、效果和运动会显示在这里。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Pick a length and a currency, then pay on lava.top. Your supporter time starts once lava.top confirms the payment."
@@ -19707,6 +20551,10 @@ msgstr "选择多张卡片"
 msgid "pick the active one again to flip direction"
 msgstr "再次点击当前选项可切换排序方向"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Pick the layer under the pointer"
+msgstr "自动选择指针下的图层"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Pick the server you want to post."
 msgstr "选择你要发布的服务器。"
@@ -19744,9 +20592,15 @@ msgstr "选择背景或键型会用上传的 .osk 重新渲染该键数的游玩
 msgid "Picking a skin loads it into the editor and saves it as a preset under its name."
 msgstr "选中皮肤后会载入编辑器，并以它的名字保存为预设。"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Picture"
 msgstr "图片"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Picture..."
+msgstr "图片..."
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
@@ -19890,6 +20744,10 @@ msgstr "开始第 {0} 回合"
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Play row"
 msgstr "打出这一排"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Play the loop"
+msgstr "播放循环动画"
 
 #: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 msgid "Play the row. Each card scores its number times the combo."
@@ -20210,9 +21068,17 @@ msgstr "请稍等一分钟再开下一个卡包。本次开包未扣费。"
 msgid "points"
 msgstr "点"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Points"
+msgstr "角数"
+
 #: src/components/communities/field-options.tsx
 msgid "Polish"
 msgstr "波兰语"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Polygon"
+msgstr "多边形"
 
 #: src/routes/recommendations.tsx
 msgid "popular"
@@ -20241,6 +21107,10 @@ msgstr "热门程度"
 #: src/components/communities/field-options.tsx
 msgid "Portuguese"
 msgstr "葡萄牙语"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Position"
+msgstr "位置"
 
 #: src/routes/supporter.tsx
 msgid "possible combinations"
@@ -20473,6 +21343,7 @@ msgstr "预览"
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/skins/SkinPreviewPickers.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Preview"
@@ -20832,6 +21703,7 @@ msgstr "由 {pullerLink} 于 {pulledText} 抽到"
 msgid "Pulled on {dateText}"
 msgstr "抽到于 {dateText}"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Pulse"
 msgstr "脉动"
@@ -20861,6 +21733,11 @@ msgstr "放回卡池"
 #: src/components/packs/CollectionPanel.tsx
 msgid "Put back in the pool…"
 msgstr "放回卡池…"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Put in a new group"
+msgstr "放入新组"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Put it on a layer under your drawing and hide it before you export."
@@ -20954,6 +21831,11 @@ msgstr "雷达图"
 #: src/lib/signature-shared.ts
 msgid "Radar and axes"
 msgstr "雷达图与坐标轴"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Radial"
+msgstr "径向"
 
 #: src/components/supporter/loadout.ts
 msgid "Rail pass"
@@ -21588,6 +22470,15 @@ msgstr "推荐谱面"
 msgid "Recommended maps"
 msgstr "推荐谱面"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Recording the loop..."
+msgstr "正在录制循环动画..."
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Rectangle"
+msgstr "矩形"
+
 #. placeholder {0}: card.copies - 1
 #: src/components/packs/CollectionPanel.tsx
 msgid "Recycle {0, plural, one {# duplicate copy} other {# duplicate copies}}"
@@ -21674,6 +22565,8 @@ msgid "Redeem"
 msgstr "兑换"
 
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Redo"
 msgstr "重做"
@@ -21976,6 +22869,10 @@ msgstr "移除截图 {0}"
 msgid "Remove tag"
 msgstr "移除标签"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Remove the picked path point"
+msgstr "删除选中的路径点"
+
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Remove them"
 #~ msgstr "移除"
@@ -22019,6 +22916,7 @@ msgstr "正在移除..."
 #: src/components/companella/InstallationList.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Rename"
 msgstr "重命名"
@@ -22026,6 +22924,14 @@ msgstr "重命名"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Rename preset"
 msgstr "重命名预设"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Renamed {name}"
+msgstr "重命名了 {name}"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Renamed the frame"
+msgstr "重命名了头像框"
 
 #. placeholder {0}: nextPreset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -22056,9 +22962,17 @@ msgstr "每月自动续订"
 msgid "Renews every year until you cancel it on lava.top."
 msgstr "每年自动续费，直到你在 lava.top 取消。"
 
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Reordered layers"
+msgstr "调整了图层顺序"
+
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Repeat preview"
 msgstr "循环试听"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Repeat round the avatar"
+msgstr "围绕头像重复"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Repeated notes hammered on the same columns."
@@ -22290,6 +23204,7 @@ msgstr "刷新次数"
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 msgid "Reset"
 msgstr "重置"
 
@@ -22332,6 +23247,14 @@ msgstr "调整尺寸 / 裁剪"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Resize / crop…"
 msgstr "调整尺寸 / 裁剪…"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Resize and turn it with the move tool's handles, or below."
+msgstr "用移动工具的控制点调整大小和旋转，或者在下方设置。"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Resize or draw from the middle"
+msgstr "从中心缩放或绘制"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Resize panes"
@@ -22609,6 +23532,8 @@ msgstr "粗略估算，可能有偏差"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Round"
 msgstr "回合"
@@ -22645,6 +23570,27 @@ msgstr "回合通过"
 #: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 msgid "Round cleared. Keep one of these cards for your deck."
 msgstr "回合通过。从这些卡里留一张放进你的牌组。"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Round ends"
+msgstr "圆头"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Round frame, for lists"
+msgstr "圆形头像框，用于列表"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Round the avatar"
+msgstr "围绕头像"
+
+#. placeholder {0}: Math.round(clear.round * 100)
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Round: {0}% of the avatar clear"
+msgstr "圆形：头像 {0}% 可见"
+
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Round: none, lists keep the avatar square"
+msgstr "圆形：无，列表中头像保持方形"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Rounded"
@@ -22734,6 +23680,10 @@ msgstr "俄语"
 msgid "Sakura"
 msgstr "樱花"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Same frame, new art. Whoever wears it gets this."
+msgstr "同一个头像框，换上新图。佩戴的人都会看到新版本。"
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"
 msgstr "六"
@@ -22742,6 +23692,8 @@ msgstr "六"
 msgid "Satori fumo"
 msgstr "觉 fumo"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Saturation"
 msgstr "饱和度"
@@ -22798,6 +23750,10 @@ msgstr "保存卡组"
 msgid "Save showcase"
 msgstr "保存展示柜"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Save the draft now"
+msgstr "立即保存草稿"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Save this editor version as the skin everyone sees on your replays"
 msgstr "把编辑器里的这一版保存为所有人在你回放里看到的皮肤"
@@ -22827,9 +23783,21 @@ msgstr "已设为你的回放皮肤"
 msgid "Saved for everyone"
 msgstr "已对所有人保存"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Saved in this browser"
+msgstr "已保存在这个浏览器"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Saved in this browser only"
+msgstr "仅保存在这个浏览器"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Saved in this browser only. <0><1/>Log in with osu!</0> to sync your collection across devices."
 msgstr "仅保存在这个浏览器里。<0><1/>用 osu! 登录</0>即可在多设备间同步收藏册。"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Saved to your account"
+msgstr "已保存到你的账号"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Saves the current draft as-is; everyone watching your replays sees it"
@@ -22871,6 +23839,7 @@ msgstr "正在保存。"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/FeaturedPlays.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Saving..."
 msgstr "正在保存..."
@@ -22935,6 +23904,10 @@ msgstr "扫描线"
 #: src/components/supporter/loadout.ts
 msgid "Scarlet moon"
 msgstr "绯红之月"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Scatter"
+msgstr "散点"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "Scenes"
@@ -23022,6 +23995,7 @@ msgstr "ScoreV2 准确率"
 msgid "Scrawl"
 msgstr "涂鸦"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Screen"
 msgstr "滤色"
@@ -23053,6 +24027,10 @@ msgstr "截图"
 #: src/lib/supporter-name-fonts.ts
 msgid "Script"
 msgstr "手写体"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "scroll"
+msgstr "滚轮"
 
 #: src/components/prism/PrismVisualizer.tsx
 #: src/components/replay/ReplayControls.tsx
@@ -23293,6 +24271,8 @@ msgstr "搜索..."
 msgid "searching"
 msgstr "搜索中"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Second colour"
 msgstr "第二颜色"
@@ -23365,8 +24345,13 @@ msgstr "查看你抽到的卡"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Select"
 msgstr "选择"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Select (again to swap rectangle and ellipse)"
+msgstr "选择（再按一次切换矩形和椭圆）"
 
 #. placeholder {0}: card.player.user.username
 #. placeholder {0}: card.username
@@ -23386,6 +24371,8 @@ msgid "select all"
 msgstr "全选"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 msgid "Select all"
 msgstr "全选"
 
@@ -23422,6 +24409,10 @@ msgstr "选择本页"
 msgid "select text or type it here"
 msgstr "选中文字，或直接在这里输入"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Selection"
+msgstr "选区"
+
 #: src/components/packs/collections/CardMarks.tsx
 #~ msgid "self"
 #~ msgstr "本人"
@@ -23448,9 +24439,14 @@ msgstr "发送测试消息"
 #~ msgid "Send a tip"
 #~ msgstr "打赏"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Send backward"
 msgstr "下移一层"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Send backward or bring forward"
+msgstr "后移或前移一层"
 
 #: src/routes/report.tsx
 msgid "Send feedback"
@@ -23774,9 +24770,25 @@ msgstr "七键"
 #~ msgid "Shaded: the 300 window at OD 0 around each press"
 #~ msgstr ""
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Shadow"
+msgstr "阴影"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Shadow colour"
+msgstr "阴影颜色"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Shape"
 msgstr "形状"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Shape round the avatar"
+msgstr "围绕头像的形状"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -23901,14 +24913,31 @@ msgstr "乐谱"
 msgid "Shift = lock ratio"
 msgstr "Shift = 锁定比例"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Shift adds, Alt takes away"
+msgstr "Shift 添加，Alt 减去"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Shift adds, Alt takes away. Ctrl D drops the selection."
+msgstr "Shift 添加，Alt 减去。Ctrl D 取消选择。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Shift hue ({signedHueShift}°)"
 msgstr "色相偏移 ({signedHueShift}°)"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Shift keeps a move on one axis and turns in 15° steps"
+msgstr "按住 Shift 只沿一个方向移动，并以 15° 为步长旋转"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Shift keeps it even, Alt draws from the middle"
+msgstr "按住 Shift 保持等比，Alt 从中心绘制"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Shifting, irregular patterns that punish bad reading."
 msgstr "多变而不规则的键型，读谱不好就吃亏。"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/lib/pack-run.ts
 msgid "Shine"
 msgstr "闪耀"
@@ -23945,6 +24974,7 @@ msgid "show"
 msgstr "显示"
 
 #: src/components/player/FeaturedPlays.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Show"
 msgstr "显示"
@@ -24125,6 +25155,10 @@ msgstr "查看 {0} 的通过记录"
 msgid "Show the fire on your rank"
 msgstr "在你的段位上显示火焰"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Show the guides"
+msgstr "显示参考线"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Show the image at its real pixel size"
 msgstr "按图片真实像素尺寸显示"
@@ -24149,6 +25183,10 @@ msgstr "显示它们"
 msgid "Show what you are doing in osu! on your profile and the rankings"
 msgstr "在你的资料页和排行榜上显示你在 osu! 中的动态"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Show your avatar"
+msgstr "显示你的头像"
+
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "showcase"
 msgstr "展示柜"
@@ -24160,6 +25198,10 @@ msgstr "展示柜"
 #: src/components/packs/collections/ShowcaseTab.tsx
 #~ msgid "showcases"
 #~ msgstr "展示柜"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Showed {name}"
+msgstr "显示了 {name}"
 
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "Showing"
@@ -24313,6 +25355,10 @@ msgstr "方向"
 msgid "Side by Side"
 msgstr "并排对比"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Sides"
+msgstr "边数"
+
 #: src/lib/pack-run.ts
 msgid "Sightread"
 msgstr "视奏"
@@ -24321,6 +25367,7 @@ msgstr "视奏"
 msgid "Sign for the next round"
 msgstr "为下一轮签约"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Sign in"
@@ -24554,6 +25601,8 @@ msgstr "大小"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerHandles.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Size"
@@ -24803,6 +25852,14 @@ msgstr "暂不支持跳过曲目。"
 msgid "Skips the last few players and maps you were shown."
 msgstr "跳过最近展示过的玩家和谱面。"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Slant X"
+msgstr "倾斜 X"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Slant Y"
+msgstr "倾斜 Y"
+
 #: src/components/packs/PackSummary.tsx
 msgid "sliced"
 msgstr "已撕开"
@@ -24862,9 +25919,34 @@ msgstr "小"
 msgid "Smaller file"
 msgstr "更小文件"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Smaller or bigger brush"
+msgstr "缩小或放大画笔"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Smoothing"
+msgstr "平滑"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Smudge"
+msgstr "涂抹"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Smudge and blur"
+msgstr "涂抹和模糊"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Smudge and blur work on paint layers. Pick one, or turn this layer into paint from the layer menu."
+msgstr "涂抹和模糊只作用于绘画图层。请选择一个，或在图层菜单中把这个图层转换为绘画图层。"
+
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Snap to grid"
 msgstr "对齐网格"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Snap while moving"
+msgstr "移动时吸附"
 
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Snipe feed"
@@ -24926,14 +26008,23 @@ msgstr "柔和"
 msgid "Soft clouds that roll by"
 msgstr "缓缓飘过的柔和云雾"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Soft light"
+msgstr "柔光"
+
 #: src/components/supporter/loadout.ts
 msgid "Soft wings"
 msgstr "柔软的翅膀"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Softer or harder brush"
+msgstr "更柔或更硬的画笔"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Softness"
 msgstr "柔和度"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/lib/signature-style.ts
 msgid "Solid"
 msgstr "纯色"
@@ -25159,6 +26250,10 @@ msgstr "灵魂破碎"
 msgid "Space Key"
 msgstr "空格键"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Spacing"
+msgstr "间距"
+
 #: src/lib/pack-run.ts
 msgid "Spam"
 msgstr "乱按"
@@ -25263,6 +26358,7 @@ msgstr "把歌曲加快到 1.5倍速。"
 msgid "Spell card"
 msgstr "符卡"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Spin"
 msgstr "转动"
@@ -25280,6 +26376,28 @@ msgstr "剧透文字"
 #: src/lib/pack-run.ts
 msgid "Spotlight"
 msgstr "聚光灯"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Square"
+msgstr "方形"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Square ends"
+msgstr "方头"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Square frame"
+msgstr "方形头像框"
+
+#. placeholder {0}: Math.round(clear.square * 100)
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Square: {0}% of the avatar clear"
+msgstr "方形：头像 {0}% 可见"
+
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Square: empty"
+msgstr "方形：空"
 
 #: src/components/supporter/loadout.ts
 msgid "SSR card"
@@ -25434,6 +26552,10 @@ msgstr "标准箔"
 msgid "Stands"
 msgstr "替身"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Star"
+msgstr "星形"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/discord.tsx
@@ -25488,6 +26610,10 @@ msgstr "从 {0} 开始"
 #: src/components/supporter/themes/StartPicker.tsx
 msgid "Start from"
 msgstr "从模板开始"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Start from a picture"
+msgstr "从图片开始"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -25559,6 +26685,10 @@ msgstr "状态"
 msgid "Stay under {0}x the target for more combo."
 msgstr "不超过目标的 {0} 倍就有更多连击。"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Steady"
+msgstr "匀速"
+
 #: src/components/supporter/loadout.ts
 msgid "Stellium charm"
 msgstr "Stellium 护符"
@@ -25619,6 +26749,10 @@ msgstr "模板体"
 msgid "Sticker"
 msgstr "贴纸"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Still"
+msgstr "静止"
+
 #: src/routes/replay.tsx
 msgid "Still fetching the replay and chart."
 msgstr "仍在获取回放和谱面。"
@@ -25645,6 +26779,10 @@ msgstr "仅静帧"
 msgid "Stop browsing {0}"
 msgstr "不再浏览 {0}"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Stop clipping"
+msgstr "取消剪切"
+
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Stop repeating"
 msgstr "停止循环"
@@ -25656,6 +26794,10 @@ msgstr "停止分享这一张"
 #: src/components/packs/PackPulse.tsx
 msgid "stop sim"
 msgstr "停止模拟"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Stop the loop"
+msgstr "停止循环动画"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stop tracking"
@@ -25699,6 +26841,14 @@ msgstr "故事板"
 msgid "Storyboard…"
 msgstr "故事板…"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Straight line from the last stroke"
+msgstr "从上一笔画直线"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Straighten"
+msgstr "拉直"
+
 #: src/components/packs/StreakGame.tsx
 msgid "streak"
 msgstr "连胜"
@@ -25737,6 +26887,8 @@ msgid "Streams thickened with three-note hand chords."
 msgstr "夹三押的切。"
 
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Strength"
@@ -25797,10 +26949,20 @@ msgid "Submission sent"
 msgstr "已提交"
 
 #: src/components/communities/CommunitySubmitModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/SupporterExtras.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Submit"
 msgstr "提交"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Submit a new one"
+msgstr "提交新的"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Submit frame"
+msgstr "提交头像框"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Submit play"
@@ -25814,6 +26976,11 @@ msgstr "无论你是离线、在私服上游玩，还是被 osu! 限制，都可
 msgid "Submit your own"
 msgstr "提交你自己的"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Submitted"
+msgstr "已提交"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Submitting..."
 msgstr "提交中..."
@@ -25864,6 +27031,7 @@ msgstr "Super Rare"
 msgid "support"
 msgstr "支持"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/routes/support.tsx
 msgid "Support"
 msgstr "支持"
@@ -25960,6 +27128,10 @@ msgstr "支持者"
 msgid "Supporters can upload images and make their own profile themes, including shader code others can see and use. Whoever uploads or writes them is responsible for them and must have the right to share them. They go live without review."
 msgstr "支持者可以上传图片并制作自己的个人资料主题，包括其他人可以查看和使用的着色器代码。上传或编写者需对其负责，并且必须有权分享。它们无需审核即会上线。"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Supporters submit frames to everyone's picker and wear them on their profile. You can still download it as a PNG from the menu."
+msgstr "支持者可以把头像框提交到所有人的选择器，并在主页上佩戴。你仍然可以从菜单下载 PNG。"
+
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Supporters submit frames to everyone's picker, with their name on them, and wear them on their profile."
 msgstr "支持者可以把头像框提交到所有人的选择器并署名，还能在主页上佩戴。"
@@ -26036,6 +27208,10 @@ msgstr "SV"
 msgid "SV gimmick"
 msgstr "SV 变速"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Swap"
+msgstr "交换"
+
 #. placeholder {0}: activeAssetSourceName ?? t`this skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Swap any element for another image from {0}, or click it in the preview to find its row. Note and key art draws under the Bars style; cleared elements fall back to flat shapes."
@@ -26045,10 +27221,16 @@ msgstr "把任意元素替换成 {0} 里的其他图片，或在预览里点击�
 msgid "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak, percentile among tracked players, notes hit, strongest skill or the hour you play most."
 msgstr "把个人资料下方四张卡片中的任意一张换成你的比例、Rice / LN 占比、最长连续天数、在记录玩家中的百分位、命中音符、最强技能或你最常游玩的时段。"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Swap colours"
+msgstr "交换颜色"
+
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile."
 msgstr "把主页下方的四张卡片换成你的比率、Rice / LN 占比、最长连续天数、最长连续游玩或百分位。"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Sway"
 msgstr "摇摆"
@@ -26060,6 +27242,11 @@ msgstr "摇摆速度"
 #: src/components/communities/field-options.tsx
 msgid "Swedish"
 msgstr "瑞典语"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Sweep"
+msgstr "扫描"
 
 #: src/components/supporter/loadout.ts
 msgid "Swept wings"
@@ -26074,6 +27261,10 @@ msgstr "切换国家/地区到 {0}"
 #: src/components/layout/Nav.tsx
 msgid "Switch to {0}"
 msgstr "切换到 {0}"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Symmetry"
+msgstr "对称"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Synced to your osu! account."
@@ -26100,6 +27291,10 @@ msgstr "标签"
 msgid "Tags"
 msgstr "标签"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Take a colour while painting"
+msgstr "绘制时取色"
+
 #. placeholder {0}: selected.ownerName || selected.owner
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Take all of {0}'s cards off and stop them laying cards {length}?"
@@ -26108,6 +27303,10 @@ msgstr "移除 {0} 的所有卡牌，并禁止其放置卡牌（{length}）？"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Take all their cards off"
 msgstr "移除其全部卡牌"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Take away from it"
+msgstr "减去"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
@@ -26324,6 +27523,10 @@ msgstr "Tektur"
 #~ msgid "Tell the bot who you are once with <0>/link</0>. After that, lookups like <1>/recent</1> default to your account, no username needed."
 #~ msgstr "用 <0>/link</0> 告诉机器人你是谁，只需一次。之后 <1>/recent</1> 这类查询会默认使用你的账号，不用再输用户名。"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Template guides"
+msgstr "模板参考线"
+
 #: src/components/BackendOfflineScreen.tsx
 msgid "Temporarily offline"
 msgstr "暂时离线"
@@ -26367,6 +27570,11 @@ msgid "Teto"
 msgstr "重音 Teto"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Text"
 msgstr "文字"
 
@@ -26543,6 +27751,10 @@ msgstr "该文件超过 200 MB。"
 msgid "That file isn't a supported image."
 msgstr "这个文件不是支持的图片格式。"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "That frame isn't one of yours."
+msgstr "那不是你的头像框。"
+
 #: src/components/packs/GiftInbox.tsx
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "That gift is no longer there."
@@ -26584,6 +27796,10 @@ msgstr "这是你自己的条目。"
 #: src/components/player/ServerLinks.tsx
 msgid "That isn't a profile link."
 msgstr "这不是个人资料链接。"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "That layer is locked."
+msgstr "该图层已锁定。"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That link did not load."
@@ -26721,6 +27937,10 @@ msgstr "一分钟内保存次数太多了，请稍等片刻再保存。"
 #: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 msgid "That's Overjoy"
 msgstr "这就是 Overjoy"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "That's the most layers a frame can have."
+msgstr "头像框的图层数已达上限。"
 
 #: src/lib/replay-side-by-side.ts
 msgid "That's the same score on both sides. Pick a different run for the other side."
@@ -27495,6 +28715,14 @@ msgstr "实时信息流已连接。玩家提交新成绩后就会显示在这里
 #~ msgid "The live score feed for a country, newest first."
 #~ msgstr "某个国家/地区的实时成绩 feed，最新的在前。"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "The loop came out over 2 MB. Make it simpler and try again, or turn the loop off."
+msgstr "循环动画超过了 2 MB。简化一下再试，或者关闭循环动画。"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "The loop is 3 seconds. Moving layers make the frame a looping video; play it from the top bar. Spin and Orbit backwards with a negative number."
+msgstr "循环时长为 3 秒。有运动的图层会让头像框变成循环视频，可以在顶部栏播放。转动和环绕填负数会反向。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The map's own samples and keysounds, when it has them."
 msgstr "谱面自带的采样和键音（如果有的话）。"
@@ -27704,6 +28932,10 @@ msgstr "反馈已提交，但至少有一个文件没能上传。"
 #~ msgid "The ringed release costs as before when the hand is busy around it, and less when it comes alone."
 #~ msgstr ""
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "The round frame covers too much of the avatar; keep the middle see-through."
+msgstr "圆形头像框遮挡头像太多，请让中间保持透明。"
+
 #: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 msgid "The round ran out of rows before the target. Try it again: line up cards that share more."
 msgstr "排数用完了，还没达到目标。再试一次：把共享更多特征的卡排在一起。"
@@ -27898,6 +29130,14 @@ msgstr "每开一包仍未通过，该曲目的目标降低 {0}%。"
 #: src/routes/dan-estimates.tsx
 #~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
 #~ msgstr "分开算很重要，因为这两边说明不了对方。LN 谱面上的准确率几乎全都是在按住和放键上挣来的，所以通过一张 LN 谱面并不能说明你的单点水平，反过来也一样。"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "The square frame covers too much of the avatar; keep the middle see-through."
+msgstr "方形头像框遮挡头像太多，请让中间保持透明。"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "The square frame is empty."
+msgstr "方形头像框是空的。"
 
 #: src/lib/pack-run.ts
 msgid "The standard run."
@@ -28204,6 +29444,10 @@ msgstr "此浏览器无法为该格式编码音频轨道。"
 msgid "This browser can't encode video at the selected size and frame rate."
 msgstr "此浏览器无法按所选分辨率和帧率编码视频。"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "This browser can't record the loop with a see-through background. Open the editor in Chrome or Edge to include it; the still goes up either way."
+msgstr "这个浏览器无法录制透明背景的循环动画。请在 Chrome 或 Edge 中打开编辑器来包含它；静态图片无论如何都会上传。"
+
 #: src/components/replay/ReplayControls.tsx
 msgid "This browser can't save directly to a file, so the video is held in memory and downloaded when it finishes."
 msgstr "此浏览器无法直接写入文件，视频会先保存在内存中，完成后再下载。"
@@ -28415,6 +29659,14 @@ msgstr "这是你唯一的一份，卡片会离开你的收藏。"
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "This is your own gift code. Send the link to a friend."
 msgstr "这是你自己的兑换码，把链接发给朋友吧。"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "This layer is locked. Unlock it in the layer list to paint or move it."
+msgstr "该图层已锁定。在图层列表中解锁后才能绘制或移动。"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "This list"
+msgstr "本列表"
 
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -28735,6 +29987,7 @@ msgstr "等级变更为 {tierLabel}"
 msgid "Tier colour"
 msgstr "稀有度颜色"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Time"
 msgstr "时间"
@@ -28763,6 +30016,10 @@ msgstr "加载回放渲染器超时。"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Timed out starting the replay renderers."
 msgstr "启动回放渲染器超时。"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Times per loop"
+msgstr "每次循环的次数"
 
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Timing Distribution"
@@ -28814,6 +30071,7 @@ msgstr "结束色"
 msgid "to {keyCount}K rating"
 msgstr "{keyCount}K 评分"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "to make your own avatar frames."
 msgstr "以制作你自己的头像框。"
@@ -28865,6 +30123,10 @@ msgstr "切换菜单"
 #: src/components/replay/ReplayControls.tsx
 msgid "Toggles"
 msgstr "开关"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Tolerance"
+msgstr "容差"
 
 #: src/routes/recommendations.tsx
 msgid "too easy"
@@ -28925,6 +30187,10 @@ msgstr "占据了榜单第 {0} 名"
 #: src/routes/snipes.tsx
 #~ msgid "Took the country board's #{0} spot"
 #~ msgstr "占据了国家/地区榜第 {0} 名"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Tools"
+msgstr "工具"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "top"
@@ -29150,6 +30416,7 @@ msgstr "拖尾颜色"
 msgid "Trail thickness"
 msgstr "拖尾粗细"
 
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Transform"
 msgstr "变换"
@@ -29266,6 +30533,7 @@ msgstr "Tung tung sahur 键帽"
 msgid "Turkish"
 msgstr "土耳其语"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerHandles.tsx
 msgid "Turn"
 msgstr "旋转"
@@ -29281,6 +30549,11 @@ msgstr "整体旋转"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn each"
 msgstr "各自旋转"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Turn into paint"
+msgstr "转换为绘画图层"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn left"
@@ -29319,9 +30592,21 @@ msgstr "在所有频道开启"
 msgid "Turn right"
 msgstr "向右旋转"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Turn the mask off"
+msgstr "关闭蒙版"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Turn the mask on"
+msgstr "开启蒙版"
+
 #: src/routes/support.tsx
 msgid "Turn them on from the <0>Discord bot page</0>."
 msgstr "在 <0>Discord 机器人页面</0> 开启。"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Turn this layer into paint again (layer menu) to paint on it in perspective."
+msgstr "请先把这个图层转换为绘画图层（图层菜单），才能在透视状态下绘制。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn with the stroke"
@@ -29492,6 +30777,8 @@ msgstr "下划线"
 
 #: src/components/me/GoalToasts.tsx
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter.tsx
 msgid "Undo"
@@ -29501,9 +30788,19 @@ msgstr "撤销"
 msgid "Undo (Ctrl+Z)"
 msgstr "撤销（Ctrl+Z）"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Undo perspective"
+msgstr "取消透视"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Undo re-renders"
 msgstr "撤销重新渲染"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Ungroup"
+msgstr "取消编组"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Unhide"
@@ -29579,6 +30876,10 @@ msgstr "下架"
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Unlisted, by {0}"
 msgstr "已下架，作者 {0}"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Unlock"
+msgstr "解锁"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Unlock for rolls"
@@ -29669,6 +30970,7 @@ msgstr "未评分成绩"
 msgid "unreadable"
 msgstr "无法读取"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter.tsx
 msgid "Unsaved changes"
@@ -29703,6 +31005,12 @@ msgstr "直到 {0}"
 #: src/components/companella/ProfileImportedPlays.tsx
 #~ msgid "Untitled chart"
 #~ msgstr "无标题谱面"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Untitled frame"
+msgstr "未命名头像框"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/workshop.themes.index.tsx
@@ -29747,6 +31055,7 @@ msgstr "最多为谱面段位 +0.1"
 #~ msgstr "如果某技能中的通过计入段位比你在该技能最好的五次平均低五级以上，最多会排除其中三次。段位窗口会把它们标为<0>不计入</0>。"
 
 #: src/components/maps/ChartLabelReport.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 msgid "Update"
 msgstr "更新"
 
@@ -29762,6 +31071,10 @@ msgstr "更新文件"
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Update the skin"
 msgstr "更新皮肤"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Update your frame"
+msgstr "更新你的头像框"
 
 #. placeholder {0}: formatTimeAgo(mapsUpdatedAt, locale)
 #: src/routes/maps.tsx
@@ -29902,6 +31215,7 @@ msgid "Uploading the skin file, {sentSize} of {totalSize}."
 msgstr "正在上传皮肤文件，{sentSize} / {totalSize}。"
 
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 msgid "Uploading..."
 msgstr "上传中..."
 
@@ -30159,6 +31473,8 @@ msgid "Vietnamese"
 msgstr "越南语"
 
 #: src/components/player/SkillHistoryModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/routes/player/$username.tsx
 msgid "View"
 msgstr "视图"
@@ -30544,6 +31860,14 @@ msgstr "我们没有 {0} 在这张谱面上的成绩。粘贴其成绩链接就�
 msgid "Wear"
 msgstr "佩戴"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Wear it"
+msgstr "佩戴"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Wearing it"
+msgstr "佩戴中"
+
 #: src/lib/replay-overlays.ts
 #~ msgid "Web page"
 #~ msgstr "网页"
@@ -30575,6 +31899,10 @@ msgstr "每周柱状图"
 #: src/routes/discord.tsx
 msgid "Weekly recap"
 msgstr "每周回顾"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Weight"
+msgstr "粗细"
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 msgid "Welcome to supporter, {username}"
@@ -30811,6 +32139,10 @@ msgstr "追踪期间"
 msgid "While you pick a song, you see the map's leaderboard for the mods you have on, even DT or HT at any rate, Invert or No Release, and on graveyard maps too. You can switch it to your country, your region or your friends, or search for a player."
 msgstr "选歌时，你能看到当前所开模组下这张谱面的排行榜，包括任意倍速的 DT 或 HT、Invert 或 No Release，坟场谱面也有。你可以切换到你的国家、地区或好友，也可以搜索某个玩家。"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "White and black"
+msgstr "白色和黑色"
+
 #: src/lib/supporter-companions.ts
 msgid "White fairy"
 msgstr "白色妖精"
@@ -30865,9 +32197,9 @@ msgstr "谱面为何出现在这里"
 msgid "Wide"
 msgstr "宽体"
 
-#: src/components/replay/ReplayCustomMediaControls.tsx
-#~ msgid "Width"
-#~ msgstr "宽"
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Width"
+msgstr "宽"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Width of the exported image, in pixels"
@@ -30995,6 +32327,10 @@ msgstr "以分数取胜，而非 pp"
 msgid "working on next"
 msgstr "接下来在做的"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Works on paint layers. The brush's symmetry applies."
+msgstr "作用于绘画图层。画笔的对称设置同样适用。"
+
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Works once, for an account that isn't a supporter and hasn't had a trial."
 msgstr "仅限使用一次，适用于不是支持者且没有试用过的账号。"
@@ -31006,7 +32342,7 @@ msgstr "创意工坊"
 
 #: src/components/layout/Nav.tsx
 #: src/components/supporter/LoadoutSlots.tsx
-#: src/routes/workshop.frames.tsx
+#: src/routes/workshop.frames.index.tsx
 #: src/routes/workshop.index.tsx
 msgid "Workshop"
 msgstr "创意工坊"
@@ -31589,6 +32925,10 @@ msgstr "准确率决定档位。在段位要求 96% 的段位表上，delta 段�
 #~ msgid "Your accuracy sets the tier. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, and 98% and up as <2>delta++</2>. Come up short at 94% and you still get <3>delta--</3>, since getting that close is worth something. Below that you get nothing. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "档次由你的准度决定。在课题要求 96% 的段位系统里，delta 课题上刚好 96% 的通过读作 <0>delta</0>，97.5% 读作 <1>delta+</1>，98% 及以上读作 <2>delta++</2>。94% 差一点没过，你仍然能拿到 <3>delta--</3>，因为差这么一点也算数。再低就什么都没有。要求别的准度的段位系统，整条刻度也跟着平移。"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Your avatar under it"
+msgstr "在下方显示你的头像"
+
 #: src/routes/recommendations.tsx
 msgid "your best"
 msgstr "你的最佳"
@@ -31700,6 +33040,10 @@ msgstr "你的描述会显示在这里。"
 msgid "Your Discord account is linked to <0>{0}</0>."
 msgstr "你的 Discord 账号已绑定到 <0>{0}</0>。"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Your drafts"
+msgstr "你的草稿"
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Your dynamic renders were turned off."
 msgstr "你的动态渲染图已被关闭。"
@@ -31740,6 +33084,7 @@ msgstr "第一次断连变成连线。"
 #~ msgid "Your first forge"
 #~ msgstr "你的第一次锻造"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/workshop.index.tsx
 msgid "Your frames"
@@ -31799,6 +33144,7 @@ msgstr "你的标记"
 msgid "Your mods"
 msgstr "你的 mod"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Your name"
 msgstr "你的名字"
@@ -32155,6 +33501,8 @@ msgstr "幽幽子 fumo"
 msgid "Zip binder"
 msgstr "拉链卡册"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/RowFramer.tsx
 msgid "Zoom"
@@ -32163,6 +33511,14 @@ msgstr "缩放"
 #: src/components/prism/PrismVisualizer.tsx
 #~ msgid "Zoom {value}"
 #~ msgstr ""
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Zoom at the pointer"
+msgstr "以指针为中心缩放"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Zoom in or out"
+msgstr "放大或缩小"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Zoom in to lay cards down."

@@ -114,7 +114,6 @@ import { Route as ReplayUploadsRouteImport } from './routes/replay_.uploads'
 import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
 import { Route as TeamTeamIdRouteImport } from './routes/team/$teamId'
 import { Route as WorkshopIndexRouteImport } from './routes/workshop.index'
-import { Route as WorkshopFramesRouteImport } from './routes/workshop.frames'
 import { Route as ApiAuthDiscordRouteImport } from './routes/api/auth/discord'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
@@ -135,6 +134,8 @@ import { Route as PullOwnerIdCardIdRouteImport } from './routes/pull/$ownerId/$c
 import { Route as RecommendationsMapBeatmapIdRouteImport } from './routes/recommendations/map/$beatmapId'
 import { Route as SupporterThemesSplatRouteImport } from './routes/supporter_.themes.$'
 import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
+import { Route as WorkshopFramesIndexRouteImport } from './routes/workshop.frames.index'
+import { Route as WorkshopFramesEditorRouteImport } from './routes/workshop.frames.editor'
 import { Route as WorkshopThemesIndexRouteImport } from './routes/workshop.themes.index'
 import { Route as WorkshopThemesThemeIdRouteImport } from './routes/workshop.themes.$themeId'
 import { Route as WorkshopThemesGalleryRouteImport } from './routes/workshop.themes.gallery'
@@ -683,11 +684,6 @@ const WorkshopIndexRoute = WorkshopIndexRouteImport.update({
   path: '/workshop/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WorkshopFramesRoute = WorkshopFramesRouteImport.update({
-  id: '/workshop/frames',
-  path: '/workshop/frames',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiAuthDiscordRoute = ApiAuthDiscordRouteImport.update({
   id: '/api/auth/discord',
   path: '/api/auth/discord',
@@ -790,6 +786,16 @@ const SupporterThemesSplatRoute = SupporterThemesSplatRouteImport.update({
 const VideosIdFilenameRoute = VideosIdFilenameRouteImport.update({
   id: '/videos/$id/$filename',
   path: '/videos/$id/$filename',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorkshopFramesIndexRoute = WorkshopFramesIndexRouteImport.update({
+  id: '/workshop/frames/',
+  path: '/workshop/frames/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorkshopFramesEditorRoute = WorkshopFramesEditorRouteImport.update({
+  id: '/workshop/frames/editor',
+  path: '/workshop/frames/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WorkshopThemesIndexRoute = WorkshopThemesIndexRouteImport.update({
@@ -1018,7 +1024,6 @@ export interface FileRoutesByFullPath {
   '/replay/uploads': typeof ReplayUploadsRoute
   '/skins/$id': typeof SkinsIdRoute
   '/team/$teamId': typeof TeamTeamIdRoute
-  '/workshop/frames': typeof WorkshopFramesRoute
   '/workshop/': typeof WorkshopIndexRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -1040,9 +1045,11 @@ export interface FileRoutesByFullPath {
   '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
   '/supporter/themes/$': typeof SupporterThemesSplatRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
+  '/workshop/frames/editor': typeof WorkshopFramesEditorRoute
   '/workshop/themes/$themeId': typeof WorkshopThemesThemeIdRoute
   '/workshop/themes/gallery': typeof WorkshopThemesGalleryRoute
   '/workshop/themes/spec': typeof WorkshopThemesSpecRoute
+  '/workshop/frames/': typeof WorkshopFramesIndexRoute
   '/workshop/themes/': typeof WorkshopThemesIndexRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
@@ -1167,7 +1174,6 @@ export interface FileRoutesByTo {
   '/replay/uploads': typeof ReplayUploadsRoute
   '/skins/$id': typeof SkinsIdRoute
   '/team/$teamId': typeof TeamTeamIdRoute
-  '/workshop/frames': typeof WorkshopFramesRoute
   '/workshop': typeof WorkshopIndexRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -1189,9 +1195,11 @@ export interface FileRoutesByTo {
   '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
   '/supporter/themes/$': typeof SupporterThemesSplatRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
+  '/workshop/frames/editor': typeof WorkshopFramesEditorRoute
   '/workshop/themes/$themeId': typeof WorkshopThemesThemeIdRoute
   '/workshop/themes/gallery': typeof WorkshopThemesGalleryRoute
   '/workshop/themes/spec': typeof WorkshopThemesSpecRoute
+  '/workshop/frames': typeof WorkshopFramesIndexRoute
   '/workshop/themes': typeof WorkshopThemesIndexRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
@@ -1317,7 +1325,6 @@ export interface FileRoutesById {
   '/replay_/uploads': typeof ReplayUploadsRoute
   '/skins_/$id': typeof SkinsIdRoute
   '/team/$teamId': typeof TeamTeamIdRoute
-  '/workshop/frames': typeof WorkshopFramesRoute
   '/workshop/': typeof WorkshopIndexRoute
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -1339,9 +1346,11 @@ export interface FileRoutesById {
   '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
   '/supporter_/themes/$': typeof SupporterThemesSplatRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
+  '/workshop/frames/editor': typeof WorkshopFramesEditorRoute
   '/workshop/themes/$themeId': typeof WorkshopThemesThemeIdRoute
   '/workshop/themes/gallery': typeof WorkshopThemesGalleryRoute
   '/workshop/themes/spec': typeof WorkshopThemesSpecRoute
+  '/workshop/frames/': typeof WorkshopFramesIndexRoute
   '/workshop/themes/': typeof WorkshopThemesIndexRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
@@ -1468,7 +1477,6 @@ export interface FileRouteTypes {
     | '/replay/uploads'
     | '/skins/$id'
     | '/team/$teamId'
-    | '/workshop/frames'
     | '/workshop/'
     | '/api/auth/discord'
     | '/api/auth/logout'
@@ -1490,9 +1498,11 @@ export interface FileRouteTypes {
     | '/recommendations/map/$beatmapId'
     | '/supporter/themes/$'
     | '/videos/$id/$filename'
+    | '/workshop/frames/editor'
     | '/workshop/themes/$themeId'
     | '/workshop/themes/gallery'
     | '/workshop/themes/spec'
+    | '/workshop/frames/'
     | '/workshop/themes/'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
@@ -1617,7 +1627,6 @@ export interface FileRouteTypes {
     | '/replay/uploads'
     | '/skins/$id'
     | '/team/$teamId'
-    | '/workshop/frames'
     | '/workshop'
     | '/api/auth/discord'
     | '/api/auth/logout'
@@ -1639,9 +1648,11 @@ export interface FileRouteTypes {
     | '/recommendations/map/$beatmapId'
     | '/supporter/themes/$'
     | '/videos/$id/$filename'
+    | '/workshop/frames/editor'
     | '/workshop/themes/$themeId'
     | '/workshop/themes/gallery'
     | '/workshop/themes/spec'
+    | '/workshop/frames'
     | '/workshop/themes'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
@@ -1766,7 +1777,6 @@ export interface FileRouteTypes {
     | '/replay_/uploads'
     | '/skins_/$id'
     | '/team/$teamId'
-    | '/workshop/frames'
     | '/workshop/'
     | '/api/auth/discord'
     | '/api/auth/logout'
@@ -1788,9 +1798,11 @@ export interface FileRouteTypes {
     | '/recommendations/map/$beatmapId'
     | '/supporter_/themes/$'
     | '/videos/$id/$filename'
+    | '/workshop/frames/editor'
     | '/workshop/themes/$themeId'
     | '/workshop/themes/gallery'
     | '/workshop/themes/spec'
+    | '/workshop/frames/'
     | '/workshop/themes/'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
@@ -1915,7 +1927,6 @@ export interface RootRouteChildren {
   ReplayUploadsRoute: typeof ReplayUploadsRoute
   SkinsIdRoute: typeof SkinsIdRoute
   TeamTeamIdRoute: typeof TeamTeamIdRoute
-  WorkshopFramesRoute: typeof WorkshopFramesRoute
   WorkshopIndexRoute: typeof WorkshopIndexRoute
   ApiAuthDiscordRoute: typeof ApiAuthDiscordRouteWithChildren
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
@@ -1931,9 +1942,11 @@ export interface RootRouteChildren {
   PullOwnerIdCardIdRoute: typeof PullOwnerIdCardIdRoute
   SupporterThemesSplatRoute: typeof SupporterThemesSplatRoute
   VideosIdFilenameRoute: typeof VideosIdFilenameRoute
+  WorkshopFramesEditorRoute: typeof WorkshopFramesEditorRoute
   WorkshopThemesThemeIdRoute: typeof WorkshopThemesThemeIdRoute
   WorkshopThemesGalleryRoute: typeof WorkshopThemesGalleryRoute
   WorkshopThemesSpecRoute: typeof WorkshopThemesSpecRoute
+  WorkshopFramesIndexRoute: typeof WorkshopFramesIndexRoute
   WorkshopThemesIndexRoute: typeof WorkshopThemesIndexRoute
   ApiSignatureTokenVariantRoute: typeof ApiSignatureTokenVariantRoute
   ApiIntegrationsCompanellaV1BugReportsRoute: typeof ApiIntegrationsCompanellaV1BugReportsRoute
@@ -2683,13 +2696,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkshopIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/workshop/frames': {
-      id: '/workshop/frames'
-      path: '/workshop/frames'
-      fullPath: '/workshop/frames'
-      preLoaderRoute: typeof WorkshopFramesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/auth/discord': {
       id: '/api/auth/discord'
       path: '/api/auth/discord'
@@ -2828,6 +2834,20 @@ declare module '@tanstack/react-router' {
       path: '/videos/$id/$filename'
       fullPath: '/videos/$id/$filename'
       preLoaderRoute: typeof VideosIdFilenameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/workshop/frames/': {
+      id: '/workshop/frames/'
+      path: '/workshop/frames'
+      fullPath: '/workshop/frames/'
+      preLoaderRoute: typeof WorkshopFramesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/workshop/frames/editor': {
+      id: '/workshop/frames/editor'
+      path: '/workshop/frames/editor'
+      fullPath: '/workshop/frames/editor'
+      preLoaderRoute: typeof WorkshopFramesEditorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/workshop/themes/': {
@@ -3218,7 +3238,6 @@ const rootRouteChildren: RootRouteChildren = {
   ReplayUploadsRoute: ReplayUploadsRoute,
   SkinsIdRoute: SkinsIdRoute,
   TeamTeamIdRoute: TeamTeamIdRoute,
-  WorkshopFramesRoute: WorkshopFramesRoute,
   WorkshopIndexRoute: WorkshopIndexRoute,
   ApiAuthDiscordRoute: ApiAuthDiscordRouteWithChildren,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
@@ -3235,9 +3254,11 @@ const rootRouteChildren: RootRouteChildren = {
   PullOwnerIdCardIdRoute: PullOwnerIdCardIdRoute,
   SupporterThemesSplatRoute: SupporterThemesSplatRoute,
   VideosIdFilenameRoute: VideosIdFilenameRoute,
+  WorkshopFramesEditorRoute: WorkshopFramesEditorRoute,
   WorkshopThemesThemeIdRoute: WorkshopThemesThemeIdRoute,
   WorkshopThemesGalleryRoute: WorkshopThemesGalleryRoute,
   WorkshopThemesSpecRoute: WorkshopThemesSpecRoute,
+  WorkshopFramesIndexRoute: WorkshopFramesIndexRoute,
   WorkshopThemesIndexRoute: WorkshopThemesIndexRoute,
   ApiSignatureTokenVariantRoute: ApiSignatureTokenVariantRoute,
   ApiIntegrationsCompanellaV1BugReportsRoute:

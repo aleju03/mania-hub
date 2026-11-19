@@ -5,6 +5,7 @@ import { useLingui } from "@lingui/react/macro";
 import { avatarImageSrc } from "../ui/Avatar";
 import { frameOverhangMargins, SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { useAuth } from "../../lib/auth-context";
+import { listDraftsWithArt, type DraftSummary } from "../../lib/frame-editor/storage";
 import { deleteAdminFrame, loadAdminFrames, setAdminFrameListed, setAdminFrameReviewed } from "../../lib/admin-supporters";
 import { fetchLiveWorkshopFrames, forgetLiveSupporterLook, setSupporterFrameLocally } from "../../lib/live-backend";
 import {
@@ -21,8 +22,7 @@ import {
   saveSupporterFrameSetting,
   submitWorkshopFrame,
 } from "../../lib/supporter-look-settings";
-import { FRAME_NAME_MAX, registerSubmittedFrames, type SubmittedFrame } from "../../lib/workshop-frames";
-import { fitPictureForUpload } from "../../lib/fit-picture-for-upload";
+import { FRAME_NAME_MAX, registerSubmittedFrames, uploadFramePart as upload, type SubmittedFrame } from "../../lib/workshop-frames";
 
 /* The workshop's frame maker (/workshop/frames). A supporter draws on the
    template, picks the still (and, if they like, a looping WebM and a round
@@ -92,14 +92,6 @@ async function measurePicture(file: File, round: boolean): Promise<{ overhang: [
   if (1 - covered / (round ? Math.PI * radius2 : A * A) < MIN_CLEAR_AVATAR) return { error: "covers" };
   const reach = (n: number) => Math.max(0, n) / A;
   return { overhang: [reach(I - x0), reach(I - y0), reach(x1 + 1 - (I + A)), reach(y1 + 1 - (I + A))] };
-}
-
-async function upload(kind: "still" | "video" | "round", original: File): Promise<{ url: string; overhang?: [number, number, number, number] }> {
-  const file = kind === "video" ? original : await fitPictureForUpload(original);
-  const response = await fetch(`/api/supporter-frame?kind=${kind}`, { method: "POST", headers: { "content-type": file.type || "application/octet-stream" }, body: file });
-  const reply = await response.json().catch(() => null) as { url?: unknown; overhang?: unknown; error?: unknown } | null;
-  if (!response.ok || typeof reply?.url !== "string") throw new Error(typeof reply?.error === "string" ? reply.error : `Upload failed (${response.status})`);
-  return { url: reply.url, overhang: Array.isArray(reply.overhang) ? reply.overhang.map(Number) as [number, number, number, number] : undefined };
 }
 
 export function WorkshopFrames() {
@@ -264,7 +256,9 @@ export function WorkshopFrames() {
 
   return (
     <div className="space-y-10">
+      <EditorEntry />
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <h2 className="text-[15px] font-semibold text-white lg:col-span-2">{t`Or upload one you drew elsewhere`}</h2>
         <div className="space-y-5">
           <Step n={1} title={t`Draw it on the template`}>
             <p>{t`A ${T}px square with the avatar in the middle. Draw on a transparent background; the art can reach out to the canvas edge, and the avatar has to stay mostly clear.`}</p>
@@ -355,6 +349,7 @@ export function WorkshopFrames() {
               frame,
               <>
                 {wearButton(frame)}
+                <Link to="/workshop/frames/editor" search={{ frame: frame.id }} className={BUTTON}>{t`Edit`}</Link>
                 <button type="button" disabled={busy !== null} onClick={() => void remove(frame)} className={BUTTON}>{t`Delete`}</button>
               </>,
               frame.listed ? t`In everyone's picker` : t`Taken off the list`,
@@ -391,6 +386,45 @@ export function WorkshopFrames() {
         </section>
       ) : null}
     </div>
+  );
+}
+
+/* The way in to the frame editor, with the drafts this browser keeps. */
+function EditorEntry() {
+  const { t } = useLingui();
+  const [drafts, setDrafts] = useState<(DraftSummary & { url: string | null })[]>([]);
+  useEffect(() => {
+    let urls: string[] = [];
+    void listDraftsWithArt().then((list) => {
+      const withUrls = list.slice(0, 8).map((draft) => ({ ...draft, url: draft.thumb ? URL.createObjectURL(draft.thumb) : null }));
+      urls = withUrls.map((draft) => draft.url).filter((url): url is string => !!url);
+      setDrafts(withUrls);
+    }).catch(() => undefined);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+  return (
+    <section className="flex flex-wrap items-center gap-x-6 gap-y-4 rounded-2xl bg-osu-b6 p-5">
+      <h2 className="min-w-0 flex-1 text-[17px] font-semibold text-white">{t`Make one in the frame editor`}</h2>
+      {drafts.length ? (
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1">{t`Your drafts`}</span>
+          <div className="flex items-center gap-2">
+            {drafts.map((draft) => (
+              <Link
+                key={draft.id}
+                to="/workshop/frames/editor"
+                search={{ draft: draft.id }}
+                title={draft.name || t`Untitled frame`}
+                className="h-14 w-14 overflow-hidden rounded-lg bg-[conic-gradient(#ffffff0d_25%,transparent_0_50%,#ffffff0d_0_75%,transparent_0)] bg-[length:10px_10px] ring-1 ring-white/[0.08] transition hover:ring-osu-pink/60"
+              >
+                {draft.url ? <img src={draft.url} alt="" className="h-full w-full object-contain" /> : null}
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <Link to="/workshop/frames/editor" className="inline-flex h-10 items-center rounded-full bg-osu-pink px-6 text-[13px] font-semibold text-white transition hover:brightness-110">{t`Open the editor`}</Link>
+    </section>
   );
 }
 

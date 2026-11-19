@@ -418,6 +418,37 @@ export function ColorField({ value, onChange, label, bar = false }: { value: str
   );
 }
 
+/* The picker's body on its own (pad, hue strip, hex), for a swatch that
+   opens it some other way. */
+export function ColorPanel({ value, onChange, label }: { value: string; onChange: (hex: string) => void; label: string }) {
+  const [hsv, setHsv] = useState(() => hexToHsv(value));
+  const [text, setText] = useState(value);
+  useEffect(() => {
+    if (hsvToHex(...hsv) !== value) setHsv(hexToHsv(value));
+    setText(value);
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  const set = (next: [number, number, number]) => {
+    setHsv(next);
+    onChange(hsvToHex(...next));
+  };
+  return (
+    <div className="grid gap-2.5">
+      <SatValuePad hue={hsv[0]} sat={hsv[1]} value={hsv[2]} onChange={(sat, val) => set([hsv[0], sat, val])} label={label} />
+      <Slider value={hsv[0]} min={0} max={360} onChange={(hue) => set([hue, hsv[1], hsv[2]])} label={label} gradient={HUE_STRIP} thumbColor={`hsl(${hsv[0]}, 100%, 50%)`} />
+      <input
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+          const hex = event.target.value.trim().replace(/^([0-9a-f]{6})$/i, "#$1").toLowerCase();
+          if (/^#[0-9a-f]{6}$/.test(hex)) onChange(hex);
+        }}
+        spellCheck={false}
+        className="h-8 w-full rounded-lg bg-osu-b6 px-2.5 font-mono text-[12px] text-white ring-1 ring-white/10 focus:outline-none focus:ring-osu-pink/50"
+      />
+    </div>
+  );
+}
+
 /* A row of choices, one picked: for a blend mode or a particle's shape. */
 export function Choice<T extends string>({ value, options, onChange }: { value: T; options: readonly { id: T; label: string }[]; onChange: (value: T) => void }) {
   // up to four fit one segmented bar; more wrap as chips

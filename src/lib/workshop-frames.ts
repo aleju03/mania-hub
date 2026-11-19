@@ -1,3 +1,4 @@
+import { fitPictureForUpload } from "./fit-picture-for-upload";
 import { isWorkshopFrameId, parseWorkshopFrameArt, registerWorkshopFrames, type WorkshopFrameArt, type WorkshopFrameId } from "./supporter-avatar-frames";
 
 /* A frame a supporter made in the workshop, as the backend lists it
@@ -42,4 +43,15 @@ export function parseSubmittedFrames(raw: unknown): SubmittedFrame[] {
 export function registerSubmittedFrames(frames: readonly SubmittedFrame[]): readonly SubmittedFrame[] {
   registerWorkshopFrames(Object.fromEntries(frames.map((frame) => [frame.id, { name: frame.name, still: frame.still, video: frame.video, round: frame.round, overhang: frame.overhang }])));
   return frames;
+}
+
+/* Uploads one file of a frame (its still, round still or loop) to
+   /api/supporter-frame, which checks it and answers with its public URL and,
+   for a picture, how far its art reaches past the avatar. */
+export async function uploadFramePart(kind: "still" | "video" | "round", original: Blob): Promise<{ url: string; overhang?: [number, number, number, number] }> {
+  const file = kind === "video" ? original : await fitPictureForUpload(original);
+  const response = await fetch(`/api/supporter-frame?kind=${kind}`, { method: "POST", headers: { "content-type": file.type || "application/octet-stream" }, body: file });
+  const reply = await response.json().catch(() => null) as { url?: unknown; overhang?: unknown; error?: unknown } | null;
+  if (!response.ok || typeof reply?.url !== "string") throw new Error(typeof reply?.error === "string" ? reply.error : `Upload failed (${response.status})`);
+  return { url: reply.url, overhang: Array.isArray(reply.overhang) ? reply.overhang.map(Number) as [number, number, number, number] : undefined };
 }

@@ -115,7 +115,7 @@ function WorkshopPage() {
           <section>
             <h2 className="mb-3 text-[17px] font-semibold text-white">{t`Make your own`}</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <MakeTile to="frames" title={t`Make a frame`} body={t`Draw it on the template, add a loop if you like.`} art={<FramedAvatar frame="pencil-boil" avatar={avatar} size={46} />} />
+              <MakeTile to="frames" title={t`Make a frame`} body={t`Draw it in the editor or on the template, add a loop if you like.`} art={<FramedAvatar frame="pencil-boil" avatar={avatar} size={46} />} />
               <MakeTile to="themes" title={t`Make a theme`} body={t`Stack layers, or write the shader.`} art={<img src={backdrop(9)} alt="" className="h-[58px] w-[104px] rounded-lg object-cover" />} />
             </div>
           </section>
@@ -137,7 +137,7 @@ function Rail() {
       <Link to="/workshop/frames" hash="shared" className={item}>{t`Frames`}</Link>
       <Link to="/workshop/themes/gallery" className={item}>{t`Themes`}</Link>
       <div className={`${heading} max-md:hidden`}>{t`Make`}</div>
-      <Link to="/workshop/frames" className={`${item} max-md:shrink-0`}>{t`Make a frame`}</Link>
+      <Link to="/workshop/frames/editor" className={`${item} max-md:shrink-0`}>{t`Make a frame`}</Link>
       <NewThemeChooser trigger={(toggle) => <button type="button" onClick={toggle} className={`${item} w-full cursor-pointer text-left max-md:shrink-0`}>{t`Make a theme`}</button>} />
       <div className={`${heading} max-md:hidden`}>{t`Yours`}</div>
       <Link to="/workshop/frames" hash="yours" className={`${item} max-md:shrink-0`}>{t`Your frames`}</Link>
@@ -224,7 +224,7 @@ function EmptyHero({ avatar }: { avatar: string | undefined }) {
       <div className="relative max-w-[400px] px-6 sm:px-12">
         <h2 className="text-[28px] font-bold leading-tight text-white">{t`Nothing here yet`}</h2>
         <p className="mt-2 text-[13px] text-white/70">{t`The first frame players make goes up here.`}</p>
-        <Link to="/workshop/frames" className="mt-5 inline-flex h-10 items-center rounded-full bg-osu-pink px-5 text-[13.5px] font-semibold text-white transition hover:brightness-110">{t`Make a frame`}</Link>
+        <Link to="/workshop/frames/editor" className="mt-5 inline-flex h-10 items-center rounded-full bg-osu-pink px-5 text-[13.5px] font-semibold text-white transition hover:brightness-110">{t`Make a frame`}</Link>
       </div>
       <div className="relative ml-auto mr-10 hidden sm:block lg:mr-20">
         <FramedAvatar frame="crown-sketch-gold" avatar={avatar} size={150} live />
@@ -274,7 +274,7 @@ function MakeTile({ to, title, body, art }: { to: "frames" | "themes"; title: st
   const className = "flex items-center gap-5 rounded-xl border-[1.5px] border-dashed border-osu-pink/40 bg-osu-b4 px-5 py-4 transition hover:border-osu-pink/70 hover:brightness-110";
   // a theme starts from layers or from code, so its tile asks which
   return to === "frames"
-    ? <Link to="/workshop/frames" className={className}>{inner}</Link>
+    ? <Link to="/workshop/frames/editor" className={className}>{inner}</Link>
     : <NewThemeChooser trigger={(toggle) => <button type="button" onClick={toggle} className={`${className} h-full w-full cursor-pointer text-left`}>{inner}</button>} />;
 }
 

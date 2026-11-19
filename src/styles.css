@@ -311,6 +311,9 @@ html[data-custom-cursor="true"] * {
   41%, 100% { transform: rotate(0deg); }
 }
 .frame-swing { animation: frame-swing 14s infinite; }
+/* The frame editor's selection outline: marching ants. --ants is one dash and gap at the current zoom. */
+@keyframes frame-editor-ants { to { stroke-dashoffset: calc(-1 * var(--ants)); } }
+.frame-editor-ants { animation: frame-editor-ants 0.6s linear infinite; }
 @keyframes frame-sheen {
   0%, 10% { opacity: 0; background-position: 50% 0; animation-timing-function: cubic-bezier(0.3, 0, 0.6, 1); }
   14.4% { opacity: 0.85; background-position: 8% 0; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }

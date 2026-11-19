@@ -520,8 +520,10 @@ msgstr "{0} columns selected"
 #~ msgid "{0} copies"
 #~ msgstr "{0} copies"
 
+#. placeholder {0}: entry.name
 #. placeholder {0}: selectedPreset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 msgid "{0} copy"
 msgstr "{0} copy"
 
@@ -664,6 +666,11 @@ msgstr "{0} is yours"
 #: src/routes/player/$username.tsx
 msgid "{0} keeps their skill ratings private."
 msgstr "{0} keeps their skill ratings private."
+
+#. placeholder {0}: layer.children.length
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "{0} layers drawn as one. Its opacity, blend, mask, effects, repeat and motion apply to all of them. Move, turn and resize it like any layer."
+msgstr "{0} layers drawn as one. Its opacity, blend, mask, effects, repeat and motion apply to all of them. Move, turn and resize it like any layer."
 
 #. placeholder {0}: shown.rowsLeft
 #: src/components/packs/run/chain/ChainTable.tsx
@@ -921,6 +928,11 @@ msgstr "{0} only"
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "{0} pack"
 msgstr "{0} pack"
+
+#. placeholder {0}: layer.name
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "{0} part"
+msgstr "{0} part"
 
 #. placeholder {0}: stats.owners.toLocaleString("en-US")
 #: src/components/packs/PackPulse.tsx
@@ -4088,6 +4100,7 @@ msgid "Activity is recorded for tracked players, and no one in this team is trac
 msgstr "Activity is recorded for tracked players, and no one in this team is tracked yet."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 msgid "Actual size"
 msgstr "Actual size"
 
@@ -4139,6 +4152,11 @@ msgstr "Add a country to pick or leave out its players."
 msgid "Add a loop (optional)"
 msgstr "Add a loop (optional)"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Add a mask"
+msgstr "Add a mask"
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Add a message (optional)"
 msgstr "Add a message (optional)"
@@ -4171,6 +4189,10 @@ msgstr "Add a screenshot"
 #: src/routes/report.tsx
 msgid "Add a screenshot or file"
 msgstr "Add a screenshot or file"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Add a shape, text or picture"
+msgstr "Add a shape, text or picture"
 
 #. placeholder {0}: diffs.length
 #: src/components/maps/UserCollectionEditor.tsx
@@ -4220,6 +4242,11 @@ msgstr "Add image"
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Add its picture first."
 msgstr "Add its picture first."
+
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Add key"
+msgstr "Add key"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Add layer"
@@ -4281,6 +4308,10 @@ msgstr "Add to Discord"
 #~ msgid "Add to folder..."
 #~ msgstr "Add to folder..."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Add to it"
+msgstr "Add to it"
+
 #: src/components/packs/SetsView.tsx
 msgid "Add to set"
 msgstr "Add to set"
@@ -4305,6 +4336,11 @@ msgstr "Add your {name} profile next to your name first."
 msgid "added"
 msgstr "added"
 
+#. placeholder {0}: added.name
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Added {0}"
+msgstr "Added {0}"
+
 #: src/components/me/RosterOptInCard.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/player/SkillsUntrackedNotice.tsx
@@ -4319,6 +4355,10 @@ msgstr "Adding you…"
 #: src/lib/pack-run.ts
 msgid "Adds the notes it has kept, then keeps {0}% of the pack's notes."
 msgstr "Adds the notes it has kept, then keeps {0}% of the pack's notes."
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Adjust"
+msgstr "Adjust"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Adjust your image"
@@ -4482,6 +4522,10 @@ msgstr "All keymodes"
 msgid "All keys"
 msgstr "All keys"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "All layers"
+msgstr "All layers"
+
 #: src/components/me/dynamic-renders/GalleryView.tsx
 msgid "All layouts"
 msgstr "All layouts"
@@ -4556,6 +4600,10 @@ msgstr "Almost there..."
 #: src/routes/replay.tsx
 msgid "Almost there{elapsedLabel}"
 msgstr "Almost there{elapsedLabel}"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Along the bottom"
+msgstr "Along the bottom"
 
 #: src/components/packs/GoatPoll.tsx
 msgid "already a GOAT"
@@ -4639,6 +4687,7 @@ msgstr "Always reveal all"
 msgid "amber"
 msgstr "amber"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Amount"
 msgstr "Amount"
@@ -4738,6 +4787,7 @@ msgstr "and {0} more below these"
 msgid "Angel wings"
 msgstr "Angel wings"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Angle"
 msgstr "Angle"
@@ -4881,6 +4931,7 @@ msgstr "Applies on top of every layer"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/bbcode/ImageEditorModal.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 msgid "Apply"
 msgstr "Apply"
 
@@ -4895,6 +4946,10 @@ msgstr "Apply picks to every keymode preview"
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Apply picks to the {keymodeLabel} preview only"
 msgstr "Apply picks to the {keymodeLabel} preview only"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Apply the mask"
+msgstr "Apply the mask"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Apply to all columns"
@@ -4940,6 +4995,10 @@ msgstr "approved"
 #: src/components/communities/field-options.tsx
 msgid "Arabic"
 msgstr "Arabic"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Arc"
+msgstr "Arc"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Arcade"
@@ -5177,12 +5236,13 @@ msgstr "avatar"
 msgid "Avatar frame"
 msgstr "Avatar frame"
 
-#: src/routes/workshop.frames.tsx
+#: src/routes/workshop.frames.index.tsx
 msgid "avatar frames"
 msgstr "avatar frames"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/routes/support.tsx
-#: src/routes/workshop.frames.tsx
+#: src/routes/workshop.frames.index.tsx
 msgid "Avatar frames"
 msgstr "Avatar frames"
 
@@ -5329,6 +5389,10 @@ msgstr "Back to your themes"
 #: src/components/skins/SkinPreviewPickers.tsx
 msgid "backdrop"
 msgstr "backdrop"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Backdrop"
+msgstr "Backdrop"
 
 #: src/components/me/dynamic-renders/controls.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
@@ -5756,9 +5820,18 @@ msgstr "Blackletter"
 msgid "Blacklight"
 msgstr "Blacklight"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Blank"
+msgstr "Blank"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Blend"
 msgstr "Blend"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Blending of {name}"
+msgstr "Blending of {name}"
 
 #: src/components/packs/StreakGame.tsx
 msgid "Blitz"
@@ -5789,6 +5862,8 @@ msgid "Blue screen"
 msgstr "Blue screen"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/ThemeReadabilityPanel.tsx
 msgid "Blur"
 msgstr "Blur"
@@ -5809,6 +5884,10 @@ msgstr "Board map"
 #: src/routes/snipes.tsx
 msgid "Board spot <0>#{0}</0>"
 msgstr "Board spot <0>#{0}</0>"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Bob"
+msgstr "Bob"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -5925,11 +6004,13 @@ msgid "Bright idea"
 msgstr "Bright idea"
 
 #: src/components/me/dynamic-renders/controls.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Brightness"
 msgstr "Brightness"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Bring forward"
 msgstr "Bring forward"
@@ -5989,8 +6070,14 @@ msgstr "Browser preferences and local caches stay on your device until they expi
 #~ msgstr "Browser test client"
 
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Brush"
 msgstr "Brush"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Brush and colours"
+msgstr "Brush and colours"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Bubble"
@@ -6141,6 +6228,7 @@ msgstr "Can't reach the bot right now. Refresh in a moment."
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/supporter/CustomArtDialog.tsx
 #: src/components/supporter/CustomThemeCredit.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/report.tsx
 #: src/routes/workshop.themes.gallery.tsx
@@ -6390,9 +6478,17 @@ msgstr "Celtic"
 msgid "Center"
 msgstr "Center"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Centre"
+msgstr "Centre"
+
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Centre across"
 msgstr "Centre across"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Centre on the avatar"
+msgstr "Centre on the avatar"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Centre up"
@@ -6421,6 +6517,10 @@ msgstr "Chained cards score twice."
 #: src/components/supporter/loadout.ts
 msgid "Chains"
 msgstr "Chains"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Chalk"
+msgstr "Chalk"
 
 #. placeholder {0}: N.fever.factor
 #. placeholder {1}: N.fever.factor
@@ -6488,6 +6588,10 @@ msgstr "Change this stat"
 #: src/components/layout/ChangelogModal.tsx
 msgid "Changed"
 msgstr "Changed"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Changed {name}"
+msgstr "Changed {name}"
 
 #: src/routes/__root.tsx
 msgid "changelog"
@@ -6870,6 +6974,7 @@ msgstr "clear"
 #: src/components/player/BestScoresControls.tsx
 #: src/components/replay/ReplayRecentlyViewed.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/tools/StableAccCalculator.tsx
 #: src/routes/maps.tsx
 msgid "Clear"
@@ -6919,6 +7024,10 @@ msgstr "Clear formatting"
 msgid "Clear in {0} rows or fewer."
 msgstr "Clear in {0} rows or fewer."
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Clear it"
+msgstr "Clear it"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Clear map search"
 msgstr "Clear map search"
@@ -6963,6 +7072,10 @@ msgstr "Clear the round"
 #: src/components/replay/ReplaySideBySidePicker.tsx
 msgid "Clear the search"
 msgstr "Clear the search"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Clear the selection, or delete the layer"
+msgstr "Clear the selection, or delete the layer"
 
 #: src/lib/chain-run.ts
 msgid "Clear with your first row."
@@ -7017,6 +7130,10 @@ msgstr "Clears"
 msgid "Clears pay shards to spend in the shop. Skip it this time."
 msgstr "Clears pay shards to spend in the shop. Skip it this time."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "click"
+msgstr "click"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
 msgstr "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
@@ -7024,6 +7141,10 @@ msgstr "Click a column to select. Drag a box for multi-select. Hold Shift for ra
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
 msgstr "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Click a step to go back to it. The last 80 are kept."
+msgstr "Click a step to go back to it. The last 80 are kept."
 
 #: src/routes/discord.tsx
 #~ msgid "Click Add to Discord and pick a server where you have Manage Server."
@@ -7041,6 +7162,10 @@ msgstr "Click again to discard edits"
 msgid "Click an image first. Imagemap turns that image into clickable areas."
 msgstr "Click an image first. Imagemap turns that image into clickable areas."
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Click for corners, drag for curves. Click the first point to close, Enter to finish. Alt-drag a handle to break it."
+msgstr "Click for corners, drag for curves. Click the first point to close, Enter to finish. Alt-drag a handle to break it."
+
 #: src/components/rankings/DanLeaderboardBoard.tsx
 #~ msgid "Click here to read how dans are estimated"
 #~ msgstr "Click here to read how dans are estimated"
@@ -7052,6 +7177,10 @@ msgstr "Click an image first. Imagemap turns that image into clickable areas."
 #: src/routes/hashi.tsx
 msgid "Click the chart icon on a play to see how it went. It reads the replay on your computer and shows your timing on each key and hand, how you let go of long notes, and where in the map you dropped. It also points out things worth fixing, like a bad offset or chords you roll, and compares the play with your last try on that map."
 msgstr "Click the chart icon on a play to see how it went. It reads the replay on your computer and shows your timing on each key and hand, how you let go of long notes, and where in the map you dropped. It also points out things worth fixing, like a bad offset or chords you roll, and compares the play with your last try on that map."
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Click to add text"
+msgstr "Click to add text"
 
 #: src/routes/dan-estimates.tsx
 msgid "Click to group the numbered levels"
@@ -7086,9 +7215,17 @@ msgstr "Click to sort ascending"
 msgid "Click to sort descending"
 msgstr "Click to sort descending"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Click to take a colour. Alt-click with the brush does the same."
+msgstr "Click to take a colour. Alt-click with the brush does the same."
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "click to view"
 msgstr "click to view"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Click to zoom in, Alt-click to zoom out"
+msgstr "Click to zoom in, Alt-click to zoom out"
 
 #: src/routes/dan-estimates.tsx
 msgid "Clicking your dan badge shows the course that set your estimate, when one did."
@@ -7114,6 +7251,11 @@ msgstr "clip"
 #: src/routes/clip.$id.tsx
 msgid "Clip not found"
 msgstr "Clip not found"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Clip to the layer below"
+msgstr "Clip to the layer below"
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunityReportModal.tsx
@@ -7146,6 +7288,7 @@ msgstr "Clip not found"
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/routes/discord.tsx
 #: src/routes/maps.tsx
@@ -7196,11 +7339,16 @@ msgstr "Close settings"
 msgid "Close skill plays"
 msgstr "Close skill plays"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Close the group"
+msgstr "Close the group"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "closed"
 msgstr "closed"
 
 #: src/components/communities/CommunityCard.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/routes/communities_.$id.tsx
 msgid "Closed"
 msgstr "Closed"
@@ -7325,9 +7473,32 @@ msgid "Colors"
 msgstr "Colors"
 
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Colour"
 msgstr "Colour"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Colour burn"
+msgstr "Colour burn"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Colour cycle"
+msgstr "Colour cycle"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Colour dodge"
+msgstr "Colour dodge"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Colour overlay"
+msgstr "Colour overlay"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Colour to clear"
+msgstr "Colour to clear"
 
 #. placeholder {0}: column + 1
 #. placeholder {0}: primarySelected + 1
@@ -7569,6 +7740,10 @@ msgstr "Connected as {0}."
 msgid "Connected as <0>{0}</0>. Link it to use commands without typing your name."
 msgstr "Connected as <0>{0}</0>. Link it to use commands without typing your name."
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Connected only"
+msgstr "Connected only"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "connected to Discord"
 msgstr "connected to Discord"
@@ -7650,6 +7825,10 @@ msgstr "Contract missed: {name}"
 msgid "Contracts"
 msgstr "Contracts"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Contrast"
+msgstr "Contrast"
+
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
 msgid "Control"
 msgstr "Control"
@@ -7681,6 +7860,8 @@ msgstr "copies"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/CollectorDirectory.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Copies"
 msgstr "Copies"
 
@@ -7700,6 +7881,7 @@ msgstr "Copies of it drift across your card behind everything printed on it, on 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/replay/ShareClipButton.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/KofiNameSteps.tsx
 #: src/components/ui/MessageText.tsx
 msgid "Copy"
@@ -7770,6 +7952,14 @@ msgstr "Copy link URL"
 msgid "Copy share code"
 msgstr "Copy share code"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Copy the square frame here"
+msgstr "Copy the square frame here"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "copy the square one"
+msgstr "copy the square one"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Copy the theme spec"
 msgstr "Copy the theme spec"
@@ -7781,6 +7971,15 @@ msgstr "Copy URL"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Copying BBCode..."
 msgstr "Copying BBCode..."
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Corner"
+msgstr "Corner"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Corners"
+msgstr "Corners"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Cost"
@@ -7942,6 +8141,7 @@ msgstr "Could not reach the server. Nothing changed."
 msgid "Could not reach the server. Try again."
 msgstr "Could not reach the server. Try again."
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Could not read that picture."
 msgstr "Could not read that picture."
@@ -8243,6 +8443,10 @@ msgstr "Couldn't play chart preview audio"
 #: src/components/packs/GoatPoll.tsx
 msgid "Couldn't reach the server."
 msgstr "Couldn't reach the server."
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Couldn't reach your account; this browser still has it."
+msgstr "Couldn't reach your account; this browser still has it."
 
 #: src/routes/replay.tsx
 msgid "Couldn't read that beatmap file."
@@ -8589,6 +8793,14 @@ msgstr "Cursor"
 msgid "Cursor trail"
 msgstr "Cursor trail"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Curve"
+msgstr "Curve"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Curve round the avatar"
+msgstr "Curve round the avatar"
+
 #: src/components/packs/collections/CardMarks.tsx
 #~ msgid "custom"
 #~ msgstr "custom"
@@ -8657,6 +8869,7 @@ msgstr "Customize replay skin"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 msgid "Cut"
 msgstr "Cut"
 
@@ -8822,6 +9035,12 @@ msgstr "Danish"
 msgid "dark"
 msgstr "dark"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Dark"
+msgstr "Dark"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Darken"
 msgstr "Darken"
@@ -8833,6 +9052,10 @@ msgstr "Darken"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Darkens the beatmap background so notes stay readable."
 msgstr "Darkens the beatmap background so notes stay readable."
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Dash"
+msgstr "Dash"
 
 #: src/routes/legal.tsx
 msgid "Data Sources"
@@ -8935,6 +9158,8 @@ msgstr "Delay"
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/skins/SkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/workshop.themes.gallery.tsx
@@ -8956,6 +9181,10 @@ msgstr "Delete {rowTitle} from your uploads"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Delete area"
 msgstr "Delete area"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Delete draft"
+msgstr "Delete draft"
 
 #: src/components/me/MyDataPanel.tsx
 #: src/components/me/RemovePlaysSheet.tsx
@@ -8982,6 +9211,10 @@ msgstr "Delete image"
 msgid "Delete imagemap"
 msgstr "Delete imagemap"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Delete key"
+msgstr "Delete key"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Delete my data"
 msgstr "Delete my data"
@@ -9001,6 +9234,10 @@ msgstr "Delete profile"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Delete skin"
 msgstr "Delete skin"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Delete the mask"
+msgstr "Delete the mask"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Delete this imported play? Its replay is removed and the preview is recalculated."
@@ -9025,8 +9262,10 @@ msgstr "Delete this upload? Its share link stops working and the file is gone fo
 msgid "Delete what's new"
 msgstr "Delete what's new"
 
+#. placeholder {0}: removed.name
 #. placeholder {0}: selectedPreset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameHistory.tsx
 msgid "Deleted {0}"
 msgstr "Deleted {0}"
 
@@ -9115,6 +9354,10 @@ msgstr "Dialogue box"
 #: src/lib/streak-game.ts
 msgid "Did {hidden} join osu! earlier or later than {shown}?"
 msgstr "Did {hidden} join osu! earlier or later than {shown}?"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Difference"
+msgstr "Difference"
 
 #. placeholder {0}: delta(entry.otherRatingChange, locale)
 #: src/components/player/maniacard3d/ManiacardHistory.tsx
@@ -9238,6 +9481,10 @@ msgstr "Dismiss"
 msgid "display"
 msgstr "display"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Distance"
+msgstr "Distance"
+
 #: src/lib/supporter-name-styles.ts
 msgid "Dither"
 msgstr "Dither"
@@ -9360,10 +9607,12 @@ msgstr "Dot"
 msgid "Dot matrix"
 msgstr "Dot matrix"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/lib/supporter-name-fonts.ts
 msgid "Dots"
 msgstr "Dots"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/loadout.ts
 msgid "Double line"
 msgstr "Double line"
@@ -9433,6 +9682,10 @@ msgstr "Download again"
 msgid "Download for {name}"
 msgstr "Download for {name}"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Download PNG"
+msgstr "Download PNG"
+
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Download replay"
 msgstr "Download replay"
@@ -9449,6 +9702,10 @@ msgstr "Download the .osk"
 #: src/components/skins/SkinCard.tsx
 msgid "Download the .osk, {0}"
 msgstr "Download the .osk, {0}"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Download the loop (WebM)"
+msgstr "Download the loop (WebM)"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Download the template"
@@ -9504,6 +9761,14 @@ msgstr "Draft saved. Publish it when it's ready."
 msgid "Draft saved. Your profile and the gallery keep what's published."
 msgstr "Draft saved. Your profile and the gallery keep what's published."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Drafts are saved as you work, in this browser and on your account."
+msgstr "Drafts are saved as you work, in this browser and on your account."
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Drafts are saved in this browser as you work."
+msgstr "Drafts are saved in this browser as you work."
+
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Drag a box round your cards or tap them one by one, then drag one to move them all."
 msgstr "Drag a box round your cards or tap them one by one, then drag one to move them all."
@@ -9512,6 +9777,14 @@ msgstr "Drag a box round your cards or tap them one by one, then drag one to mov
 msgid "Drag a page or swipe to flip"
 msgstr "Drag a page or swipe to flip"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Drag across the canvas, from the colour to clear"
+msgstr "Drag across the canvas, from the colour to clear"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Drag across the canvas, from the colour to the second colour"
+msgstr "Drag across the canvas, from the colour to the second colour"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Drag an .osr here, or click to browse"
 msgstr "Drag an .osr here, or click to browse"
@@ -9519,6 +9792,10 @@ msgstr "Drag an .osr here, or click to browse"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around, right-click one of yours to pick it up. Alt-click a pile to see every card in it."
 msgstr "Drag cards out of the tray. Drag across the board to select your cards, right-drag to move around, right-click one of yours to pick it up. Alt-click a pile to see every card in it."
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Drag each corner on its own"
+msgstr "Drag each corner on its own"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Drag over your cards to pick them back up."
@@ -9532,9 +9809,17 @@ msgstr "Drag over your cards to pick them back up. Right-click one of your cards
 msgid "Drag the map's .osz here, or click to browse"
 msgstr "Drag the map's .osz here, or click to browse"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Drag the playhead under the canvas to a moment and add a key. With a key picked, the move tool moves, turns and resizes the layer at that moment."
+msgstr "Drag the playhead under the canvas to a moment and add a key. With a key picked, the move tool moves, turns and resizes the layer at that moment."
+
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "drag to crop"
 msgstr "drag to crop"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Drag to move around. Space does it from any tool."
+msgstr "Drag to move around. Space does it from any tool."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Drag to resize"
@@ -9567,13 +9852,25 @@ msgstr "Draw card"
 msgid "Draw it at least {0}px square (the template is {T}px)."
 msgstr "Draw it at least {0}px square (the template is {T}px)."
 
+#: src/routes/workshop.index.tsx
+msgid "Draw it in the editor or on the template, add a loop if you like."
+msgstr "Draw it in the editor or on the template, add a loop if you like."
+
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Draw it on the template"
 msgstr "Draw it on the template"
 
 #: src/routes/workshop.index.tsx
-msgid "Draw it on the template, add a loop if you like."
-msgstr "Draw it on the template, add a loop if you like."
+#~ msgid "Draw it on the template, add a loop if you like."
+#~ msgstr "Draw it on the template, add a loop if you like."
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Draw round what to select. Shift adds, Alt takes away."
+msgstr "Draw round what to select. Shift adds, Alt takes away."
+
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Draw something to see it on your avatar."
+msgstr "Draw something to see it on your avatar."
 
 #: src/components/packs/RevealStage.tsx
 msgid "Draw the next card"
@@ -9599,10 +9896,15 @@ msgstr "Drawing..."
 msgid "Drawings are protected from other players for their first day."
 msgstr "Drawings are protected from other players for their first day."
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Draws the layer again, evenly spaced round the avatar's centre. Mirror adds a flipped copy of each."
+msgstr "Draws the layer again, evenly spaced round the avatar's centre. Mirror adds a flipped copy of each."
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Drop an .osk here, or click to browse"
 msgstr "Drop an .osk here, or click to browse"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Drop or paste pictures here"
 msgstr "Drop or paste pictures here"
@@ -9610,6 +9912,19 @@ msgstr "Drop or paste pictures here"
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Drop the new .osk here, or click to browse"
 msgstr "Drop the new .osk here, or click to browse"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Drop the selection"
+msgstr "Drop the selection"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Drop the selection, then the layer"
+msgstr "Drop the selection, then the layer"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Drop to add it as a layer"
+msgstr "Drop to add it as a layer"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Drop to add it as a picture layer"
@@ -9652,9 +9967,14 @@ msgstr "Duet"
 msgid "Dumpstream"
 msgstr "Dumpstream"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Duplicate"
 msgstr "Duplicate"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Duplicate, or the selection to a new layer"
+msgstr "Duplicate, or the selection to a new layer"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Duplicates"
@@ -9826,6 +10146,10 @@ msgstr "Earn <0/> <1/>"
 msgid "Earn <0/> <1/> on {mapSlot}"
 msgstr "Earn <0/> <1/> on {mapSlot}"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Ease in and out"
+msgstr "Ease in and out"
+
 #: src/routes/recommendations.tsx
 msgid "easy"
 msgstr "easy"
@@ -9848,6 +10172,8 @@ msgstr "Echo"
 
 #: src/components/maps/UserCollectionDetail.tsx
 #: src/components/packs/collections/ShowcaseTab.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/communities_.$id.tsx
 #: src/routes/discord.tsx
 #: src/routes/workshop.themes.gallery.tsx
@@ -9880,6 +10206,10 @@ msgstr "Edit goal"
 msgid "Edit image"
 msgstr "Edit image"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Edit its points with the pen. Drag a point to move it, drag a handle to bend the curve."
+msgstr "Edit its points with the pen. Drag a point to move it, drag a handle to bend the curve."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Edit link…"
 msgstr "Edit link…"
@@ -9903,6 +10233,10 @@ msgstr "Edit skin previews"
 #: src/components/communities/CommunityCard.tsx
 msgid "Edit your listing"
 msgstr "Edit your listing"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Edited"
+msgstr "Edited"
 
 #: src/components/player/LivePresence.tsx
 msgid "Editing"
@@ -9930,6 +10264,10 @@ msgstr "Edits stay in this browser. Copy the result and paste it into the me! ed
 msgid "Effects"
 msgstr "Effects"
 
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Effects on {name}"
+msgstr "Effects on {name}"
+
 #: src/components/BackendOfflineScreen.tsx
 msgid "Either restarting or under maintenance. Try again later."
 msgstr "Either restarting or under maintenance. Try again later."
@@ -9938,6 +10276,10 @@ msgstr "Either restarting or under maintenance. Try again later."
 #: src/lib/packs.ts
 msgid "Elite"
 msgstr "Elite"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Ellipse"
+msgstr "Ellipse"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Email"
@@ -10024,6 +10366,8 @@ msgid "Equal chance per player"
 msgstr "Equal chance per player"
 
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Eraser"
 msgstr "Eraser"
 
@@ -10436,6 +10780,10 @@ msgstr "Excludes all dan-related stuff from the website"
 msgid "Excluding (click to clear)"
 msgstr "Excluding (click to clear)"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Exclusion"
+msgstr "Exclusion"
+
 #: src/components/packs/collections/CollectorDirectory.tsx
 msgid "Exclusives"
 msgstr "Exclusives"
@@ -10537,6 +10885,15 @@ msgstr "Extra slot"
 #: src/routes/dan-estimates.tsx
 #~ msgid "Extra: practice charts set one skill directly"
 #~ msgstr "Extra: practice charts set one skill directly"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Eyedropper"
+msgstr "Eyedropper"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Fade"
+msgstr "Fade"
 
 #: src/lib/pack-run.ts
 msgid "Fade In"
@@ -10851,6 +11208,8 @@ msgstr "Files in folders skin.ini doesn't use"
 msgid "Filipino"
 msgstr "Filipino"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Fill"
 msgstr "Fill"
@@ -10866,6 +11225,18 @@ msgstr "Fill the {label} run below"
 #: src/components/replay/ReplayControls.tsx
 msgid "Fill the playfield with a solid black background"
 msgstr "Fill the playfield with a solid black background"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Fill with the colour"
+msgstr "Fill with the colour"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Fill with the second colour"
+msgstr "Fill with the second colour"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Filled"
+msgstr "Filled"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Fills the stage and holds still, in place of the background."
@@ -11019,6 +11390,10 @@ msgstr "Finish"
 msgid "Finish at {0}x the target or more."
 msgstr "Finish at {0}x the target or more."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Finish the path"
+msgstr "Finish the path"
+
 #: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 msgid "Finish the round with rows of your own."
 msgstr "Finish the round with rows of your own."
@@ -11170,8 +11545,18 @@ msgid "Fish tank"
 msgstr "Fish tank"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Fit"
 msgstr "Fit"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Fit round the avatar"
+msgstr "Fit round the avatar"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Fit to screen"
+msgstr "Fit to screen"
 
 #. placeholder {0}: CHAIN_ROUND_CHART.skill
 #: src/components/packs/run/chain/ChainScoring.tsx
@@ -11238,6 +11623,10 @@ msgstr "Flashlight"
 msgid "flat"
 msgstr "flat"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Flat"
+msgstr "Flat"
+
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "Flat backdrop tinted with the skin's accent"
 msgstr "Flat backdrop tinted with the skin's accent"
@@ -11250,6 +11639,14 @@ msgstr "Flight case"
 msgid "Flip"
 msgstr "Flip"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Flip ⇅"
+msgstr "Flip ⇅"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Flip ⇆"
+msgstr "Flip ⇆"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/routes/maps.tsx
 msgid "Flip direction"
@@ -11259,6 +11656,7 @@ msgstr "Flip direction"
 msgid "Flip horizontal"
 msgstr "Flip horizontal"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Flip horizontally"
 msgstr "Flip horizontally"
@@ -11267,6 +11665,7 @@ msgstr "Flip horizontally"
 msgid "Flip vertical"
 msgstr "Flip vertical"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Flip vertically"
 msgstr "Flip vertically"
@@ -11274,6 +11673,10 @@ msgstr "Flip vertically"
 #: src/lib/replay-overlays.ts
 msgid "Flipped"
 msgstr "Flipped"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Flow"
+msgstr "Flow"
 
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "Flowing ribbons of teal and violet."
@@ -11307,6 +11710,7 @@ msgstr "Follow pointer"
 msgid "Follow SV changes"
 msgstr "Follow SV changes"
 
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/loadout.ts
 msgid "Font"
 msgstr "Font"
@@ -11429,6 +11833,11 @@ msgstr "Four traits"
 msgid "fps"
 msgstr "fps"
 
+#: src/routes/workshop.frames.editor.tsx
+msgid "Frame editor"
+msgstr "Frame editor"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Frame name"
 msgstr "Frame name"
@@ -11437,6 +11846,7 @@ msgstr "Frame name"
 msgid "frames"
 msgstr "frames"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/routes/workshop.index.tsx
 msgid "Frames"
 msgstr "Frames"
@@ -11656,6 +12066,10 @@ msgstr "Gale"
 msgid "Gallery"
 msgstr "Gallery"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Gap"
+msgstr "Gap"
+
 #: src/lib/skill-axes.ts
 msgid "General"
 msgstr "General"
@@ -11826,6 +12240,7 @@ msgid "Global tracker is ready"
 msgstr "Global tracker is ready"
 
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Glow"
 msgstr "Glow"
@@ -11834,9 +12249,17 @@ msgstr "Glow"
 msgid "Glow and retro"
 msgstr "Glow and retro"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Glow colour"
+msgstr "Glow colour"
+
 #: src/components/supporter/themes/LayerHandles.tsx
 msgid "Glow position"
 msgstr "Glow position"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Glow ring"
+msgstr "Glow ring"
 
 #: src/components/supporter/themes/LayerHandles.tsx
 msgid "Glow size"
@@ -11998,6 +12421,7 @@ msgstr "Grade"
 msgid "Graded slab"
 msgstr "Graded slab"
 
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/lib/signature-style.ts
 msgid "Gradient"
 msgstr "Gradient"
@@ -12072,6 +12496,11 @@ msgstr "Grind"
 msgid "Groovy"
 msgstr "Groovy"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Group"
+msgstr "Group"
+
 #: src/lib/chain-run.ts
 msgid "Grows with every clean row."
 msgstr "Grows with every clean row."
@@ -12124,6 +12553,11 @@ msgstr "HAND"
 #~ msgid "Hand busy"
 #~ msgstr "Hand busy"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Hand tool"
+msgstr "Hand tool"
+
 #: src/lib/pattern-labels.ts
 msgid "Handjack"
 msgstr "Handjack"
@@ -12146,6 +12580,10 @@ msgstr "hard"
 msgid "Hard"
 msgstr "Hard"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Hard light"
+msgstr "Hard light"
+
 #: src/lib/pack-run.ts
 msgid "Hard Rock"
 msgstr "Hard Rock"
@@ -12153,6 +12591,10 @@ msgstr "Hard Rock"
 #: src/components/packs/collections/RecordBoards.tsx
 #~ msgid "hardest cards to find"
 #~ msgstr "hardest cards to find"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Hardness"
+msgstr "Hardness"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Hardware encoding isn't available here. Smaller file uses your CPU."
@@ -12263,7 +12705,7 @@ msgstr "Heavy pixel"
 msgid "Hebrew"
 msgstr "Hebrew"
 
-#: src/components/replay/ReplayCustomMediaControls.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #~ msgid "Height"
 #~ msgstr "Height"
 
@@ -12286,6 +12728,10 @@ msgstr "Herd"
 #: src/components/supporter/loadout.ts
 msgid "Hex HUD"
 msgstr "Hex HUD"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Hid {name}"
+msgstr "Hid {name}"
 
 #: src/components/skins/SkinCard.tsx
 #: src/components/skins/SkinUploadModal.tsx
@@ -12317,6 +12763,7 @@ msgstr "hide"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Hide"
 msgstr "Hide"
@@ -12393,6 +12840,10 @@ msgstr "Hide plays on ranked, approved and qualified charts"
 msgid "Hide the {0} clears"
 msgstr "Hide the {0} clears"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Hide the guides"
+msgstr "Hide the guides"
+
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Hide the keymodes with no note images"
 msgstr "Hide the keymodes with no note images"
@@ -12416,6 +12867,14 @@ msgstr "Hide the profile on top"
 #: src/routes/dan-estimates.tsx
 #~ msgid "hide the ScoreV2 note"
 #~ msgstr "hide the ScoreV2 note"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Hide your avatar"
+msgstr "Hide your avatar"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Hides parts of the layer without erasing them. With a selection, the mask shows only what's selected."
+msgstr "Hides parts of the layer without erasing them. With a selection, the mask shows only what's selected."
 
 #: src/components/player/BestScoresControls.tsx
 msgid "Hiding {grade}"
@@ -12483,6 +12942,7 @@ msgid "Hint"
 msgstr "Hint"
 
 #: src/components/player/SkillHistoryModal.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 msgid "History"
 msgstr "History"
 
@@ -12646,6 +13106,10 @@ msgstr "Hold to delete my profile"
 msgid "Hold to delete this collection"
 msgstr "Hold to delete this collection"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Hold to move the view from any tool"
+msgstr "Hold to move the view from any tool"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "hold to recycle"
 msgstr "hold to recycle"
@@ -12665,6 +13129,10 @@ msgstr "Hold to recycle every duplicate, worth {recyclable} shards"
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Hold to stop tracking"
 msgstr "Hold to stop tracking"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Hold while moving to stop snapping"
+msgstr "Hold while moving to stop snapping"
 
 #. placeholder {0}: formatNumber(completionCounts.owned)
 #. placeholder {1}: formatNumber(completionCounts.total)
@@ -12875,6 +13343,8 @@ msgstr "https://... wraps the image in a link"
 msgid "HUD"
 msgstr "HUD"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Hue"
 msgstr "Hue"
@@ -12897,9 +13367,14 @@ msgstr "Hybrid"
 msgid "Hybrid chart: {0}, {1}"
 msgstr "Hybrid chart: {0}, {1}"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "I understand"
 msgstr "I understand"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "I understand I'm responsible for what I put in my frames, and that one breaking the <0>Terms</0> can be taken down."
+msgstr "I understand I'm responsible for what I put in my frames, and that one breaking the <0>Terms</0> can be taken down."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "I understand I'm responsible for what I put in my themes, and that one breaking the <0>Terms</0> can be taken down."
@@ -13192,6 +13667,10 @@ msgstr "In multiplayer"
 msgid "In osu!"
 msgstr "In osu!"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "In perspective. Drag its corners with the move tool's Perspective mode."
+msgstr "In perspective. Drag its corners with the move tool's Perspective mode."
+
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "in queue"
 msgstr "in queue"
@@ -13240,6 +13719,14 @@ msgstr "In your collection."
 #: src/components/supporter/SupportPlans.tsx
 msgid "In your rank's tooltip, at $10 a month or more."
 msgstr "In your rank's tooltip, at $10 a month or more."
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Include the loop"
+msgstr "Include the loop"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Include the loop. It records for 3 seconds before uploading."
+msgstr "Include the loop. It records for 3 seconds before uploading."
 
 #: src/routes/skins.tsx
 msgid "includes"
@@ -13307,6 +13794,14 @@ msgstr "Ink plum"
 #: src/routes/bbcode.tsx
 msgid "Inline code"
 msgstr "Inline code"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Inner"
+msgstr "Inner"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Inner line"
+msgstr "Inner line"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Input overlay options"
@@ -13388,6 +13883,11 @@ msgstr "Inverse"
 msgid "Invert"
 msgstr "Invert"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Invert the selection"
+msgstr "Invert the selection"
+
 #: src/routes/communities_.$id.tsx
 msgid "invite"
 msgstr "invite"
@@ -13422,6 +13922,7 @@ msgstr "It crashed on several visitors' devices, so it shows its still until it'
 msgid "It flashes {0} times a second around {1}. Fast flashing can set off seizures: keep it to {FLASH_LIMIT} a second or fewer, or make the change gentler."
 msgstr "It flashes {0} times a second around {1}. Fast flashing can set off seizures: keep it to {FLASH_LIMIT} a second or fewer, or make the change gentler."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "It goes into everyone's picker right away, with your name on it."
 msgstr "It goes into everyone's picker right away, with your name on it."
@@ -13531,6 +14032,7 @@ msgstr "It's on your profile now."
 msgid "It's too late to cancel."
 msgstr "It's too late to cancel."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "It's up: in your picker and everyone else's."
 msgstr "It's up: in your picker and everyone else's."
@@ -13540,6 +14042,7 @@ msgid "Italian"
 msgstr "Italian"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/routes/bbcode.tsx
 msgid "Italic"
 msgstr "Italic"
@@ -13758,6 +14261,14 @@ msgstr "Katana"
 msgid "Keep"
 msgstr "Keep"
 
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Keep at least 60% of the avatar see-through."
+msgstr "Keep at least 60% of the avatar see-through."
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Keep editing"
+msgstr "Keep editing"
+
 #: src/components/communities/CommunityEditModal.tsx
 msgid "keep it"
 msgstr "keep it"
@@ -13781,6 +14292,10 @@ msgstr "Keep my profile"
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Keep one"
 msgstr "Keep one"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Keep only the overlap"
+msgstr "Keep only the overlap"
 
 #: src/components/packs/run/chain/ChainHud.tsx
 msgid "Keep playing"
@@ -13814,6 +14329,10 @@ msgstr "Keeps {0}"
 #: src/components/replay/ReplayControls.tsx
 msgid "Keeps the layout you're watching."
 msgstr "Keeps the layout you're watching."
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Keeps the old frame as it is."
+msgstr "Keeps the old frame as it is."
 
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -13867,9 +14386,23 @@ msgstr "Key split"
 msgid "Key Split"
 msgstr "Key Split"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Keyboard shortcuts"
+msgstr "Keyboard shortcuts"
+
 #: src/lib/supporter-pack-style.ts
 msgid "Keycaps"
 msgstr "Keycaps"
+
+#. placeholder {0}: (key.t * LOOP_SECONDS).toFixed(2)
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Keyframe at {0}s"
+msgstr "Keyframe at {0}s"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Keyframes"
+msgstr "Keyframes"
 
 #: src/components/me/GoalsPanel.tsx
 #: src/components/packs/run/chain/ChainDetails.tsx
@@ -14036,6 +14569,11 @@ msgstr "Large"
 msgid "large gap"
 msgstr "large gap"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Lasso"
+msgstr "Lasso"
+
 #. placeholder {0}: compact(judgement.plays)
 #: src/components/me/MyStatsInsights.tsx
 #~ msgid "last {0} plays"
@@ -14155,11 +14693,23 @@ msgstr "lava.top sends the receipt to this email."
 msgid "lava.top's Supporter membership renews by itself. You can cancel any time on lava.top."
 msgstr "lava.top's Supporter membership renews by itself. You can cancel any time on lava.top."
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Layer"
 msgstr "Layer"
 
+#. placeholder {0}: s.doc.boards[b].length + 1
+#. placeholder {0}: walk(s.doc.boards[b]).length + 1
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Layer {0}"
+msgstr "Layer {0}"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Layer 1"
+msgstr "Layer 1"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Layer menu"
 msgstr "Layer menu"
@@ -14168,6 +14718,9 @@ msgstr "Layer menu"
 msgid "layers"
 msgstr "layers"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/loadout.ts
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
@@ -14339,6 +14892,7 @@ msgstr "Legendary charms and endless runs"
 #: src/components/maps/MapSearchSection.tsx
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/SupportCheckout.tsx
 #: src/routes/maps.tsx
 msgid "Length"
@@ -14390,6 +14944,7 @@ msgid "light"
 msgstr "light"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Light"
 msgstr "Light"
@@ -14397,6 +14952,11 @@ msgstr "Light"
 #: src/components/supporter/loadout.ts
 msgid "Light wings"
 msgstr "Light wings"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Lighten"
+msgstr "Lighten"
 
 #: src/components/supporter/loadout.ts
 #: src/lib/supporter-pack-style.ts
@@ -14437,6 +14997,13 @@ msgstr "Limitations"
 msgid "line"
 msgstr "line"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Line"
+msgstr "Line"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Linear"
 msgstr "Linear"
@@ -14538,6 +15105,10 @@ msgstr "listed"
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there."
 msgstr "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there."
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Lists show avatars round. Draw the frame again round the circle, or"
+msgstr "Lists show avatars round. Draw the frame again round the circle, or"
 
 #: src/components/communities/field-options.tsx
 msgid "Lithuanian"
@@ -14988,6 +15559,7 @@ msgstr "loading..."
 #: src/components/replay/ReplaySideBySideView.tsx
 #: src/components/settings/LazySettingsPanel.tsx
 #: src/components/skins/SkinAssetExplorer.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/player/$username.tsx
 #: src/routes/replay_.community.tsx
@@ -15019,6 +15591,10 @@ msgstr "Local file"
 #: src/components/maps/MapDetailModal.tsx
 msgid "localized vibro detected"
 msgstr "localized vibro detected"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Lock"
+msgstr "Lock"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Lock for rolls"
@@ -15215,6 +15791,10 @@ msgstr "Lowest PP first"
 msgid "Lucky Strike"
 msgstr "Lucky Strike"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Luminosity"
+msgstr "Luminosity"
+
 #: src/routes/__root.tsx
 msgid "made by"
 msgstr "made by"
@@ -15242,6 +15822,11 @@ msgstr "Made for resolution"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Made for, e.g. 1920x1080"
 msgstr "Made for, e.g. 1920x1080"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Magic wand"
+msgstr "Magic wand"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Magnetic case"
@@ -15286,6 +15871,10 @@ msgstr "Make a new link?"
 msgid "Make a theme"
 msgstr "Make a theme"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Make an avatar frame"
+msgstr "Make an avatar frame"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Make imagemap"
 msgstr "Make imagemap"
@@ -15297,6 +15886,10 @@ msgstr "Make it {OSU_PROFILE_COLUMN_WIDTH}px wide - the full width of the osu! p
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Make it permanent if you can: a temporary invite hides your server the day it runs out, until you paste a new one."
 msgstr "Make it permanent if you can: a temporary invite hides your server the day it runs out, until you paste a new one."
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Make one in the frame editor"
+msgstr "Make one in the frame editor"
 
 #: src/components/supporter/LoadoutSlots.tsx
 #: src/routes/workshop.index.tsx
@@ -15679,6 +16272,18 @@ msgstr "Mashed: {0}% accuracy at demand {1}"
 #~ msgid "Mashed: <0>{0}%</0>"
 #~ msgstr "Mashed: <0>{0}%</0>"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Mask"
+msgstr "Mask"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Mask on"
+msgstr "Mask on"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Mask on {name}"
+msgstr "Mask on {name}"
+
 #: src/components/packs/run/RunInfo.tsx
 msgid "Master sets"
 msgstr "Master sets"
@@ -15805,6 +16410,11 @@ msgstr "members"
 msgid "Members"
 msgstr "Members"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Merge down"
+msgstr "Merge down"
+
 #: src/lib/supporter-name-styles.ts
 msgid "Mesh gradient"
 msgstr "Mesh gradient"
@@ -15899,6 +16509,8 @@ msgstr "Minimum required for dan credit is {floorText} {currency}. This play got
 msgid "Minimum required for dan credit is {floorText}. This play got {accText}."
 msgstr "Minimum required for dan credit is {floorText}. This play got {accText}."
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/lib/pack-run.ts
 msgid "Mirror"
 msgstr "Mirror"
@@ -15906,6 +16518,18 @@ msgstr "Mirror"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Mirror (out and back)"
 msgstr "Mirror (out and back)"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Mirror four ways"
+msgstr "Mirror four ways"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Mirror left and right"
+msgstr "Mirror left and right"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Mirror top and bottom"
+msgstr "Mirror top and bottom"
 
 #: src/components/packs/run/HandScore.tsx
 #: src/components/packs/run/RunScoring.tsx
@@ -16034,6 +16658,7 @@ msgstr "Monthly"
 msgid "more"
 msgstr "more"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "More"
 msgstr "More"
@@ -16196,11 +16821,18 @@ msgstr "Most Used Mod"
 msgid "Most worn"
 msgstr "Most worn"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Motion"
 msgstr "Motion"
 
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Motion on {name}"
+msgstr "Motion on {name}"
+
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Move"
 msgstr "Move"
 
@@ -16216,9 +16848,22 @@ msgstr "Move {name} right"
 msgid "Move down"
 msgstr "Move down"
 
+#. placeholder {0}: group.name
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Move into {0}"
+msgstr "Move into {0}"
+
 #: src/components/packs/run/RunCharmRail.tsx
 msgid "Move left"
 msgstr "Move left"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Move on one axis, turn in 15° steps, keep shapes even"
+msgstr "Move on one axis, turn in 15° steps, keep shapes even"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Move out of the group"
+msgstr "Move out of the group"
 
 #: src/components/packs/run/RunCharmRail.tsx
 msgid "Move right"
@@ -16227,6 +16872,27 @@ msgstr "Move right"
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Move up"
 msgstr "Move up"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Move, resize and turn"
+msgstr "Move, resize and turn"
+
+#. placeholder {0}: changed.name
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Moved {0}"
+msgstr "Moved {0}"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Moved {name}"
+msgstr "Moved {name}"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Moves in the loop"
+msgstr "Moves in the loop"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Moving and drawing"
+msgstr "Moving and drawing"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "MP4 isn't available here, so the file is WebM."
@@ -16280,6 +16946,10 @@ msgstr "MSD {minMsd} and up"
 #: src/lib/pack-run.ts
 msgid "Multiplayer"
 msgstr "Multiplayer"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Multiply"
+msgstr "Multiply"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Music"
@@ -16355,6 +17025,8 @@ msgid "name"
 msgstr "name"
 
 #: src/components/skins/SkinUploadModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Name"
 msgstr "Name"
@@ -16374,6 +17046,10 @@ msgstr "Name a new set"
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Name and description"
 msgstr "Name and description"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Name arc"
+msgstr "Name arc"
 
 #. placeholder {0}: index + 1
 #: src/components/skins/SkinScreenshotFields.tsx
@@ -16541,6 +17217,14 @@ msgstr "New farm maps at my level"
 #~ msgid "New folder"
 #~ msgstr "New folder"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "New frame"
+msgstr "New frame"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "New frame..."
+msgstr "New frame..."
+
 #: src/routes/workshop.index.tsx
 msgid "New frames"
 msgstr "New frames"
@@ -16560,6 +17244,11 @@ msgstr "New invite link"
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "New link"
 msgstr "New link"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "New paint layer"
+msgstr "New paint layer"
 
 #: src/components/supporter/SupportShowcase.tsx
 #~ msgid "new pb"
@@ -17043,6 +17732,10 @@ msgstr "No key data"
 msgid "No layers yet. Add one with +, or drop a picture on the stage."
 msgstr "No layers yet. Add one with +, or drop a picture on the stage."
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "No layers yet. Paint with the brush, add a shape or text, or drop a picture on the canvas."
+msgstr "No layers yet. Paint with the brush, add a shape or text, or drop a picture on the canvas."
+
 #: src/routes/discord.tsx
 msgid "No level yet. It comes from your top plays."
 msgstr "No level yet. It comes from your top plays."
@@ -17451,6 +18144,10 @@ msgstr "No stand"
 msgid "No streak this time."
 msgstr "No streak this time."
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "No symmetry"
+msgstr "No symmetry"
+
 #: src/routes/teams.tsx
 msgid "No teams match \"{query}\"."
 msgstr "No teams match \"{query}\"."
@@ -17706,6 +18403,7 @@ msgid "None yet. Yours could be the first."
 msgstr "None yet. Yours could be the first."
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/lib/goal-format.ts
 #: src/lib/pack-run.ts
@@ -18117,6 +18815,14 @@ msgstr "Now build a row yourself: line up cards that share a country, a dan or a
 msgid "Now x{0}"
 msgstr "Now x{0}"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Nudge 10px"
+msgstr "Nudge 10px"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Nudge 1px"
+msgstr "Nudge 1px"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
 msgid "Numbered list"
@@ -18189,6 +18895,7 @@ msgid "off"
 msgstr "off"
 
 #: src/components/replay/ReplayControls.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Off"
 msgstr "Off"
 
@@ -18203,6 +18910,10 @@ msgstr "Off means you are only part of the count. Needs you signed in."
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Off the list, no download. Your replays still play in it."
 msgstr "Off the list, no download. Your replays still play in it."
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Offset"
+msgstr "Offset"
 
 #: src/components/packs/GiftInbox.tsx
 #: src/components/packs/run/HandScore.tsx
@@ -18266,9 +18977,9 @@ msgstr "Oldest Top Play"
 #~ msgid "on"
 #~ msgstr "on"
 
-#: src/components/replay/ReplayControls.tsx
-#~ msgid "On"
-#~ msgstr "On"
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "On"
+msgstr "On"
 
 #. placeholder {0}: formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)
 #: src/routes/pull/$ownerId/$cardId.tsx
@@ -18332,6 +19043,10 @@ msgstr "on stable"
 #: src/components/supporter/SupportPlans.tsx
 msgid "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
 msgstr "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "On the mask the brush hides the layer and the eraser brings it back. The gradient fades it out from where you start dragging."
+msgstr "On the mask the brush hides the layer and the eraser brings it back. The gradient fades it out from where you start dragging."
 
 #: src/components/player/LivePresence.tsx
 msgid "On the results screen"
@@ -18593,6 +19308,9 @@ msgstr "Only your best rate play on the same chart counts toward Dan. This play 
 
 #: src/components/me/dynamic-renders/controls.tsx
 #: src/components/replay/ReplayCustomMediaControls.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Opacity"
 msgstr "Opacity"
@@ -18645,6 +19363,10 @@ msgstr "Open {0}'s team page in a new tab"
 #: src/routes/player/$username.tsx
 msgid "Open {profileCountryName} home"
 msgstr "Open {profileCountryName} home"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Open a picture as a layer..."
+msgstr "Open a picture as a layer..."
 
 #: src/components/packs/PackSummary.tsx
 msgid "Open another"
@@ -18740,6 +19462,14 @@ msgstr "Open the album"
 msgid "Open the day modal with simulated busy-day data"
 msgstr "Open the day modal with simulated busy-day data"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Open the editor"
+msgstr "Open the editor"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Open the group"
+msgstr "Open the group"
+
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Open the in-browser replay viewer for a score."
 #~ msgstr "Open the in-browser replay viewer for a score."
@@ -18781,6 +19511,10 @@ msgstr "Open your own packs"
 #: src/components/packs/PackMilestone.tsx
 #~ msgid "opened"
 #~ msgstr "opened"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Opened"
+msgstr "Opened"
 
 #. placeholder {0}: dateLabel(claim.dealtAt)
 #: src/components/packs/PackMilestone.tsx
@@ -18869,6 +19603,10 @@ msgstr "or pick someone else"
 msgid "or someone else"
 msgstr "or someone else"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Or upload one you drew elsewhere"
+msgstr "Or upload one you drew elsewhere"
+
 #: src/components/supporter/SupportShowcase.tsx
 msgid "Or upload one yourself (a 3D model, an image or a GIF) from your supporter page."
 msgstr "Or upload one yourself (a 3D model, an image or a GIF) from your supporter page."
@@ -18880,6 +19618,11 @@ msgstr "Or write this as the message:"
 #: src/components/layout/ThemePicker.tsx
 msgid "orange"
 msgstr "orange"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Orbit"
+msgstr "Orbit"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Orbitron"
@@ -19078,7 +19821,15 @@ msgstr "Out of rows"
 msgid "Out of time."
 msgstr "Out of time."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Outer line"
+msgstr "Outer line"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/LoadoutSlots.tsx
 #: src/lib/supporter-name-fonts.ts
 msgid "Outline"
@@ -19087,6 +19838,14 @@ msgstr "Outline"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Outline color"
 msgstr "Outline color"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Outline colour"
+msgstr "Outline colour"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Outline only"
+msgstr "Outline only"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Outline width"
@@ -19164,6 +19923,10 @@ msgstr "Overjoy"
 #: src/lib/chain-run.ts
 msgid "Overkill"
 msgstr "Overkill"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Overlay"
+msgstr "Overlay"
 
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 msgid "Overlay scroll speed"
@@ -19286,9 +20049,56 @@ msgstr "Paid on lava.top already? Enter the email you paid with."
 msgid "Paid with Google already?"
 msgstr "Paid with Google already?"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Paint"
+msgstr "Paint"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Paint bucket"
+msgstr "Paint bucket"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Paint bucket (again for the gradient)"
+msgstr "Paint bucket (again for the gradient)"
+
 #: src/components/supporter/loadout.ts
 msgid "Paint canvas"
 msgstr "Paint canvas"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Paint on it with the brush, fill it with the bucket, or erase."
+msgstr "Paint on it with the brush, fill it with the bucket, or erase."
+
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Paint the layer"
+msgstr "Paint the layer"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Paint the mask"
+msgstr "Paint the mask"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Paint the mask with the brush, eraser or gradient."
+msgstr "Paint the mask with the brush, eraser or gradient."
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Paint the mask: the brush hides, the eraser brings back"
+msgstr "Paint the mask: the brush hides, the eraser brings back"
+
+#. placeholder {0}: layer.name
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Painted on {0}"
+msgstr "Painted on {0}"
+
+#. placeholder {0}: layer.name
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Painted the mask of {0}"
+msgstr "Painted the mask of {0}"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Paints over the layer, keeping its shape. Gradients run across the whole canvas, so a sweep turns round the avatar."
+msgstr "Paints over the layer, keeping its shape. Gradients run across the whole canvas, so a sweep turns round the avatar."
 
 #. placeholder {0}: pct(E.bracket[band])
 #: src/lib/chain-run.ts
@@ -19422,6 +20232,10 @@ msgstr "Paste it once. It redraws when your stats change."
 msgid "Paste share code"
 msgstr "Paste share code"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Paste, as a new layer"
+msgstr "Paste, as a new layer"
+
 #: src/routes/report.tsx
 msgid "Paste, drop or pick a screenshot or any file under 5MB."
 msgstr "Paste, drop or pick a screenshot or any file under 5MB."
@@ -19429,6 +20243,15 @@ msgstr "Paste, drop or pick a screenshot or any file under 5MB."
 #: src/routes/report.tsx
 #~ msgid "Paste, drop or pick a screenshot."
 #~ msgstr "Paste, drop or pick a screenshot."
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Pasted"
+msgstr "Pasted"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Path"
+msgstr "Path"
 
 #: src/lib/pack-run.ts
 msgid "Patriot"
@@ -19544,6 +20367,15 @@ msgstr "peers farming"
 msgid "peers hold"
 msgstr "peers hold"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Pen"
+msgstr "Pen"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Pen pressure"
+msgstr "Pen pressure"
+
 #: src/components/supporter/loadout.ts
 msgid "Pencil test"
 msgstr "Pencil test"
@@ -19631,6 +20463,10 @@ msgstr "Performance rank"
 msgid "Persian"
 msgstr "Persian"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Perspective"
+msgstr "Perspective"
+
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Phone"
 msgstr "Phone"
@@ -19653,9 +20489,17 @@ msgstr "Pick a different file"
 msgid "pick a difficulty below"
 msgstr "pick a difficulty below"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Pick a layer inside a group on the canvas"
+msgstr "Pick a layer inside a group on the canvas"
+
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Pick a layer to change it, or click a picture on the stage."
 msgstr "Pick a layer to change it, or click a picture on the stage."
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Pick a layer to change it. Its position, effects and motion show here."
+msgstr "Pick a layer to change it. Its position, effects and motion show here."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Pick a length and a currency, then pay on lava.top. Your supporter time starts once lava.top confirms the payment."
@@ -19745,6 +20589,10 @@ msgstr "Pick several cards"
 msgid "pick the active one again to flip direction"
 msgstr "pick the active one again to flip direction"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Pick the layer under the pointer"
+msgstr "Pick the layer under the pointer"
+
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Pick the server you want to post."
 msgstr "Pick the server you want to post."
@@ -19782,9 +20630,15 @@ msgstr "Picking a backdrop or a pattern re-renders that playfield from the uploa
 msgid "Picking a skin loads it into the editor and saves it as a preset under its name."
 msgstr "Picking a skin loads it into the editor and saves it as a preset under its name."
 
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Picture"
 msgstr "Picture"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Picture..."
+msgstr "Picture..."
 
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
@@ -19928,6 +20782,10 @@ msgstr "Play round {0}"
 #: src/components/packs/run/chain/ChainTable.tsx
 msgid "Play row"
 msgstr "Play row"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Play the loop"
+msgstr "Play the loop"
 
 #: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 msgid "Play the row. Each card scores its number times the combo."
@@ -20248,9 +21106,17 @@ msgstr "Please wait a minute before opening another pack. This pack wasn't charg
 msgid "points"
 msgstr "points"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Points"
+msgstr "Points"
+
 #: src/components/communities/field-options.tsx
 msgid "Polish"
 msgstr "Polish"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Polygon"
+msgstr "Polygon"
 
 #: src/routes/recommendations.tsx
 msgid "popular"
@@ -20279,6 +21145,10 @@ msgstr "popularity"
 #: src/components/communities/field-options.tsx
 msgid "Portuguese"
 msgstr "Portuguese"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Position"
+msgstr "Position"
 
 #: src/routes/supporter.tsx
 msgid "possible combinations"
@@ -20511,6 +21381,7 @@ msgstr "preview"
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/skins/SkinPreviewPickers.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/skins_.$id.tsx
 msgid "Preview"
@@ -20870,6 +21741,7 @@ msgstr "Pulled by {pullerLink} on {pulledText}"
 msgid "Pulled on {dateText}"
 msgstr "Pulled on {dateText}"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Pulse"
 msgstr "Pulse"
@@ -20899,6 +21771,11 @@ msgstr "Put back in the pool"
 #: src/components/packs/CollectionPanel.tsx
 msgid "Put back in the pool…"
 msgstr "Put back in the pool…"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Put in a new group"
+msgstr "Put in a new group"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Put it on a layer under your drawing and hide it before you export."
@@ -20992,6 +21869,11 @@ msgstr "Radar"
 #: src/lib/signature-shared.ts
 msgid "Radar and axes"
 msgstr "Radar and axes"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Radial"
+msgstr "Radial"
 
 #: src/components/supporter/loadout.ts
 msgid "Rail pass"
@@ -21626,6 +22508,15 @@ msgstr "recommended maps"
 msgid "Recommended maps"
 msgstr "Recommended maps"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Recording the loop..."
+msgstr "Recording the loop..."
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Rectangle"
+msgstr "Rectangle"
+
 #. placeholder {0}: card.copies - 1
 #: src/components/packs/CollectionPanel.tsx
 msgid "Recycle {0, plural, one {# duplicate copy} other {# duplicate copies}}"
@@ -21712,6 +22603,8 @@ msgid "Redeem"
 msgstr "Redeem"
 
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Redo"
 msgstr "Redo"
@@ -22014,6 +22907,10 @@ msgstr "Remove screenshot {0}"
 msgid "Remove tag"
 msgstr "Remove tag"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Remove the picked path point"
+msgstr "Remove the picked path point"
+
 #: src/components/me/MyDataPanel.tsx
 #~ msgid "Remove them"
 #~ msgstr "Remove them"
@@ -22057,6 +22954,7 @@ msgstr "Removing..."
 #: src/components/companella/InstallationList.tsx
 #: src/components/packs/SetsView.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Rename"
 msgstr "Rename"
@@ -22064,6 +22962,14 @@ msgstr "Rename"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Rename preset"
 msgstr "Rename preset"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Renamed {name}"
+msgstr "Renamed {name}"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Renamed the frame"
+msgstr "Renamed the frame"
 
 #. placeholder {0}: nextPreset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -22094,9 +23000,17 @@ msgstr "Renews every month"
 msgid "Renews every year until you cancel it on lava.top."
 msgstr "Renews every year until you cancel it on lava.top."
 
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Reordered layers"
+msgstr "Reordered layers"
+
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Repeat preview"
 msgstr "Repeat preview"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Repeat round the avatar"
+msgstr "Repeat round the avatar"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Repeated notes hammered on the same columns."
@@ -22328,6 +23242,7 @@ msgstr "Rerolls"
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
 msgid "Reset"
 msgstr "Reset"
 
@@ -22370,6 +23285,14 @@ msgstr "Resize / crop"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Resize / crop…"
 msgstr "Resize / crop…"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Resize and turn it with the move tool's handles, or below."
+msgstr "Resize and turn it with the move tool's handles, or below."
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Resize or draw from the middle"
+msgstr "Resize or draw from the middle"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Resize panes"
@@ -22647,6 +23570,8 @@ msgstr "rough estimate, may be off"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 #: src/components/packs/run/chain/ChainEnd.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Round"
 msgstr "Round"
@@ -22683,6 +23608,27 @@ msgstr "Round cleared"
 #: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 msgid "Round cleared. Keep one of these cards for your deck."
 msgstr "Round cleared. Keep one of these cards for your deck."
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Round ends"
+msgstr "Round ends"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Round frame, for lists"
+msgstr "Round frame, for lists"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Round the avatar"
+msgstr "Round the avatar"
+
+#. placeholder {0}: Math.round(clear.round * 100)
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Round: {0}% of the avatar clear"
+msgstr "Round: {0}% of the avatar clear"
+
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Round: none, lists keep the avatar square"
+msgstr "Round: none, lists keep the avatar square"
 
 #: src/lib/supporter-name-fonts.ts
 msgid "Rounded"
@@ -22772,6 +23718,10 @@ msgstr "Russian"
 msgid "Sakura"
 msgstr "Sakura"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Same frame, new art. Whoever wears it gets this."
+msgstr "Same frame, new art. Whoever wears it gets this."
+
 #: src/components/player/ActivityPanel.tsx
 msgid "Sat"
 msgstr "Sat"
@@ -22780,6 +23730,8 @@ msgstr "Sat"
 msgid "Satori fumo"
 msgstr "Satori fumo"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Saturation"
 msgstr "Saturation"
@@ -22836,6 +23788,10 @@ msgstr "Save set"
 msgid "Save showcase"
 msgstr "Save showcase"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Save the draft now"
+msgstr "Save the draft now"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Save this editor version as the skin everyone sees on your replays"
 msgstr "Save this editor version as the skin everyone sees on your replays"
@@ -22865,9 +23821,21 @@ msgstr "Saved as your replay skin"
 msgid "Saved for everyone"
 msgstr "Saved for everyone"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Saved in this browser"
+msgstr "Saved in this browser"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Saved in this browser only"
+msgstr "Saved in this browser only"
+
 #: src/components/packs/CollectionPanel.tsx
 msgid "Saved in this browser only. <0><1/>Log in with osu!</0> to sync your collection across devices."
 msgstr "Saved in this browser only. <0><1/>Log in with osu!</0> to sync your collection across devices."
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Saved to your account"
+msgstr "Saved to your account"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Saves the current draft as-is; everyone watching your replays sees it"
@@ -22909,6 +23877,7 @@ msgstr "Saving."
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/components/player/DisplayNameEditor.tsx
 #: src/components/player/FeaturedPlays.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Saving..."
 msgstr "Saving..."
@@ -22973,6 +23942,10 @@ msgstr "Scanlines"
 #: src/components/supporter/loadout.ts
 msgid "Scarlet moon"
 msgstr "Scarlet moon"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Scatter"
+msgstr "Scatter"
 
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "Scenes"
@@ -23060,6 +24033,7 @@ msgstr "ScoreV2 accuracy"
 msgid "Scrawl"
 msgstr "Scrawl"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Screen"
 msgstr "Screen"
@@ -23091,6 +24065,10 @@ msgstr "Screenshots"
 #: src/lib/supporter-name-fonts.ts
 msgid "Script"
 msgstr "Script"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "scroll"
+msgstr "scroll"
 
 #: src/components/prism/PrismVisualizer.tsx
 #: src/components/replay/ReplayControls.tsx
@@ -23331,6 +24309,8 @@ msgstr "Search..."
 msgid "searching"
 msgstr "searching"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Second colour"
 msgstr "Second colour"
@@ -23403,8 +24383,13 @@ msgstr "See your pulls"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Select"
 msgstr "Select"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Select (again to swap rectangle and ellipse)"
+msgstr "Select (again to swap rectangle and ellipse)"
 
 #. placeholder {0}: card.player.user.username
 #. placeholder {0}: card.username
@@ -23424,6 +24409,8 @@ msgid "select all"
 msgstr "select all"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 msgid "Select all"
 msgstr "Select all"
 
@@ -23460,6 +24447,10 @@ msgstr "select page"
 msgid "select text or type it here"
 msgstr "select text or type it here"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Selection"
+msgstr "Selection"
+
 #: src/components/packs/collections/CardMarks.tsx
 #~ msgid "self"
 #~ msgstr "self"
@@ -23486,9 +24477,14 @@ msgstr "Send a test message"
 #~ msgid "Send a tip"
 #~ msgstr "Send a tip"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Send backward"
 msgstr "Send backward"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Send backward or bring forward"
+msgstr "Send backward or bring forward"
 
 #: src/routes/report.tsx
 msgid "Send feedback"
@@ -23812,9 +24808,25 @@ msgstr "Seven Keys"
 #~ msgid "Shaded: the 300 window at OD 0 around each press"
 #~ msgstr "Shaded: the 300 window at OD 0 around each press"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Shadow"
+msgstr "Shadow"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Shadow colour"
+msgstr "Shadow colour"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Shape"
 msgstr "Shape"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Shape round the avatar"
+msgstr "Shape round the avatar"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -23939,14 +24951,31 @@ msgstr "Sheet music"
 msgid "Shift = lock ratio"
 msgstr "Shift = lock ratio"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Shift adds, Alt takes away"
+msgstr "Shift adds, Alt takes away"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Shift adds, Alt takes away. Ctrl D drops the selection."
+msgstr "Shift adds, Alt takes away. Ctrl D drops the selection."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Shift hue ({signedHueShift}°)"
 msgstr "Shift hue ({signedHueShift}°)"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Shift keeps a move on one axis and turns in 15° steps"
+msgstr "Shift keeps a move on one axis and turns in 15° steps"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Shift keeps it even, Alt draws from the middle"
+msgstr "Shift keeps it even, Alt draws from the middle"
 
 #: src/components/maps/MapCollectionsSection.tsx
 msgid "Shifting, irregular patterns that punish bad reading."
 msgstr "Shifting, irregular patterns that punish bad reading."
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/lib/pack-run.ts
 msgid "Shine"
 msgstr "Shine"
@@ -23983,6 +25012,7 @@ msgid "show"
 msgstr "show"
 
 #: src/components/player/FeaturedPlays.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Show"
 msgstr "Show"
@@ -24163,6 +25193,10 @@ msgstr "Show the {0} clears"
 msgid "Show the fire on your rank"
 msgstr "Show the fire on your rank"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Show the guides"
+msgstr "Show the guides"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "Show the image at its real pixel size"
 msgstr "Show the image at its real pixel size"
@@ -24187,6 +25221,10 @@ msgstr "show them"
 msgid "Show what you are doing in osu! on your profile and the rankings"
 msgstr "Show what you are doing in osu! on your profile and the rankings"
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Show your avatar"
+msgstr "Show your avatar"
+
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "showcase"
 msgstr "showcase"
@@ -24198,6 +25236,10 @@ msgstr "Showcase"
 #: src/components/packs/collections/ShowcaseTab.tsx
 #~ msgid "showcases"
 #~ msgstr "showcases"
+
+#: src/components/supporter/frames/FrameHistory.tsx
+msgid "Showed {name}"
+msgstr "Showed {name}"
 
 #: src/components/supporter/SupporterRankBadge.tsx
 msgid "Showing"
@@ -24359,6 +25401,10 @@ msgstr "Side"
 msgid "Side by Side"
 msgstr "Side by Side"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Sides"
+msgstr "Sides"
+
 #: src/lib/pack-run.ts
 msgid "Sightread"
 msgstr "Sightread"
@@ -24367,6 +25413,7 @@ msgstr "Sightread"
 msgid "Sign for the next round"
 msgstr "Sign for the next round"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Sign in"
@@ -24600,6 +25647,8 @@ msgstr "size"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerHandles.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Size"
@@ -24849,6 +25898,14 @@ msgstr "Skipping songs is not available yet."
 msgid "Skips the last few players and maps you were shown."
 msgstr "Skips the last few players and maps you were shown."
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Slant X"
+msgstr "Slant X"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Slant Y"
+msgstr "Slant Y"
+
 #: src/components/packs/PackSummary.tsx
 msgid "sliced"
 msgstr "sliced"
@@ -24908,9 +25965,34 @@ msgstr "Small"
 msgid "Smaller file"
 msgstr "Smaller file"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Smaller or bigger brush"
+msgstr "Smaller or bigger brush"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Smoothing"
+msgstr "Smoothing"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Smudge"
+msgstr "Smudge"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Smudge and blur"
+msgstr "Smudge and blur"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Smudge and blur work on paint layers. Pick one, or turn this layer into paint from the layer menu."
+msgstr "Smudge and blur work on paint layers. Pick one, or turn this layer into paint from the layer menu."
+
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Snap to grid"
 msgstr "Snap to grid"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Snap while moving"
+msgstr "Snap while moving"
 
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Snipe feed"
@@ -24972,14 +26054,23 @@ msgstr "Soft"
 msgid "Soft clouds that roll by"
 msgstr "Soft clouds that roll by"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Soft light"
+msgstr "Soft light"
+
 #: src/components/supporter/loadout.ts
 msgid "Soft wings"
 msgstr "Soft wings"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Softer or harder brush"
+msgstr "Softer or harder brush"
 
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Softness"
 msgstr "Softness"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/lib/signature-style.ts
 msgid "Solid"
 msgstr "Solid"
@@ -25205,6 +26296,10 @@ msgstr "Soul shatter"
 msgid "Space Key"
 msgstr "Space Key"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Spacing"
+msgstr "Spacing"
+
 #: src/lib/pack-run.ts
 msgid "Spam"
 msgstr "Spam"
@@ -25309,6 +26404,7 @@ msgstr "Speeds the song up to 1.5x."
 msgid "Spell card"
 msgstr "Spell card"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Spin"
 msgstr "Spin"
@@ -25326,6 +26422,28 @@ msgstr "Spoiler text"
 #: src/lib/pack-run.ts
 msgid "Spotlight"
 msgstr "Spotlight"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Square"
+msgstr "Square"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Square ends"
+msgstr "Square ends"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Square frame"
+msgstr "Square frame"
+
+#. placeholder {0}: Math.round(clear.square * 100)
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Square: {0}% of the avatar clear"
+msgstr "Square: {0}% of the avatar clear"
+
+#: src/components/supporter/frames/FramePreview.tsx
+msgid "Square: empty"
+msgstr "Square: empty"
 
 #: src/components/supporter/loadout.ts
 msgid "SSR card"
@@ -25480,6 +26598,10 @@ msgstr "Standard foil"
 msgid "Stands"
 msgstr "Stands"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Star"
+msgstr "Star"
+
 #: src/components/maps/MapSearchSection.tsx
 #: src/lib/replay-overlays.ts
 #: src/routes/discord.tsx
@@ -25534,6 +26656,10 @@ msgstr "Start at {0}"
 #: src/components/supporter/themes/StartPicker.tsx
 msgid "Start from"
 msgstr "Start from"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Start from a picture"
+msgstr "Start from a picture"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 #: src/routes/bbcode.tsx
@@ -25605,6 +26731,10 @@ msgstr "Status"
 msgid "Stay under {0}x the target for more combo."
 msgstr "Stay under {0}x the target for more combo."
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Steady"
+msgstr "Steady"
+
 #: src/components/supporter/loadout.ts
 msgid "Stellium charm"
 msgstr "Stellium charm"
@@ -25665,6 +26795,10 @@ msgstr "Stencil"
 msgid "Sticker"
 msgstr "Sticker"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Still"
+msgstr "Still"
+
 #: src/routes/replay.tsx
 msgid "Still fetching the replay and chart."
 msgstr "Still fetching the replay and chart."
@@ -25691,6 +26825,10 @@ msgstr "Still only"
 msgid "Stop browsing {0}"
 msgstr "Stop browsing {0}"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Stop clipping"
+msgstr "Stop clipping"
+
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Stop repeating"
 msgstr "Stop repeating"
@@ -25702,6 +26840,10 @@ msgstr "Stop sharing this one"
 #: src/components/packs/PackPulse.tsx
 msgid "stop sim"
 msgstr "stop sim"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Stop the loop"
+msgstr "Stop the loop"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "Stop tracking"
@@ -25745,6 +26887,14 @@ msgstr "Storyboard"
 msgid "Storyboard…"
 msgstr "Storyboard…"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Straight line from the last stroke"
+msgstr "Straight line from the last stroke"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Straighten"
+msgstr "Straighten"
+
 #: src/components/packs/StreakGame.tsx
 msgid "streak"
 msgstr "streak"
@@ -25783,6 +26933,8 @@ msgid "Streams thickened with three-note hand chords."
 msgstr "Streams thickened with three-note hand chords."
 
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Strength"
@@ -25843,10 +26995,20 @@ msgid "Submission sent"
 msgstr "Submission sent"
 
 #: src/components/communities/CommunitySubmitModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/SupporterExtras.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Submit"
 msgstr "Submit"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Submit a new one"
+msgstr "Submit a new one"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Submit frame"
+msgstr "Submit frame"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Submit play"
@@ -25860,6 +27022,11 @@ msgstr "Submit plays to your account whether you're offline, on a private server
 msgid "Submit your own"
 msgstr "Submit your own"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Submitted"
+msgstr "Submitted"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Submitting..."
 msgstr "Submitting..."
@@ -25910,6 +27077,7 @@ msgstr "Super Rare"
 msgid "support"
 msgstr "support"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/routes/support.tsx
 msgid "Support"
 msgstr "Support"
@@ -26006,6 +27174,10 @@ msgstr "Supporters"
 msgid "Supporters can upload images and make their own profile themes, including shader code others can see and use. Whoever uploads or writes them is responsible for them and must have the right to share them. They go live without review."
 msgstr "Supporters can upload images and make their own profile themes, including shader code others can see and use. Whoever uploads or writes them is responsible for them and must have the right to share them. They go live without review."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Supporters submit frames to everyone's picker and wear them on their profile. You can still download it as a PNG from the menu."
+msgstr "Supporters submit frames to everyone's picker and wear them on their profile. You can still download it as a PNG from the menu."
+
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Supporters submit frames to everyone's picker, with their name on them, and wear them on their profile."
 msgstr "Supporters submit frames to everyone's picker, with their name on them, and wear them on their profile."
@@ -26082,6 +27254,10 @@ msgstr "SV"
 msgid "SV gimmick"
 msgstr "SV gimmick"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Swap"
+msgstr "Swap"
+
 #. placeholder {0}: activeAssetSourceName ?? t`this skin`
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Swap any element for another image from {0}, or click it in the preview to find its row. Note and key art draws under the Bars style; cleared elements fall back to flat shapes."
@@ -26091,10 +27267,16 @@ msgstr "Swap any element for another image from {0}, or click it in the preview 
 msgid "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak, percentile among tracked players, notes hit, strongest skill or the hour you play most."
 msgstr "Swap any of the four cards under your profile for your ratio, rice / LN split, longest streak, percentile among tracked players, notes hit, strongest skill or the hour you play most."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Swap colours"
+msgstr "Swap colours"
+
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile."
 msgstr "Swap the four cards under your profile for your ratio, rice / LN split, longest streak, longest session or percentile."
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Sway"
 msgstr "Sway"
@@ -26106,6 +27288,11 @@ msgstr "Sway speed"
 #: src/components/communities/field-options.tsx
 msgid "Swedish"
 msgstr "Swedish"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Sweep"
+msgstr "Sweep"
 
 #: src/components/supporter/loadout.ts
 msgid "Swept wings"
@@ -26120,6 +27307,10 @@ msgstr "Switch country to {0}"
 #: src/components/layout/Nav.tsx
 msgid "Switch to {0}"
 msgstr "Switch to {0}"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Symmetry"
+msgstr "Symmetry"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "Synced to your osu! account."
@@ -26146,6 +27337,10 @@ msgstr "tags"
 msgid "Tags"
 msgstr "Tags"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Take a colour while painting"
+msgstr "Take a colour while painting"
+
 #. placeholder {0}: selected.ownerName || selected.owner
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Take all of {0}'s cards off and stop them laying cards {length}?"
@@ -26154,6 +27349,10 @@ msgstr "Take all of {0}'s cards off and stop them laying cards {length}?"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Take all their cards off"
 msgstr "Take all their cards off"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Take away from it"
+msgstr "Take away from it"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Take every qualifying pass on one side of one keymode, sort them by the chart's dan level, and look at the 4th one down. That is your dan. Nothing is added on top of it, and no single pass above it can raise it."
@@ -26370,6 +27569,10 @@ msgstr "Tektur"
 #~ msgid "Tell the bot who you are once with <0>/link</0>. After that, lookups like <1>/recent</1> default to your account, no username needed."
 #~ msgstr "Tell the bot who you are once with <0>/link</0>. After that, lookups like <1>/recent</1> default to your account, no username needed."
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Template guides"
+msgstr "Template guides"
+
 #: src/components/BackendOfflineScreen.tsx
 msgid "Temporarily offline"
 msgstr "Temporarily offline"
@@ -26413,6 +27616,11 @@ msgid "Teto"
 msgstr "Teto"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 msgid "Text"
 msgstr "Text"
 
@@ -26589,6 +27797,10 @@ msgstr "That file is over 200 MB."
 msgid "That file isn't a supported image."
 msgstr "That file isn't a supported image."
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "That frame isn't one of yours."
+msgstr "That frame isn't one of yours."
+
 #: src/components/packs/GiftInbox.tsx
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "That gift is no longer there."
@@ -26630,6 +27842,10 @@ msgstr "That is your own listing."
 #: src/components/player/ServerLinks.tsx
 msgid "That isn't a profile link."
 msgstr "That isn't a profile link."
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "That layer is locked."
+msgstr "That layer is locked."
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "That link did not load."
@@ -26767,6 +27983,10 @@ msgstr "That's a lot of saves in a minute. Wait a moment and save again."
 #: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 msgid "That's Overjoy"
 msgstr "That's Overjoy"
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "That's the most layers a frame can have."
+msgstr "That's the most layers a frame can have."
 
 #: src/lib/replay-side-by-side.ts
 msgid "That's the same score on both sides. Pick a different run for the other side."
@@ -27541,6 +28761,14 @@ msgstr "The live feed is connected. New plays will start showing up as players s
 #~ msgid "The live score feed for a country, newest first."
 #~ msgstr "The live score feed for a country, newest first."
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "The loop came out over 2 MB. Make it simpler and try again, or turn the loop off."
+msgstr "The loop came out over 2 MB. Make it simpler and try again, or turn the loop off."
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "The loop is 3 seconds. Moving layers make the frame a looping video; play it from the top bar. Spin and Orbit backwards with a negative number."
+msgstr "The loop is 3 seconds. Moving layers make the frame a looping video; play it from the top bar. Spin and Orbit backwards with a negative number."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The map's own samples and keysounds, when it has them."
 msgstr "The map's own samples and keysounds, when it has them."
@@ -27758,6 +28986,10 @@ msgstr "The report was sent, but at least one file did not upload."
 #~ msgid "The ringed release costs as before when the hand is busy around it, and less when it comes alone."
 #~ msgstr "The ringed release costs as before when the hand is busy around it, and less when it comes alone."
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "The round frame covers too much of the avatar; keep the middle see-through."
+msgstr "The round frame covers too much of the avatar; keep the middle see-through."
+
 #: src/components/packs/run/chain/tutorial/ChainTutorial.tsx
 msgid "The round ran out of rows before the target. Try it again: line up cards that share more."
 msgstr "The round ran out of rows before the target. Try it again: line up cards that share more."
@@ -27952,6 +29184,14 @@ msgstr "The song's target drops {0}% after every pack that does not clear it."
 #: src/routes/dan-estimates.tsx
 #~ msgid "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
 #~ msgstr "The split matters because the two say nothing about each other. Accuracy on an LN chart is earned almost entirely on the holds and the releases, so passing it is not evidence about your regular level, and the other way around."
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "The square frame covers too much of the avatar; keep the middle see-through."
+msgstr "The square frame covers too much of the avatar; keep the middle see-through."
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "The square frame is empty."
+msgstr "The square frame is empty."
 
 #: src/lib/pack-run.ts
 msgid "The standard run."
@@ -28258,6 +29498,10 @@ msgstr "This browser can't encode the audio track for this format."
 msgid "This browser can't encode video at the selected size and frame rate."
 msgstr "This browser can't encode video at the selected size and frame rate."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "This browser can't record the loop with a see-through background. Open the editor in Chrome or Edge to include it; the still goes up either way."
+msgstr "This browser can't record the loop with a see-through background. Open the editor in Chrome or Edge to include it; the still goes up either way."
+
 #: src/components/replay/ReplayControls.tsx
 msgid "This browser can't save directly to a file, so the video is held in memory and downloaded when it finishes."
 msgstr "This browser can't save directly to a file, so the video is held in memory and downloaded when it finishes."
@@ -28469,6 +29713,14 @@ msgstr "This is your only copy, so the card leaves your collection."
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "This is your own gift code. Send the link to a friend."
 msgstr "This is your own gift code. Send the link to a friend."
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "This layer is locked. Unlock it in the layer list to paint or move it."
+msgstr "This layer is locked. Unlock it in the layer list to paint or move it."
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "This list"
+msgstr "This list"
 
 #: src/components/replay/ReplayBrowseView.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
@@ -28789,6 +30041,7 @@ msgstr "Tier changed to {tierLabel}"
 msgid "Tier colour"
 msgstr "Tier colour"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Time"
 msgstr "Time"
@@ -28817,6 +30070,10 @@ msgstr "Timed out loading the replay renderer."
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Timed out starting the replay renderers."
 msgstr "Timed out starting the replay renderers."
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Times per loop"
+msgstr "Times per loop"
 
 #: src/components/replay/LazerResultsScreen.tsx
 msgid "Timing Distribution"
@@ -28868,6 +30125,7 @@ msgstr "To"
 msgid "to {keyCount}K rating"
 msgstr "to {keyCount}K rating"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "to make your own avatar frames."
 msgstr "to make your own avatar frames."
@@ -28919,6 +30177,10 @@ msgstr "Toggle menu"
 #: src/components/replay/ReplayControls.tsx
 msgid "Toggles"
 msgstr "Toggles"
+
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Tolerance"
+msgstr "Tolerance"
 
 #: src/routes/recommendations.tsx
 msgid "too easy"
@@ -28979,6 +30241,10 @@ msgstr "Took the board's #{0} spot"
 #: src/routes/snipes.tsx
 #~ msgid "Took the country board's #{0} spot"
 #~ msgstr "Took the country board's #{0} spot"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Tools"
+msgstr "Tools"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "top"
@@ -29204,6 +30470,7 @@ msgstr "Trail color"
 msgid "Trail thickness"
 msgstr "Trail thickness"
 
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Transform"
 msgstr "Transform"
@@ -29320,6 +30587,7 @@ msgstr "Tung tung sahur keycap"
 msgid "Turkish"
 msgstr "Turkish"
 
+#: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/themes/LayerHandles.tsx
 msgid "Turn"
 msgstr "Turn"
@@ -29335,6 +30603,11 @@ msgstr "Turn as one"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn each"
 msgstr "Turn each"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Turn into paint"
+msgstr "Turn into paint"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn left"
@@ -29373,9 +30646,21 @@ msgstr "Turn on in every channel"
 msgid "Turn right"
 msgstr "Turn right"
 
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Turn the mask off"
+msgstr "Turn the mask off"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Turn the mask on"
+msgstr "Turn the mask on"
+
 #: src/routes/support.tsx
 msgid "Turn them on from the <0>Discord bot page</0>."
 msgstr "Turn them on from the <0>Discord bot page</0>."
+
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Turn this layer into paint again (layer menu) to paint on it in perspective."
+msgstr "Turn this layer into paint again (layer menu) to paint on it in perspective."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Turn with the stroke"
@@ -29546,6 +30831,8 @@ msgstr "Underline"
 
 #: src/components/me/GoalToasts.tsx
 #: src/components/packs/collections/board/CardBoard.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter.tsx
 msgid "Undo"
@@ -29555,9 +30842,19 @@ msgstr "Undo"
 msgid "Undo (Ctrl+Z)"
 msgstr "Undo (Ctrl+Z)"
 
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Undo perspective"
+msgstr "Undo perspective"
+
 #: src/components/skins/SkinPreviewEditorModal.tsx
 msgid "Undo re-renders"
 msgstr "Undo re-renders"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameInspector.tsx
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Ungroup"
+msgstr "Ungroup"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Unhide"
@@ -29633,6 +30930,10 @@ msgstr "Unlist"
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Unlisted, by {0}"
 msgstr "Unlisted, by {0}"
+
+#: src/components/supporter/frames/FrameLayersPanel.tsx
+msgid "Unlock"
+msgstr "Unlock"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Unlock for rolls"
@@ -29723,6 +31024,7 @@ msgstr "Unrated plays"
 msgid "unreadable"
 msgstr "unreadable"
 
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter.tsx
 msgid "Unsaved changes"
@@ -29757,6 +31059,12 @@ msgstr "until {0}"
 #: src/components/companella/ProfileImportedPlays.tsx
 #~ msgid "Untitled chart"
 #~ msgstr "Untitled chart"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Untitled frame"
+msgstr "Untitled frame"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/workshop.themes.index.tsx
@@ -29801,6 +31109,7 @@ msgstr "up to the chart's level +0.1"
 #~ msgstr "Up to three passes in a skill are left out when they credit more than five levels below the average of your best five in it. The dan window marks them <0>not counted</0>."
 
 #: src/components/maps/ChartLabelReport.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 msgid "Update"
 msgstr "Update"
 
@@ -29816,6 +31125,10 @@ msgstr "Update file"
 #: src/components/skins/SkinUpdateModal.tsx
 msgid "Update the skin"
 msgstr "Update the skin"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Update your frame"
+msgstr "Update your frame"
 
 #. placeholder {0}: formatTimeAgo(mapsUpdatedAt, locale)
 #: src/routes/maps.tsx
@@ -29956,6 +31269,7 @@ msgid "Uploading the skin file, {sentSize} of {totalSize}."
 msgstr "Uploading the skin file, {sentSize} of {totalSize}."
 
 #: src/components/supporter/CustomArtDialog.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
 msgid "Uploading..."
 msgstr "Uploading..."
 
@@ -30213,6 +31527,8 @@ msgid "Vietnamese"
 msgstr "Vietnamese"
 
 #: src/components/player/SkillHistoryModal.tsx
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameEditor.tsx
 #: src/routes/player/$username.tsx
 msgid "View"
 msgstr "View"
@@ -30598,6 +31914,14 @@ msgstr "We have no run by {0} on this map. Paste a link to their score to use it
 msgid "Wear"
 msgstr "Wear"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Wear it"
+msgstr "Wear it"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Wearing it"
+msgstr "Wearing it"
+
 #: src/lib/replay-overlays.ts
 #~ msgid "Web page"
 #~ msgstr "Web page"
@@ -30629,6 +31953,10 @@ msgstr "Weekly bars"
 #: src/routes/discord.tsx
 msgid "Weekly recap"
 msgstr "Weekly recap"
+
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Weight"
+msgstr "Weight"
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 msgid "Welcome to supporter, {username}"
@@ -30865,6 +32193,10 @@ msgstr "while tracked"
 msgid "While you pick a song, you see the map's leaderboard for the mods you have on, even DT or HT at any rate, Invert or No Release, and on graveyard maps too. You can switch it to your country, your region or your friends, or search for a player."
 msgstr "While you pick a song, you see the map's leaderboard for the mods you have on, even DT or HT at any rate, Invert or No Release, and on graveyard maps too. You can switch it to your country, your region or your friends, or search for a player."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "White and black"
+msgstr "White and black"
+
 #: src/lib/supporter-companions.ts
 msgid "White fairy"
 msgstr "White fairy"
@@ -30919,9 +32251,9 @@ msgstr "why a map shows up"
 msgid "Wide"
 msgstr "Wide"
 
-#: src/components/replay/ReplayCustomMediaControls.tsx
-#~ msgid "Width"
-#~ msgstr "Width"
+#: src/components/supporter/frames/FrameInspector.tsx
+msgid "Width"
+msgstr "Width"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Width of the exported image, in pixels"
@@ -31049,6 +32381,10 @@ msgstr "Won on score, not pp"
 msgid "working on next"
 msgstr "working on next"
 
+#: src/components/supporter/frames/FrameTools.tsx
+msgid "Works on paint layers. The brush's symmetry applies."
+msgstr "Works on paint layers. The brush's symmetry applies."
+
 #: src/components/supporter/GiftCodePanel.tsx
 msgid "Works once, for an account that isn't a supporter and hasn't had a trial."
 msgstr "Works once, for an account that isn't a supporter and hasn't had a trial."
@@ -31060,7 +32396,7 @@ msgstr "workshop"
 
 #: src/components/layout/Nav.tsx
 #: src/components/supporter/LoadoutSlots.tsx
-#: src/routes/workshop.frames.tsx
+#: src/routes/workshop.frames.index.tsx
 #: src/routes/workshop.index.tsx
 msgid "Workshop"
 msgstr "Workshop"
@@ -31643,6 +32979,10 @@ msgstr "Your accuracy sets the tier. On a ladder whose courses ask for 96%, a 96
 #~ msgid "Your accuracy sets the tier. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, and 98% and up as <2>delta++</2>. Come up short at 94% and you still get <3>delta--</3>, since getting that close is worth something. Below that you get nothing. Ladders that ask for a different accuracy shift the whole scale with them."
 #~ msgstr "Your accuracy sets the tier. On a ladder whose courses ask for 96%, a bare 96% pass on the delta course reads as <0>delta</0>, 97.5% as <1>delta+</1>, and 98% and up as <2>delta++</2>. Come up short at 94% and you still get <3>delta--</3>, since getting that close is worth something. Below that you get nothing. Ladders that ask for a different accuracy shift the whole scale with them."
 
+#: src/components/supporter/frames/FrameEditor.tsx
+msgid "Your avatar under it"
+msgstr "Your avatar under it"
+
 #: src/routes/recommendations.tsx
 msgid "your best"
 msgstr "your best"
@@ -31754,6 +33094,10 @@ msgstr "Your description shows up here."
 msgid "Your Discord account is linked to <0>{0}</0>."
 msgstr "Your Discord account is linked to <0>{0}</0>."
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Your drafts"
+msgstr "Your drafts"
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Your dynamic renders were turned off."
 msgstr "Your dynamic renders were turned off."
@@ -31794,6 +33138,7 @@ msgstr "Your first break becomes a link."
 #~ msgid "Your first forge"
 #~ msgstr "Your first forge"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/workshop.index.tsx
 msgid "Your frames"
@@ -31853,6 +33198,7 @@ msgstr "your marks"
 msgid "Your mods"
 msgstr "Your mods"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Your name"
 msgstr "Your name"
@@ -32209,6 +33555,8 @@ msgstr "Yuyuko fumo"
 msgid "Zip binder"
 msgstr "Zip binder"
 
+#: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/themes/RowFramer.tsx
 msgid "Zoom"
@@ -32217,6 +33565,14 @@ msgstr "Zoom"
 #: src/components/prism/PrismVisualizer.tsx
 #~ msgid "Zoom {value}"
 #~ msgstr "Zoom {value}"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Zoom at the pointer"
+msgstr "Zoom at the pointer"
+
+#: src/components/supporter/frames/FrameDialogs.tsx
+msgid "Zoom in or out"
+msgstr "Zoom in or out"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Zoom in to lay cards down."
