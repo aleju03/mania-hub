@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   SMOKE_LIFETIME_MS,
+  pointerLead,
   readCursorSettings,
+  resetPointerMotion,
   smokeAlpha,
   subscribeCursorSettings,
+  trackPointerMotion,
 } from "../../lib/cursor";
-import type { CursorSettings } from "../../lib/cursor";
+import type { CursorSettings, PointerMotion } from "../../lib/cursor";
 
 const TRAIL_LIFETIME_MS = 240;
 const TRAIL_MIN_DISTANCE = 4;
@@ -21,7 +24,7 @@ const NATIVE_CURSOR_EDGE_LIMIT = 32;
 const DRAWN_ORB_LEAD = 16;
 /* The canvas reaches the screen about this many frames after the native
    cursor moves, so the glow and trail are drawn that far ahead along the
-   pointer's velocity. */
+   pointer's path. */
 const PRESENT_LAG_FRAMES = 1.5;
 const MAX_LEAD_PX = 64;
 
@@ -192,9 +195,7 @@ function CursorOverlay() {
     const smoke: SmokePoint[] = [];
     let rafId: number | null = null;
     let lastFrameAt: number | null = null;
-    // Pointer velocity in px/ms and when it was last measured, for drawing the
-    // effects where the native cursor will be when this frame is shown.
-    const motion = { vx: 0, vy: 0, at: 0 };
+    const motion: PointerMotion = { vx: 0, vy: 0, turn: 0, lagMs: 0, at: 0 };
     let frameMs = 1000 / 60;
 
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -273,15 +274,14 @@ function CursorOverlay() {
          means it stopped, and the lead eases back to nothing. */
       const sinceMove = now - motion.at;
       const fade = Math.max(0, 1 - sinceMove / (frameMs * 2));
-      let leadX = motion.vx * (sinceMove + PRESENT_LAG_FRAMES * frameMs) * fade;
-      let leadY = motion.vy * (sinceMove + PRESENT_LAG_FRAMES * frameMs) * fade;
-      const leadLength = Math.hypot(leadX, leadY);
-      if (leadLength > MAX_LEAD_PX) {
-        leadX *= MAX_LEAD_PX / leadLength;
-        leadY *= MAX_LEAD_PX / leadLength;
-      }
-      const headX = pointer.x + leadX;
-      const headY = pointer.y + leadY;
+      const speed = Math.hypot(motion.vx, motion.vy);
+      const leadMs = Math.min(
+        (sinceMove + PRESENT_LAG_FRAMES * frameMs) * fade,
+        speed > 0 ? MAX_LEAD_PX / speed : 0,
+      );
+      const lead = pointerLead(motion, leadMs);
+      const headX = pointer.x + lead.x;
+      const headY = pointer.y + lead.y;
       while (smoke.length > 0 && now - smoke[0].at >= SMOKE_LIFETIME_MS) smoke.shift();
       while (trail.length > 0 && now - trail[0].at >= TRAIL_LIFETIME_MS) trail.shift();
 
@@ -314,16 +314,20 @@ function CursorOverlay() {
           context.globalAlpha = life * 0.8;
           context.drawImage(trailSprite.canvas, point.x - size / 2, point.y - size / 2, size, size);
         }
-        // Close the gap from the newest point up to the led head.
-        const last = trail[trail.length - 1];
-        if (last && pointer.inside && !pointer.typing) {
-          const gap = Math.hypot(headX - last.x, headY - last.y);
+        // Close the gap from the pointer up to the led head, along the same path.
+        if (trail.length > 0 && pointer.inside && !pointer.typing) {
+          const steps = Math.ceil((speed * leadMs) / TRAIL_MIN_DISTANCE);
           const size = trailSprite.size * pressScale;
           context.globalAlpha = 0.8;
-          for (let step = TRAIL_MIN_DISTANCE; step < gap; step += TRAIL_MIN_DISTANCE) {
-            const x = last.x + ((headX - last.x) * step) / gap;
-            const y = last.y + ((headY - last.y) * step) / gap;
-            context.drawImage(trailSprite.canvas, x - size / 2, y - size / 2, size, size);
+          for (let step = 1; step < steps; step++) {
+            const part = pointerLead(motion, (leadMs * step) / steps);
+            context.drawImage(
+              trailSprite.canvas,
+              pointer.x + part.x - size / 2,
+              pointer.y + part.y - size / 2,
+              size,
+              size,
+            );
           }
         }
         context.globalAlpha = 1;
@@ -369,13 +373,10 @@ function CursorOverlay() {
       const now = performance.now();
       const elapsed = now - motion.at;
       if (pointer.inside && elapsed > 0 && elapsed < 100) {
-        motion.vx += ((event.clientX - pointer.x) / elapsed - motion.vx) * 0.6;
-        motion.vy += ((event.clientY - pointer.y) / elapsed - motion.vy) * 0.6;
+        trackPointerMotion(motion, event.clientX - pointer.x, event.clientY - pointer.y, elapsed, now);
       } else {
-        motion.vx = 0;
-        motion.vy = 0;
+        resetPointerMotion(motion, now);
       }
-      motion.at = now;
       pointer.x = event.clientX;
       pointer.y = event.clientY;
       pointer.inside = true;

@@ -5,9 +5,13 @@ import {
   SMOKE_HOLD_MS,
   SMOKE_LIFETIME_MS,
   normalizeCursorSettings,
+  pointerLead,
+  resetPointerMotion,
   segmentHitsCircle,
   smokeAlpha,
+  trackPointerMotion,
 } from "./cursor";
+import type { PointerMotion } from "./cursor";
 
 describe("normalizeCursorSettings", () => {
   it("returns defaults for missing or invalid input", () => {
@@ -92,5 +96,56 @@ describe("segmentHitsCircle", () => {
   it("treats a zero-length segment as a point check", () => {
     expect(segmentHitsCircle(1, 1, 1, 1, 0, 0, 2)).toBe(true);
     expect(segmentHitsCircle(5, 5, 5, 5, 0, 0, 2)).toBe(false);
+  });
+});
+
+describe("pointerLead", () => {
+  const FRAME_MS = 1000 / 60;
+  const newMotion = (): PointerMotion => ({ vx: 0, vy: 0, turn: 0, lagMs: 0, at: 0 });
+
+  it("leads a straight move along its velocity", () => {
+    const motion = newMotion();
+    for (let i = 1; i <= 20; i++) trackPointerMotion(motion, 20, 10, FRAME_MS, i * FRAME_MS);
+    const lead = pointerLead(motion, 25);
+    expect(lead.x).toBeCloseTo((20 / FRAME_MS) * 25, 3);
+    expect(lead.y).toBeCloseTo((10 / FRAME_MS) * 25, 3);
+  });
+
+  it("is nothing for a pointer that has not moved", () => {
+    const motion = newMotion();
+    resetPointerMotion(motion, 5);
+    expect(pointerLead(motion, 25)).toEqual({ x: 0, y: 0 });
+  });
+
+  // A 110px circle at 40px a frame, in both directions: how far the led head
+  // lands from where the pointer really is 1.5 and 2.5 frames later.
+  it.each([1, -1])("stays on a fast circle (direction %i)", (direction) => {
+    const radius = 110;
+    const perFrame = (40 / radius) * direction;
+    const at = (frame: number) => ({
+      x: radius * Math.cos(perFrame * frame),
+      y: radius * Math.sin(perFrame * frame),
+    });
+    const motion = newMotion();
+    let worst = 0;
+    let worstStraight = 0;
+    for (let frame = 1; frame <= 60; frame++) {
+      const from = at(frame - 1);
+      const to = at(frame);
+      trackPointerMotion(motion, to.x - from.x, to.y - from.y, FRAME_MS, frame * FRAME_MS);
+      if (frame < 8) continue;
+      for (const ahead of [1.5, 2.5]) {
+        const ms = Math.min(ahead * FRAME_MS, 64 / Math.hypot(motion.vx, motion.vy));
+        const real = at(frame + ms / FRAME_MS);
+        const lead = pointerLead(motion, ms);
+        worst = Math.max(worst, Math.hypot(to.x + lead.x - real.x, to.y + lead.y - real.y));
+        worstStraight = Math.max(
+          worstStraight,
+          Math.hypot(to.x + motion.vx * ms - real.x, to.y + motion.vy * ms - real.y),
+        );
+      }
+    }
+    expect(worstStraight).toBeGreaterThan(25);
+    expect(worst).toBeLessThan(6);
   });
 });

@@ -133,3 +133,64 @@ export function segmentHitsCircle(
   const nearestY = ay + dy * t;
   return Math.hypot(cx - nearestX, cy - nearestY) <= radius;
 }
+
+/* Pointer motion, for drawing the cursor effects where the native cursor will
+   be when the frame is shown. */
+export interface PointerMotion {
+  /** Smoothed velocity in px/ms. */
+  vx: number;
+  vy: number;
+  /** Smoothed turn rate in rad/ms. */
+  turn: number;
+  /** How far the smoothed velocity's direction trails the pointer's own. */
+  lagMs: number;
+  /** When the last move was measured. */
+  at: number;
+}
+
+const MOTION_SMOOTHING = 0.6;
+const TURN_SMOOTHING = 0.5;
+const MAX_LEAD_TURN = Math.PI / 2;
+
+export function resetPointerMotion(motion: PointerMotion, now: number): void {
+  motion.vx = 0;
+  motion.vy = 0;
+  motion.turn = 0;
+  motion.lagMs = 0;
+  motion.at = now;
+}
+
+/** Fold a move of (dx, dy) over `elapsed` ms into the motion. */
+export function trackPointerMotion(motion: PointerMotion, dx: number, dy: number, elapsed: number, now: number): void {
+  const prevVx = motion.vx;
+  const prevVy = motion.vy;
+  motion.vx += (dx / elapsed - prevVx) * MOTION_SMOOTHING;
+  motion.vy += (dy / elapsed - prevVy) * MOTION_SMOOTHING;
+  if ((prevVx !== 0 || prevVy !== 0) && (motion.vx !== 0 || motion.vy !== 0)) {
+    const angle = Math.atan2(prevVx * motion.vy - prevVy * motion.vx, prevVx * motion.vx + prevVy * motion.vy);
+    motion.turn += (angle / elapsed - motion.turn) * TURN_SMOOTHING;
+  } else {
+    motion.turn = 0;
+  }
+  // A move's velocity is its direction half an interval ago, and the
+  // smoothing adds the weighted age of the moves before it.
+  motion.lagMs = elapsed * (0.5 + (1 - MOTION_SMOOTHING) / MOTION_SMOOTHING);
+  motion.at = now;
+}
+
+/* Where the pointer will be `ms` after its last move. It follows the arc the
+   pointer is turning along: a straight line leaves a fast circle along the
+   tangent. */
+export function pointerLead(motion: PointerMotion, ms: number): { x: number; y: number } {
+  if (ms <= 0) return { x: 0, y: 0 };
+  const clampTurn = (angle: number) => Math.min(MAX_LEAD_TURN, Math.max(-MAX_LEAD_TURN, angle));
+  const turned = clampTurn(motion.turn * ms);
+  const chord = Math.abs(turned) < 1e-6 ? 1 : Math.sin(turned / 2) / (turned / 2);
+  const angle = clampTurn(motion.turn * motion.lagMs) + turned / 2;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    x: (motion.vx * cos - motion.vy * sin) * ms * chord,
+    y: (motion.vx * sin + motion.vy * cos) * ms * chord,
+  };
+}
