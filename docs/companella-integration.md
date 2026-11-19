@@ -44,7 +44,8 @@ frontend  /api/integrations/companella/v1/*        (src/routes/api/integrations/
 backend   /api/integrations/companella/native/*    (http/routes/companella.ts)
           /api/integrations/companella/v1/*        (same handlers, called directly on the API host)
     +-- SQLite: installations, grants, credentials, submissions, scores, previews
-    +-- private R2 prefix: replays and contributed charts
+    +-- private R2 prefix: replays (and charts stored before the move below)
+    +-- .osu artifacts database: chart bytes (chart-bytes.ts)
     +-- the ordinary job queue: one submission per job, one lane
     |
     v
@@ -97,6 +98,7 @@ Backend, all under `backend/src/integrations/companella/`:
 | `authorization.ts` | Redirect rules, consent, one-time codes, PKCE, token issue. |
 | `installations.ts` | The rows behind the page, plus rename / revoke. |
 | `storage.ts` | R2 (production) and a local-disk adapter (never in production). |
+| `chart-bytes.ts` | Chart bytes in the .osu artifacts database (`companella_chart_files`), the object store as fallback, and the job that moves older charts over. |
 | `artifacts.ts` | Staged/committed object registry. An object stays while something points at it; the rest is collected. |
 | `charts.ts` | Exact chart bytes, parsed facts, shared-pool consent. |
 | `chart-matching.ts` | Read-only relationship lookup and the directional rate. |
@@ -638,8 +640,13 @@ the uploader writes them, and a chart rating must not be movable by editing a
 metadata line.
 
 The cache key carries the chart SHA-256, runtime rate, mods, ScoreV2 flag, the
-calibrated goal and the analysis version (`LOCAL_ANALYSIS_VERSION`, now 3). A
-family id alone would be wrong.
+calibrated goal and the analysis version (`LOCAL_ANALYSIS_VERSION`). A family
+id alone would be wrong. It closes with the stamp the play was rated under
+(`importCalcStamp`): the keymode's engine (MinaCalc pin or Prism), the vibro
+rules' revision, the keymode's rate-vibro check version and every version in
+`IMPORT_CALC_VERSIONS` (classifier, LN skill, LN tail pass, vibro sections,
+jack demand). `tests/companella-calc-versions.test.ts` fails when a calc
+version constant is in neither that list nor its exemptions.
 
 Vibro is decided the way the official pass decides it for a chart with no pp
 behind it (`rateVibroVerdictWithoutPpTrust`). A
@@ -647,9 +654,18 @@ non-4K chart flagged vibro at 1.0x is unrated `chart_vibro`. Where the official
 pass checks the rate (4K, and other keymodes away from 1.0x), an excluded
 result is unrated `rate_vibro`, an adjusted one lowers the goal and LN goal with
 `conservativeVibroAccuracy`, and an unreadable chart is `vibro_check_failed`.
-A goal left at or under the calc floor is `accuracy_below_calc_floor`. Imports
-analysed before version 3 keep their stored analyses; there is no re-analysis
-sweep.
+A goal left at or under the calc floor is `accuracy_below_calc_floor`.
+
+When the stamp moves, `engine-rerate.ts` rates every import on an old stamp
+again, in every keymode, as the official sweeps re-rate osu! plays: local
+charts on an old engine first, then the plays, with the goals they got on
+arrival (a replay import's stored key-press targets, an entered play's entry,
+a 6K-8K replay import's judgement counts), then each player's merge. Plays a
+mod or keymode keeps unrated stay as they are, and so does a replay import with
+no stored timing. A change to the replay timing itself
+(`REPLAY_TIMING_VERSION`) is not reached: that needs the replays judged again.
+A 4K analysis takes about 0.2s, 6K-8K under 0.1s, so a full pass over the
+imports runs for a few hours on the Companella lane behind new submissions.
 
 `preview.ts` reads the player's stored official ratings and retained evidence
 from `player_skill_ratings` and computes a second aggregate over the same
@@ -1280,6 +1296,17 @@ account is gone: it ranks on the leaderboards like anyone's, with no marker.
   restriction. The country board's 4K+7K order merges the simulated rows
   (with their `pp_4k`/`pp_7k`) as Global and regions do. Each board picks the
   change up on its next rebuild (at most five minutes).
+
+Chart bytes live in the .osu artifacts database (`mania-hub-artifacts.db`)
+beside the site's own `.osu` files, in `companella_chart_files` keyed by the
+storage key and compressed with the same verified codec, while
+`SLIM_OSU_ARTIFACTS` is on. The registry row in `companella_artifacts` is
+unchanged and names where the bytes are (`location = 'db'`, null for the
+object store), so references, quotas, collection and takedown work as before.
+Charts stored earlier are copied over by `companella_chart_files_move`, which
+flips each row and then deletes the object. The bytes are written before the
+row flips, so a crash leaves an extra copy and never a row pointing at
+nothing. Replays stay in the object store.
 
 Chart files are different: they are the site's own map data, not a score. A
 reservation first looks for the exact bytes in the pool, then in the site's own
