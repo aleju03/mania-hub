@@ -2568,7 +2568,10 @@ function RecRow({
         )}
 
         <div className="w-[74px] shrink-0 text-right sm:w-[88px]">
-          {rec.reason === "practice" ? (
+          {rec.reason === "new" && rec.status === "qualified" ? (
+            // A qualified map gives no pp yet: no gain on the row.
+            <div className="text-[12px] font-bold leading-tight text-osu-f1"><Trans>once ranked</Trans></div>
+          ) : rec.reason === "practice" ? (
             <>
               <div className="text-[15px] font-black leading-none tabular-nums text-osu-c1">
                 {formatPp(rec.peerPpMedian)}
@@ -2731,7 +2734,9 @@ function RecPreview({
             ) : (
               <div className="flex items-end justify-between gap-3">
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1"><Trans>estimated gain</Trans></div>
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-osu-f1">
+                    {rec.reason === "new" && rec.status === "qualified" ? <Trans>gain once ranked</Trans> : <Trans>estimated gain</Trans>}
+                  </div>
                   <div className="mt-0.5 text-2xl font-black leading-none tabular-nums text-osu-pink">
                     {formatRecGain(rec.estimatedPpGain)}
                     <span className="ml-1 text-[13px] font-bold text-osu-pink/70">{gainUnit}</span>

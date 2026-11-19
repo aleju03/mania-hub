@@ -11535,6 +11535,10 @@ msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ en 0:12. El número en cada releas
 msgid "Furthest stages"
 msgstr "Etapas más lejanas"
 
+#: src/routes/recommendations.tsx
+msgid "gain once ranked"
+msgstr "ganancia al rankearse"
+
 #. placeholder {0}: N.snowball.step
 #: src/lib/pack-run.ts
 msgid "Gains +{0} combo every pack with a jump."
@@ -18289,6 +18293,10 @@ msgstr "En Windows"
 #: src/components/supporter/SupporterExtras.tsx
 msgid "On your profile"
 msgstr "En tu perfil"
+
+#: src/routes/recommendations.tsx
+msgid "once ranked"
+msgstr "al rankearse"
 
 #: src/routes/news_.companella.tsx
 msgid "Once you connect Companella to your account, it sends every mania play you finish, with its replay. Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."

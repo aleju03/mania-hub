@@ -11547,6 +11547,10 @@ msgstr "Funwari Fuwari [7K] yoshilove's Uryu~ 的 0:12。每次放手上的数�
 msgid "Furthest stages"
 msgstr "最远关卡"
 
+#: src/routes/recommendations.tsx
+msgid "gain once ranked"
+msgstr "ranked 之后的提升"
+
 #. placeholder {0}: N.snowball.step
 #: src/lib/pack-run.ts
 msgid "Gains +{0} combo every pack with a jump."
@@ -18301,6 +18305,10 @@ msgstr "在 Windows 上"
 #: src/components/supporter/SupporterExtras.tsx
 msgid "On your profile"
 msgstr "在你的主页上"
+
+#: src/routes/recommendations.tsx
+msgid "once ranked"
+msgstr "ranked 之后"
 
 #: src/routes/news_.companella.tsx
 msgid "Once you connect Companella to your account, it sends every mania play you finish, with its replay. Those plays show on your profile's Recent tab and on the tracker with the Companella icon. A play osu! also has shows once."
