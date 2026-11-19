@@ -1501,8 +1501,10 @@ function PreviewPanel({ initialProfile }: { initialProfile: DiscordMessageJson |
           ))}
         </div>
       ))}
-      <div className="overflow-hidden rounded-xl p-4" style={{ backgroundColor: DISCORD.msg, fontFamily: DISCORD.font }}>
-        <div className="flex gap-4">
+      {/* On a phone the message runs edge to edge with Discord's mobile gutters
+          (12px sides, 12px after the avatar), so its lines wrap where Discord's do. */}
+      <div className="-mx-4 overflow-hidden px-3 py-4 sm:mx-0 sm:rounded-xl sm:p-4" style={{ backgroundColor: DISCORD.msg, fontFamily: DISCORD.font }}>
+        <div className="flex gap-3 sm:gap-4">
           <img src="/images/discord/bot-avatar.png" alt="" className="h-10 w-10 shrink-0 rounded-full" />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-1.5">
@@ -1556,7 +1558,7 @@ function CommandsPanel({ commands }: { commands: DiscordPublicInfo["commands"] }
       </p>
       <p className="mt-2 text-[13px] text-osu-f1">
         <Trans>
-          Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">Dan clears</span>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <span className="font-semibold text-osu-l2">New farm maps</span> and <span className="font-semibold text-osu-l2">Website changelog</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
+          Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">Recent plays</span>, <span className="font-semibold text-osu-l2">Dan clears</span>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <span className="font-semibold text-osu-l2">Goals</span>, <span className="font-semibold text-osu-l2">New farm maps</span> and <span className="font-semibold text-osu-l2">Website changelog</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
         </Trans>
       </p>
     </Panel>

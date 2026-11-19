@@ -10722,8 +10722,8 @@ msgstr "Feedback sent"
 #~ msgstr "Feeds are currently disabled on the backend."
 
 #: src/routes/discord.tsx
-msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Dan clears</1>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <2>New farm maps</2> and <3>Website changelog</3>, which posts each new changelog line. Turn them on with <4>/setup</4> or under Your servers above."
-msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>Dan clears</1>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <2>New farm maps</2> and <3>Website changelog</3>, which posts each new changelog line. Turn them on with <4>/setup</4> or under Your servers above."
+#~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Dan clears</1>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <2>New farm maps</2> and <3>Website changelog</3>, which posts each new changelog line. Turn them on with <4>/setup</4> or under Your servers above."
+#~ msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>Dan clears</1>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <2>New farm maps</2> and <3>Website changelog</3>, which posts each new changelog line. Turn them on with <4>/setup</4> or under Your servers above."
 
 #: src/routes/discord.tsx
 #~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Site updates</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
@@ -10732,6 +10732,10 @@ msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>Dan clears</1
 #: src/routes/discord.tsx
 #~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
 #~ msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+
+#: src/routes/discord.tsx
+msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4> and <5>Website changelog</5>, which posts each new changelog line. Turn them on with <6>/setup</6> or under Your servers above."
+msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4> and <5>Website changelog</5>, which posts each new changelog line. Turn them on with <6>/setup</6> or under Your servers above."
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
