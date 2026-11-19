@@ -448,6 +448,11 @@ msgstr "{0} / mapeado por {1}"
 msgid "{0} against"
 msgstr "{0} en contra"
 
+#. placeholder {0}: formatAge(rec.newMap?.rankedAt ?? null, i18n)
+#: src/routes/recommendations.tsx
+#~ msgid "{0} ago"
+#~ msgstr ""
+
 #. placeholder {0}: sections.length
 #: src/components/packs/album/AlbumView.tsx
 msgid "{0} albums"
@@ -1303,6 +1308,10 @@ msgstr "{0}pp de diferencia"
 msgid "{acc}% {speed} on {map}"
 msgstr "{acc}% {speed} en {map}"
 
+#: src/routes/recommendations.tsx
+msgid "{acc}% acc"
+msgstr "{acc}% acc"
+
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "{actions} same-hand actions"
 #~ msgstr "{actions} acciones con la misma mano"
@@ -1968,6 +1977,10 @@ msgid "{otherTabMatches, plural, one {# match} other {# matches}} in <0>{0}</0>"
 msgstr "{otherTabMatches, plural, one {# coincidencia} other {# coincidencias}} en <0>{0}</0>"
 
 #: src/routes/recommendations.tsx
+msgid "{pct}% of players at your pp have a play this hard"
+msgstr "El {pct}% de los jugadores con tu pp tiene un play así de difícil"
+
+#: src/routes/recommendations.tsx
 msgid "{pct}% of players near you farm this"
 msgstr "El {pct}% de los jugadores cerca de ti farmea esto"
 
@@ -2068,6 +2081,10 @@ msgstr "{rangeStart}–{pageEnd} de {totalText} cartas"
 #: src/components/packs/CollectionPanel.tsx
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "{rangeStart}–{pageEnd} de {totalText} jugadores"
+
+#: src/routes/recommendations.tsx
+msgid "{rankedAge} ago"
+msgstr "hace {rankedAge}"
 
 #. placeholder {0}: mod.basedOn
 #: src/components/ui/ScoreModBadge.tsx
@@ -3845,6 +3862,10 @@ msgstr "Cerca de {0}x el límite: ayudaría usar menos octavas de fbm o iteracio
 #: src/routes/teams.tsx
 msgid "Acc"
 msgstr "Acc"
+
+#: src/routes/recommendations.tsx
+msgid "acc needed"
+msgstr "acc necesaria"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Accent colour"
@@ -16387,6 +16408,7 @@ msgstr "nunca vista"
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/RevealStage.tsx
 #: src/components/player/SkillHistoryModal.tsx
+#: src/routes/recommendations.tsx
 msgid "new"
 msgstr "nuevo"
 
@@ -16427,6 +16449,10 @@ msgstr "Nueva colección"
 #: src/components/supporter/SupportShowcase.tsx
 #~ msgid "New farm map"
 #~ msgstr "Mapa nuevo para farmear"
+
+#: src/routes/recommendations.tsx
+msgid "new farm maps"
+msgstr "mapas nuevos para farmear"
 
 #: src/routes/discord.tsx
 msgid "New farm maps"
@@ -20837,6 +20863,7 @@ msgid "Quadstream"
 msgstr "Quadstream"
 
 #: src/lib/beatmap-status.ts
+#: src/routes/recommendations.tsx
 msgid "qualified"
 msgstr "calificado"
 
@@ -20844,6 +20871,10 @@ msgstr "calificado"
 #: src/components/ui/BeatmapStatusBadge.tsx
 msgid "Qualified"
 msgstr "Calificado"
+
+#: src/routes/recommendations.tsx
+msgid "Qualified {age} ago, it gives pp once it is ranked. Players at your pp hold {acc}% on charts this hard {mods}, which is {target}pp here."
+msgstr "Calificado hace {age}, da pp cuando lo rankeen. Los jugadores con tu pp tienen {acc}% en mapas así de difíciles {mods}, que aquí son {target}pp."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Quarter turn right"
@@ -20964,6 +20995,7 @@ msgstr "Rango en llamas"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
+#: src/routes/recommendations.tsx
 msgid "ranked"
 msgstr "ranked"
 
@@ -20975,6 +21007,10 @@ msgstr "Ranked"
 #: src/routes/tracker.tsx
 msgid "Ranked (PP)"
 msgstr "Ranked (PP)"
+
+#: src/routes/recommendations.tsx
+msgid "Ranked {age} ago. Players at your pp hold {acc}% on charts this hard {mods}, which is {target}pp here."
+msgstr "Rankeado hace {age}. Los jugadores con tu pp tienen {acc}% en mapas así de difíciles {mods}, que aquí son {target}pp."
 
 #: src/components/player/SkillPlaysModal.tsx
 #~ msgid "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."

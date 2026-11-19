@@ -2778,8 +2778,9 @@ export async function fetchLiveTrackerSnapshot(
   return fetchLiveJson(`/api/snapshots/tracker?${query.toString()}`);
 }
 
-// "practice" only ever appears on `practiceRecs` rows, never in `recs`.
-export type LiveFarmHelperReason = "missing" | "improve" | "stale" | "owned" | "push" | "practice";
+// "practice" only ever appears on `practiceRecs` rows and "new" on `newMaps`
+// rows, never in `recs`.
+export type LiveFarmHelperReason = "missing" | "improve" | "stale" | "owned" | "push" | "practice" | "new";
 export type LiveFarmHelperKeyMode = "4k" | "7k" | "any";
 export type LiveFarmHelperView = "gain" | "popular" | "skills";
 export type LiveFarmHelperSkillMods = "nm" | "dt";
@@ -2851,6 +2852,17 @@ export interface LiveFarmHelperRec {
   subjectMissCount?: number | null;
   // skillboost rows only: the 320 rate the target pp corresponds to.
   pushTargetAccuracy?: number;
+  // "new" rows only: how the target was priced. No peer has played the chart,
+  // so the peer fields are zero; the accuracy is what players at this pp hold
+  // on charts this hard, lower when the target was capped.
+  newMap?: {
+    laneStars: number;
+    sunny: number;
+    predictedAccuracy: number;
+    cohortPlays: number;
+    cohortShare: number;
+    rankedAt: string | null;
+  };
 }
 
 export interface LiveFarmHelperPeerBand {
@@ -2905,6 +2917,10 @@ export interface LiveFarmHelperSnapshot {
   // sit above the player's shown skills. Their benchmarkPp is the raw peer
   // median, not a personal target. Optional so older backends still parse.
   practiceRecs?: LiveFarmHelperRec[];
+  // Gain view only: charts qualified or ranked in the last few weeks that pay
+  // more pp than they ask for, priced before players near this one have
+  // farmed them. Optional so older backends still parse.
+  newMaps?: LiveFarmHelperRec[];
   // Skills view only: the player's skill axes and ranked charts a little
   // above their rating in the chosen one. `recs` is empty on that view.
   skills?: LiveFarmHelperSkillBoard;

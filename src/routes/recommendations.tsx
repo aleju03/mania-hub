@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Flame,
   Mountain,
+  Gem,
   CircleHelp,
   SlidersHorizontal,
 } from "lucide-react";
@@ -432,6 +433,15 @@ const REASON_META: Record<
     soft: "bg-osu-purple/15",
     wash: "bg-gradient-to-l from-osu-purple/20 to-transparent",
     Icon: Mountain,
+  },
+  // Only "new farm maps" rows carry this; they never appear on the main board.
+  new: {
+    label: msg`new`,
+    accent: "bg-osu-orange",
+    text: "text-osu-orange",
+    soft: "bg-osu-orange/15",
+    wash: "bg-gradient-to-l from-osu-orange/20 to-transparent",
+    Icon: Gem,
   },
 };
 
@@ -936,6 +946,10 @@ function FarmHelperPage() {
     && !isClientFiltered
     && (visibleSnapshot?.recs.length ?? 0) <= PAGE_SIZE;
 
+  // "New farm maps" ride the snapshot separately too, above the board on an
+  // unfiltered gain view.
+  const newList = view === "gain" && !isClientFiltered ? visibleSnapshot?.newMaps ?? [] : [];
+
   const pageCount = Math.ceil(recs.length / PAGE_SIZE);
   const safePage = Math.min(page, Math.max(0, pageCount - 1));
   const pageRecs = recs.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
@@ -953,6 +967,7 @@ function FarmHelperPage() {
   const selectedFromList = selectedKey
     ? recs.find((rec) => recKey(rec) === selectedKey)
       ?? (showPractice ? practiceList.find((rec) => recKey(rec) === selectedKey) : null)
+      ?? newList.find((rec) => recKey(rec) === selectedKey)
       ?? null
     : null;
   // Keep the previewed rec renderable when a too_hard mark drops it from the
@@ -1181,6 +1196,31 @@ function FarmHelperPage() {
                           : t`${plural(recs.length, { one: "# map", other: "# maps" })}`
                     }
                   />
+
+                  {newList.length > 0 ? (
+                    <div className="mb-4">
+                      <div className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-osu-orange">
+                        <Trans>new farm maps</Trans>
+                      </div>
+                      <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4/60">
+                        <div className="divide-y divide-osu-b3/15">
+                          {newList.map((rec, index) => (
+                            <RecRow
+                              key={recKey(rec)}
+                              rec={rec}
+                              rank={index + 1}
+                              barPct={0}
+                              gainUnit={gainUnit}
+                              view={view}
+                              selected={selectedKey === recKey(rec)}
+                              onSelect={() => setSelectedKey(recKey(rec))}
+                              markedVerdict={isOwner ? feedbackMarks.get(recKey(rec)) ?? null : null}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {!visibleSnapshot ? (
                     error ? (
@@ -2511,6 +2551,9 @@ function RecRow({
           </div>
         </div>
 
+        {rec.reason === "new" ? (
+          <div className="hidden w-[86px] shrink-0 md:block" />
+        ) : (
         <div className="hidden w-[86px] shrink-0 items-center gap-1.5 md:flex">
           <Users className="h-3 w-3 shrink-0 text-osu-f1/70" />
           <span className="flex shrink-0 -space-x-1.5">
@@ -2522,6 +2565,7 @@ function RecRow({
           </span>
           <span className="text-[11px] font-semibold tabular-nums text-osu-l2">{formatPp(rec.peerCount)}</span>
         </div>
+        )}
 
         <div className="w-[74px] shrink-0 text-right sm:w-[88px]">
           {rec.reason === "practice" ? (
@@ -2615,6 +2659,7 @@ function RecPreview({
   const bar = comparisonBar(rec, i18n);
   const meta = REASON_META[rec.reason];
   const cover = rec.cover || rec.listCover;
+  const rankedAge = formatAge(rec.newMap?.rankedAt ?? null, i18n);
 
   return (
     <div className={`flex flex-col overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b4 ${className}`}>
@@ -2710,10 +2755,21 @@ function RecPreview({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <PreviewStat label={t`play this`} value={`${Math.round(rec.peerFraction * 100)}%`} tone="text-osu-blue" />
-            <PreviewStat label={t`median`} value={`${formatPp(rec.peerPpMedian)}pp`} tone="text-osu-c1" />
-          </div>
+          {rec.reason === "new" ? (
+            <div className="grid grid-cols-2 gap-2">
+              <PreviewStat label={t`acc needed`} value={`${formatAccPct(rec.newMap?.predictedAccuracy ?? 0)}%`} tone="text-osu-orange" />
+              <PreviewStat
+                label={rec.status === "qualified" ? t`qualified` : t`ranked`}
+                value={t`${rankedAge} ago`}
+                tone="text-osu-c1"
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <PreviewStat label={t`play this`} value={`${Math.round(rec.peerFraction * 100)}%`} tone="text-osu-blue" />
+              <PreviewStat label={t`median`} value={`${formatPp(rec.peerPpMedian)}pp`} tone="text-osu-c1" />
+            </div>
+          )}
 
           <div className="flex gap-2">
             <button
@@ -3568,6 +3624,7 @@ function useOpenFarmMapDetail() {
 function farmStatusLabel(rec: LiveFarmHelperRec, i18n: I18nLike): string {
   if (rec.reason === "owned") return i18n._(msg`cleared`);
   if (rec.reason === "practice") return i18n._(msg`next tier`);
+  if (rec.reason === "new") return rec.status === "qualified" ? i18n._(msg`qualified`) : i18n._(msg`new`);
   if (rec.reason === "missing") return rec.peerFraction >= 0.45 ? i18n._(msg`common pick`) : i18n._(msg`missing`);
   if (rec.reason === "stale") return i18n._(msg`old pb`);
   if (rec.reason === "push") return i18n._(msg`skillboost`);
@@ -3626,6 +3683,15 @@ function whySentence(rec: LiveFarmHelperRec, i18n: I18nLike): string {
     return i18n._(
       msg`${pct}% of the players around your pp farm this and hold ${median}pp on it, but its difficulty sits above what your plays have shown so far. Practice material, not farm yet.`,
     );
+  }
+  if (rec.reason === "new") {
+    const age = formatAge(rec.newMap?.rankedAt ?? null, i18n);
+    const acc = formatAccPct(rec.newMap?.predictedAccuracy ?? 0);
+    const target = formatPp(rec.benchmarkPp);
+    const mods = modsPhrase(rec.speedBucket, i18n);
+    return rec.status === "qualified"
+      ? i18n._(msg`Qualified ${age} ago, it gives pp once it is ranked. Players at your pp hold ${acc}% on charts this hard ${mods}, which is ${target}pp here.`)
+      : i18n._(msg`Ranked ${age} ago. Players at your pp hold ${acc}% on charts this hard ${mods}, which is ${target}pp here.`);
   }
   if (subjectPp == null) {
     const other = otherLaneBest(rec);
@@ -3830,6 +3896,17 @@ function ModList({ mods, size = 0.58, className = "" }: { mods: string[]; size?:
 }
 
 function comparisonBar(rec: LiveFarmHelperRec, i18n: I18nLike): { left: string; right: string; pct: number } {
+  // New maps have no peer scores yet: the share of players at this pp who hold
+  // a play as hard, and the accuracy the target needs.
+  if (rec.reason === "new") {
+    const pct = Math.round((rec.newMap?.cohortShare ?? 0) * 100);
+    const acc = formatAccPct(rec.newMap?.predictedAccuracy ?? 0);
+    return {
+      left: i18n._(msg`${pct}% of players at your pp have a play this hard`),
+      right: i18n._(msg`${acc}% acc`),
+      pct: clampPct(pct),
+    };
+  }
   // Missing rows, and any row without a recorded score, compare peers only:
   // there is no real subject score to anchor the other templates on, and a
   // fake "your 0pp" would be worse than the popularity framing.
@@ -3881,9 +3958,9 @@ function clampPct(value: number): number {
 function countReasons(recs: LiveFarmHelperRec[]): Record<ReasonFilter, number> {
   const counts: Record<ReasonFilter, number> = { all: recs.length, missing: 0, improve: 0, stale: 0, push: 0 };
   // "owned" only appears in the popular view, where the reason filter is
-  // hidden; "practice" rows never enter `recs` at all.
+  // hidden; "practice" and "new" rows never enter `recs` at all.
   for (const rec of recs) {
-    if (rec.reason !== "owned" && rec.reason !== "practice") counts[rec.reason] += 1;
+    if (rec.reason !== "owned" && rec.reason !== "practice" && rec.reason !== "new") counts[rec.reason] += 1;
   }
   return counts;
 }

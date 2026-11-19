@@ -100,6 +100,7 @@ const REASON_LABELS: Record<LiveFarmHelperReason, string> = {
   owned: "cleared",
   push: "skillboost",
   practice: "next tier",
+  new: "new",
 };
 
 const SPEED_LABELS: Record<LiveFarmHelperSpeedBucket, string> = {

@@ -460,6 +460,11 @@ msgstr "{0} / 谱师 {1}"
 msgid "{0} against"
 msgstr "{0} 票反对"
 
+#. placeholder {0}: formatAge(rec.newMap?.rankedAt ?? null, i18n)
+#: src/routes/recommendations.tsx
+#~ msgid "{0} ago"
+#~ msgstr ""
+
 #. placeholder {0}: sections.length
 #: src/components/packs/album/AlbumView.tsx
 msgid "{0} albums"
@@ -1315,6 +1320,10 @@ msgstr "相差 {0}pp"
 msgid "{acc}% {speed} on {map}"
 msgstr "在 {map} 上以 {speed} 打出 {acc}%"
 
+#: src/routes/recommendations.tsx
+msgid "{acc}% acc"
+msgstr "{acc}% acc"
+
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "{actions} same-hand actions"
 #~ msgstr "{actions} 次同手操作"
@@ -1980,6 +1989,10 @@ msgid "{otherTabMatches, plural, one {# match} other {# matches}} in <0>{0}</0>"
 msgstr "在<0>{0}</0>中找到 {otherTabMatches, plural, other {# 个匹配}}"
 
 #: src/routes/recommendations.tsx
+msgid "{pct}% of players at your pp have a play this hard"
+msgstr "与你 pp 相近的玩家中有 {pct}% 打过这么难的图"
+
+#: src/routes/recommendations.tsx
 msgid "{pct}% of players near you farm this"
 msgstr "与你水平相近的玩家中有 {pct}% 在刷这张"
 
@@ -2080,6 +2093,10 @@ msgstr "第 {rangeStart}–{pageEnd} 张 / 共 {totalText} 张卡片"
 #: src/components/packs/CollectionPanel.tsx
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "第 {rangeStart}–{pageEnd} 名 / 共 {totalText} 名玩家"
+
+#: src/routes/recommendations.tsx
+msgid "{rankedAge} ago"
+msgstr "{rankedAge}前"
 
 #. placeholder {0}: mod.basedOn
 #: src/components/ui/ScoreModBadge.tsx
@@ -3857,6 +3874,10 @@ msgstr "约为上限的 {0} 倍：减少 fbm 的八度数或循环次数会有�
 #: src/routes/teams.tsx
 msgid "Acc"
 msgstr "准度"
+
+#: src/routes/recommendations.tsx
+msgid "acc needed"
+msgstr "所需 acc"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Accent colour"
@@ -16399,6 +16420,7 @@ msgstr "从未活动"
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/RevealStage.tsx
 #: src/components/player/SkillHistoryModal.tsx
+#: src/routes/recommendations.tsx
 msgid "new"
 msgstr "新"
 
@@ -16439,6 +16461,10 @@ msgstr "新建收藏夹"
 #: src/components/supporter/SupportShowcase.tsx
 #~ msgid "New farm map"
 #~ msgstr "新的刷分图"
+
+#: src/routes/recommendations.tsx
+msgid "new farm maps"
+msgstr "新刷分图"
 
 #: src/routes/discord.tsx
 msgid "New farm maps"
@@ -20849,6 +20875,7 @@ msgid "Quadstream"
 msgstr "四押切"
 
 #: src/lib/beatmap-status.ts
+#: src/routes/recommendations.tsx
 msgid "qualified"
 msgstr "过审"
 
@@ -20856,6 +20883,10 @@ msgstr "过审"
 #: src/components/ui/BeatmapStatusBadge.tsx
 msgid "Qualified"
 msgstr "过审"
+
+#: src/routes/recommendations.tsx
+msgid "Qualified {age} ago, it gives pp once it is ranked. Players at your pp hold {acc}% on charts this hard {mods}, which is {target}pp here."
+msgstr "{age}前过审，ranked 之后才给 pp。与你 pp 相近的玩家在这么难的图上{mods}能打出 {acc}%，在这张图上相当于 {target}pp。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Quarter turn right"
@@ -20976,6 +21007,7 @@ msgstr "燃烧的段位"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
+#: src/routes/recommendations.tsx
 msgid "ranked"
 msgstr "上架"
 
@@ -20987,6 +21019,10 @@ msgstr "上架"
 #: src/routes/tracker.tsx
 msgid "Ranked (PP)"
 msgstr "Ranked（PP）"
+
+#: src/routes/recommendations.tsx
+msgid "Ranked {age} ago. Players at your pp hold {acc}% on charts this hard {mods}, which is {target}pp here."
+msgstr "{age}前 ranked。与你 pp 相近的玩家在这么难的图上{mods}能打出 {acc}%，在这张图上相当于 {target}pp。"
 
 #: src/components/player/SkillPlaysModal.tsx
 #~ msgid "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."

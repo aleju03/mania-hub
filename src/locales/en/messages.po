@@ -448,6 +448,11 @@ msgstr "{0} / mapped by {1}"
 msgid "{0} against"
 msgstr "{0} against"
 
+#. placeholder {0}: formatAge(rec.newMap?.rankedAt ?? null, i18n)
+#: src/routes/recommendations.tsx
+#~ msgid "{0} ago"
+#~ msgstr "{0} ago"
+
 #. placeholder {0}: sections.length
 #: src/components/packs/album/AlbumView.tsx
 msgid "{0} albums"
@@ -1326,6 +1331,10 @@ msgstr "{0}pp spread"
 msgid "{acc}% {speed} on {map}"
 msgstr "{acc}% {speed} on {map}"
 
+#: src/routes/recommendations.tsx
+msgid "{acc}% acc"
+msgstr "{acc}% acc"
+
 #: src/components/maps/LnStructurePanel.tsx
 #~ msgid "{actions} same-hand actions"
 #~ msgstr "{actions} same-hand actions"
@@ -1991,6 +2000,10 @@ msgid "{otherTabMatches, plural, one {# match} other {# matches}} in <0>{0}</0>"
 msgstr "{otherTabMatches, plural, one {# match} other {# matches}} in <0>{0}</0>"
 
 #: src/routes/recommendations.tsx
+msgid "{pct}% of players at your pp have a play this hard"
+msgstr "{pct}% of players at your pp have a play this hard"
+
+#: src/routes/recommendations.tsx
 msgid "{pct}% of players near you farm this"
 msgstr "{pct}% of players near you farm this"
 
@@ -2091,6 +2104,10 @@ msgstr "{rangeStart}–{pageEnd} of {totalText} cards"
 #: src/components/packs/CollectionPanel.tsx
 msgid "{rangeStart}–{pageEnd} of {totalText} players"
 msgstr "{rangeStart}–{pageEnd} of {totalText} players"
+
+#: src/routes/recommendations.tsx
+msgid "{rankedAge} ago"
+msgstr "{rankedAge} ago"
 
 #. placeholder {0}: mod.basedOn
 #: src/components/ui/ScoreModBadge.tsx
@@ -3868,6 +3885,10 @@ msgstr "About {0}x the limit: fewer fbm octaves or loop iterations would help."
 #: src/routes/teams.tsx
 msgid "Acc"
 msgstr "Acc"
+
+#: src/routes/recommendations.tsx
+msgid "acc needed"
+msgstr "acc needed"
 
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Accent colour"
@@ -16437,6 +16458,7 @@ msgstr "never seen"
 #: src/components/packs/PackSummary.tsx
 #: src/components/packs/RevealStage.tsx
 #: src/components/player/SkillHistoryModal.tsx
+#: src/routes/recommendations.tsx
 msgid "new"
 msgstr "new"
 
@@ -16477,6 +16499,10 @@ msgstr "New collection"
 #: src/components/supporter/SupportShowcase.tsx
 #~ msgid "New farm map"
 #~ msgstr "New farm map"
+
+#: src/routes/recommendations.tsx
+msgid "new farm maps"
+msgstr "new farm maps"
 
 #: src/routes/discord.tsx
 msgid "New farm maps"
@@ -20887,6 +20913,7 @@ msgid "Quadstream"
 msgstr "Quadstream"
 
 #: src/lib/beatmap-status.ts
+#: src/routes/recommendations.tsx
 msgid "qualified"
 msgstr "qualified"
 
@@ -20894,6 +20921,10 @@ msgstr "qualified"
 #: src/components/ui/BeatmapStatusBadge.tsx
 msgid "Qualified"
 msgstr "Qualified"
+
+#: src/routes/recommendations.tsx
+msgid "Qualified {age} ago, it gives pp once it is ranked. Players at your pp hold {acc}% on charts this hard {mods}, which is {target}pp here."
+msgstr "Qualified {age} ago, it gives pp once it is ranked. Players at your pp hold {acc}% on charts this hard {mods}, which is {target}pp here."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Quarter turn right"
@@ -21014,6 +21045,7 @@ msgstr "Rank on fire"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/lib/beatmap-status.ts
+#: src/routes/recommendations.tsx
 msgid "ranked"
 msgstr "ranked"
 
@@ -21025,6 +21057,10 @@ msgstr "Ranked"
 #: src/routes/tracker.tsx
 msgid "Ranked (PP)"
 msgstr "Ranked (PP)"
+
+#: src/routes/recommendations.tsx
+msgid "Ranked {age} ago. Players at your pp hold {acc}% on charts this hard {mods}, which is {target}pp here."
+msgstr "Ranked {age} ago. Players at your pp hold {acc}% on charts this hard {mods}, which is {target}pp here."
 
 #: src/components/player/SkillPlaysModal.tsx
 #~ msgid "Ranked by {label} skill rating from the plays behind this profile rating, including tracked history."
