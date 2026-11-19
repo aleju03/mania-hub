@@ -64,6 +64,15 @@ export const CELEBRATIONS: Record<string, ChangelogCelebration> = {
 };
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-11-18", text: "Added a \"new farm\" category to Recommended maps, from the day they're qualified or ranked.", to: "/recommendations", image: { src: "/images/changelog/2026-11-18-new-farm-maps.webp", alt: "The New farm maps section on Recommended maps, with a qualified map and a newly ranked one", width: 640, height: 80 } },
+  { date: "2026-11-18", text: "Fixed Recommended maps leaving out HT and DT maps that players near you farm.", to: "/recommendations" },
+  { date: "2026-11-18", text: "Added a Recent plays feed to the Discord bot, which posts every pass of the players you pick in a channel.", to: "/discord" },
+  { date: "2026-11-18", text: "Improved the Discord bot's /setup, which now sets up every feed and its filters, including Recent plays.", to: "/discord" },
+  { date: "2026-11-18", text: "Added each skillset's exact dan estimate to the dan window, to know how close you are to the next level.", image: { src: "/images/changelog/2026-11-18-dan-window-skillset-estimate.webp", alt: "The Tech skillset in the dan window, delta-- with its estimate of 14.04", width: 192, height: 149 } },
+  { date: "2026-11-17", text: "Added Torii plays to Add a missing score." },
+  { date: "2026-11-17", text: "Added the set's MSD range to map cards.", to: "/maps", image: { src: "/images/changelog/2026-11-17-map-card-msd-range.webp", alt: "A map card with its MSD range, 5.1 to 29.4, in the corner of the cover", width: 382, height: 124 } },
+  { date: "2026-11-17", text: "Added the HT and DT toggles to maps opened from an HT or DT play." },
+  { date: "2026-11-17", text: "Fixed some replays not loading when osu! no longer serves the score." },
   {
     date: "2026-11-14",
     text: "Dedicated to everyone who supported even when there were no perks in return, there's now a supporter status that unlocks cosmetics for your profile, your name and your cards.",
