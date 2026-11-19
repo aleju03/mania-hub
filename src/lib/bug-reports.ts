@@ -28,7 +28,8 @@ export type BugReportStatus =
   | "fixed"
   | "wontfix"
   | "duplicate"
-  | "notabug";
+  | "notabug"
+  | "ignored";
 
 /** Something broken, or anything else said about the site. One table and one
  *  thread either way; the kind only changes the wording and what is collected. */
@@ -42,6 +43,7 @@ export const BUG_REPORT_STATUSES: readonly BugReportStatus[] = [
   "wontfix",
   "duplicate",
   "notabug",
+  "ignored",
 ];
 
 export const BUG_REPORT_BODY_MAX = 4000;
@@ -130,6 +132,7 @@ export interface BugReportCounts {
   wontfix: number;
   duplicate: number;
   notabug: number;
+  ignored: number;
   total: number;
 }
 
@@ -435,7 +438,7 @@ export const editBugReportMessageAsAdmin = createServerFn({ method: "POST" })
     return await response.json() as { report: BugReport };
   });
 
-export interface BugReportAlert {
+export interface BugReportUnseen {
   /** Reports carrying reporter words the board has not been shown yet. */
   count: number;
   latestAt: number | null;
@@ -443,19 +446,29 @@ export interface BugReportAlert {
   byStatus: Record<BugReportStatus, number>;
 }
 
-function emptyUnreadByStatus(): Record<BugReportStatus, number> {
-  return { new: 0, investigating: 0, pending: 0, fixed: 0, wontfix: 0, duplicate: 0, notabug: 0 };
+/** The top level is bugs, which is what the nav dot rings for. Feedback is
+ *  counted apart and only shows on the board's Feedback tab. */
+export interface BugReportAlert extends BugReportUnseen {
+  feedback: BugReportUnseen;
 }
 
-const NO_ALERT: BugReportAlert = { count: 0, latestAt: null, byStatus: emptyUnreadByStatus() };
+export function emptyBugReportStatusCounts(): Record<BugReportStatus, number> {
+  return { new: 0, investigating: 0, pending: 0, fixed: 0, wontfix: 0, duplicate: 0, notabug: 0, ignored: 0 };
+}
 
-function toAlert(payload: Partial<BugReportAlert> | undefined): BugReportAlert {
+function toUnseen(payload: Partial<BugReportUnseen> | undefined): BugReportUnseen {
   return {
     count: Number(payload?.count ?? 0),
     latestAt: payload?.latestAt ?? null,
-    byStatus: { ...emptyUnreadByStatus(), ...(payload?.byStatus ?? {}) },
+    byStatus: { ...emptyBugReportStatusCounts(), ...(payload?.byStatus ?? {}) },
   };
 }
+
+function toAlert(payload: Partial<BugReportAlert> | undefined): BugReportAlert {
+  return { ...toUnseen(payload), feedback: toUnseen(payload?.feedback) };
+}
+
+const NO_ALERT: BugReportAlert = toAlert(undefined);
 
 /** Backs the red dot in the nav. Polled from every page an admin is on, so it
  *  answers with zero rather than throwing when the backend is unreachable or
@@ -577,17 +590,22 @@ export const deleteBugReport = createServerFn({ method: "POST" })
     return { ok: payload.ok };
   });
 
-export const clearClosedBugReports = createServerFn({ method: "POST" }).handler(
-  async (): Promise<{ cleared: number }> => {
+export const clearClosedBugReports = createServerFn({ method: "POST" })
+  .validator((data: { kind?: BugReportKind } | undefined) => ({
+    kind: data?.kind === "bug" || data?.kind === "feedback" ? data.kind : undefined,
+  }))
+  .handler(async ({ data }): Promise<{ cleared: number }> => {
     const { requireAdminAccess } = await import("./auth");
     await requireAdminAccess("Bug reports clear");
-    const response = await adminFetch("/api/admin/bug-reports/clear-closed", { method: "POST", body: "{}" });
+    const response = await adminFetch("/api/admin/bug-reports/clear-closed", {
+      method: "POST",
+      body: JSON.stringify({ kind: data.kind }),
+    });
     if (!response.ok) throw new Error(`Bug reports clear failed (${response.status}).`);
     const payload = await response.json() as { cleared: number; screenshotKeys?: string[] };
     await removeScreenshots(payload.screenshotKeys ?? []);
     return { cleared: payload.cleared };
-  },
-);
+  });
 
 export const promoteBugReportToTodo = createServerFn({ method: "POST" })
   .validator((data: { id: string }) => data)

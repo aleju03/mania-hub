@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Clock,
   Copy,
+  EyeOff,
   Flag,
   Inbox,
   Layers,
@@ -52,6 +53,7 @@ import {
   clearClosedBugReports,
   deleteBugReport,
   editBugReportMessageAsAdmin,
+  emptyBugReportStatusCounts,
   getBugReportAlert,
   getBugReportScreenshotUrls,
   listBugReports,
@@ -60,6 +62,7 @@ import {
   replyToBugReportAsAdmin,
   updateBugReport,
   type BugReport,
+  type BugReportAlert,
   type BugReportCounts,
   type BugReportKind,
   type BugReportMessage,
@@ -111,10 +114,7 @@ const ADMIN_THREAD_PREVIEW_COUNT = 6;
 const ADMIN_REPLY_USER_ID = 7095193;
 
 type StatusFilter = BugReportStatus | "all";
-type KindFilter = BugReportKind | "all";
-
-const KIND_FILTERS: { value: KindFilter; label: string }[] = [
-  { value: "all", label: "All" },
+const KIND_FILTERS: { value: BugReportKind; label: string }[] = [
   { value: "bug", label: "Bugs" },
   { value: "feedback", label: "Feedback" },
 ];
@@ -166,6 +166,13 @@ const STATUS_META: Record<BugReportStatus, StatusMeta> = {
     pill: "border-osu-b3/40 bg-osu-b4/60 text-osu-l2",
     edge: "border-l-osu-b3/60",
   },
+  ignored: {
+    label: "Ignored",
+    Icon: EyeOff,
+    text: "text-osu-f1",
+    pill: "border-osu-b3/40 bg-osu-b4/60 text-osu-f1",
+    edge: "border-l-osu-b3/40",
+  },
   duplicate: {
     label: "Duplicate",
     Icon: Copy,
@@ -190,6 +197,7 @@ const FILTERS: StatusFilter[] = [
   "wontfix",
   "duplicate",
   "notabug",
+  "ignored",
   "all",
 ];
 
@@ -202,12 +210,14 @@ const STATUS_MOVES: BugReportStatus[] = [
   "wontfix",
   "duplicate",
   "notabug",
+  "ignored",
   "new",
 ];
 
 /* What "clear closed" takes. `notabug` and `pending` are left out on purpose:
    a question parked in one and a job queued in the other are not finished
-   with, so they survive the sweep the same way new and investigating do. */
+   with, so they survive the sweep the same way new and investigating do.
+   `ignored` stays too, so a report you chose not to answer is not re-filed. */
 const CLOSED_STATUSES: BugReportStatus[] = ["fixed", "wontfix", "duplicate"];
 
 function formatWhen(ms: number): string {
@@ -976,7 +986,7 @@ function BugReportsAdminPage() {
 
 function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
   const [status, setStatus] = useState<StatusFilter>("new");
-  const [kind, setKind] = useState<KindFilter>("all");
+  const [kind, setKind] = useState<BugReportKind>("bug");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
@@ -989,6 +999,7 @@ function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
     wontfix: 0,
     duplicate: 0,
     notabug: 0,
+    ignored: 0,
     total: 0,
   });
   const [total, setTotal] = useState(0);
@@ -1004,9 +1015,8 @@ function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
   const [chipsFading, setChipsFading] = useState(false);
   /* What is still waiting, per status: the tab it sits behind wears the dot,
      which is also how it gets cleared - opening that tab reads those rows. */
-  const [unread, setUnread] = useState<Record<BugReportStatus, number>>(() => ({
-    new: 0, investigating: 0, pending: 0, fixed: 0, wontfix: 0, duplicate: 0, notabug: 0,
-  }));
+  const [alert, setAlert] = useState<BugReportAlert | null>(null);
+  const unread = alert ? (kind === "feedback" ? alert.feedback.byStatus : alert.byStatus) : emptyBugReportStatusCounts();
   // Guards against a slow response for an old filter landing after a newer one.
   const requestRef = useRef(0);
 
@@ -1021,7 +1031,7 @@ function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
       const page = await listBugReports({
         data: {
           status: status === "all" ? undefined : status,
-          kind: kind === "all" ? undefined : kind,
+          kind,
           search: search || undefined,
           limit: PAGE_SIZE,
           offset,
@@ -1046,7 +1056,7 @@ function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
         : await getBugReportAlert();
       if (request !== requestRef.current) return;
       publishBugReportAlert(alert);
-      setUnread(alert.byStatus);
+      setAlert(alert);
     } catch {
       if (request !== requestRef.current) return;
       setReports([]);
@@ -1120,7 +1130,9 @@ function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="h-4 w-1 rounded-full bg-osu-pink" />
-              <h1 className="text-sm font-bold uppercase tracking-[0.14em] text-osu-l1">Bugs and feedback</h1>
+              <h1 className="text-sm font-bold uppercase tracking-[0.14em] text-osu-l1">
+                {kind === "feedback" ? "Feedback" : "Bug reports"}
+              </h1>
             </div>
             <p className="mt-1 text-[11px] text-osu-f1">
               {counts.new} waiting{counts.total ? ` · ${counts.total} filed` : ""}
@@ -1132,18 +1144,31 @@ function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
 
           <div className="flex items-center gap-2">
             <div className="flex flex-shrink-0 rounded-md border border-osu-b3/50 bg-osu-b6/70 p-0.5">
-              {KIND_FILTERS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setKind(option.value)}
-                  className={`h-[24px] cursor-pointer rounded px-2 text-[11px] font-semibold transition-colors duration-[120ms] ${
-                    kind === option.value ? "bg-osu-b4 text-white" : "text-osu-f1 hover:text-osu-l1"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
+              {KIND_FILTERS.map((option) => {
+                const waiting = option.value === "feedback" ? alert?.feedback.count ?? 0 : alert?.count ?? 0;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setKind(option.value)}
+                    className={`inline-flex h-[24px] cursor-pointer items-center gap-1.5 rounded px-2 text-[11px] font-semibold transition-colors duration-[120ms] ${
+                      kind === option.value ? "bg-osu-b4 text-white" : "text-osu-f1 hover:text-osu-l1"
+                    }`}
+                  >
+                    {option.label}
+                    {waiting > 0 && kind !== option.value ? (
+                      <span
+                        title={`${waiting} unread`}
+                        className={`inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[9.5px] font-bold tabular-nums leading-none text-white ${
+                          option.value === "feedback" ? "bg-osu-b3" : "bg-osu-red"
+                        }`}
+                      >
+                        {waiting}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
             <div className="relative min-w-0 flex-1 sm:w-[260px] sm:flex-none">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
@@ -1177,7 +1202,7 @@ function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b5/40 lg:grid-cols-8">
+        <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b5/40 lg:grid-cols-9">
           {FILTERS.map((filter) => {
             const active = status === filter;
             const meta = filter === "all" ? null : STATUS_META[filter];
@@ -1273,18 +1298,14 @@ function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
               </button>
             </>
           ) : null}
-          {/* The sweep takes both kinds, so it is offered where the count it
-              quotes covers both. */}
-          {kind === "all" ? (
-            <button
-              onClick={() => setClearAsk(true)}
-              disabled={closedCount(counts) === 0}
-              className={`${ACTION_CLASS} ml-auto`}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Clear closed
-            </button>
-          ) : null}
+          <button
+            onClick={() => setClearAsk(true)}
+            disabled={closedCount(counts) === 0}
+            className={`${ACTION_CLASS} ml-auto`}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Clear closed
+          </button>
         </div>
       </div>
 
@@ -1301,11 +1322,11 @@ function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
 
       {clearAsk ? (
         <ConfirmModal
-          title="Clear every closed report?"
-          body={`${closedCount(counts)} fixed, won't fix and duplicate reports go for good, screenshots included. New, investigating, pending and not-a-bug ones stay.`}
+          title={kind === "feedback" ? "Clear all closed feedback?" : "Clear every closed bug report?"}
+          body={`${closedCount(counts)} fixed, won't fix and duplicate ${kind === "feedback" ? "feedback reports" : "bug reports"} go for good, screenshots included. New, investigating, pending, not-a-bug and ignored ones stay.`}
           confirmLabel="Clear"
           danger
-          onConfirm={() => void act("clear", async () => { await clearClosedBugReports(); })}
+          onConfirm={() => void act("clear", async () => { await clearClosedBugReports({ data: { kind } }); })}
           onClose={() => setClearAsk(false)}
         />
       ) : null}

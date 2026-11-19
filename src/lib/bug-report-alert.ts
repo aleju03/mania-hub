@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { getBugReportAlert, type BugReportAlert } from "./bug-reports";
+import { emptyBugReportStatusCounts, getBugReportAlert, type BugReportAlert } from "./bug-reports";
 
 /* The unread state behind the red dot on the Admin nav button.
  *
@@ -17,7 +17,8 @@ import { getBugReportAlert, type BugReportAlert } from "./bug-reports";
 const EMPTY: BugReportAlert = {
   count: 0,
   latestAt: null,
-  byStatus: { new: 0, investigating: 0, pending: 0, fixed: 0, wontfix: 0, duplicate: 0, notabug: 0 },
+  byStatus: emptyBugReportStatusCounts(),
+  feedback: { count: 0, latestAt: null, byStatus: emptyBugReportStatusCounts() },
 };
 const POLL_MS = 90_000;
 

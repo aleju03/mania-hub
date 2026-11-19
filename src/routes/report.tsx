@@ -1168,10 +1168,11 @@ function StatusChip({ status, kind }: { status: BugReportStatus; kind: BugReport
     // The backend never sends this one to a reporter (it reads as "open"
     // instead, see toBugReportForReporter); the arm only keeps the map total.
     notabug: t`open`,
+    ignored: t`open`,
   };
   const tone = status === "fixed"
     ? "bg-emerald-400/10 text-emerald-200"
-    : status === "new" || status === "investigating" || status === "pending" || status === "notabug"
+    : status === "new" || status === "investigating" || status === "pending" || status === "notabug" || status === "ignored"
       ? "bg-osu-pink/10 text-osu-pink-light"
       : "bg-osu-b4/60 text-osu-l2";
   return (
