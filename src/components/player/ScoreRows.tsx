@@ -677,18 +677,17 @@ export function ScoreDetailModal({ score, onClose, extra, showPlayer = false }: 
                   value={display.totalScore ? formatNumber(display.totalScore) : "-"}
                 />
               )}
-              <ScoreDetailStat
-                label={t`Stars`}
-                value={
-                  score.beatmap?.difficulty_rating != null
-                    ? <StarRatingBadge stars={score.beatmap.difficulty_rating} size={1.4} />
-                    : "-"
-                }
-              />
-              <ScoreDetailStat
-                label={t`BPM`}
-                value={score.beatmap?.bpm != null ? String(Math.round(score.beatmap.bpm)) : "-"}
-              />
+              {/* Some plays (e.g. tracked rows without beatmap stats) never
+                  carry these, so the cells only show when there is a value. */}
+              {score.beatmap?.difficulty_rating != null && (
+                <ScoreDetailStat
+                  label={t`Stars`}
+                  value={<StarRatingBadge stars={score.beatmap.difficulty_rating} size={1.4} />}
+                />
+              )}
+              {score.beatmap?.bpm != null && (
+                <ScoreDetailStat label={t`BPM`} value={String(Math.round(score.beatmap.bpm))} />
+              )}
             </div>
 
             <div className="mt-5 flex flex-col gap-3 border-t border-osu-b3/20 pt-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
