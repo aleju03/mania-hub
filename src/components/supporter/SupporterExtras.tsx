@@ -1,4 +1,4 @@
-import { previewMascot, rememberPreviewMascot } from "#/lib/supporter-preview";
+import { rememberPreviewMascot } from "#/lib/supporter-preview";
 import { useEffect, useRef, useState } from "react";
 import { useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
@@ -7,9 +7,9 @@ import type { MessageDescriptor } from "@lingui/core";
 import { HoursCard, LnSplitCard, NotesCard, PercentileCard, ProfileStatPicker, RatioCard, SessionCard, SkillCard, SkillKeymodeChoice, StatPreviewCell, StreakCard, useExtraStatPreviews } from "#/components/player/ProfileStatCards";
 import { fetchLiveSubmittedCompanions, fetchLiveSupporterProfileLook, forgetLiveSupporterLook } from "#/lib/live-backend";
 import { DEFAULT_PROFILE_STATS, type ProfileStatId, type ProfileStatsData } from "#/lib/profile-stats";
-import { fetchOwnSupporterCompanions, saveSupporterCompanionSetting, saveSupporterProfileSkillKeysSetting, saveSupporterProfileStatsSetting, submitSupporterCompanion } from "#/lib/supporter-look-settings";
+import { fetchOwnSupporterCompanions, saveSupporterProfileSkillKeysSetting, saveSupporterProfileStatsSetting, submitSupporterCompanion } from "#/lib/supporter-look-settings";
 import { deleteAdminCompanion, loadAdminCompanions, setAdminCompanionListed } from "#/lib/admin-supporters";
-import { BUILT_IN_COMPANIONS, builtInCompanion, COMPANION_NAME_MAX, companionId, type SubmittedCompanion, type SupporterCompanion } from "#/lib/supporter-companions";
+import { BUILT_IN_COMPANIONS, builtInCompanion, COMPANION_NAME_MAX, type SubmittedCompanion, type SupporterCompanion } from "#/lib/supporter-companions";
 import { useAuth } from "#/lib/auth-context";
 import { Loader2 } from "lucide-react";
 import { GradeImg } from "#/components/ui/GradeImg";
@@ -119,14 +119,22 @@ const NONE = "none";
 
 /* The companion beside the viewer's profile numbers: the site's own, the listed
    submissions and the viewer's own unlisted ones in one list. Pointing at one
-   shows it in the preview; clicking puts it on the profile. A supporter can
-   submit their own (a .glb model or an image), theirs alone until an admin
+   shows it in the preview; clicking puts it on, waiting with the page's other
+   unsaved changes (`value` and `onPick` are the page's loadout). A supporter
+   can submit their own (a .glb model or an image), theirs alone until an admin
    lists it with their name on it. An admin sees every submission and can
-   list, unlist or delete any. */
-export function CompanionSection({ viewerId, supporter }: { viewerId: number; supporter: boolean }) {
+   list, unlist or delete any; someone else's unlisted one only previews. */
+export function CompanionSection({ viewerId, supporter, value, onPick, saveError }: {
+  viewerId: number;
+  supporter: boolean;
+  /** The stand on now (saved or waiting to be), null for none; undefined while it loads. */
+  value: string | null | undefined;
+  onPick: (id: string | null, companion: SupporterCompanion | null) => void;
+  saveError?: string | null;
+}) {
   const { t, i18n } = useLingui();
   const auth = useAuth();
-  const [saved, setSaved] = useState<string>(NONE);
+  const saved = value ?? NONE;
   const [hovered, setHovered] = useState<string | null>(null);
   // a tile takes the preview only once the pointer rests on it, so crossing
   // other tiles on the way to the preview (to drag it) leaves it alone
@@ -146,15 +154,6 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
 
   useEffect(() => {
     let alive = true;
-    void fetchLiveSupporterProfileLook(viewerId).then((value) => {
-      if (!alive) return;
-      if (value.companion) setSaved(companionId(value.companion));
-      else if (!supporter) {
-        // what they picked for the profile preview, this session
-        const tried = previewMascot();
-        if (tried) setSaved(companionId(tried));
-      }
-    });
     const lists = auth.isAdmin
       ? [loadAdminCompanions()]
       : [fetchOwnSupporterCompanions().catch(() => []), fetchLiveSubmittedCompanions().catch(() => [])];
@@ -173,30 +172,25 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
   const find = (id: string | null) => choices.find((choice) => choice.id === id)?.companion ?? null;
   const shownId = hovered ?? saved;
   const shown = find(shownId);
+  // what the backend lets the viewer wear: someone else's unlisted submission only previews
+  const wearable = (companion: SupporterCompanion) =>
+    "builtIn" in companion || companion.submitted.listed || companion.submitted.submittedBy.id === viewerId;
 
-  const pick = (id: string) => {
-    if (id === saved) return;
-    if (!supporter) {
-      // nothing saves; kept for "Preview on my profile"
-      setSaved(id);
-      rememberPreviewMascot(id === NONE ? null : find(id));
+  const pick = (id: string, companion = find(id)) => {
+    if (companion && !wearable(companion)) {
+      setHovered(id);
       return;
     }
-    const before = saved;
-    setSaved(id);
     setError(null);
-    saveSupporterCompanionSetting({ data: { companion: id === NONE ? null : id } })
-      .then(() => forgetLiveSupporterLook(viewerId))
-      .catch((reason: unknown) => {
-        setSaved(before);
-        setError(reason instanceof Error ? reason.message : t`That didn't save. Try again.`);
-      });
+    if (id === saved) return;
+    // someone who has not supported picks for "Preview on my profile"
+    if (!supporter) rememberPreviewMascot(id === NONE ? null : companion);
+    onPick(id === NONE ? null : id, id === NONE ? null : companion);
   };
 
   const remove = (id: string) => {
     void deleteAdminCompanion({ data: { id } }).then(() => {
       setSubmitted((list) => list.filter((entry) => entry.id !== id));
-      if (saved === id) setSaved(NONE);
       setHovered(null);
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
   };
@@ -220,7 +214,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
       setDraftName("");
       setDraftFile(null);
       setFormOpen(false);
-      pick(companion.id);
+      pick(companion.id, { submitted: companion });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -354,7 +348,7 @@ export function CompanionSection({ viewerId, supporter }: { viewerId: number; su
               </div>
             </div>
           )}
-          {error && <p className="mt-2 text-[12px] text-osu-red-light">{error}</p>}
+          {(error ?? saveError) && <p className="mt-2 text-[12px] text-osu-red-light">{error ?? saveError}</p>}
         </div>
       </div>
     </section>

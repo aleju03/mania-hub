@@ -27,6 +27,8 @@ export interface Loadout {
   look: SupporterLook;
   /** Packs cosmetics: card case, binder, pack wrapper and opening blade. */
   pack: SupporterPackStyle;
+  /** The stand's id (supporter-companions.ts), null for none. Not a slot: the Stand section picks it. Left out until it has loaded. */
+  companion?: string | null;
 }
 
 export type SlotId = "theme" | "frame" | "nameStyle" | "nameFont" | "motif" | "foil" | "sleeve" | "binder" | "wrapper" | "blade";

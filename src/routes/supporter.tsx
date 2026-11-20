@@ -41,6 +41,7 @@ import { getI18n } from "../lib/i18n";
 import { formatNumber } from "../lib/format";
 import {
   fetchLivePackCardSnapshotDirect,
+  fetchLiveSupporterProfileLook,
   forgetLiveSupporterLook,
   setSupporterFrameLocally,
   setSupporterThemeLocally,
@@ -67,9 +68,11 @@ import {
   saveSupporterProfileThemeSetting,
   saveSupporterRankFireSetting,
   saveSupporterRankShownSetting,
+  saveSupporterCompanionSetting,
   type SupporterLookState,
 } from "../lib/supporter-look-settings";
 import { wearCustomTheme } from "../lib/supporter-custom-themes";
+import { builtInCompanion, companionId, type SupporterCompanion } from "../lib/supporter-companions";
 
 /* Supporter perks as a loadout: the theme of the viewer's whole profile, the
    frame around their avatar, the style and font of their name, and the art
@@ -156,7 +159,8 @@ function sameLoadout(a: Loadout, b: Loadout): boolean {
   return a.theme === b.theme && ownThemeOf(a) === ownThemeOf(b) && themeSwitches(a) === themeSwitches(b)
     && a.frame === b.frame && a.nameStyle === b.nameStyle && a.nameFont === b.nameFont && a.nameOutline === b.nameOutline
     && sameLook(a.look, b.look)
-    && a.pack.sleeve === b.pack.sleeve && a.pack.binder === b.pack.binder && a.pack.wrapper === b.pack.wrapper && a.pack.blade === b.pack.blade;
+    && a.pack.sleeve === b.pack.sleeve && a.pack.binder === b.pack.binder && a.pack.wrapper === b.pack.wrapper && a.pack.blade === b.pack.blade
+    && (a.companion ?? null) === (b.companion ?? null);
 }
 
 export const Route = createFileRoute("/supporter")({
@@ -178,8 +182,19 @@ export const Route = createFileRoute("/supporter")({
   component: SupporterPage,
 });
 
-function loadoutOf(state: SupporterLookState): Loadout {
-  return { theme: state.profileTheme, themeOptions: state.profileThemeOptions, frame: state.frame, nameStyle: state.nameStyle, nameFont: state.nameFont, nameOutline: state.nameOutline, look: state.look ?? DEFAULT_LOOK, pack: state.packStyle };
+/* The stand is not in the look state; it comes from the profile look and is
+   carried over from the loadout it was last saved with. */
+function loadoutOf(state: SupporterLookState, companion?: string | null): Loadout {
+  return { theme: state.profileTheme, themeOptions: state.profileThemeOptions, frame: state.frame, nameStyle: state.nameStyle, nameFont: state.nameFont, nameOutline: state.nameOutline, look: state.look ?? DEFAULT_LOOK, pack: state.packStyle, companion };
+}
+
+/* The stand on the viewer's profile, undefined if it could not be read. Past
+   the browser's cached copy, which can be from before a save just made. */
+function readCompanion(userId: number): Promise<string | null | undefined> {
+  forgetLiveSupporterLook(userId);
+  return fetchLiveSupporterProfileLook(userId)
+    .then((value) => (value.companion ? companionId(value.companion) : null))
+    .catch(() => undefined);
 }
 
 function SupporterPage() {
@@ -211,6 +226,8 @@ function SupporterPage() {
   /* The loadout the server last confirmed, which a failed save falls back to. */
   const saved = useRef<Loadout | null>(null);
   const saveChain = useRef<Promise<void>>(Promise.resolve());
+  /* Stands picked here, by id, for "Preview on my profile" before they are saved. */
+  const pickedCompanions = useRef(new Map<string, SupporterCompanion>());
   const [artDraft, setArtDraft] = useState<CustomArtDraft | null>(null);
   const [artUploading, setArtUploading] = useState(false);
   const [artError, setArtError] = useState<string | null>(null);
@@ -230,15 +247,22 @@ function SupporterPage() {
   useEffect(() => {
     if (!viewer) return;
     let alive = true;
-    fetchSupporterLookState()
-      .then((next) => {
+    Promise.all([fetchSupporterLookState(), readCompanion(viewer.id)])
+      .then(([next, companion]) => {
         if (!alive) return;
         registerWorkshopFrames(next.frameArt ?? {});
         setState(next);
         rememberViewerSupporter(viewer.id, next.supporter ? next.expiresAt : null);
-        saved.current = loadoutOf(next);
-        setEquipped(loadoutOf(next));
-        if (next.supporter) setPending(readDraft(viewer.id));
+        // someone who has not supported gets the one they picked for the profile preview
+        const tried = next.supporter ? null : previewMascot();
+        const stand = tried ? companionId(tried) : companion;
+        saved.current = loadoutOf(next, stand);
+        setEquipped(loadoutOf(next, stand));
+        if (next.supporter) {
+          const draft = readDraft(viewer.id);
+          // a draft from before the stand was part of the loadout keeps the saved one
+          setPending(draft && draft.companion === undefined ? { ...draft, companion: stand } : draft);
+        }
       })
       .catch(() => alive && setEquipped({ theme: null, themeOptions: {}, frame: null, nameStyle: null, nameFont: null, nameOutline: null, look: DEFAULT_LOOK, pack: NO_PACK_STYLE }));
     fetchLivePackCardSnapshotDirect(String(viewer.id))
@@ -275,6 +299,7 @@ function SupporterPage() {
       const before = saved.current;
       if (!before) return;
       let latest: SupporterLookState | null = null;
+      let stand = before.companion;
       setBusy(true);
       try {
         /* One of the viewer's own themes is stored apart from the built-ins,
@@ -309,9 +334,14 @@ function SupporterPage() {
           latest = await saveSupporterPackStyleSetting({ data: { packStyle: next.pack } });
           setSupporterSleeveLocally(viewer.id, next.pack.sleeve);
         }
+        if ((next.companion ?? null) !== (before.companion ?? null)) {
+          stand = (await saveSupporterCompanionSetting({ data: { companion: next.companion ?? null } })).companion;
+          saved.current = { ...saved.current!, companion: stand };
+          forgetLiveSupporterLook(viewer.id);
+        }
         if (latest) {
           setState(latest);
-          saved.current = loadoutOf(latest);
+          saved.current = loadoutOf(latest, stand);
           forgetLiveSupporterLook(viewer.id);
           setSupporterFrameLocally(viewer.id, latest.frame);
           setSupporterThemeLocally(viewer.id, latest.profileThemeOptions.rows ? latest.profileTheme : null);
@@ -319,7 +349,7 @@ function SupporterPage() {
           setSupporterNameOutlineLocally(viewer.id, latest.nameOutline);
         }
       } catch (cause) {
-        if (latest) saved.current = loadoutOf(latest);
+        if (latest) saved.current = loadoutOf(latest, stand);
         setEquipped(saved.current);
         setPending((current) => current ?? next);
         setError(cause instanceof Error ? cause.message : t`Could not save that.`);
@@ -482,7 +512,8 @@ function SupporterPage() {
     if (!equipped || spinning) return;
     setHover(null);
     setError(null);
-    setPending(BARE);
+    // the stand is its own section, so it stays
+    setPending({ ...BARE, companion: equipped.companion });
     setPop((n) => n + 1);
   };
   const worn = pending ?? equipped;
@@ -564,6 +595,13 @@ function SupporterPage() {
   const onEditCustom = useCallback(() => latest.current.editCustom(), []);
   const onThemeOptions = useCallback((options: Loadout["themeOptions"]) => latest.current.setThemeOptions(options), []);
   const onNameOutline = useCallback((outline: string | null, commit: boolean) => latest.current.setNameOutline(outline, commit), []);
+  const onPickCompanion = (companion: string | null, picked: SupporterCompanion | null) => {
+    const base = pending ?? equipped;
+    if (!base) return;
+    if (picked) pickedCompanions.current.set(companion!, picked);
+    trackOnce("supporter_pick_companion");
+    put({ ...base, companion });
+  };
   const onWearOwnTheme = useCallback((themeId: number | null, options?: ProfileThemeOptions) => latest.current.wearOwnTheme(themeId, options), []);
 
   const giftFrom = state?.giftFrom ?? null;
@@ -573,11 +611,20 @@ function SupporterPage() {
   /* The viewer's own profile wearing what is on now (a roll waiting to be
      kept included), in this browser only: supporter-preview.ts. Someone who
      has not supported also gets a first rank and the mascot they picked. */
+  /* A supporter's stand picked here and not saved yet (null: taken off), for
+     the profile preview; undefined leaves the saved one. */
+  const unsavedStand = (loadout: Loadout): SupporterCompanion | null | undefined => {
+    const id = loadout.companion ?? null;
+    if (loadout.companion === undefined || id === (saved.current?.companion ?? null)) return undefined;
+    if (id === null) return null;
+    const builtIn = builtInCompanion(id);
+    return pickedCompanions.current.get(id) ?? (builtIn ? { builtIn } : undefined);
+  };
   const previewOnProfile = () => {
     const loadout = pending ?? equipped;
     if (!viewer || !loadout) return;
     track("supporter_preview");
-    const mascot = supporter ? undefined : previewMascot();
+    const mascot = supporter ? unsavedStand(loadout) : previewMascot();
     startSupporterProfilePreview(viewer.id, {
       look: loadout.look,
       frame: loadout.frame,
@@ -589,7 +636,7 @@ function SupporterPage() {
       // a built-in theme picked here takes the place of their own, as does taking their own off
       ...(loadout.theme || loadout.ownTheme === null ? { customTheme: null } : {}),
       packStyle: loadout.pack,
-      ...(supporter ? {} : { runStartedAt: Date.now(), companion: mascot ?? null }),
+      ...(supporter ? (mascot !== undefined ? { companion: mascot } : {}) : { runStartedAt: Date.now(), companion: mascot ?? null }),
     });
     void navigate({ to: "/player/$username", params: { username: viewer.username } });
   };
@@ -796,7 +843,7 @@ function SupporterPage() {
                       </AnimatePresence>
                     </>
                   ) : section === "companion" ? (
-                    <CompanionSection viewerId={viewer.id} supporter={supporter} />
+                    <CompanionSection viewerId={viewer.id} supporter={supporter} value={held?.companion} onPick={onPickCompanion} saveError={error} />
                   ) : section === "stats" ? (
                     <ProfileStatsSection viewerId={viewer.id} supporter={supporter} />
                   ) : section === "perks" ? (
