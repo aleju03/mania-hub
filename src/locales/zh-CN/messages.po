@@ -19332,8 +19332,20 @@ msgid "Only your best rate play on the same chart counts per ladder, rate reuplo
 msgstr "同一张谱面在每个段位表中只计入你最好的一次倍速成绩，倍速重传版本也算在内。"
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Only your best rate play on the same chart counts toward Dan. This play is not it."
-msgstr "同一张谱面只有你最好的一个倍速成绩计入段位。这个成绩不是它。"
+#~ msgid "Only your best rate play on the same chart counts toward Dan. This play is not it."
+#~ msgstr "同一张谱面只有你最好的一个倍速成绩计入段位。这个成绩不是它。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Only your rate play with the highest Dan credit on the same chart counts toward Dan."
+msgstr "同一张谱面只有段位贡献最高的一个倍速成绩计入段位。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Only your rate play with the highest Dan credit on the same chart counts toward Dan. Another play has {keptCredit}, this one has {ownCredit}."
+msgstr "同一张谱面只有段位贡献最高的一个倍速成绩计入段位。另一个成绩为 {keptCredit}，这个成绩为 {ownCredit}。"
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Only your rate play with the highest Dan credit on the same chart counts toward Dan. Your {keptRate} play has {keptCredit}, this one has {ownCredit}."
+msgstr "同一张谱面只有段位贡献最高的一个倍速成绩计入段位。你的 {keptRate} 成绩为 {keptCredit}，这个成绩为 {ownCredit}。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Only your two best rate plays on the same chart count per ladder, rate reuploads included."

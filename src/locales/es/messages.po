@@ -19320,8 +19320,20 @@ msgid "Only your best rate play on the same chart counts per ladder, rate reuplo
 msgstr "Por escala solo cuenta tu mejor play con rate en el mismo chart, contando los reuploads con rate."
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Only your best rate play on the same chart counts toward Dan. This play is not it."
-msgstr "Solo tu mejor play de rate en el mismo chart cuenta para el dan. Este play no es ese."
+#~ msgid "Only your best rate play on the same chart counts toward Dan. This play is not it."
+#~ msgstr "Solo tu mejor play de rate en el mismo chart cuenta para el dan. Este play no es ese."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Only your rate play with the highest Dan credit on the same chart counts toward Dan."
+msgstr "Solo tu play de rate con más crédito de dan en el mismo chart cuenta para el dan."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Only your rate play with the highest Dan credit on the same chart counts toward Dan. Another play has {keptCredit}, this one has {ownCredit}."
+msgstr "Solo tu play de rate con más crédito de dan en el mismo chart cuenta para el dan. Otro play tiene {keptCredit}, este tiene {ownCredit}."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Only your rate play with the highest Dan credit on the same chart counts toward Dan. Your {keptRate} play has {keptCredit}, this one has {ownCredit}."
+msgstr "Solo tu play de rate con más crédito de dan en el mismo chart cuenta para el dan. Tu play en {keptRate} tiene {keptCredit}, este tiene {ownCredit}."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Only your two best rate plays on the same chart count per ladder, rate reuploads included."

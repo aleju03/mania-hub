@@ -19370,8 +19370,20 @@ msgid "Only your best rate play on the same chart counts per ladder, rate reuplo
 msgstr "Only your best rate play on the same chart counts per ladder, rate reuploads included."
 
 #: src/components/player/SkillPlaysExplorer.tsx
-msgid "Only your best rate play on the same chart counts toward Dan. This play is not it."
-msgstr "Only your best rate play on the same chart counts toward Dan. This play is not it."
+#~ msgid "Only your best rate play on the same chart counts toward Dan. This play is not it."
+#~ msgstr "Only your best rate play on the same chart counts toward Dan. This play is not it."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Only your rate play with the highest Dan credit on the same chart counts toward Dan."
+msgstr "Only your rate play with the highest Dan credit on the same chart counts toward Dan."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Only your rate play with the highest Dan credit on the same chart counts toward Dan. Another play has {keptCredit}, this one has {ownCredit}."
+msgstr "Only your rate play with the highest Dan credit on the same chart counts toward Dan. Another play has {keptCredit}, this one has {ownCredit}."
+
+#: src/components/player/SkillPlaysExplorer.tsx
+msgid "Only your rate play with the highest Dan credit on the same chart counts toward Dan. Your {keptRate} play has {keptCredit}, this one has {ownCredit}."
+msgstr "Only your rate play with the highest Dan credit on the same chart counts toward Dan. Your {keptRate} play has {keptCredit}, this one has {ownCredit}."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Only your two best rate plays on the same chart count per ladder, rate reuploads included."

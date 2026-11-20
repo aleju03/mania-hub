@@ -138,6 +138,10 @@ export interface LivePlayerDanRejectedPlay {
   od: number | null;
   /** The tiles it would have been filed under, had it counted. */
   skillsets?: string[];
+  /** Only for chart_repeat_limit: the dan this play would have credited. Absent on older payloads. */
+  creditedDan?: number;
+  /** Only for chart_repeat_limit: the play on the same chart that counts instead. Absent on older payloads. */
+  kept?: { rate: number; creditedDan: number };
 }
 
 // One credited clear behind a dan estimate: the play, the chart's own dan on

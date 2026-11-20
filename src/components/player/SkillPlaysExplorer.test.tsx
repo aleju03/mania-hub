@@ -274,6 +274,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
       rejected: [{
         play: play(103, "Recent"), reason: "chart_repeat_limit", side: "rc",
         chartDan: 12, chartDanLabel: "beta", clearAccuracy: 0.97, bar: 0.96, od: null,
+        creditedDan: 11.34, kept: { rate: 0.9, creditedDan: 11.44 },
       }],
     });
     render(<I18nProvider i18n={getI18n("en")}>
@@ -283,7 +284,7 @@ describe("SkillPlaysExplorer bounded cohorts", () => {
     fireEvent.click(screen.getByRole("button", { name: "Recent" }));
     fireEvent.click(await screen.findByText("Recent 103"));
     expect(within(screen.getByTestId("map-rating-state")).getByText(
-      "Only your best rate play on the same chart counts toward Dan. This play is not it.",
+      "Only your rate play with the highest Dan credit on the same chart counts toward Dan. Your 0.90x play has 11.94, this one has 11.84.",
     )).toBeTruthy();
     expect(screen.queryByText(/Vibro detected/)).toBeNull();
   });

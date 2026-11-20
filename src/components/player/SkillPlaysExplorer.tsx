@@ -44,6 +44,7 @@ import type { MyDataSkillMode } from "#/lib/my-data";
 import { formatAccuracy, formatAccuracyAgainst, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "#/lib/format";
 import { DAN_SKILLSET_META, OVERALL_AXIS_META, skillModeEntries, type SkillAxisMeta } from "#/lib/skill-axes";
 import { beatmapStatusPill } from "#/lib/beatmap-status";
+import { formatDanValue } from "#/lib/dan-images";
 import { Skeleton } from "#/components/ui/LoadingSkeleton";
 import { ModFilterChip } from "#/components/ui/ModFilterChip";
 import {
@@ -1502,7 +1503,19 @@ function useDanRejectionReason(rejected: LivePlayerDanRejectedPlay): string {
     return t`Minimum required for dan credit is ${floorText} ${currency}. This play got ${accText} ${currency}, not the ${displayedText} the score screen shows.`;
   };
   if (rejected.reason === "chart_repeat_limit") {
-    return t`Only your best rate play on the same chart counts toward Dan. This play is not it.`;
+    // "Best" is the dan credit, not the rate: a higher rate under the bar can
+    // credit less than a lower one over it, so both numbers are named.
+    const kept = rejected.kept;
+    if (kept == null || rejected.creditedDan == null || kept.creditedDan <= rejected.creditedDan) {
+      return t`Only your rate play with the highest Dan credit on the same chart counts toward Dan.`;
+    }
+    const keptCredit = formatDanValue(kept.creditedDan);
+    const ownCredit = formatDanValue(rejected.creditedDan);
+    if (kept.rate === rejected.play.rate) {
+      return t`Only your rate play with the highest Dan credit on the same chart counts toward Dan. Another play has ${keptCredit}, this one has ${ownCredit}.`;
+    }
+    const keptRate = `${kept.rate.toFixed(2)}x`;
+    return t`Only your rate play with the highest Dan credit on the same chart counts toward Dan. Your ${keptRate} play has ${keptCredit}, this one has ${ownCredit}.`;
   }
   const reason = (rejected.reason === "rate_vibro" || rejected.reason === "chart_vibro") && rejected.play.unrateable
     ? t`Unrateable chart. This play does not count toward skill or dan ratings.`
