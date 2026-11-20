@@ -1403,7 +1403,7 @@ function ServerRow({ server, feedTypes, autoDanAvailable, fallbackCountry, invit
                 {channel.category ? <span className="ml-2 text-[11px] font-normal text-osu-f1">{channel.category}</span> : null}
               </div>
               {channel.botCanPost === false ? (
-                <p className="mt-1 text-[12px] text-rose-300"><Trans>The bot can't send messages in this channel, so nothing posts here. Allow Send Messages for the bot in this channel's permissions.</Trans></p>
+                <p className="mt-1 text-[12px] text-rose-300"><Trans>The bot can't see this channel or send messages in it, so nothing posts here. Allow View Channel and Send Messages for the bot in this channel's permissions.</Trans></p>
               ) : null}
               <div className="mt-3 space-y-2.5">
                 {feeds.map((feed) => {

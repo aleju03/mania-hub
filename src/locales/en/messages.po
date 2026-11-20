@@ -28212,8 +28212,8 @@ msgid "The bot can DM you when someone pulls your card, a player you follow sets
 msgstr "The bot can DM you when someone pulls your card, a player you follow sets a top play, a new farm map at your level gets ranked or you get sniped, plus a weekly recap. Confirm your Discord account above first, so it knows the account is yours."
 
 #: src/routes/discord.tsx
-msgid "The bot can't send messages in this channel, so nothing posts here. Allow Send Messages for the bot in this channel's permissions."
-msgstr "The bot can't send messages in this channel, so nothing posts here. Allow Send Messages for the bot in this channel's permissions."
+msgid "The bot can't see this channel or send messages in it, so nothing posts here. Allow View Channel and Send Messages for the bot in this channel's permissions."
+msgstr "The bot can't see this channel or send messages in it, so nothing posts here. Allow View Channel and Send Messages for the bot in this channel's permissions."
 
 #: src/routes/discord.tsx
 msgid "The bot isn't in this server"
