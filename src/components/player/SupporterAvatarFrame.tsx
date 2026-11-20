@@ -117,10 +117,13 @@ export function SupporterAvatarFrame({ frame, still: holdStill = false, round = 
   const wrapped = Boolean(geometry.danWindow) || liveKeys;
   const fill = wrapped ? "absolute inset-0 h-full w-full" : className;
   const fillStyle = wrapped ? undefined : style;
-  const art = playing && !geometry.stillOnly ? (
+  // a round avatar in a frame with a round still plays only the round version's own loop
+  const circle = round && geometry.roundStill;
+  const loops = circle ? Boolean(geometry.roundLoop) : !geometry.stillOnly;
+  const art = playing && loops ? (
     <video
-      key={frame}
-      src={supporterFrameSrc(frame, "video")}
+      key={circle ? `${frame}-round` : frame}
+      src={supporterFrameSrc(frame, "video", { round })}
       poster={still}
       autoPlay
       loop

@@ -3858,8 +3858,8 @@ msgstr "一个主题最多放八张图片。"
 #~ msgstr ""
 
 #: src/components/supporter/WorkshopFrames.tsx
-msgid "A WebM with alpha (VP9), the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts."
-msgstr "带 alpha 通道的 WebM（VP9），同样的正方形，小于 2 MB。让第一帧与图片一致，开始播放时就不会跳动。"
+#~ msgid "A WebM with alpha (VP9), the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts."
+#~ msgstr "带 alpha 通道的 WebM（VP9），同样的正方形，小于 2 MB。让第一帧与图片一致，开始播放时就不会跳动。"
 
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
@@ -4148,8 +4148,12 @@ msgid "Add a country to pick or leave out its players."
 msgstr "添加一个国家来选择或排除其中的玩家。"
 
 #: src/components/supporter/WorkshopFrames.tsx
-msgid "Add a loop (optional)"
-msgstr "添加循环动画（可选）"
+msgid "Add a loop"
+msgstr "添加循环动画"
+
+#: src/components/supporter/WorkshopFrames.tsx
+#~ msgid "Add a loop (optional)"
+#~ msgstr "添加循环动画（可选）"
 
 #: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/frames/FrameLayersPanel.tsx
@@ -6832,8 +6836,8 @@ msgstr "选择文件"
 #~ msgstr "选择外观"
 
 #: src/components/supporter/WorkshopFrames.tsx
-msgid "Choose a loop"
-msgstr "选择循环动画"
+#~ msgid "Choose a loop"
+#~ msgstr "选择循环动画"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Choose a mania difficulty"
@@ -15120,8 +15124,12 @@ msgid "listed"
 msgstr "收录于"
 
 #: src/components/supporter/WorkshopFrames.tsx
-msgid "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there."
-msgstr "列表中的头像是圆形的。围绕模板中的圆再画一遍头像框，列表就会使用它；没有的话，你的头像在列表中保持方形。"
+#~ msgid "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there."
+#~ msgstr "列表中的头像是圆形的。围绕模板中的圆再画一遍头像框，列表就会使用它；没有的话，你的头像在列表中保持方形。"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there. Its loop plays on your stats page."
+msgstr "列表中的头像是圆形的。围绕模板中的圆再画一遍头像框，列表就会使用它；没有的话，你的头像在列表中保持方形。它的循环动画会在你的统计页面上播放。"
 
 #: src/components/supporter/frames/FrameEditor.tsx
 msgid "Lists show avatars round. Draw the frame again round the circle, or"
@@ -22960,6 +22968,10 @@ msgstr "移除截图 {0}"
 msgid "Remove tag"
 msgstr "移除标签"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Remove the loop"
+msgstr "移除循环动画"
+
 #: src/components/supporter/frames/FrameDialogs.tsx
 msgid "Remove the picked path point"
 msgstr "删除选中的路径点"
@@ -30170,6 +30182,10 @@ msgstr "结束色"
 #: src/components/player/AddScoreModal.tsx
 msgid "to {keyCount}K rating"
 msgstr "{keyCount}K 评分"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "To make it move, add a WebM with alpha (VP9) of the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts."
+msgstr "想让它动起来，就添加一个带 alpha 通道的 WebM（VP9），同样的正方形，小于 2 MB。让第一帧与图片一致，开始播放时就不会跳动。"
 
 #: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx

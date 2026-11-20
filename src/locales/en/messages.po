@@ -3869,8 +3869,8 @@ msgstr "A theme holds up to eight pictures."
 #~ msgstr "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
 
 #: src/components/supporter/WorkshopFrames.tsx
-msgid "A WebM with alpha (VP9), the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts."
-msgstr "A WebM with alpha (VP9), the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts."
+#~ msgid "A WebM with alpha (VP9), the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts."
+#~ msgstr "A WebM with alpha (VP9), the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts."
 
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
@@ -4163,8 +4163,12 @@ msgid "Add a country to pick or leave out its players."
 msgstr "Add a country to pick or leave out its players."
 
 #: src/components/supporter/WorkshopFrames.tsx
-msgid "Add a loop (optional)"
-msgstr "Add a loop (optional)"
+msgid "Add a loop"
+msgstr "Add a loop"
+
+#: src/components/supporter/WorkshopFrames.tsx
+#~ msgid "Add a loop (optional)"
+#~ msgstr "Add a loop (optional)"
 
 #: src/components/supporter/frames/FrameInspector.tsx
 #: src/components/supporter/frames/FrameLayersPanel.tsx
@@ -6847,8 +6851,8 @@ msgstr "Choose a file"
 #~ msgstr "Choose a finish"
 
 #: src/components/supporter/WorkshopFrames.tsx
-msgid "Choose a loop"
-msgstr "Choose a loop"
+#~ msgid "Choose a loop"
+#~ msgstr "Choose a loop"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "Choose a mania difficulty"
@@ -15158,8 +15162,12 @@ msgid "listed"
 msgstr "listed"
 
 #: src/components/supporter/WorkshopFrames.tsx
-msgid "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there."
-msgstr "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there."
+#~ msgid "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there."
+#~ msgstr "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there."
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there. Its loop plays on your stats page."
+msgstr "Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there. Its loop plays on your stats page."
 
 #: src/components/supporter/frames/FrameEditor.tsx
 msgid "Lists show avatars round. Draw the frame again round the circle, or"
@@ -22998,6 +23006,10 @@ msgstr "Remove screenshot {0}"
 msgid "Remove tag"
 msgstr "Remove tag"
 
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "Remove the loop"
+msgstr "Remove the loop"
+
 #: src/components/supporter/frames/FrameDialogs.tsx
 msgid "Remove the picked path point"
 msgstr "Remove the picked path point"
@@ -30224,6 +30236,10 @@ msgstr "To"
 #: src/components/player/AddScoreModal.tsx
 msgid "to {keyCount}K rating"
 msgstr "to {keyCount}K rating"
+
+#: src/components/supporter/WorkshopFrames.tsx
+msgid "To make it move, add a WebM with alpha (VP9) of the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts."
+msgstr "To make it move, add a WebM with alpha (VP9) of the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts."
 
 #: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx

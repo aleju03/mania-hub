@@ -82,7 +82,7 @@ export function FramePreview({ still, round, video, overhang, avatar, clear, mot
     if (canvas) targets.current.add(canvas);
   }, []);
   useEffect(() => {
-    if (still) registerWorkshopFrames({ [PREVIEW_ID]: { name: "", still, video, round, overhang } });
+    if (still) registerWorkshopFrames({ [PREVIEW_ID]: { name: "", still, video, round, roundVideo: null, overhang } });
   }, [still, round, video, overhang]);
   const tone = (value: number | null) => (value === null ? "busy" : value < 0.6 ? "bad" : value < 0.7 ? "warn" : "good");
   return (

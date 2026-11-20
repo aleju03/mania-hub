@@ -24,6 +24,9 @@ export interface FrameGeometry {
      for art that rests on the avatar's edge (the green hat), redrawn to sit
      on a circle. */
   roundStill?: true;
+  /* Its round still has a loop of its own (a workshop frame's round version);
+     without one a round avatar holds the round still. */
+  roundLoop?: true;
   /* Shown as the still PNG only, never the looping video. */
   stillOnly?: boolean;
   /* Drawn live instead of from its files, because it carries the wearer's own
@@ -239,6 +242,8 @@ export interface WorkshopFrameArt {
   video: string | null;
   /* The still drawn round a round avatar, for lists; without it lists keep the avatar square. */
   round: string | null;
+  /* The round version's loop. */
+  roundVideo: string | null;
   overhang: readonly [number, number, number, number];
 }
 
@@ -255,19 +260,27 @@ export function parseWorkshopFrameArt(raw: unknown): Record<string, WorkshopFram
   const out: Record<string, WorkshopFrameArt> = {};
   if (!raw || typeof raw !== "object") return out;
   for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
-    const art = value as { name?: unknown; still?: unknown; video?: unknown; round?: unknown; overhang?: unknown } | null;
+    const art = value as { name?: unknown; still?: unknown; video?: unknown; round?: unknown; roundVideo?: unknown; overhang?: unknown } | null;
     const overhang = Array.isArray(art?.overhang) && art.overhang.length === 4 ? art.overhang.map(Number) : null;
     if (!isWorkshopFrameId(id) || typeof art?.still !== "string" || !/^https:\/\//.test(art.still) || !overhang || overhang.some((n) => !Number.isFinite(n))) continue;
-    out[id] = { name: typeof art.name === "string" ? art.name.slice(0, 40) : "", still: art.still, video: typeof art.video === "string" && /^https:\/\//.test(art.video) ? art.video : null, round: typeof art.round === "string" && /^https:\/\//.test(art.round) ? art.round : null, overhang: overhang as [number, number, number, number] };
+    const round = typeof art.round === "string" && /^https:\/\//.test(art.round) ? art.round : null;
+    out[id] = {
+      name: typeof art.name === "string" ? art.name.slice(0, 40) : "",
+      still: art.still,
+      video: typeof art.video === "string" && /^https:\/\//.test(art.video) ? art.video : null,
+      round,
+      roundVideo: round && typeof art.roundVideo === "string" && /^https:\/\//.test(art.roundVideo) ? art.roundVideo : null,
+      overhang: overhang as [number, number, number, number],
+    };
   }
   return out;
 }
 
 /* Where a workshop frame's art sits. With a round version a list draws its
    avatar round; without one it keeps it square. */
-export function workshopFrameGeometry(art: Pick<WorkshopFrameArt, "overhang" | "round" | "video">): FrameGeometry {
+export function workshopFrameGeometry(art: Pick<WorkshopFrameArt, "overhang" | "round" | "video"> & { roundVideo?: string | null }): FrameGeometry {
   return art.round
-    ? { box: WORKSHOP_BOX, overhang: art.overhang, roundStill: true, stillOnly: !art.video }
+    ? { box: WORKSHOP_BOX, overhang: art.overhang, roundStill: true, ...(art.roundVideo ? { roundLoop: true as const } : {}), stillOnly: !art.video }
     : { box: WORKSHOP_BOX, overhang: art.overhang, squareWindow: true, stillOnly: !art.video };
 }
 
@@ -275,7 +288,7 @@ export function registerWorkshopFrames(frames: Record<string, WorkshopFrameArt>)
   let changed = false;
   for (const [id, art] of Object.entries(frames)) {
     const known = workshopFrames.get(id)?.art;
-    if (known && known.still === art.still && known.video === art.video && known.round === art.round && known.name === art.name) continue;
+    if (known && known.still === art.still && known.video === art.video && known.round === art.round && known.roundVideo === art.roundVideo && known.name === art.name) continue;
     workshopFrames.set(id, { art, geometry: workshopFrameGeometry(art) });
     changed = true;
   }
@@ -348,7 +361,7 @@ export function supporterFramePartSrc(id: SupporterAvatarFrameId, part: string):
 export function supporterFrameSrc(id: SupporterAvatarFrameId, kind: "video" | "still", { round = false }: { round?: boolean } = {}): string {
   if (isWorkshopFrameId(id)) {
     const art = workshopFrames.get(id)?.art;
-    return (kind === "video" ? art?.video : round ? art?.round : null) ?? art?.still ?? "";
+    return (kind === "video" ? (round && art?.round ? art.roundVideo : art?.video) : round ? art?.round : null) ?? art?.still ?? "";
   }
   if (kind === "still" && round && geometryOf(id).roundStill) return `/images/supporter-frames/${id}-round.png?v=${FRAME_ART_VERSION}`;
   return `/images/supporter-frames/${id}.${kind === "video" ? "webm" : "png"}?v=${FRAME_ART_VERSION}`;

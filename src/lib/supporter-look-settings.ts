@@ -808,13 +808,13 @@ export const fetchOwnWorkshopFrames = createServerFn({ method: "GET" }).handler(
 
 /* Adds a frame made from uploads (/api/supporter-frame), straight into everyone's picker. */
 export const submitWorkshopFrame = createServerFn({ method: "POST" })
-  .validator((data: { name?: unknown; still?: unknown; video?: unknown; round?: unknown; overhang?: unknown }) => {
+  .validator((data: { name?: unknown; still?: unknown; video?: unknown; round?: unknown; roundVideo?: unknown; overhang?: unknown }) => {
     const name = typeof data?.name === "string" ? data.name.replace(/\s+/g, " ").trim().slice(0, FRAME_NAME_MAX) : "";
     if (!name) throw new Error("Give it a name.");
     if (typeof data?.still !== "string") throw new Error("Upload its picture first.");
     const overhang = Array.isArray(data?.overhang) && data.overhang.length === 4 ? data.overhang.map(Number) : null;
     if (!overhang || overhang.some((n) => !Number.isFinite(n))) throw new Error("Upload its picture first.");
-    return { name, still: data.still, video: typeof data?.video === "string" ? data.video : null, round: typeof data?.round === "string" ? data.round : null, overhang };
+    return { name, still: data.still, video: typeof data?.video === "string" ? data.video : null, round: typeof data?.round === "string" ? data.round : null, roundVideo: typeof data?.round === "string" && typeof data?.roundVideo === "string" ? data.roundVideo : null, overhang };
   })
   .handler(async ({ data }): Promise<{ frame: SubmittedFrame }> => {
     const viewer = await requireViewer();
@@ -833,14 +833,14 @@ export const submitWorkshopFrame = createServerFn({ method: "POST" })
 /* Replaces the art and name of one of the viewer's own frames (from the frame
    editor), keeping its id so whoever wears it gets the new version. */
 export const updateWorkshopFrame = createServerFn({ method: "POST" })
-  .validator((data: { id?: unknown; name?: unknown; still?: unknown; video?: unknown; round?: unknown; overhang?: unknown }) => {
+  .validator((data: { id?: unknown; name?: unknown; still?: unknown; video?: unknown; round?: unknown; roundVideo?: unknown; overhang?: unknown }) => {
     if (!isWorkshopFrameId(data?.id)) throw new Error("Pick a frame.");
     const name = typeof data?.name === "string" ? data.name.replace(/\s+/g, " ").trim().slice(0, FRAME_NAME_MAX) : "";
     if (!name) throw new Error("Give it a name.");
     if (typeof data?.still !== "string") throw new Error("Upload its picture first.");
     const overhang = Array.isArray(data?.overhang) && data.overhang.length === 4 ? data.overhang.map(Number) : null;
     if (!overhang || overhang.some((n) => !Number.isFinite(n))) throw new Error("Upload its picture first.");
-    return { id: data.id, name, still: data.still, video: typeof data?.video === "string" ? data.video : null, round: typeof data?.round === "string" ? data.round : null, overhang };
+    return { id: data.id, name, still: data.still, video: typeof data?.video === "string" ? data.video : null, round: typeof data?.round === "string" ? data.round : null, roundVideo: typeof data?.round === "string" && typeof data?.roundVideo === "string" ? data.roundVideo : null, overhang };
   })
   .handler(async ({ data }): Promise<{ frame: SubmittedFrame }> => {
     const viewer = await requireViewer();

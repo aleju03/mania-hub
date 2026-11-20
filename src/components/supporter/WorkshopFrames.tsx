@@ -28,7 +28,7 @@ import { FRAME_NAME_MAX, registerSubmittedFrames, uploadFramePart as upload, typ
 
 /* The workshop's frame maker (/workshop/frames). A supporter draws on the
    template, picks the still (and, if they like, a looping WebM and a round
-   version), sees it on their own avatar at the sizes the site draws it, names
+   version with its own loop), sees it on their own avatar at the sizes the site draws it, names
    it and submits it. Anyone can make and preview one (the files stay in the
    browser); submitting uploads them and is for supporters.
    It goes into everyone's picker at once; an admin reviews it afterwards from
@@ -54,8 +54,8 @@ function templateSvg(): string {
 /* A file picked for the draft, shown from the browser: nothing is uploaded
    until the frame is submitted, so anyone can try the maker. */
 type Local = { file: File; url: string };
-type Draft = { still: Local | null; overhang: WorkshopFrameArt["overhang"] | null; video: Local | null; round: Local | null; name: string };
-const EMPTY_DRAFT: Draft = { still: null, overhang: null, video: null, round: null, name: "" };
+type Draft = { still: Local | null; overhang: WorkshopFrameArt["overhang"] | null; video: Local | null; round: Local | null; roundVideo: Local | null; name: string };
+const EMPTY_DRAFT: Draft = { still: null, overhang: null, video: null, round: null, roundVideo: null, name: "" };
 const MIN_CLEAR_AVATAR = 0.6;
 
 /* The picture's reach past the avatar and whether it leaves the avatar
@@ -135,15 +135,15 @@ export function WorkshopFrames() {
 
   // the draft draws through the same frame code as a saved one, from the picked files
   useEffect(() => {
-    if (draft.still && draft.overhang) registerWorkshopFrames({ [DRAFT_ID]: { name: draft.name, still: draft.still.url, video: draft.video?.url ?? null, round: draft.round?.url ?? null, overhang: draft.overhang } });
+    if (draft.still && draft.overhang) registerWorkshopFrames({ [DRAFT_ID]: { name: draft.name, still: draft.still.url, video: draft.video?.url ?? null, round: draft.round?.url ?? null, roundVideo: draft.roundVideo?.url ?? null, overhang: draft.overhang } });
   }, [draft]);
   // a replaced or dropped file lets go of its preview URL
   const urls = useRef(new Set<string>());
   useEffect(() => {
-    const live = new Set([draft.still?.url, draft.video?.url, draft.round?.url].filter((url): url is string => !!url));
+    const live = new Set([draft.still?.url, draft.video?.url, draft.round?.url, draft.roundVideo?.url].filter((url): url is string => !!url));
     for (const url of urls.current) if (!live.has(url)) URL.revokeObjectURL(url);
     urls.current = live;
-  }, [draft.still, draft.video, draft.round]);
+  }, [draft.still, draft.video, draft.round, draft.roundVideo]);
   useEffect(() => () => {
     for (const url of urls.current) URL.revokeObjectURL(url);
   }, []);
@@ -174,16 +174,17 @@ export function WorkshopFrames() {
     const local = { file, url: URL.createObjectURL(file) };
     setDraft((prev) => key === "still" ? { ...prev, still: local, overhang: measured.overhang } : { ...prev, round: local });
   });
-  const onVideo = (file: File) => run("video", async () => {
+  const onVideo = (key: "video" | "roundVideo", file: File) => run(key, async () => {
     if (file.size > 2 * 1024 * 1024) throw new Error(t`That video is over 2 MB.`);
-    setDraft((prev) => ({ ...prev, video: { file, url: URL.createObjectURL(file) } }));
+    setDraft((prev) => ({ ...prev, [key]: { file, url: URL.createObjectURL(file) } }));
   });
   const submit = () => run("submit", async () => {
     if (!draft.still) throw new Error(t`Add its picture first.`);
     const still = await upload("still", draft.still.file);
     const video = draft.video ? (await upload("video", draft.video.file)).url : null;
     const round = draft.round ? (await upload("round", draft.round.file)).url : null;
-    const { frame } = await submitWorkshopFrame({ data: { name: draft.name, still: still.url, video, round, overhang: still.overhang ?? [...(draft.overhang ?? [0, 0, 0, 0])] } });
+    const roundVideo = draft.round && draft.roundVideo ? (await upload("video", draft.roundVideo.file)).url : null;
+    const { frame } = await submitWorkshopFrame({ data: { name: draft.name, still: still.url, video, round, roundVideo, overhang: still.overhang ?? [...(draft.overhang ?? [0, 0, 0, 0])] } });
     registerSubmittedFrames([frame]);
     setOwn((prev) => [frame, ...prev]);
     setDraft(EMPTY_DRAFT);
@@ -275,23 +276,21 @@ export function WorkshopFrames() {
           </Step>
           <Step n={2} title={t`Add the picture`}>
             <p>{t`A PNG or WebP with transparency. It's also what lists, Safari and reduced motion show.`}</p>
-            <FileButton accept="image/png,image/webp" disabled={busy !== null} label={draft.still ? t`Replace the picture` : t`Choose a picture`} onFile={(file) => void onPicture("still", file)} />
-          </Step>
-          <Step n={3} title={t`Add a loop (optional)`}>
-            <p>{t`A WebM with alpha (VP9), the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts.`}</p>
-            <div className="mt-2 flex items-center gap-2">
-              <FileButton accept="video/webm" disabled={!draft.still || busy !== null} label={draft.video ? t`Replace the loop` : t`Choose a loop`} onFile={(file) => void onVideo(file)} />
-              {draft.video ? <button type="button" onClick={() => setDraft((prev) => ({ ...prev, video: null }))} className="text-[12px] text-osu-f1 hover:text-white">{t`Remove`}</button> : null}
+            <p className="mt-1">{t`To make it move, add a WebM with alpha (VP9) of the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts.`}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <FileButton accept="image/png,image/webp" disabled={busy !== null} label={draft.still ? t`Replace the picture` : t`Choose a picture`} onFile={(file) => void onPicture("still", file)} />
+              <LoopButton loop={draft.video} disabled={!draft.still || busy !== null} onFile={(file) => void onVideo("video", file)} onRemove={() => setDraft((prev) => ({ ...prev, video: null }))} />
             </div>
           </Step>
-          <Step n={4} title={t`Add a round version (optional)`}>
-            <p>{t`Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there.`}</p>
-            <div className="mt-2 flex items-center gap-2">
+          <Step n={3} title={t`Add a round version (optional)`}>
+            <p>{t`Lists show avatars as circles. Draw the frame again around the template's circle and lists use it; without one, your avatar stays square there. Its loop plays on your stats page.`}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <FileButton accept="image/png,image/webp" disabled={!draft.still || busy !== null} label={draft.round ? t`Replace the round version` : t`Choose a round version`} onFile={(file) => void onPicture("round", file)} />
-              {draft.round ? <button type="button" onClick={() => setDraft((prev) => ({ ...prev, round: null }))} className="text-[12px] text-osu-f1 hover:text-white">{t`Remove`}</button> : null}
+              {draft.round ? <button type="button" onClick={() => setDraft((prev) => ({ ...prev, round: null, roundVideo: null }))} className="text-[12px] text-osu-f1 hover:text-white">{t`Remove`}</button> : null}
+              <LoopButton loop={draft.roundVideo} disabled={!draft.round || busy !== null} onFile={(file) => void onVideo("roundVideo", file)} onRemove={() => setDraft((prev) => ({ ...prev, roundVideo: null }))} />
             </div>
           </Step>
-          <Step n={5} title={t`Name it and submit`}>
+          <Step n={4} title={t`Name it and submit`}>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <input
                 value={draft.name}
@@ -332,7 +331,7 @@ export function WorkshopFrames() {
                   <FramedAvatar frame={DRAFT_ID} avatar={avatar} size={124} live />
                   <div className="flex items-end gap-6">
                     <FramedAvatar frame={DRAFT_ID} avatar={avatar} size={84} live />
-                    <FramedAvatar frame={DRAFT_ID} avatar={avatar} size={36} round />
+                    <FramedAvatar frame={DRAFT_ID} avatar={avatar} size={36} round live={!!draft.roundVideo} />
                   </div>
                 </div>
               ))}
@@ -491,6 +490,17 @@ function FileButton({ accept, disabled, label, onFile }: { accept: string; disab
   );
 }
 
+/* A loop for the square or round version: pick or replace it, or drop it. */
+function LoopButton({ loop, disabled, onFile, onRemove }: { loop: Local | null; disabled: boolean; onFile: (file: File) => void; onRemove: () => void }) {
+  const { t } = useLingui();
+  return (
+    <>
+      <FileButton accept="video/webm" disabled={disabled} label={loop ? t`Replace the loop` : t`Add a loop`} onFile={onFile} />
+      {loop ? <button type="button" onClick={onRemove} className="text-[12px] text-osu-f1 hover:text-white">{t`Remove the loop`}</button> : null}
+    </>
+  );
+}
+
 /* The viewer's avatar `size` px wide wearing the frame, with room left for its art. */
 /* `round`: as a list draws it, a circle with the frame's round version (or square without one). */
 function FramedAvatar({ frame, avatar, size, live = false, round = false }: { frame: SupporterAvatarFrameId; avatar: string | undefined; size: number; live?: boolean; round?: boolean }) {
@@ -499,7 +509,7 @@ function FramedAvatar({ frame, avatar, size, live = false, round = false }: { fr
       <div className="overflow-hidden bg-osu-b3" style={{ width: size, height: size, ...framedAvatarStyle(frame, { round }) }}>
         {avatar ? <img src={avatar} alt="" className="h-full w-full object-cover" /> : null}
       </div>
-      <SupporterAvatarFrame frame={frame} still={!live || round} round={round} />
+      <SupporterAvatarFrame frame={frame} still={!live} round={round} />
     </div>
   );
 }

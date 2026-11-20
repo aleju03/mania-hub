@@ -31,7 +31,7 @@ import {
 import { fetchLiveSupporterProfileLook, loadLiveMapSearchEntry, openLiveEventSource, peekLiveMapSearchEntry, prefetchLiveMapSearchEntry, type LiveMapSearchEntry, peekLiveSupporterCustomTheme, peekLiveSupporterFrame, peekLiveSupporterNameFont, peekLiveSupporterNameStyle, peekLiveSupporterProfileTheme } from "../../lib/live-backend";
 import { frameOverhangMargins, SupporterAvatarFrame } from "../player/SupporterAvatarFrame";
 import { SupporterStyledName } from "../supporter/SupporterNameStyle";
-import { framedAvatarStyle, supporterFrameGeometry, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
+import { framedAvatarStyle, type SupporterAvatarFrameId } from "../../lib/supporter-avatar-frames";
 import type { SupporterNameStyleId } from "../../lib/supporter-name-styles";
 import type { SupporterNameFontId } from "../../lib/supporter-name-fonts";
 import { profileThemeStyle, type SupporterProfileThemeId } from "../../lib/supporter-profile-themes";
@@ -694,12 +694,12 @@ export function MyDataPanel() {
         <div className={`relative flex items-end gap-3.5 px-4 pb-3 ${summary?.coverUrl ? "pt-16" : "pt-4"}`}>
           {frame ? (
             // round, as the avatar is here unframed, unless the art frames a square window;
-            // a frame whose art passes behind the avatar holds its round-holed still
+            // a frame whose art passes behind the avatar shows its round version (a still unless it has a round loop)
             <div className="relative shrink-0" style={frameOverhangMargins(frame, "68px", "12px")}>
               <div className="h-[68px] w-[68px] overflow-hidden" style={framedAvatarStyle(frame, { round: true })}>
                 <Avatar url={summary?.avatarUrl ?? viewer.avatarUrl} userId={viewer.id} size={68} shape="square" />
               </div>
-              <SupporterAvatarFrame frame={frame} userId={viewer.id} round still={!!supporterFrameGeometry(frame).roundStill} />
+              <SupporterAvatarFrame frame={frame} userId={viewer.id} round />
             </div>
           ) : (
             <Avatar url={summary?.avatarUrl ?? viewer.avatarUrl} userId={viewer.id} size={68} />

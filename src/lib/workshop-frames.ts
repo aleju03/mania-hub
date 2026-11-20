@@ -41,11 +41,11 @@ export function parseSubmittedFrames(raw: unknown): SubmittedFrame[] {
 /* Registers the art of frames that came back from a server function: those
    were parsed on the server, so this page has not seen their art yet. */
 export function registerSubmittedFrames(frames: readonly SubmittedFrame[]): readonly SubmittedFrame[] {
-  registerWorkshopFrames(Object.fromEntries(frames.map((frame) => [frame.id, { name: frame.name, still: frame.still, video: frame.video, round: frame.round, overhang: frame.overhang }])));
+  registerWorkshopFrames(Object.fromEntries(frames.map((frame) => [frame.id, { name: frame.name, still: frame.still, video: frame.video, round: frame.round, roundVideo: frame.roundVideo, overhang: frame.overhang }])));
   return frames;
 }
 
-/* Uploads one file of a frame (its still, round still or loop) to
+/* Uploads one file of a frame (its still, round still or a loop) to
    /api/supporter-frame, which checks it and answers with its public URL and,
    for a picture, how far its art reaches past the avatar. */
 export async function uploadFramePart(kind: "still" | "video" | "round", original: Blob): Promise<{ url: string; overhang?: [number, number, number, number] }> {
