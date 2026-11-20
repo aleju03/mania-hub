@@ -183,12 +183,12 @@ function CollectorHeader({ profile }: { profile: LivePackCollectorProfile }) {
                 to="/player/$username"
                 params={{ username: collector.username }}
                 preload="intent"
-                className="truncate text-xl font-black text-white transition-colors hover:text-osu-pink-light"
+                className="glow-room truncate text-xl font-black text-white transition-colors hover:text-osu-pink-light"
               >
                 <UsernameText username={collector.username} userId={collector.userId} />
               </Link>
             ) : (
-              <UsernameText username={collector.username} userId={collector.userId} className="truncate text-xl font-black text-white" />
+              <span className="glow-room truncate text-xl font-black text-white"><UsernameText username={collector.username} userId={collector.userId} /></span>
             )}
           </div>
           <div className="mt-0.5 text-[11px] text-osu-f1">
