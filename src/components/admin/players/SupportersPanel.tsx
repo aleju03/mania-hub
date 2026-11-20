@@ -79,6 +79,16 @@ function timeLeft(row: AdminSupporterRow, now: number): string {
   return `${Math.floor(days / 30)} months left`;
 }
 
+/* Their gift codes under the name: used by friends, and unused (earned, handed out or not). */
+function giftLine(row: AdminSupporterRow): string | null {
+  const codes = row.giftCodes;
+  if (!codes) return null;
+  const unused = row.permanent ? null : Math.max(0, codes.earned - codes.claimed);
+  if (codes.claimed > 0) return `${codes.claimed} ${codes.claimed === 1 ? "code" : "codes"} used, ${unused === null ? "unlimited" : `${unused} unused`}`;
+  if (row.permanent) return "Unlimited codes";
+  return unused ? `${unused} ${unused === 1 ? "code" : "codes"} unused` : null;
+}
+
 /* Pinning a rank: by months (no pin), or one of the gems, each with its swatch. */
 const RANK_PIN_OPTIONS: SelectMenuOption<string>[] = [
   { value: "months", label: "By months" },
@@ -507,6 +517,7 @@ function SupporterTile({
       </button>
       <div className="mt-2 max-w-full truncate text-[13px] font-medium text-white">{name}</div>
       <div className={`text-[12px] ${row.active ? "text-osu-l2" : "text-osu-f1"}`}>{timeLeft(row, now)}</div>
+      {giftLine(row) ? <div className="text-[11px] text-osu-f1">{giftLine(row)}</div> : null}
 
       <AnimatePresence>
         {open ? (

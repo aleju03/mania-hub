@@ -44,6 +44,8 @@ export interface AdminSupporterRow {
   permanent?: boolean;
   /** Everything their linked donations came to, in US cents, refunds taken off. */
   paidCents?: number;
+  /** Gift codes their money has earned (huge for a permanent supporter) and how many friends claimed; an older backend sends none. */
+  giftCodes?: { earned: number; claimed: number };
 }
 
 export interface AdminSupportersView {
