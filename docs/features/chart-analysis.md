@@ -59,6 +59,7 @@ A play's rating on a pattern axis is its Overall SSR, never Overall scaled by th
 ## LeoBlack local adaptations
 
 - **Low-band Azusa/Companella fusion** (`features/leoblack-fusion.ts`), with Azusa's 18% LN scope enforced and the easy-chart guard ahead of fusion.
+- **Easy-chart guard** (`sunnyLowEndReroute`, `features/azusa-low-end-line.ts`): an Azusa verdict of Reform 2 or higher is replaced by Sunny's only where Sunny reads the chart under the whole 4K RC table (under 1.502 stars, "< Intro 1 low"). A pinned Roxy verdict still needs Sunny under 3.0. The Azusa line was 3.0 until dan cache v46; Sunny underrates jack-heavy charts, so real charts between the lines stored an Intro tier.
 - **Roxy meta clamp** (`features/roxy-meta-clamp.ts`): stops a degenerate meta feature from dragging 4K chordjack down.
 - **Companella rate floor** (`classifyChartWithCompanella`, `COMPANELLA_RATE_FLOOR_STEPS`, `features/companella-rate-floor.ts`): a Companella-refined rice verdict never drops as the rate rises; it is floored at the verdicts 0.05x and 0.1x slower. Upstream parity checks pass `rateFloor: false`.
 - **Companella inputs** (`features/companella-inputs.ts`): Companella gets actual Sunny SR and its own raw MinaCalc 0.74.0 features, as upstream does. Ordinary 4K MSD/SSR and marathon correction stay on 0.72.3.
