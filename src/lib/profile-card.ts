@@ -12,8 +12,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { createElement as h, type ReactNode } from "react";
 
 import { getCountryFlagLargeUrl, UNKNOWN_FLAG_URL } from "./country";
+import { drawFramedAvatar, type OgFramedAvatar } from "./og-avatar-frame";
 import { renderOgPng } from "./og-image-response";
+import { drawNameTag, type OgNameTag } from "./og-name-tag";
 import { ogFontList } from "./og-render";
+import { lookLayer, readOgSupporterLook, type OgLookSources, type OgSupporterLook } from "./og-supporter-look";
 
 export const PROFILE_CARD_WIDTH = 1100;
 const PAD_X = 44;
@@ -74,6 +77,8 @@ export interface ProfileCardData {
   historyDays: number | null;
   plays: ProfileCardPlay[];
   modes: ProfileCardMode[];
+  /** A supporter's name style, font, outline and avatar frame. */
+  look: OgSupporterLook | null;
 }
 
 // The kind is signed with the payload: another picture's signed payload is not this one's.
@@ -162,6 +167,7 @@ export function readProfileCard(payload: string | null, signature: string | null
       historyDays: history.length ? number(raw.rd, 1, 1000) : null,
       plays: Array.isArray(raw.p) ? raw.p.slice(0, PROFILE_CARD_PLAYS).map(readPlay).filter((play): play is ProfileCardPlay => play != null) : [],
       modes: Array.isArray(raw.k) ? raw.k.slice(0, PROFILE_CARD_MODES).map(readMode).filter((mode): mode is ProfileCardMode => mode != null) : [],
+      look: readOgSupporterLook(raw.lk),
     };
   } catch {
     return null;
@@ -185,6 +191,8 @@ export interface ProfileCardParts {
   gradeIcons: Array<string | null>;
   modIcons: Array<Array<string | null>>;
   fonts: [ArrayBuffer, ArrayBuffer];
+  /** The name fonts and frame art of a supporter's look; without them the look is not drawn. */
+  lookSources?: OgLookSources;
 }
 
 type Style = Record<string, string | number>;
@@ -226,15 +234,43 @@ function nameSize(username: string): number {
   return username.length <= 9 ? 34 : username.length <= 12 ? 28 : 22;
 }
 
-function nameRow(data: ProfileCardData, avatar: string | null, flag: string | null) {
+const AVATAR = 68;
+const AVATAR_TOP = 32;
+const NAME_LINE = 1.25;
+
+/** A supporter's look, drawn apart and laid over the card: the row only keeps its room. */
+interface DrawnLook {
+  nameTag: OgNameTag | null;
+  framedAvatar: OgFramedAvatar | null;
+}
+
+// The gap after the avatar, wider when its frame's art reaches past it.
+function avatarGap(look: DrawnLook): number {
+  const framed = look.framedAvatar;
+  if (!framed) return 18;
+  const reach = framed.width - framed.avatar.x - framed.avatar.size - (AVATAR - framed.avatar.size) / 2;
+  return Math.max(18, Math.round(reach) + 8);
+}
+
+function flagWidth(username: string): number {
+  return Math.round(nameSize(username) * 1.05);
+}
+
+// The widest names still end before the flag.
+function nameRoom(data: ProfileCardData, look: DrawnLook, hasAvatar: boolean, hasFlag: boolean): number {
+  return INNER - (hasAvatar ? AVATAR + avatarGap(look) : 0) - (hasFlag ? flagWidth(data.username) + 14 : 0);
+}
+
+function nameRow(data: ProfileCardData, avatar: string | null, flag: string | null, look: DrawnLook, hasAvatar: boolean) {
   const size = nameSize(data.username);
-  const flagWidth = Math.round(size * 1.05);
-  // The widest names still end before the flag.
-  const room = INNER - (avatar ? 86 : 0) - (flag ? flagWidth + 14 : 0);
-  return row({ height: "68px" },
-    avatar ? image(avatar, 68, 68, { marginRight: "18px" }) : null,
-    oneLine(data.username, { maxWidth: `${room}px`, fontSize: `${size}px`, fontWeight: 900, color: SOFT }),
-    flag ? image(flag, flagWidth, Math.round(size * 0.7), { marginLeft: "14px" }) : null,
+  const tag = look.nameTag;
+  return row({ height: `${AVATAR}px` },
+    // A framed avatar is laid over the card afterwards; its room stays.
+    avatar ? image(avatar, AVATAR, AVATAR, { marginRight: `${avatarGap(look)}px` }) : hasAvatar ? box({ width: `${AVATAR}px`, height: `${AVATAR}px`, marginRight: `${avatarGap(look)}px` }) : null,
+    tag
+      ? box({ width: `${Math.ceil(tag.line.width)}px`, height: `${Math.ceil(tag.line.height)}px` })
+      : oneLine(data.username, { maxWidth: `${nameRoom(data, look, hasAvatar, Boolean(flag))}px`, fontSize: `${size}px`, fontWeight: 900, color: SOFT }),
+    flag ? image(flag, flagWidth(data.username), Math.round(size * 0.7), { marginLeft: "14px" }) : null,
   );
 }
 
@@ -292,7 +328,7 @@ function standingHeight(data: ProfileCardData): number {
   return Math.max(bands, Math.min(column, BANDS_HEIGHT));
 }
 
-function playerColumn(data: ProfileCardData, avatar: string | null, flag: string | null) {
+function playerColumn(data: ProfileCardData, avatar: string | null, flag: string | null, look: DrawnLook, hasAvatar: boolean) {
   const stats = [
     data.playCount != null ? stat(count(data.playCount), "plays") : null,
     data.accuracy != null ? stat(`${data.accuracy.toFixed(2)}%`, "accuracy") : null,
@@ -300,8 +336,8 @@ function playerColumn(data: ProfileCardData, avatar: string | null, flag: string
     data.peakRank != null ? stat(`#${count(data.peakRank)}`, "peak rank") : null,
   ].filter(Boolean);
   const graph = data.history.length >= 2;
-  return col({ ...at(0, PAD_X, INNER, standingHeight(data)), paddingTop: "32px", paddingBottom: "18px" },
-    nameRow(data, avatar, flag),
+  return col({ ...at(0, PAD_X, INNER, standingHeight(data)), paddingTop: `${AVATAR_TOP}px`, paddingBottom: "18px" },
+    nameRow(data, avatar, flag, look, hasAvatar),
     data.pp != null ? box({ marginTop: "20px" }, ppText(data.pp, 70)) : null,
     ranks(data),
     box({ marginTop: "auto" }),
@@ -404,8 +440,26 @@ export async function drawProfileCard(parts: ProfileCardParts): Promise<Buffer> 
       return null;
     }
   };
+  // A supporter's frame goes round their avatar, their name in its style and font.
+  const sources = parts.lookSources;
+  const framedAvatar = sources && data.look?.frame && parts.avatar
+    ? await drawFramedAvatar({ avatar: parts.avatar, frame: data.look.frame, size: AVATAR, round: true, room: { left: PAD_X - 6, top: AVATAR_TOP - 6, bottom: 20 }, loadArt: sources.loadArt })
+    : null;
+  const look: DrawnLook = { nameTag: null, framedAvatar };
+  if (sources && data.look?.name) {
+    look.nameTag = await drawNameTag({
+      name: data.username,
+      look: data.look.name,
+      fontSize: nameSize(data.username),
+      lineHeight: NAME_LINE,
+      color: SOFT,
+      maxWidth: nameRoom(data, look, Boolean(parts.avatar), Boolean(parts.flag)),
+      fonts: sources.fonts,
+    });
+  }
+
   const [avatar, flag, emblems] = await Promise.all([
-    masked(parts.avatar, 136, 136, 68),
+    framedAvatar ? null : masked(parts.avatar, 136, 136, 68),
     masked(parts.flag, 72, 48, 8),
     Promise.all(data.modes.map(async (_mode, index) => ({ rice: await badge(parts.emblems[index]?.rice ?? null), ln: await badge(parts.emblems[index]?.ln ?? null) }))),
   ]);
@@ -414,7 +468,7 @@ export async function drawProfileCard(parts: ProfileCardParts): Promise<Buffer> 
   const fontList = ogFontList(...parts.fonts);
   const overlay = await renderOgPng(
     box({ position: "relative", width: `${PROFILE_CARD_WIDTH}px`, height: `${height}px`, fontFamily: fontList[0].name },
-      playerColumn(data, avatar, flag),
+      playerColumn(data, avatar, flag, look, Boolean(parts.avatar)),
       ...data.plays.map((play, index) => playBand(play, index, parts.gradeIcons[index] ?? null, parts.modIcons[index] ?? [])),
       lines.length
         ? col({ ...at(standingHeight(data), PAD_X, PROFILE_CARD_WIDTH - PAD_X * 2, height - standingHeight(data)), justifyContent: "center" },
@@ -425,6 +479,19 @@ export async function drawProfileCard(parts: ProfileCardParts): Promise<Buffer> 
     { width: PROFILE_CARD_WIDTH, height, fonts: fontList },
   );
   layers.push({ input: overlay, left: 0, top: 0 });
+  if (framedAvatar) {
+    // Centred where the bare avatar sits, its art over whatever is beside it.
+    const inset = (AVATAR - framedAvatar.avatar.size) / 2;
+    const layer = await lookLayer(framedAvatar.png, Math.round(PAD_X + inset - framedAvatar.avatar.x), Math.round(AVATAR_TOP + inset - framedAvatar.avatar.y), PROFILE_CARD_WIDTH, height);
+    if (layer) layers.push(layer);
+  }
+  if (look.nameTag) {
+    const tag = look.nameTag;
+    const left = PAD_X + (parts.avatar ? AVATAR + avatarGap(look) : 0);
+    const top = AVATAR_TOP + (AVATAR - Math.ceil(tag.line.height)) / 2;
+    const layer = await lookLayer(tag.png, Math.round(left - tag.line.x), Math.round(top - tag.line.y), PROFILE_CARD_WIDTH, height);
+    if (layer) layers.push(layer);
+  }
 
   return sharp({ create: { width: PROFILE_CARD_WIDTH, height, channels: 3, background: BACKGROUND } })
     .composite(layers)

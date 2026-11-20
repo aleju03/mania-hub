@@ -49,6 +49,25 @@ export async function loadOgFonts(request: Request): Promise<[ArrayBuffer, Array
   ]);
 }
 
+/* What a picture needs to draw a supporter's look (og-supporter-look.ts): the
+   name fonts as TTFs, and a frame's still by site path or workshop URL. */
+export function ogLookSources(request: Request, heavyFont: ArrayBuffer): { fonts: { base: ArrayBuffer; load: (file: string) => Promise<ArrayBuffer> }; loadArt: (source: string) => Promise<Buffer | null> } {
+  return {
+    fonts: { base: heavyFont, load: (file) => getFont(request, `name/ttf/${file}.ttf`) },
+    loadArt: async (source) => {
+      try {
+        const url = /^https:\/\//.test(source) ? source : new URL(source, getAssetOrigin(request)).toString();
+        const response = await fetch(url, { signal: AbortSignal.timeout(FONT_FETCH_TIMEOUT_MS) });
+        if (!response.ok) return null;
+        const buffer = Buffer.from(await response.arrayBuffer());
+        return buffer.length > 0 && buffer.length <= 8 * 1024 * 1024 ? buffer : null;
+      } catch {
+        return null;
+      }
+    },
+  };
+}
+
 export function ogFontList(regularFont: ArrayBuffer, heavyFont: ArrayBuffer) {
   return [
     { name: "Tracker Round OG" as const, data: regularFont, style: "normal" as const, weight: 400 as const },

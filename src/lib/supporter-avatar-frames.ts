@@ -7,7 +7,7 @@
    pick against the same ids (SUPPORTER_AVATAR_FRAMES in features/supporters.ts);
    how the picker groups them lives in SupporterFramePicker. */
 
-interface FrameGeometry {
+export interface FrameGeometry {
   /* Where the art's canvas sits: [left, top, width, height] in avatar widths, from the avatar's top-left corner. */
   box: readonly [number, number, number, number];
   /* How far the drawn art reaches past the avatar: [left, top, right, bottom] in avatar widths. */
@@ -263,15 +263,20 @@ export function parseWorkshopFrameArt(raw: unknown): Record<string, WorkshopFram
   return out;
 }
 
+/* Where a workshop frame's art sits. With a round version a list draws its
+   avatar round; without one it keeps it square. */
+export function workshopFrameGeometry(art: Pick<WorkshopFrameArt, "overhang" | "round" | "video">): FrameGeometry {
+  return art.round
+    ? { box: WORKSHOP_BOX, overhang: art.overhang, roundStill: true, stillOnly: !art.video }
+    : { box: WORKSHOP_BOX, overhang: art.overhang, squareWindow: true, stillOnly: !art.video };
+}
+
 export function registerWorkshopFrames(frames: Record<string, WorkshopFrameArt>): void {
   let changed = false;
   for (const [id, art] of Object.entries(frames)) {
     const known = workshopFrames.get(id)?.art;
     if (known && known.still === art.still && known.video === art.video && known.round === art.round && known.name === art.name) continue;
-    // with a round version a list draws its avatar round; without one it keeps it square
-    workshopFrames.set(id, { art, geometry: art.round
-      ? { box: WORKSHOP_BOX, overhang: art.overhang, roundStill: true, stillOnly: !art.video }
-      : { box: WORKSHOP_BOX, overhang: art.overhang, squareWindow: true, stillOnly: !art.video } });
+    workshopFrames.set(id, { art, geometry: workshopFrameGeometry(art) });
     changed = true;
   }
   if (changed) {

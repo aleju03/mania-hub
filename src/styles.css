@@ -1524,11 +1524,12 @@ html[data-custom-cursor="true"] * {
   filter: drop-shadow(0 0 0.05em rgba(210, 200, 255, 0.6)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.55));
 }
 .name-tag--plasma {
-  /* deep blue run through with electric veins, a pale blue rim */
+  /* electric blue run through with veins, a pale blue rim: the shader's blue,
+     bright enough that the letters hold their shape on a dark page */
   background-image:
     radial-gradient(ellipse 40% 9% at 30% 45%, rgba(190, 230, 255, 0.9) 0, transparent 100%),
     radial-gradient(ellipse 35% 8% at 72% 60%, rgba(120, 200, 255, 0.85) 0, transparent 100%),
-    linear-gradient(180deg, #7fb2ff calc(50% - 0.36em), #2a4ca8 calc(50% - 0.18em), #142a72 calc(50% + 0.12em), #2b56b8 calc(50% + 0.5em));
+    linear-gradient(180deg, #9edbff calc(50% - 0.36em), #3a6be6 calc(50% - 0.18em), #2452d6 calc(50% + 0.12em), #4a80f0 calc(50% + 0.5em));
   filter: drop-shadow(0 0 0.08em rgba(90, 170, 255, 0.85)) drop-shadow(0 0.05em 0.06em rgba(0, 0, 0, 0.5));
 }
 .name-tag--ink {

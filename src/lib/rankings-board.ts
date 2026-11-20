@@ -12,8 +12,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createElement as h } from "react";
 
+import { drawFramedAvatar } from "./og-avatar-frame";
 import { renderOgPng } from "./og-image-response";
+import { drawNameTag, type OgNameTag } from "./og-name-tag";
 import { ogFontList } from "./og-render";
+import { lookLayer, readOgSupporterLook, type OgLookSources, type OgSupporterLook } from "./og-supporter-look";
 import { UNKNOWN_FLAG_URL, getCountryFlagLargeUrl } from "./country";
 
 export const RANKINGS_BOARD_WIDTH = 1040;
@@ -49,6 +52,8 @@ export interface RankingsBoardRow {
   place: string;
   /** A dan board's badge, drawn after the dan's name. */
   emblem?: RankingsBoardEmblem | null;
+  /** A supporter's name style, font, outline and avatar frame. */
+  look?: OgSupporterLook | null;
 }
 
 export interface RankingsBoardEmblem {
@@ -78,7 +83,7 @@ export function readRankingsBoard(payload: string | null, signature: string | nu
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as unknown;
     if (!Array.isArray(parsed) || parsed.length === 0) return null;
     return parsed.slice(0, MAX_ROWS).map((row) => {
-      const [rank, userId, name, value, place, emblem] = row as unknown[];
+      const [rank, userId, name, value, place, emblem, look] = row as unknown[];
       return {
         rank: Number(rank),
         userId: Number(userId),
@@ -86,6 +91,7 @@ export function readRankingsBoard(payload: string | null, signature: string | nu
         value: String(value ?? "").slice(0, 16),
         place: String(place ?? "").slice(0, 12),
         emblem: emblem == null ? null : readEmblem(emblem),
+        look: readOgSupporterLook(look),
       };
     }).filter((row) => Number.isSafeInteger(row.rank) && Number.isSafeInteger(row.userId) && row.userId > 0);
   } catch {
@@ -101,7 +107,15 @@ function valueText(text: string) {
     : h("div", { key: index, style: { display: "flex" } }, char));
 }
 
-function rowElement(row: RankingsBoardRow, index: number, withEmblems: boolean, withFlag: boolean) {
+const NAME_SIZE = 30;
+
+// The room a row's name has: what the rank, avatar, value, badge and place leave.
+function nameWidth(withEmblems: boolean): number {
+  return RANKINGS_BOARD_WIDTH - PAD_X * 2 - RANK_WIDTH - AVATAR_SIZE - AVATAR_GAP - 240 - (withEmblems ? EMBLEM_SLOT : 0) - PLACE_WIDTH;
+}
+
+// A supporter's name is drawn apart in its look and laid over the row (drawRankingsBoard): the row keeps its room.
+function rowElement(row: RankingsBoardRow, index: number, withEmblems: boolean, withFlag: boolean, styledName: boolean) {
   const pp = /^([\d,.]+)pp$/.exec(row.value);
   return h(
     "div",
@@ -119,7 +133,7 @@ function rowElement(row: RankingsBoardRow, index: number, withEmblems: boolean, 
     h("div", { key: "rank", style: { display: "flex", width: `${RANK_WIDTH}px`, fontSize: "30px", fontWeight: 900, color: RANK_COLORS[row.rank] ?? "#8b8e98" } }, String(row.rank)),
     // The avatar is laid over this gap by sharp.
     h("div", { key: "avatar", style: { display: "flex", width: `${AVATAR_SIZE + AVATAR_GAP}px` } }),
-    h("div", { key: "name", style: { display: "flex", flexGrow: 1, fontSize: "30px", fontWeight: 900, color: "#fff" } }, row.name),
+    h("div", { key: "name", style: { display: "flex", flexGrow: 1, fontSize: `${NAME_SIZE}px`, fontWeight: 900, color: "#fff" } }, styledName ? "" : row.name),
     h(
       "div",
       { key: "value", style: { display: "flex", alignItems: "baseline", justifyContent: "flex-end", width: "240px", fontSize: `${VALUE_SIZE}px`, fontWeight: 900, color: "#fff" } },
@@ -141,29 +155,58 @@ export async function drawRankingsBoard(
   fonts: [ArrayBuffer, ArrayBuffer],
   emblems: RankingsBoardEmblemArt[] = [],
   flags: Array<Buffer | null> = [],
+  /** The name fonts and frame art of the supporters' looks; without them no look is drawn. */
+  lookSources?: OgLookSources,
 ): Promise<Buffer> {
   const withEmblems = rows.some((row) => row.emblem);
   const { default: sharp } = await import("sharp");
+  // Supporters' names in their style and font, drawn apart and laid over their rows.
+  const nameTags: Array<OgNameTag | null> = await Promise.all(rows.map((row) => lookSources && row.look?.name
+    ? drawNameTag({ name: row.name, look: row.look.name, fontSize: NAME_SIZE, color: "#fff", maxWidth: nameWidth(withEmblems) - 16, fonts: lookSources.fonts })
+    : null));
   const height = rows.length * ROW_HEIGHT + PAD_Y * 2;
   const fontList = ogFontList(...fonts);
   const text = await renderOgPng(
     h(
       "div",
       { style: { display: "flex", flexDirection: "column", width: `${RANKINGS_BOARD_WIDTH}px`, height: `${height}px`, paddingTop: `${PAD_Y}px`, fontFamily: fontList[0].name } },
-      rows.map((row, index) => rowElement(row, index, withEmblems, Boolean(flags[index]))),
+      rows.map((row, index) => rowElement(row, index, withEmblems, Boolean(flags[index]), Boolean(nameTags[index]))),
     ),
     { width: RANKINGS_BOARD_WIDTH, height, fonts: fontList },
   );
   const mask = Buffer.from(`<svg width="${AVATAR_SIZE}" height="${AVATAR_SIZE}"><circle cx="${AVATAR_SIZE / 2}" cy="${AVATAR_SIZE / 2}" r="${AVATAR_SIZE / 2}"/></svg>`);
   const layers: Array<{ input: Buffer; left: number; top: number }> = [{ input: text, left: 0, top: 0 }];
+  // A frame's art is laid on after every bare avatar, so a neighbour's avatar never covers it.
+  const framed: Array<{ input: Buffer; left: number; top: number }> = [];
   for (const [index, source] of avatars.entries()) {
     if (!source || index >= rows.length) continue;
+    const left = PAD_X + RANK_WIDTH;
+    const top = PAD_Y + index * ROW_HEIGHT + Math.round((ROW_HEIGHT - AVATAR_SIZE) / 2);
+    const frame = lookSources ? rows[index]!.look?.frame : null;
+    if (frame && lookSources) {
+      // The rows are close: the art keeps to its own row where it can.
+      const drawn = await drawFramedAvatar({ avatar: source, frame, size: AVATAR_SIZE, round: true, room: { left: 12, top: 12, right: AVATAR_GAP - 4, bottom: 12 }, minScale: 0.7, loadArt: lookSources.loadArt });
+      if (drawn) {
+        const inset = (AVATAR_SIZE - drawn.avatar.size) / 2;
+        const layer = await lookLayer(drawn.png, Math.round(left + inset - drawn.avatar.x), Math.round(top + inset - drawn.avatar.y), RANKINGS_BOARD_WIDTH, height);
+        if (layer) framed.push(layer);
+        continue;
+      }
+    }
     try {
       const avatar = await sharp(source).resize(AVATAR_SIZE, AVATAR_SIZE, { fit: "cover" }).composite([{ input: mask, blend: "dest-in" }]).png().toBuffer();
-      layers.push({ input: avatar, left: PAD_X + RANK_WIDTH, top: PAD_Y + index * ROW_HEIGHT + Math.round((ROW_HEIGHT - AVATAR_SIZE) / 2) });
+      layers.push({ input: avatar, left, top });
     } catch {
       // Left empty.
     }
+  }
+  layers.push(...framed);
+  for (const [index, tag] of nameTags.entries()) {
+    if (!tag) continue;
+    const left = PAD_X + RANK_WIDTH + AVATAR_SIZE + AVATAR_GAP;
+    const top = PAD_Y + index * ROW_HEIGHT + (ROW_HEIGHT - tag.line.height) / 2;
+    const layer = await lookLayer(tag.png, Math.round(left - tag.line.x), Math.round(top - tag.line.y), RANKINGS_BOARD_WIDTH, height);
+    if (layer) layers.push(layer);
   }
   for (const [index, art] of emblems.entries()) {
     if (!art || index >= rows.length) continue;

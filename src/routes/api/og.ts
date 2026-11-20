@@ -12,6 +12,7 @@ import {
   imageResponse,
   isOgFallbackError,
   loadOgFonts,
+  ogLookSources,
   MAX_CONCURRENT_OG_RENDERS,
   ogFontList,
   OgFallbackError,
@@ -34,6 +35,7 @@ import { drawPlayBanner, fetchPlayBannerSources, type PlayBannerStats } from "..
 import { drawPlayCard, fetchPlayCardSources, playCardGradeFile, readPlayCard, type PlayCardData } from "../../lib/play-card";
 import { drawProfileCard, fetchProfileCardSources, readProfileCard, type ProfileCardData } from "../../lib/profile-card";
 import { liveBridgeToken } from "../../lib/live-backend-tokens";
+import { readBannerLook, type OgSupporterLook } from "../../lib/og-supporter-look";
 import { drawRankingsBoard, fetchRankingsBoardAvatars, fetchRankingsBoardFlags, readRankingsBoard, type RankingsBoardRow } from "../../lib/rankings-board";
 import {
   getDisplayedAccuracy,
@@ -1879,8 +1881,10 @@ async function renderPlayBannerOg(
   userId: number,
   stats: PlayBannerStats | null,
   dan: { label: string; family: string; keyCount: number } | null = null,
+  /** A supporter's look and its payload, which names it among the renders under way. */
+  look: { look: OgSupporterLook; payload: string } | null = null,
 ): Promise<Response> {
-  const key = `${beatmapsetId}:${userId}:${stats ? `${stats.pp}:${stats.accuracy}:${stats.gain}` : ""}:${dan ? `${dan.keyCount}${dan.family}${dan.label}` : ""}`;
+  const key = `${beatmapsetId}:${userId}:${stats ? `${stats.pp}:${stats.accuracy}:${stats.gain}` : ""}:${dan ? `${dan.keyCount}${dan.family}${dan.label}` : ""}:${look?.payload ?? ""}`;
   let pending = inFlightPlayBanners.get(key);
   if (!pending) {
     pending = (async () => {
@@ -1899,6 +1903,8 @@ async function renderPlayBannerOg(
         stats: player && !emblem ? stats : null,
         emblem: player ? emblem : null,
         fonts,
+        look: look?.look ?? null,
+        lookSources: ogLookSources(request, fonts[1]),
       }));
     })().finally(() => {
       inFlightPlayBanners.delete(key);
@@ -1945,7 +1951,7 @@ async function renderPlayCardOg(request: Request, key: string, data: PlayCardDat
         Promise.all(data.mods.map((mod) => playCardIcon(request, `/images/discord/emojis/mod_${mod}.png`, "image/png"))),
       ]);
       // Only the drawing holds a render slot, not the waits on the image hosts.
-      return ogRenderGate.run(() => drawPlayCard({ data, ...sources, emblem, gradeIcon, modIcons, fonts }));
+      return ogRenderGate.run(() => drawPlayCard({ data, ...sources, emblem, gradeIcon, modIcons, fonts, lookSources: ogLookSources(request, fonts[1]) }));
     })().finally(() => {
       inFlightPlayCards.delete(key);
     });
@@ -1975,7 +1981,7 @@ async function renderProfileCardOg(request: Request, key: string, data: ProfileC
         Promise.all(data.plays.map((play) => Promise.all(play.mods.map((mod) => playCardIcon(request, `/images/discord/emojis/mod_${mod}.png`, "image/png"))))),
       ]);
       // Only the drawing holds a render slot, not the waits on the image hosts.
-      return ogRenderGate.run(() => drawProfileCard({ data, ...sources, emblems, gradeIcons, modIcons, fonts }));
+      return ogRenderGate.run(() => drawProfileCard({ data, ...sources, emblems, gradeIcons, modIcons, fonts, lookSources: ogLookSources(request, fonts[1]) }));
     })().finally(() => {
       inFlightProfileCards.delete(key);
     });
@@ -2009,7 +2015,7 @@ async function renderRankingsBoardOg(request: Request, key: string, rows: Rankin
       };
       const [fonts, avatars, emblems, flags] = await Promise.all([loadOgFonts(request), fetchRankingsBoardAvatars(rows), Promise.all(rows.map(badgeFor)), fetchRankingsBoardFlags(rows)]);
       // Only the drawing holds a render slot, not the waits on osu!'s image host.
-      return ogRenderGate.run(() => drawRankingsBoard(rows, avatars, fonts, emblems, flags));
+      return ogRenderGate.run(() => drawRankingsBoard(rows, avatars, fonts, emblems, flags, ogLookSources(request, fonts[1])));
     })().finally(() => {
       inFlightRankingsBoards.delete(key);
     });
@@ -5576,7 +5582,9 @@ export const Route = createFileRoute("/api/og")({
             return new Response(null, { status: 400 });
           }
           try {
-            return await renderPlayBannerOg(request, beatmapsetId, userId, playBannerStats(url.searchParams), playBannerDan(url.searchParams));
+            const lookPayload = url.searchParams.get("lk");
+            const look = readBannerLook(lookPayload, url.searchParams.get("ls"), userId, liveBridgeToken());
+            return await renderPlayBannerOg(request, beatmapsetId, userId, playBannerStats(url.searchParams), playBannerDan(url.searchParams), look && lookPayload ? { look, payload: lookPayload } : null);
           } catch (err) {
             console.warn("[og] play banner render failed", err);
             return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });

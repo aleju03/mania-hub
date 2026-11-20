@@ -8,8 +8,11 @@
 
 import { createElement as h } from "react";
 
+import { drawFramedAvatar } from "./og-avatar-frame";
 import { renderOgPng } from "./og-image-response";
+import { drawNameTag } from "./og-name-tag";
 import { ogFontList } from "./og-render";
+import { lookLayer, type OgLookSources, type OgSupporterLook } from "./og-supporter-look";
 
 export const PLAY_BANNER_WIDTH = 1040;
 export const PLAY_BANNER_HEIGHT = 128;
@@ -43,6 +46,9 @@ export interface PlayBannerParts {
   /** A dan badge's art (SVG or raster) for the right end, in place of the numbers. */
   emblem?: { source: Buffer; isSvg: boolean } | null;
   fonts: [ArrayBuffer, ArrayBuffer];
+  /** A supporter's name style, font, outline and avatar frame, and what drawing them needs. */
+  look?: OgSupporterLook | null;
+  lookSources?: OgLookSources;
 }
 
 const EMBLEM_HEIGHT = 104;
@@ -113,7 +119,13 @@ function emblemShade() {
   });
 }
 
-async function nameOverlay(username: string, withAvatar: boolean, stats: PlayBannerStats | null, withEmblem: boolean, fonts: [ArrayBuffer, ArrayBuffer]): Promise<Buffer> {
+const NAME_SIZE = 44;
+const NAME_GAP = 22;
+const NAME_WIDTH = 520;
+
+// `drawn` is a supporter's look, laid over the strip afterwards: a framed
+// avatar has no ring under it, and a styled name is left out of the text.
+async function nameOverlay(username: string, withAvatar: boolean, stats: PlayBannerStats | null, withEmblem: boolean, fonts: [ArrayBuffer, ArrayBuffer], drawn: { framed: boolean; styledName: boolean; nameShift: number } = { framed: false, styledName: false, nameShift: 0 }): Promise<Buffer> {
   const ringSize = AVATAR_SIZE + AVATAR_RING * 2;
   const fontList = ogFontList(...fonts);
   return renderOgPng(
@@ -137,7 +149,7 @@ async function nameOverlay(username: string, withAvatar: boolean, stats: PlayBan
             width: `${ringSize}px`,
             height: `${ringSize}px`,
             borderRadius: "50%",
-            backgroundColor: "rgba(255,255,255,0.92)",
+            backgroundColor: drawn.framed ? "rgba(255,255,255,0)" : "rgba(255,255,255,0.92)",
           },
         })
         : null,
@@ -146,14 +158,14 @@ async function nameOverlay(username: string, withAvatar: boolean, stats: PlayBan
         {
           key: "name",
           style: {
-            marginLeft: withAvatar ? "22px" : `${AVATAR_LEFT}px`,
-            fontSize: "44px",
+            marginLeft: withAvatar ? `${NAME_GAP + drawn.nameShift}px` : `${AVATAR_LEFT}px`,
+            fontSize: `${NAME_SIZE}px`,
             fontWeight: 900,
             color: "#fff",
             textShadow: "0 2px 6px rgba(0,0,0,0.7)",
           },
         },
-        username,
+        drawn.styledName ? "" : username,
       ),
       stats || withEmblem ? h("div", { key: "gap", style: { display: "flex", flexGrow: 1 } }) : null,
       stats ? statsColumn(stats) : withEmblem ? emblemShade() : null,
@@ -209,8 +221,32 @@ export async function drawPlayBanner(parts: PlayBannerParts): Promise<Buffer> {
         emblem = null;
       }
     }
-    layers.push({ input: await nameOverlay(parts.username, Boolean(avatar), parts.stats ?? null, Boolean(emblem), parts.fonts), left: 0, top: 0 });
-    if (avatar) layers.push({ input: avatar, left: AVATAR_LEFT, top: Math.round((PLAY_BANNER_HEIGHT - AVATAR_SIZE) / 2) });
+    // A supporter's frame goes round their avatar, their name in its style and font.
+    const sources = parts.lookSources;
+    const avatarTop = Math.round((PLAY_BANNER_HEIGHT - AVATAR_SIZE) / 2);
+    const framed = sources && parts.look?.frame && parts.avatar
+      ? await drawFramedAvatar({ avatar: parts.avatar, frame: parts.look.frame, size: AVATAR_SIZE, round: true, room: { left: AVATAR_LEFT - 4, top: avatarTop - 2, bottom: avatarTop - 2, right: NAME_GAP }, minScale: 0.75, loadArt: sources.loadArt })
+      : null;
+    const nameTag = sources && parts.look?.name
+      ? await drawNameTag({ name: parts.username, look: parts.look.name, fontSize: NAME_SIZE, color: "#fff", maxWidth: NAME_WIDTH, fonts: sources.fonts })
+      : null;
+    // Wide art (a pair of wings) moves right until it is on the strip, and the name starts past it.
+    const slotEnd = AVATAR_LEFT + AVATAR_SIZE + AVATAR_RING + NAME_GAP;
+    const inset = framed ? (AVATAR_SIZE - framed.avatar.size) / 2 : 0;
+    const framedLeft = framed ? Math.max(4, Math.round(AVATAR_LEFT + inset - framed.avatar.x)) : 0;
+    const nameLeft = framed ? Math.max(slotEnd, framedLeft + framed.width + 10) : avatar ? slotEnd : AVATAR_LEFT;
+    layers.push({ input: await nameOverlay(parts.username, Boolean(avatar || framed), parts.stats ?? null, Boolean(emblem), parts.fonts, { framed: Boolean(framed), styledName: Boolean(nameTag), nameShift: framed ? nameLeft - slotEnd : 0 }), left: 0, top: 0 });
+    if (framed) {
+      const left = framedLeft;
+      const layer = await lookLayer(framed.png, left, Math.round(avatarTop + inset - framed.avatar.y), PLAY_BANNER_WIDTH, PLAY_BANNER_HEIGHT);
+      if (layer) layers.push(layer);
+    } else if (avatar) {
+      layers.push({ input: avatar, left: AVATAR_LEFT, top: avatarTop });
+    }
+    if (nameTag) {
+      const layer = await lookLayer(nameTag.png, Math.round(nameLeft - nameTag.line.x), Math.round((PLAY_BANNER_HEIGHT - nameTag.line.height) / 2 - nameTag.line.y), PLAY_BANNER_WIDTH, PLAY_BANNER_HEIGHT);
+      if (layer) layers.push(layer);
+    }
     if (emblem) {
       const { width = 0, height = 0 } = await sharp(emblem).metadata();
       layers.push({ input: emblem, left: PLAY_BANNER_WIDTH - EMBLEM_RIGHT - width, top: Math.round((PLAY_BANNER_HEIGHT - height) / 2) });

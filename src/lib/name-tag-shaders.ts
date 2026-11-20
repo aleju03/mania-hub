@@ -183,16 +183,18 @@ const OWN_SHADERS: Record<Exclude<ShaderNameStyle, "chrome" | "molten-gold" | "g
   color = mix(vec3(.08, .3, .34), light, .25 + .75 * curtain);
   color = mix(color, vec3(.6, 1., .82), rim * .55);`),
 
-  // Plasma: electric veins crawling through deep blue.
+  // Plasma: electric veins crawling through electric blue. The blue is bright
+  // and the rim strong so the letters hold their shape on a dark page: on a
+  // deep navy the veins were all that showed, and the name read as scraps.
   plasma: letterShader(`
   vec2 q = p * 2.;
   float n = fbm(q + vec2(t * .3, t * .2));
   float n2 = fbm(q * 1.7 - vec2(t * .25, -t * .15) + n);
   float vein = pow(1. - abs(n2 * 2. - 1.), 12.);
   float vein2 = pow(1. - abs(fbm(q * 3. + t * .5) * 2. - 1.), 18.);
-  color = vec3(.07, .13, .38) + vec3(.3, .7, 1.) * vein * 1.4 + vec3(.9, .95, 1.) * vein2 * 1.2;
+  color = vec3(.14, .32, .84) + vec3(.3, .7, 1.) * vein * 1.4 + vec3(.9, .95, 1.) * vein2 * 1.2;
   color *= .86 + .14 * noise(vec2(t * 18., 0.));
-  color = mix(color, vec3(.5, .78, 1.), rim * .6);`),
+  color = mix(color, vec3(.62, .86, 1.), rim * .85);`),
 
   // Ink marble: ink folding through paper, a thread of gold in it.
   ink: letterShader(`
@@ -703,7 +705,7 @@ export function mountNameShader(span: HTMLElement, host: HTMLElement, style: Sha
    instead of rendering every tile again; bump STILL_VERSION when a shader's
    look changes. */
 const stills = new Map<string, HTMLCanvasElement>();
-const STILL_VERSION = 5;
+const STILL_VERSION = 6;
 const STILL_PREFIX = `name-still:${STILL_VERSION}:`;
 
 function storedStill(key: string): Promise<HTMLCanvasElement | null> {

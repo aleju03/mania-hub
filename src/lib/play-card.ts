@@ -12,8 +12,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { createElement as h, type ReactNode } from "react";
 
 import { extractBeatmapArchiveFileByRange } from "./beatmap-archive";
+import { drawFramedAvatar } from "./og-avatar-frame";
 import { renderOgPng } from "./og-image-response";
+import { drawNameTag, type OgNameTag } from "./og-name-tag";
 import { ogFontList } from "./og-render";
+import { lookLayer, readOgSupporterLook, type OgLookSources, type OgSupporterLook } from "./og-supporter-look";
 import { getCachedBeatmapAssetUrl, putBeatmapAssetAndGetUrl } from "./r2-cache";
 
 export const PLAY_CARD_WIDTH = 1100;
@@ -59,6 +62,8 @@ export interface PlayCardData {
   kind: "play" | "dan";
   userId: number;
   username: string;
+  /** A supporter's name style, font, outline and avatar frame. */
+  look: OgSupporterLook | null;
   beatmapsetId: number | null;
   /** The difficulty's background file in the set's archive. */
   background: string | null;
@@ -137,6 +142,7 @@ export function readPlayCard(payload: string | null, signature: string | null, k
       kind: raw.k === "dan" && tier ? "dan" : "play",
       userId,
       username,
+      look: readOgSupporterLook(raw.lk),
       beatmapsetId: number(raw.s, 1, Number.MAX_SAFE_INTEGER),
       background: background && !background.includes("..") ? background : null,
       title: text(raw.t, 160),
@@ -180,6 +186,10 @@ export interface PlayCardParts {
   gradeIcon: string | null;
   modIcons: Array<string | null>;
   fonts: [ArrayBuffer, ArrayBuffer];
+  /** The name fonts and frame art of a supporter's look; without them the look is not drawn. */
+  lookSources?: OgLookSources;
+  /** Set by drawPlayCard once the look is drawn: the room the player row keeps for it. */
+  drawn?: { avatarGap: number; styledName: boolean };
 }
 
 type Style = Record<string, string | number>;
@@ -214,10 +224,14 @@ function percent(value: number, decimals = 2): string {
   return `${decimals === 0 ? Number(value.toFixed(2)) : value.toFixed(decimals)}%`;
 }
 
-function playerRow(data: PlayCardData, withAvatar: boolean) {
+const NAME_SIZE = 30;
+const NAME_WIDTH = 520;
+
+// A supporter's name is drawn apart in its look and laid over the card (drawPlayCard): the row leaves it out.
+function playerRow(data: PlayCardData, withAvatar: boolean, avatarGap: number, styledName: boolean) {
   return row("player", { height: `${AVATAR_SIZE}px` },
-    withAvatar ? h("div", { key: "slot", style: { display: "flex", width: `${AVATAR_SIZE + 18}px` } }) : null,
-    oneLine("name", data.username, { fontSize: "30px", fontWeight: 900, color: SOFT, maxWidth: "520px" }),
+    withAvatar ? h("div", { key: "slot", style: { display: "flex", width: `${AVATAR_SIZE + avatarGap}px` } }) : null,
+    styledName ? null : oneLine("name", data.username, { fontSize: `${NAME_SIZE}px`, fontWeight: 900, color: SOFT, maxWidth: `${NAME_WIDTH}px` }),
   );
 }
 
@@ -276,7 +290,7 @@ function playBody(parts: PlayCardParts) {
     add("fail", h("div", { key: "fail", style: { display: "flex", fontWeight: 900, color: RED } }, data.failedAt > 0 ? `Failed at ${Math.round(data.failedAt)}%` : "Failed"));
   }
   return [
-    playerRow(data, Boolean(parts.avatar)),
+    playerRow(data, Boolean(parts.avatar), parts.drawn?.avatarGap ?? 18, Boolean(parts.drawn?.styledName)),
     oneLine("title", data.title, { marginTop: "22px", height: "46px", fontSize: "36px", lineHeight: "46px", fontWeight: 900, color: "#fff" }),
     data.version ? oneLine("version", data.version, { marginTop: "2px", height: "34px", fontSize: "26px", lineHeight: "34px", color: MUTED }) : null,
     meta.length ? row("meta", { marginTop: "4px", height: "34px", fontSize: "26px", color: MUTED }, ...meta) : null,
@@ -313,7 +327,7 @@ function danBody(parts: PlayCardParts) {
   const tier = data.tier ?? "clear";
   const context = [data.previous != null ? `Best before ${percent(data.previous)}` : null, data.note].filter(Boolean) as string[];
   return [
-    playerRow(data, Boolean(parts.avatar)),
+    playerRow(data, Boolean(parts.avatar), parts.drawn?.avatarGap ?? 18, Boolean(parts.drawn?.styledName)),
     row("tier", { marginTop: "28px", height: "32px", fontSize: "26px", color: MUTED },
       h("div", { key: "t", style: { display: "flex", fontSize: "30px", fontWeight: 900, color: TIER_COLORS[tier] } }, TIER_HEADINGS[tier]),
       ...data.level.flatMap((part, index) => [hairline(`rule${index}`, 22), h("div", { key: `l${index}`, style: { display: "flex" } }, part)]),
@@ -389,8 +403,22 @@ export async function drawPlayCard(parts: PlayCardParts): Promise<Buffer> {
     }
   }
 
+  // A supporter's frame goes round their avatar, their name in its style and font.
+  const sources = parts.lookSources;
+  const look = parts.data.look;
+  const framed = sources && look?.frame && parts.avatar
+    ? await drawFramedAvatar({ avatar: parts.avatar, frame: look.frame, size: AVATAR_SIZE, round: true, room: { left: PAD_X - 6, top: PAD_TOP - 6, bottom: 24 }, loadArt: sources.loadArt })
+    : null;
+  // The gap after the avatar, wider when the frame's art reaches past it.
+  const avatarGap = framed
+    ? Math.max(18, Math.round(framed.width - framed.avatar.x - framed.avatar.size - (AVATAR_SIZE - framed.avatar.size) / 2) + 8)
+    : 18;
+  const nameTag: OgNameTag | null = sources && look?.name
+    ? await drawNameTag({ name: parts.data.username, look: look.name, fontSize: NAME_SIZE, color: SOFT, maxWidth: NAME_WIDTH - (avatarGap - 18), fonts: sources.fonts })
+    : null;
+
   let avatar: Buffer | null = null;
-  if (parts.avatar) {
+  if (parts.avatar && !framed) {
     const mask = Buffer.from(`<svg width="${AVATAR_SIZE}" height="${AVATAR_SIZE}"><circle cx="${AVATAR_SIZE / 2}" cy="${AVATAR_SIZE / 2}" r="${AVATAR_SIZE / 2}"/></svg>`);
     try {
       avatar = await sharp(parts.avatar)
@@ -416,8 +444,21 @@ export async function drawPlayCard(parts: PlayCardParts): Promise<Buffer> {
     }
   }
 
-  layers.push({ input: await textOverlay({ ...parts, avatar }, height, Boolean(emblem)), left: 0, top: 0 });
+  const hasAvatar = Boolean(avatar || framed);
+  layers.push({ input: await textOverlay({ ...parts, avatar: hasAvatar ? parts.avatar : null, drawn: { avatarGap, styledName: Boolean(nameTag) } }, height, Boolean(emblem)), left: 0, top: 0 });
   if (avatar) layers.push({ input: avatar, left: PAD_X, top: PAD_TOP });
+  if (framed) {
+    // Centred where the bare avatar sits.
+    const inset = (AVATAR_SIZE - framed.avatar.size) / 2;
+    const layer = await lookLayer(framed.png, Math.round(PAD_X + inset - framed.avatar.x), Math.round(PAD_TOP + inset - framed.avatar.y), PLAY_CARD_WIDTH, height);
+    if (layer) layers.push(layer);
+  }
+  if (nameTag) {
+    const left = PAD_X + (hasAvatar ? AVATAR_SIZE + avatarGap : 0);
+    const top = PAD_TOP + (AVATAR_SIZE - nameTag.line.height) / 2;
+    const layer = await lookLayer(nameTag.png, Math.round(left - nameTag.line.x), Math.round(top - nameTag.line.y), PLAY_CARD_WIDTH, height);
+    if (layer) layers.push(layer);
+  }
   if (emblem) {
     const { width = 0, height: emblemHeight = 0 } = await sharp(emblem).metadata();
     layers.push(isDan
