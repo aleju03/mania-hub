@@ -14,12 +14,25 @@ declare module "three" {
     quaternion: Quaternion;
     renderOrder: number;
     userData: Record<string, any>;
+    animations: AnimationClip[];
     add(...objects: Object3D[]): void;
     remove(...objects: Object3D[]): void;
     traverse(callback: (object: Object3D) => void): void;
     getWorldPosition(target: Vector3): Vector3;
     worldToLocal(vector: Vector3): Vector3;
     lookAt(x: number, y: number, z: number): void;
+  }
+
+  export class AnimationClip {
+    name: string;
+    duration: number;
+    tracks: unknown[];
+  }
+
+  export class AnimationMixer {
+    constructor(root: Object3D);
+    clipAction(clip: AnimationClip): { play(): unknown };
+    setTime(seconds: number): this;
   }
 
   export interface Material {

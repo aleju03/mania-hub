@@ -1,4 +1,5 @@
 import {
+  AnimationMixer,
   Box3,
   DirectionalLight,
   Group,
@@ -10,6 +11,7 @@ import {
   SRGBColorSpace,
   Vector3,
   WebGLRenderer,
+  type AnimationClip,
   type Material,
   type Object3D,
 } from "three";
@@ -21,8 +23,8 @@ import { applyCompanionToon, companionMotion } from "./companion-toon";
    height, and faces the viewer; dragging sideways turns it left or right, and
    only that way: it never tips forward or back. Let go and it spins on a
    little, then eases back to face front. A model can carry its own motion
-   (a fairy's beating wings and hover, companion-toon.ts); reduced motion
-   shows its rest pose. Draws only while on screen. The canvas can swap
+   (a fairy's beating wings and hover, companion-toon.ts) or loop the
+   animation clips in its file; reduced motion shows its rest pose. Draws only while on screen. The canvas can swap
    models (the /supporter preview, as the pointer moves down the list),
    keeping its context and compiled shaders. */
 
@@ -51,8 +53,28 @@ function loadModel(url: string): Promise<Object3D> {
     .then((gltf) => {
       // models exported with cel-shading settings get their toon look
       applyCompanionToon(gltf.scene);
+      gltf.scene.animations = gltf.animations;
       return gltf.scene;
     });
+}
+
+/* Every clip the file carries, looping together on the page's clock, so two
+   copies of a model play in step. */
+function clipMotion(root: Object3D): ((seconds: number) => void) | null {
+  const clips = (root.animations as AnimationClip[]).filter((clip) => clip.duration > 0 && clip.tracks.length);
+  if (!clips.length) return null;
+  const mixer = new AnimationMixer(root);
+  for (const clip of clips) mixer.clipAction(clip).play();
+  return (seconds) => mixer.setTime(seconds);
+}
+
+/* The model's own motion and its file's clips, whichever it has. */
+function modelMotion(root: Object3D): ((seconds: number) => void) | null {
+  const parts = [companionMotion(root), clipMotion(root)].filter((part) => part !== null);
+  if (!parts.length) return null;
+  return (seconds) => {
+    for (const part of parts) part(seconds);
+  };
 }
 
 function lights(scene: Scene) {
@@ -269,7 +291,7 @@ export function mountCompanionScene(host: HTMLElement, url: string, { facing: in
       model = loaded;
       if (nextMatte) makeMatte(loaded);
       spread = fit(loaded);
-      motion = companionMotion(loaded);
+      motion = modelMotion(loaded);
       turntable.add(loaded);
       facing = nextFacing;
       yaw = nextFacing + spinAt(performance.now());
