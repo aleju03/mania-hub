@@ -130,7 +130,10 @@ export function DanProgressRail({
           <span className="col-start-3 -mt-1 whitespace-nowrap text-[11px] tabular-nums text-osu-f1/70">{t`${shiftText} for accuracy`}</span>
         )}
       </div>
-      <div className="flex min-h-[136px] flex-1 justify-center gap-3 border-t border-white/5 pt-3">
+      {/* Each band is a badge over two lines of text, about 32px; any less room
+          and neighbouring bands print over each other (a five-band window in a
+          phone-height panel did). */}
+      <div className="flex flex-1 justify-center gap-3 border-t border-white/5 pt-3" style={{ minHeight: `${bands.length * 2.25 + 0.75}rem` }}>
         <div className="relative flex flex-1 justify-center gap-3" onPointerMove={readValue} onPointerLeave={() => setHover(null)}>
           <div className="relative w-24 shrink-0">
             {bands.map((level) => {
