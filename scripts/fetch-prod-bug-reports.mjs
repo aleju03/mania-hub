@@ -6,14 +6,14 @@ import { parseArgs, parseEnv } from "node:util";
 
 // An image is `<index>.<ext>`; any other file is `<index>/<name>` (see
 // isBugReportScreenshotKey in backend/src/features/bug-reports.ts).
-const ATTACHMENT_SUFFIX = /^[0-2](?:\.(png|jpg|gif|webp|bmp|avif)|\/[A-Za-z0-9][A-Za-z0-9._-]{0,99})$/;
+const ATTACHMENT_SUFFIX = /^[0-9](?:\.(png|jpg|gif|webp|bmp|avif)|\/[A-Za-z0-9][A-Za-z0-9._-]{0,99})$/;
 const IMAGE_EXT = /\.(png|jpg|gif|webp|bmp|avif)$/;
 
 /** Local paths use our own counters; a file keeps only its extension. */
 function localAttachmentName(key, counter) {
-  const image = /\/[0-2]\.(png|jpg|gif|webp|bmp|avif)$/.exec(key);
+  const image = /\/[0-9]\.(png|jpg|gif|webp|bmp|avif)$/.exec(key);
   if (image) return `image-${counter}.${image[1]}`;
-  const file = /\/[0-2]\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.exec(key);
+  const file = /\/[0-9]\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.exec(key);
   if (!file) return null;
   const ext = /\.([A-Za-z0-9]{1,10})$/.exec(key)?.[1]?.toLowerCase() ?? "bin";
   return `file-${counter}.${ext}`;

@@ -15,8 +15,8 @@ export interface BugReportAttachmentLink {
   name: string;
 }
 
-const IMAGE_KEY = /\/[0-2]\.(png|jpg|gif|webp|bmp|avif)$/;
-const FILE_KEY = /\/[0-2]\/([A-Za-z0-9][A-Za-z0-9._-]{0,99})$/;
+const IMAGE_KEY = /\/[0-9]\.(png|jpg|gif|webp|bmp|avif)$/;
+const FILE_KEY = /\/[0-9]\/([A-Za-z0-9][A-Za-z0-9._-]{0,99})$/;
 
 const VIDEO_MIME: Record<string, string> = {
   mp4: "video/mp4",
