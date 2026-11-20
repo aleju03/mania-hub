@@ -125,6 +125,18 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
   const [error, setError] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // A chart whose plays all sit on mod boards opens on the one with the most
+  // players instead of an empty Default. Once per chart, so Default can still be picked.
+  const [autoBoardFor, setAutoBoardFor] = useState<number | null>(null);
+  if (current && board && board.entries.length === 0 && country === "" && name === "" && modBoard === "" && autoBoardFor !== beatmapId) {
+    const busiest = (board.boards ?? []).reduce<(LiveMapBoard & { count: number }) | null>((best, entry) => (entry.count > (best?.count ?? 0) ? entry : best), null);
+    if (busiest) {
+      setAutoBoardFor(beatmapId);
+      setModBoard(boardKey(busiest));
+      setLoaded(null);
+    }
+  }
+
   useEffect(() => {
     if (pendingFriendsBoard() === beatmapId) {
       try {
@@ -310,9 +322,9 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
   };
 
   const filtered = country !== "" || name !== "" || modBoard !== "";
-  // Up from the first frame, so the search row never pops in; only a board
-  // known to be empty goes without it.
-  const emptyBoard = current && board != null && board.entries.length === 0 && !filtered;
+  // Up from the first frame, so the search row never pops in; only a chart
+  // known to have no plays on any board goes without it.
+  const emptyBoard = current && board != null && board.entries.length === 0 && !filtered && !boards.some((entry) => entry.count > 0);
   const controls = !emptyBoard ? (
     <div className="mb-2 flex items-center gap-2">
       <div className="relative min-w-0 flex-1">
