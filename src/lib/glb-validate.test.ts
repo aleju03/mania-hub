@@ -29,12 +29,26 @@ const mesh = (count: number) => ({
 });
 
 describe("checkGlb", () => {
+  it("keys a model by its geometry and source, not its textures or names", () => {
+    const shaped = {
+      ...mesh(300),
+      asset: { version: "2.0", extras: { source: "https://sketchfab.com/3d-models/thing-123/" } },
+      accessors: [{ count: 300, min: [-1.23456, 0, -1], max: [1, 2.00001, 1] }],
+    };
+    const first = checkGlb(glb(shaped));
+    const renamed = checkGlb(glb({ ...shaped, nodes: [{ mesh: 0, name: "other" }], images: [] }));
+    const moved = checkGlb(glb({ ...shaped, accessors: [{ count: 300, min: [-1.3, 0, -1], max: [1, 2, 1] }] }));
+    expect(first).toMatchObject({ ok: true, source: "https://sketchfab.com/3d-models/thing-123" });
+    expect(renamed.ok && first.ok && renamed.geometry === first.geometry).toBe(true);
+    expect(moved.ok && first.ok && moved.geometry !== first.geometry).toBe(true);
+  });
+
   it("passes a self-contained model and counts its triangles", () => {
-    expect(checkGlb(glb(mesh(300)))).toEqual({ ok: true, triangles: 100 });
+    expect(checkGlb(glb(mesh(300)))).toMatchObject({ ok: true, triangles: 100 });
   });
 
   it("counts a mesh once for every node that places it", () => {
-    expect(checkGlb(glb({ ...mesh(300), nodes: [{ mesh: 0 }, { mesh: 0 }] }))).toEqual({ ok: true, triangles: 200 });
+    expect(checkGlb(glb({ ...mesh(300), nodes: [{ mesh: 0 }, { mesh: 0 }] }))).toMatchObject({ ok: true, triangles: 200 });
   });
 
   it("refuses anything that is not binary glTF 2.0", () => {
@@ -48,12 +62,12 @@ describe("checkGlb", () => {
   it("refuses a model that would fetch files or URLs", () => {
     expect(checkGlb(glb({ ...mesh(3), buffers: [{ uri: "https://example.com/x.bin", byteLength: 8 }] }))).toEqual({ ok: false, error: "external_files" });
     expect(checkGlb(glb({ ...mesh(3), images: [{ uri: "texture.png" }] }))).toEqual({ ok: false, error: "external_files" });
-    expect(checkGlb(glb({ ...mesh(3), images: [{ bufferView: 0, mimeType: "image/png" }] }))).toEqual({ ok: true, triangles: 1 });
+    expect(checkGlb(glb({ ...mesh(3), images: [{ bufferView: 0, mimeType: "image/png" }] }))).toMatchObject({ ok: true, triangles: 1 });
   });
 
   it("refuses compression the site has no decoder for", () => {
     expect(checkGlb(glb({ ...mesh(3), extensionsRequired: ["KHR_draco_mesh_compression"] }))).toEqual({ ok: false, error: "unsupported_extension" });
-    expect(checkGlb(glb({ ...mesh(3), extensionsRequired: ["KHR_texture_transform"] }))).toEqual({ ok: true, triangles: 1 });
+    expect(checkGlb(glb({ ...mesh(3), extensionsRequired: ["KHR_texture_transform"] }))).toMatchObject({ ok: true, triangles: 1 });
   });
 
   it("refuses a model past the triangle cap", () => {

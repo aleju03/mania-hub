@@ -5,13 +5,15 @@
 // An image is never stored as sent: decoded, fitted inside 512px and
 // re-encoded as WebP, an animated one with all its frames. A model is stored as sent once
 // checkGlb passes it (self-contained binary glTF, no codec the site lacks, a
-// triangle cap). Both go into the public bucket under companions/, content
+// triangle cap) and is not a copy of one of the site's own models. Both go into the public bucket under companions/, content
 // addressed; the backend only accepts a submission whose URL has that shape.
 // Hardening as for the card motif upload: signed session, same-origin,
 // per-viewer rate limit, size cap before buffering, magic-byte sniffing, and
 // an active-supporter check against the live backend.
 
+import { createHash } from "node:crypto";
 import { readViewerFromRequest } from "./auth-server";
+import { BUILT_IN_COMPANION_GEOMETRY, BUILT_IN_COMPANION_SOURCES } from "./companion-builtin-models";
 import { checkGlb } from "./glb-validate";
 import { sniffImageMime } from "./image-sniff";
 import { getServerLiveBackendUrl } from "./live-backend";
@@ -60,7 +62,15 @@ const GLB_ERRORS = {
   external_files: "That model points at files outside itself. Export it as a single .glb with its textures inside.",
   unsupported_extension: "That model is compressed in a way the site can't read (Draco, Meshopt or KTX2). Export it without compression.",
   too_many_triangles: "That model has too many triangles; keep it under 100,000.",
+  already_listed: "That model is already in the list.",
 } as const;
+
+/* The same geometry as one of the site's own models, or downloaded from the
+   same page, whatever its textures were saved as. */
+export function isBuiltInModel(model: { geometry: string; source: string | null }): boolean {
+  const geometry = createHash("sha256").update(model.geometry).digest("hex").slice(0, 16);
+  return BUILT_IN_COMPANION_GEOMETRY.has(geometry) || (model.source !== null && BUILT_IN_COMPANION_SOURCES.has(model.source));
+}
 
 export async function handleSupporterCompanionUpload(
   request: Request,
@@ -78,6 +88,7 @@ export async function handleSupporterCompanionUpload(
   const image = sniffImageMime(buffer);
   const model = image ? null : checkGlb(buffer);
   if (model && !model.ok) return Response.json({ error: GLB_ERRORS[model.error] }, { status: 415 });
+  if (model && isBuiltInModel(model)) return Response.json({ error: GLB_ERRORS.already_listed }, { status: 409 });
   if (!(await isSupporter(viewer.id).catch(() => false))) {
     return Response.json({ error: "Only supporters can submit companions." }, { status: 403 });
   }

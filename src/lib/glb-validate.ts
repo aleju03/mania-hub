@@ -2,7 +2,9 @@
    carrying everything inside it (no file or URL it would fetch), no
    compression the site has no decoder for, and few enough triangles that a
    profile draws it without a stutter. The bytes are stored as sent once they
-   pass; nothing here rewrites them. */
+   pass; nothing here rewrites them. It also reads what identifies the model
+   whatever its textures were saved as (its geometry, and the page it was
+   downloaded from), so a copy of a model already on the site can be turned away. */
 
 export const GLB_MAX_TRIANGLES = 100_000;
 
@@ -20,17 +22,38 @@ const CHUNK_JSON = 0x4e4f534a;
 const TRIANGLES = 4;
 
 export type GlbCheck =
-  | { ok: true; triangles: number }
+  | { ok: true; triangles: number; geometry: string; source: string | null }
   | { ok: false; error: "not_glb" | "external_files" | "unsupported_extension" | "too_many_triangles" };
 
 interface GltfJson {
-  asset?: { version?: unknown };
+  asset?: { version?: unknown; extras?: { source?: unknown } };
   buffers?: Array<{ uri?: unknown }>;
   images?: Array<{ uri?: unknown; mimeType?: unknown }>;
   extensionsRequired?: unknown[];
-  accessors?: Array<{ count?: unknown }>;
+  accessors?: Array<{ count?: unknown; min?: unknown; max?: unknown }>;
   meshes?: Array<{ primitives?: Array<{ mode?: unknown; indices?: unknown; attributes?: { POSITION?: unknown } }> }>;
   nodes?: Array<{ mesh?: unknown }>;
+}
+
+/* Each primitive's vertex and index counts and its position bounds, sorted:
+   recompressing the textures or renaming the parts leaves it unchanged. */
+function geometryKey(json: GltfJson): string {
+  const round = (values: unknown) => (Array.isArray(values) ? values.map((value) => Number(Number(value).toFixed(3))).join(",") : "");
+  const parts: string[] = [];
+  for (const mesh of json.meshes ?? []) {
+    for (const primitive of mesh.primitives ?? []) {
+      const position = typeof primitive.attributes?.POSITION === "number" ? json.accessors?.[primitive.attributes.POSITION] : undefined;
+      const indices = typeof primitive.indices === "number" ? json.accessors?.[primitive.indices] : undefined;
+      parts.push(`${Number(position?.count) || 0}/${Number(indices?.count) || 0}/${round(position?.min)}/${round(position?.max)}`);
+    }
+  }
+  return parts.sort().join(";");
+}
+
+/* The page a model came from, as Sketchfab and similar exporters write it. */
+function sourceKey(json: GltfJson): string | null {
+  const source = json.asset?.extras?.source;
+  return typeof source === "string" && source.trim() ? source.trim().toLowerCase().replace(/\/+$/, "") : null;
 }
 
 function primitiveTriangles(json: GltfJson, primitive: NonNullable<NonNullable<GltfJson["meshes"]>[number]["primitives"]>[number]): number {
@@ -70,5 +93,5 @@ export function checkGlb(bytes: Uint8Array): GlbCheck {
     ? placed.reduce((sum, node) => sum + (meshTriangles[node.mesh as number] ?? 0), 0)
     : meshTriangles.reduce((sum, count) => sum + count, 0);
   if (triangles > GLB_MAX_TRIANGLES) return { ok: false, error: "too_many_triangles" };
-  return { ok: true, triangles };
+  return { ok: true, triangles, geometry: geometryKey(json), source: sourceKey(json) };
 }
