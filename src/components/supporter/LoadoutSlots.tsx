@@ -655,7 +655,7 @@ function useWorkshopFrameEntries(): FrameEntry[] {
     };
   }, []);
   // a maker's name is not a catalog string, so it rides as its own message
-  return made.map((entry) => ({ id: entry.id, label: { id: `workshop-frame:${entry.id}`, message: entry.name } }));
+  return made.map((entry) => ({ id: entry.id, label: { id: `workshop-frame:${entry.id}`, message: entry.name }, by: entry.submittedBy.username }));
 }
 
 function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) {
@@ -682,6 +682,7 @@ function FrameDrawer({ current, disabled, avatar, onTry, onPick }: DrawerProps) 
         <Item key={entry.id} active={frame === entry.id} disabled={disabled} onTry={tryOn(entry.id)} onPick={() => onPick("frame", entry.id)}>
           <FrameThumb frame={entry.id} avatar={avatar} size={68} />
           <span className="w-full truncate text-center">{i18n._(entry.label)}</span>
+          {entry.by && <span className="-mt-1 w-full truncate text-center font-normal text-osu-f1">{t`by ${entry.by}`}</span>}
         </Item>
       );
     }

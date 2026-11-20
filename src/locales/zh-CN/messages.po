@@ -3004,7 +3004,6 @@ msgstr "1 个难度"
 msgid "1 error in the code"
 msgstr "代码中有 1 处错误"
 
-
 #: src/components/packs/CardSpotlight.tsx
 msgid "1 other"
 msgstr "另一人"
@@ -6165,8 +6164,9 @@ msgid "Buy"
 msgstr "购买"
 
 #. placeholder {0}: by.username || by.id
+#. placeholder {0}: entry.by
 #. placeholder {0}: frame.submittedBy.username
-#. placeholder {0}: slide.kind === "frame" ? slide.frame.submittedBy.username : slide.theme.author.username
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/components/supporter/SupporterExtras.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/workshop.index.tsx

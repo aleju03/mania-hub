@@ -2992,7 +2992,6 @@ msgstr "1 diff"
 msgid "1 error in the code"
 msgstr "1 error en el código"
 
-
 #: src/components/packs/CardSpotlight.tsx
 msgid "1 other"
 msgstr "otro más"
@@ -6153,8 +6152,9 @@ msgid "Buy"
 msgstr "Comprar"
 
 #. placeholder {0}: by.username || by.id
+#. placeholder {0}: entry.by
 #. placeholder {0}: frame.submittedBy.username
-#. placeholder {0}: slide.kind === "frame" ? slide.frame.submittedBy.username : slide.theme.author.username
+#: src/components/supporter/LoadoutSlots.tsx
 #: src/components/supporter/SupporterExtras.tsx
 #: src/components/supporter/WorkshopFrames.tsx
 #: src/routes/workshop.index.tsx

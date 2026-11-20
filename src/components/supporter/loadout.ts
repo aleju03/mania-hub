@@ -150,7 +150,7 @@ export function sameLook(a: SupporterLook, b: SupporterLook): boolean {
    4K LN tiers) is one tile, with its variants as chips once it is picked. */
 
 export type FrameEntry =
-  | { id: SupporterAvatarFrameId; label: MessageDescriptor }
+  | { id: SupporterAvatarFrameId; label: MessageDescriptor; by?: string }
   | { set: string; label: MessageDescriptor; chips: MessageDescriptor; variants: { id: SupporterAvatarFrameId; label: string }[]; shown: number };
 
 const wings = (set: string, label: MessageDescriptor): FrameEntry => ({
