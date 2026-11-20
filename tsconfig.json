@@ -22,6 +22,11 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
+    /* Repeat `tsc --noEmit` runs only recheck what changed (a no-change run
+       takes seconds instead of ~40). The cache is under node_modules, so it is
+       never committed and each worktree keeps its own. */
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsc/root.tsbuildinfo",
 
     /* Linting */
     "skipLibCheck": true,

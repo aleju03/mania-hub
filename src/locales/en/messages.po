@@ -2979,6 +2979,10 @@ msgstr "<1% weight"
 msgid "$4 a month"
 msgstr "$4 a month"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "$4 a month on Patreon"
+msgstr "$4 a month on Patreon"
+
 #: src/routes/support.tsx
 msgid "$4 buys a month of supporter, and every payment adds more time."
 msgstr "$4 buys a month of supporter, and every payment adds more time."
@@ -3082,6 +3086,10 @@ msgstr "142 up in 90d"
 #: src/components/replay/ReplayControls.tsx
 msgid "16:9 video"
 msgstr "16:9 video"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "2 months free"
+msgstr "2 months free"
 
 #: src/routes/dan-estimates.tsx
 msgid "2. Your passes earn credit by accuracy"
@@ -6351,6 +6359,10 @@ msgstr "Card sleeve"
 msgid "Card tier"
 msgstr "Card tier"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Card, PayPal or Apple Pay"
+msgstr "Card, PayPal or Apple Pay"
+
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "cards"
 msgstr "cards"
@@ -7725,6 +7737,10 @@ msgstr "Connect Discord to set up feeds in servers where you have Manage Server.
 msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
 msgstr "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Connect Patreon"
+msgstr "Connect Patreon"
+
 #: src/components/communities/field-options.tsx
 msgid "Connect your Discord account first."
 msgstr "Connect your Discord account first."
@@ -7732,6 +7748,10 @@ msgstr "Connect your Discord account first."
 #: src/routes/discord.tsx
 msgid "Connect your Discord account to link it."
 msgstr "Connect your Discord account to link it."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Connect your Patreon here, then join the Supporter tier on Patreon. Each payment adds supporter time to your account."
+msgstr "Connect your Patreon here, then join the Supporter tier on Patreon. Each payment adds supporter time to your account."
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connected"
@@ -8255,6 +8275,10 @@ msgstr "Couldn't build recommendations"
 #: src/components/me/MyDataPanel.tsx
 msgid "Couldn't cancel right now. Try again in a moment."
 msgstr "Couldn't cancel right now. Try again in a moment."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Couldn't connect Patreon. Try again."
+msgstr "Couldn't connect Patreon. Try again."
 
 #: src/components/packs/run/RunTable.tsx
 #: src/routes/packs.tsx
@@ -10298,6 +10322,10 @@ msgstr "Ellipse"
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Email"
 msgstr "Email"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Email for the lava.top receipt"
+msgstr "Email for the lava.top receipt"
 
 #: src/routes/discord.tsx
 msgid "Embed"
@@ -13476,12 +13504,16 @@ msgstr "If you load your osu! friends, the site signs you in again with the frie
 #~ msgstr "If you load your osu! friends, the site signs you in again with the friends.read scope, reads your friends list once, and stores your friends' osu! user IDs. The access token is not kept. If you link your Discord account to the Discord bot, the site stores your Discord user ID with your osu! account and your bot settings. If you connect Companella, the site stores the scores and charts you choose to send and the device you approved."
 
 #: src/routes/privacy.tsx
-msgid "If you pay through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
-msgstr "If you pay through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+#~ msgid "If you pay through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+#~ msgstr "If you pay through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
 
 #: src/routes/privacy.tsx
 #~ msgid "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
 #~ msgstr "If you pay through Ko-fi, Google or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+
+#: src/routes/privacy.tsx
+msgid "If you pay through Ko-fi, lava.top or Patreon, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. Connecting Patreon on the Support page keeps your Patreon account's id, so its payments reach your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+msgstr "If you pay through Ko-fi, lava.top or Patreon, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. Connecting Patreon on the Support page keeps your Patreon account's id, so its payments reach your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
 
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -14132,6 +14164,10 @@ msgstr "Jewel case"
 msgid "Join"
 msgstr "Join"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Join on Patreon"
+msgstr "Join on Patreon"
+
 #: src/routes/communities_.$id.tsx
 msgid "Join server"
 msgstr "Join server"
@@ -14701,12 +14737,12 @@ msgid "lava.top asks for your email when you pay. Type the same one here, so the
 msgstr "lava.top asks for your email when you pay. Type the same one here, so the payment reaches your account."
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "lava.top only sells supporter time as a membership of 1, 3, 6 or 12 months that renews until you cancel it there. To pay once, use Ko-fi."
-msgstr "lava.top only sells supporter time as a membership of 1, 3, 6 or 12 months that renews until you cancel it there. To pay once, use Ko-fi."
+#~ msgid "lava.top only sells supporter time as a membership of 1, 3, 6 or 12 months that renews until you cancel it there. To pay once, use Ko-fi."
+#~ msgstr "lava.top only sells supporter time as a membership of 1, 3, 6 or 12 months that renews until you cancel it there. To pay once, use Ko-fi."
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "lava.top sends the receipt to this email."
-msgstr "lava.top sends the receipt to this email."
+#~ msgid "lava.top sends the receipt to this email."
+#~ msgstr "lava.top sends the receipt to this email."
 
 #: src/components/supporter/SupportPlans.tsx
 msgid "lava.top's Supporter membership renews by itself. You can cancel any time on lava.top."
@@ -18469,6 +18505,10 @@ msgstr "Not available yet."
 msgid "Not connected"
 msgstr "Not connected"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Not connected yet"
+msgstr "Not connected yet"
+
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not connected. Connect from inside {appName}."
 msgstr "Not connected. Connect from inside {appName}."
@@ -18529,9 +18569,17 @@ msgstr "not in top plays"
 msgid "Not in your collection"
 msgstr "Not in your collection"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "Not on lava.top"
+msgstr "Not on lava.top"
+
 #: src/routes/player/$username.tsx
 msgid "Not on osu! anymore"
 msgstr "Not on osu! anymore"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Not on Patreon"
+msgstr "Not on Patreon"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "not passed yet"
@@ -20272,6 +20320,22 @@ msgstr "Pasted"
 msgid "Path"
 msgstr "Path"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Patreon connected"
+msgstr "Patreon connected"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Patreon connected."
+#~ msgstr "Patreon connected."
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Patreon only sells supporter time as a $4 monthly membership. To pay once, use Ko-fi."
+#~ msgstr "Patreon only sells supporter time as a $4 monthly membership. To pay once, use Ko-fi."
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Patreon's Supporter tier renews by itself. You can cancel any time on Patreon."
+msgstr "Patreon's Supporter tier renews by itself. You can cancel any time on Patreon."
+
 #: src/lib/pack-run.ts
 msgid "Patriot"
 msgstr "Patriot"
@@ -20336,6 +20400,10 @@ msgid "Paused: still frame"
 msgstr "Paused: still frame"
 
 #: src/components/supporter/SupportCheckout.tsx
+msgid "Pay {price} on lava.top"
+msgstr "Pay {price} on lava.top"
+
+#: src/components/supporter/SupportCheckout.tsx
 msgid "Pay on lava.top"
 msgstr "Pay on lava.top"
 
@@ -20344,12 +20412,16 @@ msgid "Pay with Google here. Your supporter time starts as soon as the payment g
 msgstr "Pay with Google here. Your supporter time starts as soon as the payment goes through."
 
 #: src/routes/terms.tsx
-msgid "Payments go through Ko-fi or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
-msgstr "Payments go through Ko-fi or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+#~ msgid "Payments go through Ko-fi or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+#~ msgstr "Payments go through Ko-fi or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
 
 #: src/routes/terms.tsx
 #~ msgid "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
 #~ msgstr "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+
+#: src/routes/terms.tsx
+msgid "Payments go through Ko-fi, lava.top or Patreon, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+msgstr "Payments go through Ko-fi, lava.top or Patreon, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "PayPal"
@@ -25455,6 +25527,10 @@ msgid "Sign in first so it counts toward your account."
 msgstr "Sign in first so it counts toward your account."
 
 #: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first, then connect your Patreon here, so your supporter time reaches your account."
+msgstr "Sign in first, then connect your Patreon here, so your supporter time reaches your account."
+
+#: src/components/supporter/SupportCheckout.tsx
 msgid "Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account."
 msgstr "Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account."
 
@@ -27122,6 +27198,7 @@ msgid "supporter"
 msgstr "supporter"
 
 #: src/components/layout/Nav.tsx
+#: src/components/supporter/SupportCheckout.tsx
 #: src/routes/supporter.tsx
 msgid "Supporter"
 msgstr "Supporter"
@@ -27893,6 +27970,10 @@ msgstr "That listing no longer exists."
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "That Mamestagram account isn't linked to an osu! account here."
 #~ msgstr "That Mamestagram account isn't linked to an osu! account here."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That Patreon is already connected to another account."
+msgstr "That Patreon is already connected to another account."
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "That picture is empty."
@@ -31697,6 +31778,10 @@ msgstr "Vignette"
 #: src/lib/signature-style.ts
 msgid "Violet"
 msgstr "Violet"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Visa, Mastercard, Discover, JCB, Diners Club, PayPal, Apple Pay in US dollars, Venmo in the US"
+msgstr "Visa, Mastercard, Discover, JCB, Diners Club, PayPal, Apple Pay in US dollars, Venmo in the US"
 
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUploadModal.tsx

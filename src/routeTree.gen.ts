@@ -117,6 +117,7 @@ import { Route as WorkshopIndexRouteImport } from './routes/workshop.index'
 import { Route as ApiAuthDiscordRouteImport } from './routes/api/auth/discord'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
+import { Route as ApiAuthPatreonRouteImport } from './routes/api/auth/patreon'
 import { Route as ApiCompanellaChartRouteImport } from './routes/api/companella/chart'
 import { Route as ApiCompanellaReplayRouteImport } from './routes/api/companella/replay'
 import { Route as ApiCompanellaUsageRouteImport } from './routes/api/companella/usage'
@@ -142,6 +143,7 @@ import { Route as WorkshopThemesGalleryRouteImport } from './routes/workshop.the
 import { Route as WorkshopThemesSpecRouteImport } from './routes/workshop.themes.spec'
 import { Route as ApiAuthDiscordCallbackRouteImport } from './routes/api/auth/discord/callback'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
+import { Route as ApiAuthPatreonCallbackRouteImport } from './routes/api/auth/patreon/callback'
 import { Route as ApiSignatureTokenVariantRouteImport } from './routes/api/signature/$token/$variant'
 import { Route as ApiIntegrationsCompanellaV1BugReportsRouteImport } from './routes/api/integrations/companella/v1/bug-reports'
 import { Route as ApiIntegrationsCompanellaV1CapabilitiesRouteImport } from './routes/api/integrations/companella/v1/capabilities'
@@ -699,6 +701,11 @@ const ApiAuthOsuRoute = ApiAuthOsuRouteImport.update({
   path: '/api/auth/osu',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthPatreonRoute = ApiAuthPatreonRouteImport.update({
+  id: '/api/auth/patreon',
+  path: '/api/auth/patreon',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCompanellaChartRoute = ApiCompanellaChartRouteImport.update({
   id: '/api/companella/chart',
   path: '/api/companella/chart',
@@ -827,6 +834,11 @@ const ApiAuthOsuCallbackRoute = ApiAuthOsuCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
   getParentRoute: () => ApiAuthOsuRoute,
+} as any)
+const ApiAuthPatreonCallbackRoute = ApiAuthPatreonCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => ApiAuthPatreonRoute,
 } as any)
 const ApiSignatureTokenVariantRoute =
   ApiSignatureTokenVariantRouteImport.update({
@@ -1028,6 +1040,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/api/auth/patreon': typeof ApiAuthPatreonRouteWithChildren
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
@@ -1053,6 +1066,7 @@ export interface FileRoutesByFullPath {
   '/workshop/themes/': typeof WorkshopThemesIndexRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
+  '/api/auth/patreon/callback': typeof ApiAuthPatreonCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
   '/api/integrations/companella/v1/bug-reports': typeof ApiIntegrationsCompanellaV1BugReportsRoute
   '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
@@ -1178,6 +1192,7 @@ export interface FileRoutesByTo {
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/api/auth/patreon': typeof ApiAuthPatreonRouteWithChildren
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
@@ -1203,6 +1218,7 @@ export interface FileRoutesByTo {
   '/workshop/themes': typeof WorkshopThemesIndexRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
+  '/api/auth/patreon/callback': typeof ApiAuthPatreonCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
   '/api/integrations/companella/v1/bug-reports': typeof ApiIntegrationsCompanellaV1BugReportsRoute
   '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
@@ -1329,6 +1345,7 @@ export interface FileRoutesById {
   '/api/auth/discord': typeof ApiAuthDiscordRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/api/auth/patreon': typeof ApiAuthPatreonRouteWithChildren
   '/api/companella/chart': typeof ApiCompanellaChartRoute
   '/api/companella/replay': typeof ApiCompanellaReplayRoute
   '/api/companella/usage': typeof ApiCompanellaUsageRoute
@@ -1354,6 +1371,7 @@ export interface FileRoutesById {
   '/workshop/themes/': typeof WorkshopThemesIndexRoute
   '/api/auth/discord/callback': typeof ApiAuthDiscordCallbackRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
+  '/api/auth/patreon/callback': typeof ApiAuthPatreonCallbackRoute
   '/api/signature/$token/$variant': typeof ApiSignatureTokenVariantRoute
   '/api/integrations/companella/v1/bug-reports': typeof ApiIntegrationsCompanellaV1BugReportsRoute
   '/api/integrations/companella/v1/capabilities': typeof ApiIntegrationsCompanellaV1CapabilitiesRoute
@@ -1481,6 +1499,7 @@ export interface FileRouteTypes {
     | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/api/auth/patreon'
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
@@ -1506,6 +1525,7 @@ export interface FileRouteTypes {
     | '/workshop/themes/'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
+    | '/api/auth/patreon/callback'
     | '/api/signature/$token/$variant'
     | '/api/integrations/companella/v1/bug-reports'
     | '/api/integrations/companella/v1/capabilities'
@@ -1631,6 +1651,7 @@ export interface FileRouteTypes {
     | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/api/auth/patreon'
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
@@ -1656,6 +1677,7 @@ export interface FileRouteTypes {
     | '/workshop/themes'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
+    | '/api/auth/patreon/callback'
     | '/api/signature/$token/$variant'
     | '/api/integrations/companella/v1/bug-reports'
     | '/api/integrations/companella/v1/capabilities'
@@ -1781,6 +1803,7 @@ export interface FileRouteTypes {
     | '/api/auth/discord'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/api/auth/patreon'
     | '/api/companella/chart'
     | '/api/companella/replay'
     | '/api/companella/usage'
@@ -1806,6 +1829,7 @@ export interface FileRouteTypes {
     | '/workshop/themes/'
     | '/api/auth/discord/callback'
     | '/api/auth/osu/callback'
+    | '/api/auth/patreon/callback'
     | '/api/signature/$token/$variant'
     | '/api/integrations/companella/v1/bug-reports'
     | '/api/integrations/companella/v1/capabilities'
@@ -1931,6 +1955,7 @@ export interface RootRouteChildren {
   ApiAuthDiscordRoute: typeof ApiAuthDiscordRouteWithChildren
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthOsuRoute: typeof ApiAuthOsuRouteWithChildren
+  ApiAuthPatreonRoute: typeof ApiAuthPatreonRouteWithChildren
   ApiCompanellaChartRoute: typeof ApiCompanellaChartRoute
   ApiCompanellaReplayRoute: typeof ApiCompanellaReplayRoute
   ApiCompanellaUsageRoute: typeof ApiCompanellaUsageRoute
@@ -2717,6 +2742,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthOsuRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/patreon': {
+      id: '/api/auth/patreon'
+      path: '/api/auth/patreon'
+      fullPath: '/api/auth/patreon'
+      preLoaderRoute: typeof ApiAuthPatreonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/companella/chart': {
       id: '/api/companella/chart'
       path: '/api/companella/chart'
@@ -2891,6 +2923,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/auth/osu/callback'
       preLoaderRoute: typeof ApiAuthOsuCallbackRouteImport
       parentRoute: typeof ApiAuthOsuRoute
+    }
+    '/api/auth/patreon/callback': {
+      id: '/api/auth/patreon/callback'
+      path: '/callback'
+      fullPath: '/api/auth/patreon/callback'
+      preLoaderRoute: typeof ApiAuthPatreonCallbackRouteImport
+      parentRoute: typeof ApiAuthPatreonRoute
     }
     '/api/signature/$token/$variant': {
       id: '/api/signature/$token/$variant'
@@ -3068,6 +3107,18 @@ const ApiAuthOsuRouteWithChildren = ApiAuthOsuRoute._addFileChildren(
   ApiAuthOsuRouteChildren,
 )
 
+interface ApiAuthPatreonRouteChildren {
+  ApiAuthPatreonCallbackRoute: typeof ApiAuthPatreonCallbackRoute
+}
+
+const ApiAuthPatreonRouteChildren: ApiAuthPatreonRouteChildren = {
+  ApiAuthPatreonCallbackRoute: ApiAuthPatreonCallbackRoute,
+}
+
+const ApiAuthPatreonRouteWithChildren = ApiAuthPatreonRoute._addFileChildren(
+  ApiAuthPatreonRouteChildren,
+)
+
 interface ApiIntegrationsCompanellaV1SubmissionsIdBeatmapRouteChildren {
   ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRoute: typeof ApiIntegrationsCompanellaV1SubmissionsIdBeatmapPartsOffsetRoute
 }
@@ -3242,6 +3293,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthDiscordRoute: ApiAuthDiscordRouteWithChildren,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthOsuRoute: ApiAuthOsuRouteWithChildren,
+  ApiAuthPatreonRoute: ApiAuthPatreonRouteWithChildren,
   ApiCompanellaChartRoute: ApiCompanellaChartRoute,
   ApiCompanellaReplayRoute: ApiCompanellaReplayRoute,
   ApiCompanellaUsageRoute: ApiCompanellaUsageRoute,

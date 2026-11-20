@@ -45,10 +45,12 @@ const METHOD_LABEL: Record<DonationLinkMethod, string> = {
   unlinked: "unlinked by hand",
   claim: "claimed by them",
   email_claim: "claimed by email",
+  email_intent: "email given before paying",
   renewal: "renews a linked order",
+  patreon_link: "connected Patreon",
 };
 
-const PROVIDER_LABEL: Record<string, string> = { kofi: "Ko-fi", lava: "lava.top", google: "Google" };
+const PROVIDER_LABEL: Record<string, string> = { kofi: "Ko-fi", lava: "lava.top", google: "Google", patreon: "Patreon" };
 
 function providerLabel(provider: string): string {
   return PROVIDER_LABEL[provider] ?? provider;
@@ -384,6 +386,7 @@ interface ManualPayment {
 const PAYMENT_PROVIDER_OPTIONS: SelectMenuOption<AdminPaymentProvider>[] = [
   { value: "lava", label: "lava.top" },
   { value: "kofi", label: "Ko-fi" },
+  { value: "patreon", label: "Patreon" },
 ];
 const PAYMENT_CURRENCY_OPTIONS: SelectMenuOption<string>[] = ["USD", "RUB", "EUR"].map((code) => ({ value: code, label: code }));
 const PAYMENT_FIELD_CLASS = "h-7 w-full rounded-md bg-osu-b5 px-2 text-[12px] text-white outline-none ring-1 ring-inset ring-white/[0.08] focus:ring-osu-pink/60";
@@ -573,7 +576,7 @@ function InboxCard({ row, busy, run }: { row: AdminDonationRow; busy: boolean; r
     >
       <div className="w-[96px] shrink-0 text-[22px] font-semibold tabular-nums text-white">{formatMoney(row.amount, row.currency)}</div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[14px] text-white">{row.donorName ?? (row.provider === "lava" ? "lava.top buyer" : row.provider === "google" ? "Google contributor" : "No name given")}</div>
+        <div className="truncate text-[14px] text-white">{row.donorName ?? (row.provider === "lava" ? "lava.top buyer" : row.provider === "google" ? "Google contributor" : row.provider === "patreon" ? "Patreon member" : "No name given")}</div>
         <div className="text-[11px] text-osu-f1">
           {formatShortDate(row.occurredAt)} on {providerLabel(row.provider)}
           {row.imported ? ", imported" : ""}

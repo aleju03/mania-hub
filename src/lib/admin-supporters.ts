@@ -10,7 +10,7 @@ import { parseSubmittedFrames } from "./workshop-frames";
    supporter list, and the owner's link, unlink, grant, Ko-fi CSV import and
    Google contributor export import actions. */
 
-export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "message_match" | "manual" | "unlinked" | "claim" | "email_claim" | "renewal";
+export type DonationLinkMethod = "lava_link" | "email_match" | "name_match" | "message_match" | "manual" | "unlinked" | "claim" | "email_claim" | "email_intent" | "renewal" | "patreon_link";
 
 export interface AdminDonationRow {
   provider: string;
@@ -108,7 +108,7 @@ export const grantAdminSupporterDays = createServerFn({ method: "POST" })
   })
   .handler(({ data }) => adminRequest<{ ok: true; userId: number; username: string | null }>("/api/admin/supporters/grant", data));
 
-export const ADMIN_PAYMENT_PROVIDERS = ["lava", "kofi"] as const;
+export const ADMIN_PAYMENT_PROVIDERS = ["lava", "kofi", "patreon"] as const;
 export type AdminPaymentProvider = (typeof ADMIN_PAYMENT_PROVIDERS)[number];
 
 /* A payment the provider took but never reported to the site, written as an

@@ -2968,6 +2968,10 @@ msgstr "<1% 权重"
 msgid "$4 a month"
 msgstr "每月 $4"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "$4 a month on Patreon"
+msgstr "Patreon 上每月 $4"
+
 #: src/routes/support.tsx
 msgid "$4 buys a month of supporter, and every payment adds more time."
 msgstr "$4 可购买一个月的支持者时长，每次付款都会累加时间。"
@@ -3071,6 +3075,10 @@ msgstr "90 天内上升 142 名"
 #: src/components/replay/ReplayControls.tsx
 msgid "16:9 video"
 msgstr "16:9 视频"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "2 months free"
+msgstr "免费 2 个月"
 
 #: src/routes/dan-estimates.tsx
 msgid "2. Your passes earn credit by accuracy"
@@ -6336,6 +6344,10 @@ msgstr "卡套"
 msgid "Card tier"
 msgstr "卡片稀有度"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Card, PayPal or Apple Pay"
+msgstr "银行卡、PayPal 或 Apple Pay"
+
 #: src/components/packs/collections/CollectorShelf.tsx
 msgid "cards"
 msgstr "卡片"
@@ -7710,6 +7722,10 @@ msgstr "连接 Discord 后，可以为你拥有管理服务器权限的服务器
 msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
 msgstr "在应用内将它连接到你的账号。你可以在<0>设置</0>的“偏好”中撤销连接。"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Connect Patreon"
+msgstr "连接 Patreon"
+
 #: src/components/communities/field-options.tsx
 msgid "Connect your Discord account first."
 msgstr "请先关联你的 Discord 账号。"
@@ -7717,6 +7733,10 @@ msgstr "请先关联你的 Discord 账号。"
 #: src/routes/discord.tsx
 msgid "Connect your Discord account to link it."
 msgstr "连接你的 Discord 账号来绑定。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Connect your Patreon here, then join the Supporter tier on Patreon. Each payment adds supporter time to your account."
+msgstr "先在这里连接你的 Patreon，再到 Patreon 加入 Supporter 档位。每次付款都会给你的账号加上支持者时长。"
 
 #: src/components/companella/TestClientPanel.tsx
 msgid "Connected"
@@ -8240,6 +8260,10 @@ msgstr "无法生成推荐"
 #: src/components/me/MyDataPanel.tsx
 msgid "Couldn't cancel right now. Try again in a moment."
 msgstr "暂时无法取消，请稍后再试。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Couldn't connect Patreon. Try again."
+msgstr "无法连接 Patreon，请重试。"
 
 #: src/components/packs/run/RunTable.tsx
 #: src/routes/packs.tsx
@@ -10283,6 +10307,10 @@ msgstr "椭圆"
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Email"
 msgstr "邮箱"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Email for the lava.top receipt"
+msgstr "接收 lava.top 收据的邮箱"
 
 #: src/routes/discord.tsx
 msgid "Embed"
@@ -13442,8 +13470,12 @@ msgstr "如果你加载 osu! 好友，本站会用 friends.read 权限重新登�
 #~ msgstr ""
 
 #: src/routes/privacy.tsx
-msgid "If you pay through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
-msgstr "如果你通过 Ko-fi 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及由你邮箱地址生成的一串代码（绝不是地址本身），用于识别重复付款或退款。你在 Support 页面付款前在 lava.top 一栏填写的邮箱也只以代码形式保存，只用于把那笔付款关联到你的账号。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
+#~ msgid "If you pay through Ko-fi or lava.top, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+#~ msgstr "如果你通过 Ko-fi 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及由你邮箱地址生成的一串代码（绝不是地址本身），用于识别重复付款或退款。你在 Support 页面付款前在 lava.top 一栏填写的邮箱也只以代码形式保存，只用于把那笔付款关联到你的账号。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
+
+#: src/routes/privacy.tsx
+msgid "If you pay through Ko-fi, lava.top or Patreon, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. Connecting Patreon on the Support page keeps your Patreon account's id, so its payments reach your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+msgstr "如果你通过 Ko-fi、lava.top 或 Patreon 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及由你邮箱地址生成的一串代码（绝不是地址本身），用于识别重复付款或退款。你在 Support 页面付款前在 lava.top 一栏填写的邮箱也只以代码形式保存，只用于把那笔付款关联到你的账号。在 Support 页面连接 Patreon 会保存你的 Patreon 账号 id，让它的付款记到你的账号上。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
 
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -14094,6 +14126,10 @@ msgstr "CD 盒"
 msgid "Join"
 msgstr "加入"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Join on Patreon"
+msgstr "在 Patreon 加入"
+
 #: src/routes/communities_.$id.tsx
 msgid "Join server"
 msgstr "加入服务器"
@@ -14663,12 +14699,12 @@ msgid "lava.top asks for your email when you pay. Type the same one here, so the
 msgstr "lava.top 会在付款时要求填写邮箱。在这里填写同一个邮箱，付款就会记到你的账号上。"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "lava.top only sells supporter time as a membership of 1, 3, 6 or 12 months that renews until you cancel it there. To pay once, use Ko-fi."
-msgstr "lava.top 只以 1、3、6 或 12 个月的会员形式出售 supporter 时长，会自动续费，直到你在那里取消。想一次性付款，请用 Ko-fi。"
+#~ msgid "lava.top only sells supporter time as a membership of 1, 3, 6 or 12 months that renews until you cancel it there. To pay once, use Ko-fi."
+#~ msgstr "lava.top 只以 1、3、6 或 12 个月的会员形式出售 supporter 时长，会自动续费，直到你在那里取消。想一次性付款，请用 Ko-fi。"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "lava.top sends the receipt to this email."
-msgstr "lava.top 会把收据发到这个邮箱。"
+#~ msgid "lava.top sends the receipt to this email."
+#~ msgstr "lava.top 会把收据发到这个邮箱。"
 
 #: src/components/supporter/SupportPlans.tsx
 msgid "lava.top's Supporter membership renews by itself. You can cancel any time on lava.top."
@@ -18431,6 +18467,10 @@ msgstr "暂不可用。"
 msgid "Not connected"
 msgstr "未连接"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Not connected yet"
+msgstr "尚未连接"
+
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Not connected. Connect from inside {appName}."
 msgstr "未连接。请在 {appName} 内连接。"
@@ -18491,9 +18531,17 @@ msgstr "不在最佳成绩里"
 msgid "Not in your collection"
 msgstr "不在你的收藏册里"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "Not on lava.top"
+msgstr "lava.top 不支持"
+
 #: src/routes/player/$username.tsx
 msgid "Not on osu! anymore"
 msgstr "已不在 osu! 上"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Not on Patreon"
+msgstr "Patreon 不支持"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "not passed yet"
@@ -20234,6 +20282,22 @@ msgstr "粘贴的内容"
 msgid "Path"
 msgstr "路径"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Patreon connected"
+msgstr "Patreon 已连接"
+
+#: src/components/supporter/SupportCheckout.tsx
+#~ msgid "Patreon connected."
+#~ msgstr "Patreon 已连接。"
+
+#: src/components/supporter/SupportPlans.tsx
+#~ msgid "Patreon only sells supporter time as a $4 monthly membership. To pay once, use Ko-fi."
+#~ msgstr "Patreon 只以每月 $4 的会员形式出售支持者时长。想一次性付款，请用 Ko-fi。"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Patreon's Supporter tier renews by itself. You can cancel any time on Patreon."
+msgstr "Patreon 的 Supporter 档位会自动续费。你可以随时在 Patreon 上取消。"
+
 #: src/lib/pack-run.ts
 msgid "Patriot"
 msgstr "爱国者"
@@ -20298,6 +20362,10 @@ msgid "Paused: still frame"
 msgstr "已暂停：静帧"
 
 #: src/components/supporter/SupportCheckout.tsx
+msgid "Pay {price} on lava.top"
+msgstr "在 lava.top 支付 {price}"
+
+#: src/components/supporter/SupportCheckout.tsx
 msgid "Pay on lava.top"
 msgstr "在 lava.top 支付"
 
@@ -20306,12 +20374,16 @@ msgid "Pay with Google here. Your supporter time starts as soon as the payment g
 msgstr "在这里用 Google 支付。付款完成后，你的支持者时长立即开始。"
 
 #: src/routes/terms.tsx
-msgid "Payments go through Ko-fi or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
-msgstr "付款通过 Ko-fi 或 lava.top 进行，并按各平台自己的条款处理。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
+#~ msgid "Payments go through Ko-fi or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+#~ msgstr "付款通过 Ko-fi 或 lava.top 进行，并按各平台自己的条款处理。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
 
 #: src/routes/terms.tsx
 #~ msgid "Payments go through Ko-fi, Google or lava.top, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
 #~ msgstr "付款通过 Ko-fi、Google 或 lava.top 进行，并按各平台自己的条款处理。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
+
+#: src/routes/terms.tsx
+msgid "Payments go through Ko-fi, lava.top or Patreon, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+msgstr "付款通过 Ko-fi、lava.top 或 Patreon 进行，并按各平台自己的条款处理。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "PayPal"
@@ -25409,6 +25481,10 @@ msgid "Sign in first so it counts toward your account."
 msgstr "请先登录，这样才会记到你的账号上。"
 
 #: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first, then connect your Patreon here, so your supporter time reaches your account."
+msgstr "请先登录，再在这里连接你的 Patreon，这样支持者时长才会记到你的账号上。"
+
+#: src/components/supporter/SupportCheckout.tsx
 msgid "Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account."
 msgstr "先登录，再填写你将用来付款的邮箱并在 lava.top 付款，这样支持者时长就会记到你的账号上。"
 
@@ -27076,6 +27152,7 @@ msgid "supporter"
 msgstr "支持者"
 
 #: src/components/layout/Nav.tsx
+#: src/components/supporter/SupportCheckout.tsx
 #: src/routes/supporter.tsx
 msgid "Supporter"
 msgstr "Supporter"
@@ -27847,6 +27924,10 @@ msgstr "这个条目已经不存在了。"
 #: src/components/player/AddScoreModal.tsx
 #~ msgid "That Mamestagram account isn't linked to an osu! account here."
 #~ msgstr "这个 Mamestagram 账号尚未在这里绑定 osu! 账号。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That Patreon is already connected to another account."
+msgstr "这个 Patreon 已经连接到另一个账号。"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "That picture is empty."
@@ -31643,6 +31724,10 @@ msgstr "暗角"
 #: src/lib/signature-style.ts
 msgid "Violet"
 msgstr "紫罗兰"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Visa, Mastercard, Discover, JCB, Diners Club, PayPal, Apple Pay in US dollars, Venmo in the US"
+msgstr "Visa、Mastercard、Discover、JCB、Diners Club、PayPal、Apple Pay（美元）、Venmo（美国）"
 
 #: src/components/skins/SkinSettingsModal.tsx
 #: src/components/skins/SkinUploadModal.tsx

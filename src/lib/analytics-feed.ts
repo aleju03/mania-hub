@@ -538,7 +538,7 @@ const ADD_SCORE_FAILURE_LABELS: Record<string, string> = {
   failed: "request failed",
 };
 
-const SUPPORT_METHOD_LABELS: Record<string, string> = { kofi: "Ko-fi", google: "Google", lava: "lava.top" };
+const SUPPORT_METHOD_LABELS: Record<string, string> = { kofi: "Ko-fi", google: "Google", lava: "lava.top", patreon: "Patreon" };
 
 /* The supporter page's sections, as the feed names them. */
 const SUPPORTER_SECTION_LABELS: Record<string, string> = {
@@ -598,6 +598,10 @@ function describeNamedAnalyticsEvent(
       return { kind: "support", verb: "opened", subject: "Google's checkout", detail: null };
     case "support_lava_open":
       return { kind: "support", verb: "went to pay on", subject: "lava.top", detail: null };
+    case "support_patreon_open":
+      return { kind: "support", verb: "went to pay on", subject: "Patreon", detail: null };
+    case "support_patreon_connect":
+      return { kind: "support", verb: "connected", subject: "Patreon", detail: null };
     case "support_kofi_claimed":
       return { kind: "support", verb: "claimed", subject: "a Ko-fi payment", detail: null };
     case "support_lava_claimed":

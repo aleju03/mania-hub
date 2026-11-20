@@ -64,6 +64,10 @@ export const CELEBRATIONS: Record<string, ChangelogCelebration> = {
 };
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-11-19", text: "Added a frame editor to the Workshop, to draw your own avatar frames.", to: "/workshop/frames" },
+  { date: "2026-11-19", text: "Added image posts to the Discord bot, for /profile and the Recent plays and Dan clears feeds.", to: "/discord", image: { src: "/images/changelog/2026-11-19-discord-profile-image.webp", alt: "The Discord bot answering m!p img with a profile image: pp, rank, a 90-day rank graph, top plays and skill ratings", width: 640, height: 390 }, more: [{ text: "Recent plays and Dan clears post like this when a channel has Image posts on.", image: { src: "/images/changelog/2026-11-19-discord-feed-images.webp", alt: "Two image posts from the bot, a 7K recent play at 98.30% and a 4K 10th dan overclear at 97.84% with its pass bar", width: 560, height: 527 } }] },
+  { date: "2026-11-19", text: "Added a warning in /setup and on /discord when the bot can't post in a channel.", to: "/discord" },
+  { date: "2026-11-19", text: "Added the mapper to map cards.", to: "/maps" },
   { date: "2026-11-18", text: "Added a \"new farm\" category to Recommended maps, from the day they're qualified or ranked.", to: "/recommendations", image: { src: "/images/changelog/2026-11-18-new-farm-maps.webp", alt: "The New farm maps section on Recommended maps, with a qualified map and a newly ranked one", width: 640, height: 80 } },
   { date: "2026-11-18", text: "Fixed Recommended maps leaving out HT and DT maps that players near you farm.", to: "/recommendations" },
   { date: "2026-11-18", text: "Added a Recent plays feed to the Discord bot, which posts every pass of the players you pick in a channel.", to: "/discord" },

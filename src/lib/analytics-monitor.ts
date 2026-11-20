@@ -236,6 +236,8 @@ const ANALYTICS_EVENT_LABELS: Record<string, string> = {
   support_open: "Become a supporter clicked",
   support_google_checkout: "Google checkout opened",
   support_lava_open: "lava.top checkout opened",
+  support_patreon_open: "Patreon checkout opened",
+  support_patreon_connect: "Patreon connect started",
   support_kofi_claimed: "Ko-fi payment claimed",
   support_lava_claimed: "lava.top payment claimed",
   support_google_claimed: "Google payment claimed",

@@ -18,28 +18,30 @@ const GOLD = SUPPORTER_RANKS.find((rank) => rank.id === "gold") ?? SUPPORTER_RAN
    that gets the most, so it comes first and is picked by default) and a
    one-time payment, with the days calculator. Monthly's gem burns and climbs
    the twelve ranks, as a subscriber's does, and the ladder under it lifts the
-   rank it is on. Both are paid on the checkout beside this; Google and
-   lava.top take neither any amount nor (lava.top) a one-off, so each plan
-   says how it goes with the method picked there. */
+   rank it is on. Both are paid on the checkout beside this. Patreon and
+   lava.top only sell a membership, so One-time can't be picked while one of
+   them is the method; Google takes a one-off but only in set amounts, which
+   the plan says. */
 export function SupportPlans({ method }: { method: SupportMethod | null }) {
   const { t } = useLingui();
-  const [plan, setPlan] = useState<Plan>("monthly");
+  const [picked, setPlan] = useState<Plan>("monthly");
   const index = useClimbingRank();
   const rank = SUPPORTER_RANKS[index];
+  const noOnce = method === "patreon" ? t`Not on Patreon` : method === "lava" ? t`Not on lava.top` : null;
+  // The pick is kept, so it comes back with a method that takes a one-off.
+  const plan: Plan = noOnce ? "monthly" : picked;
   return (
     <div className="mt-7">
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t`How to support`}>
         <PlanCard on={plan === "monthly"} onPick={() => setPlan("monthly")} gem={<RankGem rank={rank} renewing className="h-10 w-10" />} title={t`Monthly`} price={t`$4 a month`} />
-        <PlanCard on={plan === "once"} onPick={() => setPlan("once")} gem={<SupporterRankIcon rank={rank} className="h-10 w-10" />} title={t`One-time`} price={t`Any amount`} />
+        <PlanCard on={plan === "once"} off={noOnce != null} onPick={() => setPlan("once")} gem={<SupporterRankIcon rank={rank} className="h-10 w-10" />} title={t`One-time`} price={noOnce ?? t`Any amount`} />
       </div>
       {plan === "monthly" ? <MonthlyPerks index={index} method={method} /> : (
         <>
           <SupportDaysPreview />
-          {method === "google" || method === "lava" ? (
+          {method === "google" ? (
             <p className="mt-2.5 rounded-xl bg-osu-b4 px-4 py-3 text-[12.5px] leading-relaxed text-osu-l2 ring-1 ring-inset ring-white/[0.06]">
-              {method === "google"
-                ? t`Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi.`
-                : t`lava.top only sells supporter time as a membership of 1, 3, 6 or 12 months that renews until you cancel it there. To pay once, use Ko-fi.`}
+              {t`Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi.`}
             </p>
           ) : null}
         </>
@@ -50,19 +52,20 @@ export function SupportPlans({ method }: { method: SupportMethod | null }) {
 
 /* A plan to pick, with the rank gem it gives: burning for monthly. The fire
    rises past the card's top edge, in front of its ring. */
-function PlanCard({ on, onPick, gem, title, price }: { on: boolean; onPick: () => void; gem: ReactNode; title: string; price: string }) {
+function PlanCard({ on, off = false, onPick, gem, title, price }: { on: boolean; off?: boolean; onPick: () => void; gem: ReactNode; title: string; price: string }) {
   return (
     <button
       type="button"
       role="radio"
       aria-checked={on}
+      disabled={off}
       onClick={onPick}
-      className={`relative flex cursor-pointer items-center gap-3 rounded-xl px-3.5 py-3 text-left ring-inset transition-colors ${on ? "bg-osu-pink/15 ring-2 ring-osu-pink" : "bg-osu-b4 ring-1 ring-white/[0.06] hover:bg-osu-b3"}`}
+      className={`relative flex items-center gap-3 rounded-xl px-3.5 py-3 text-left ring-inset transition-colors ${off ? "cursor-not-allowed bg-osu-b4/50 ring-1 ring-white/[0.04]" : on ? "cursor-pointer bg-osu-pink/15 ring-2 ring-osu-pink" : "cursor-pointer bg-osu-b4 ring-1 ring-white/[0.06] hover:bg-osu-b3"}`}
     >
-      <span className="shrink-0">{gem}</span>
+      <span className={`shrink-0 ${off ? "opacity-35 grayscale" : ""}`}>{gem}</span>
       <span className="relative min-w-0">
-        <span className="block text-[15px] font-bold text-white">{title}</span>
-        <span className="block text-[12px] text-osu-l2">{price}</span>
+        <span className={`block text-[15px] font-bold ${off ? "text-white/40" : "text-white"}`}>{title}</span>
+        <span className={`block text-[12px] ${off ? "text-osu-f1" : "text-osu-l2"}`}>{price}</span>
       </span>
     </button>
   );
@@ -115,6 +118,8 @@ function MonthlyPerks({ index, method }: { index: number; method: SupportMethod 
           ? t`In Google's checkout, pick a monthly amount. You can cancel any time from your Google account.`
           : method === "lava"
             ? t`lava.top's Supporter membership renews by itself. You can cancel any time on lava.top.`
+            : method === "patreon"
+              ? t`Patreon's Supporter tier renews by itself. You can cancel any time on Patreon.`
             : t`On the Ko-fi panel, tick "Make this monthly" before you pay. You can cancel any time on Ko-fi.`}
       </p>
     </div>

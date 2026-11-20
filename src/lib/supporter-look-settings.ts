@@ -873,3 +873,19 @@ export const deleteOwnWorkshopFrame = createServerFn({ method: "POST" })
     if (!response.ok) throw new Error(`Server ${response.status}`);
     return { ok: true };
   });
+
+/* Whether the viewer's Patreon is tied to their account (backend
+   features/patreon.ts): connecting it is what makes their Patreon payments
+   count. False when signed out or when Patreon is not set up. */
+export const readPatreonConnection = createServerFn({ method: "GET" }).handler(async (): Promise<{ connected: boolean }> => {
+  const viewer = await requireViewer();
+  if (!viewer) return { connected: false };
+  try {
+    const response = await fetch(`${viewer.base}/api/supporters/self/patreon?userId=${viewer.userId}`, { headers: bridgeAuthHeaders() });
+    if (!response.ok) return { connected: false };
+    const body = await response.json().catch(() => null) as { connected?: unknown } | null;
+    return { connected: body?.connected === true };
+  } catch {
+    return { connected: false };
+  }
+});
