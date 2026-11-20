@@ -3004,6 +3004,7 @@ msgstr "1 个难度"
 msgid "1 error in the code"
 msgstr "代码中有 1 处错误"
 
+
 #: src/components/packs/CardSpotlight.tsx
 msgid "1 other"
 msgstr "另一人"
@@ -9099,6 +9100,7 @@ msgid "Daycore"
 msgstr "Daycore"
 
 #: src/components/player/ProfileStatCards.tsx
+#: src/components/supporter/GiftCodePanel.tsx
 #: src/components/supporter/GiftTicket3D.tsx
 #: src/components/supporter/SupportShowcase.tsx
 msgid "days"
@@ -12126,6 +12128,7 @@ msgstr "从 osu! 里把谱面导出"
 msgid "gift"
 msgstr "赠送"
 
+#: src/components/supporter/GiftCodePanel.tsx
 #: src/components/supporter/GiftTicket3D.tsx
 #: src/components/supporter/SupportShowcase.tsx
 msgid "Gift"
@@ -12140,8 +12143,8 @@ msgid "Gift a card…"
 msgstr "赠送卡片…"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "Gift a friend a week of supporter:"
-msgstr "送朋友一周支持者："
+#~ msgid "Gift a friend a week of supporter:"
+#~ msgstr "送朋友一周支持者："
 
 #: src/components/packs/GiftSpareDialog.tsx
 #~ msgid "Gift a spare"
@@ -19186,6 +19189,7 @@ msgstr "一击"
 msgid "one skill, no split"
 msgstr "单一技能，不细分"
 
+#: src/components/supporter/GiftCodePanel.tsx
 #: src/components/supporter/GiftTicket3D.tsx
 #: src/components/supporter/SupportShowcase.tsx
 msgid "One week of supporter"
@@ -32823,6 +32827,10 @@ msgstr "你已经有几条举报还没被处理。给管理员一点时间。"
 #: src/routes/recommendations.tsx
 msgid "You have a score, but players near you score higher on it."
 msgstr "你有成绩，但附近玩家的分数更高。"
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "You have a week of supporter to give a friend."
+msgstr "你有一周支持者可以送给朋友。"
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "You have as many cards in this part of the board as one player can. Try somewhere else."

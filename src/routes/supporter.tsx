@@ -12,6 +12,7 @@ import { LoadoutDrawer, markOwnThemeWorn, ownThemeOf, SlotLock, SupporterNav, us
 import { CustomArtDialog, type CustomArtDraft } from "#/components/supporter/CustomArtDialog";
 import { DiceIcon } from "../components/supporter/LoadoutIcons";
 import { GiftCodePanel, RedeemGiftCode } from "../components/supporter/GiftCodePanel";
+import { useViewerGiftCodeCount } from "../lib/viewer-gift-code";
 import { SupporterRankLadder } from "../components/supporter/SupporterRankBadge";
 import { Switch } from "../components/ui/Switch";
 import { useSettled } from "../components/supporter/use-settled";
@@ -253,6 +254,7 @@ function SupporterPage() {
   }, []);
 
   const supporter = state?.supporter === true;
+  const giftCodes = useViewerGiftCodeCount(viewer?.id, supporter);
   // A roll waiting to be kept can hold the image too (an upload lands on it).
   const heldLook = (pending ?? equipped)?.look;
   const customLook = heldLook?.motif === "custom" && heldLook.url ? heldLook : null;
@@ -702,6 +704,7 @@ function SupporterPage() {
                       trying={hover && !spinning ? hover.slot : null}
                       avatar={avatar}
                       supporter={supporter}
+                      giftCodes={giftCodes}
                     />
                   )}
                   <p className="mt-4 px-2 text-[11px] text-osu-f1">
@@ -747,6 +750,7 @@ function SupporterPage() {
                         trying={null}
                         avatar={avatar}
                         supporter={supporter}
+                        giftCodes={giftCodes}
                       />
                     </div>
                   )}

@@ -19,7 +19,7 @@ import { playBladeRip, warmBladeSounds } from "../packs/packSfx";
 import { bladeLook } from "../packs/packBlades";
 import type { MessageDescriptor } from "@lingui/core";
 import { FRAME_GROUPS, FRAME_NAMES, type FrameEntry } from "./loadout";
-import { formatGiftCode } from "./GiftCodePanel";
+import { formatGiftCode, ticketNotchMask } from "./GiftCodePanel";
 import { Stagger, StaggerItem, useLowEndDevice, useNearView } from "./SupportMotion";
 import { useAuth } from "../../lib/auth-context";
 import { isScrolling, queueGpuWork } from "../../lib/gpu-queue";
@@ -831,7 +831,7 @@ function GiftTicketFlat() {
     >
       {/* The ticket: punched where it meets the stub, a fine guilloche of
           stripes under the print, and a glint that crosses it on hover. */}
-      <div className="gift-ticket relative min-w-0 flex-1 overflow-hidden rounded-l-2xl bg-[linear-gradient(135deg,#ff7ab6_0%,#ff4f9a_45%,#c2357a_100%)] px-6 py-5">
+      <div className="gift-ticket relative min-w-0 flex-1 overflow-hidden rounded-l-2xl bg-[linear-gradient(135deg,#ff7ab6_0%,#ff4f9a_45%,#c2357a_100%)] px-6 py-5" style={ticketNotchMask("right")}>
         <div className="absolute inset-0 bg-[repeating-linear-gradient(115deg,rgba(255,255,255,0.07)_0_2px,transparent_2px_9px)]" />
         <div className="gift-ticket-glint absolute inset-y-0 -left-1/2 w-1/3 bg-gradient-to-r from-transparent via-white/35 to-transparent" />
         <div className="relative">
@@ -845,12 +845,10 @@ function GiftTicketFlat() {
       </div>
       {/* The tear line, with a notch bitten out at each end. */}
       <div className="relative w-0">
-        <span className="absolute -left-[10px] -top-[10px] z-10 h-5 w-5 rounded-full bg-osu-b5" />
-        <span className="absolute -bottom-[10px] -left-[10px] z-10 h-5 w-5 rounded-full bg-osu-b5" />
-        <span className="absolute inset-y-3 -left-px border-l-2 border-dotted border-white/50" />
+        <span className="absolute inset-y-3 -left-px z-10 border-l-2 border-dotted border-white/50" />
       </div>
       {/* The stub, printed on holo foil. */}
-      <div className="relative w-[96px] shrink-0 overflow-hidden rounded-r-2xl bg-[#2a2440] sm:w-[112px]">
+      <div className="relative w-[96px] shrink-0 overflow-hidden rounded-r-2xl bg-[#2a2440] sm:w-[112px]" style={ticketNotchMask("left")}>
         <FoilPreview foil="holo" className="absolute inset-0 h-full w-full" />
         <div className="relative flex h-full flex-col items-center justify-center text-center">
           <div className="text-[44px] font-black leading-none tabular-nums [text-shadow:0_2px_8px_rgba(0,0,0,0.35)]">7</div>

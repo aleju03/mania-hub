@@ -3015,6 +3015,7 @@ msgstr "1 diff"
 msgid "1 error in the code"
 msgstr "1 error in the code"
 
+
 #: src/components/packs/CardSpotlight.tsx
 msgid "1 other"
 msgstr "1 other"
@@ -9114,6 +9115,7 @@ msgid "Daycore"
 msgstr "Daycore"
 
 #: src/components/player/ProfileStatCards.tsx
+#: src/components/supporter/GiftCodePanel.tsx
 #: src/components/supporter/GiftTicket3D.tsx
 #: src/components/supporter/SupportShowcase.tsx
 msgid "days"
@@ -12152,6 +12154,7 @@ msgstr "Getting the map out of osu!"
 msgid "gift"
 msgstr "gift"
 
+#: src/components/supporter/GiftCodePanel.tsx
 #: src/components/supporter/GiftTicket3D.tsx
 #: src/components/supporter/SupportShowcase.tsx
 msgid "Gift"
@@ -12166,8 +12169,8 @@ msgid "Gift a card…"
 msgstr "Gift a card…"
 
 #: src/components/supporter/GiftCodePanel.tsx
-msgid "Gift a friend a week of supporter:"
-msgstr "Gift a friend a week of supporter:"
+#~ msgid "Gift a friend a week of supporter:"
+#~ msgstr "Gift a friend a week of supporter:"
 
 #: src/components/packs/GiftSpareDialog.tsx
 #~ msgid "Gift a spare"
@@ -19224,6 +19227,7 @@ msgstr "One shot"
 msgid "one skill, no split"
 msgstr "one skill, no split"
 
+#: src/components/supporter/GiftCodePanel.tsx
 #: src/components/supporter/GiftTicket3D.tsx
 #: src/components/supporter/SupportShowcase.tsx
 msgid "One week of supporter"
@@ -32877,6 +32881,10 @@ msgstr "You have a few reports waiting to be read already. Give a moderator a ch
 #: src/routes/recommendations.tsx
 msgid "You have a score, but players near you score higher on it."
 msgstr "You have a score, but players near you score higher on it."
+
+#: src/components/supporter/GiftCodePanel.tsx
+msgid "You have a week of supporter to give a friend."
+msgstr "You have a week of supporter to give a friend."
 
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "You have as many cards in this part of the board as one player can. Try somewhere else."

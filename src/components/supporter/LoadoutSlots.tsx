@@ -295,7 +295,7 @@ export function wrapperThumb(wrapper: SupporterWrapperId | null): string {
    store's categories, each loadout slot showing what it holds (the reels
    included), so the list doubles as the overview of the loadout. Below xl it
    folds into one scrolling row of chips. */
-export function SupporterNav({ shown, section, onSection, locks, spinning, trying, avatar, supporter, layout }: {
+export function SupporterNav({ shown, section, onSection, locks, spinning, trying, avatar, supporter, giftCodes = 0, layout }: {
   /** What the stage shows, so the rows read the same as it. */
   shown: Loadout;
   section: SupporterSection;
@@ -306,6 +306,8 @@ export function SupporterNav({ shown, section, onSection, locks, spinning, tryin
   trying: SlotId | null;
   avatar: string | undefined;
   supporter: boolean;
+  /** Unused gift codes they hold, counted on the Rank and gifts entry. */
+  giftCodes?: number;
   layout: "column" | "row";
 }) {
   const { t, i18n } = useLingui();
@@ -325,6 +327,10 @@ export function SupporterNav({ shown, section, onSection, locks, spinning, tryin
     { to: "/workshop/themes" as const, label: t`Your themes` },
   ];
 
+  const giftCount = (id: SupporterSection) => id === "you" && giftCodes > 0 ? (
+    <span className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-white/[0.1] px-1 text-[11px] font-bold tabular-nums text-white">{giftCodes}</span>
+  ) : null;
+
   if (layout === "row") {
     const chip = (id: SupporterSection) => (
       <button
@@ -336,6 +342,7 @@ export function SupporterNav({ shown, section, onSection, locks, spinning, tryin
       >
         <SectionArt section={id} className="h-[22px] w-[27px] shrink-0" />
         {label(id)}
+        {giftCount(id)}
       </button>
     );
     return (
@@ -360,6 +367,7 @@ export function SupporterNav({ shown, section, onSection, locks, spinning, tryin
       className={`flex w-full cursor-pointer items-center rounded-lg px-2 py-1.5 text-left text-[13px] font-semibold transition-colors ${section === id ? "bg-osu-b4 text-white" : "text-osu-l2 hover:bg-osu-b4/60 hover:text-white"}`}
     >
       {label(id)}
+      {giftCount(id)}
     </button>
   );
   // the profile's two non-slot rows sit among slot rows, so they get a drawn tile too
