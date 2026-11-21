@@ -58,7 +58,7 @@ const PATREON_FOR_EVERYONE = true;
 /* Crypto: USDT sent straight to the owner's wallet (backend
    features/crypto-wallet.ts). Admins only until it is set up; then only
    where CRYPTO_SUPPORT_COUNTRIES says. */
-const CRYPTO_FOR_EVERYONE = false;
+const CRYPTO_FOR_EVERYONE = true;
 /* What each crypto pack length costs in USDT (a dollar each): 4 a month, 40 a year. */
 const PACK_PRICE_USD: Record<PackMonths, number> = { 1: 4, 3: 12, 6: 24, 12: 40 };
 /* Signed-in buyers pay on an invoice the site makes through lava.top's API
