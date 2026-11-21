@@ -4931,6 +4931,10 @@ msgstr "Anything else"
 msgid "Anything else that might help?"
 msgstr "Anything else that might help?"
 
+#: src/routes/supporter.tsx
+msgid "Anything you change here is a preview until you support again."
+msgstr "Anything you change here is a preview until you support again."
+
 #: src/routes/communities.tsx
 msgid "anywhere"
 msgstr "anywhere"
@@ -27851,10 +27855,6 @@ msgid "Thai"
 msgstr "Thai"
 
 #. placeholder {0}: viewer.username
-#: src/routes/supporter.tsx
-msgid "Thank you for supporting before, {0}."
-msgstr "Thank you for supporting before, {0}."
-
 #. placeholder {0}: viewer.username
 #: src/routes/supporter.tsx
 msgid "Thank you for supporting, {0}."
@@ -33719,6 +33719,7 @@ msgid "Your support keeps the servers running and new features coming. These ext
 msgstr "Your support keeps the servers running and new features coming. These extras are the thank-you."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter.tsx
 msgid "Your supporter time has run out."
 msgstr "Your supporter time has run out."
 

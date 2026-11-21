@@ -39,7 +39,6 @@ import {
   peekLiveSupporterProfileThemeOptions,
   peekLiveSupporterCustomTheme,
   peekLiveSupporterProfileStats,
-  peekLiveSupporterLook,
   forgetLiveSupporterLook,
   LiveBackendRequestError,
   type LivePlayerSkills,
@@ -1205,7 +1204,7 @@ export function PlayerProfilePage({
     const raw = loaderData?.cachedSupporterLook;
     if (!raw || !profileUserId) return null;
     const value = seedLiveSupporterLook(profileUserId, raw);
-    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, rankPinned: value.rankPinned, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null };
+    return { userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, rankPinned: value.rankPinned, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.runStartedAt !== null };
   });
   useEffect(() => {
     if (!profileUserId) return;
@@ -1232,11 +1231,11 @@ export function PlayerProfilePage({
         patron: false,
         shownRank: null,
         rankFire: peekLiveSupporterRankFire(profileUserId) ?? true,
-        supporter: peekLiveSupporterLook(profileUserId) != null,
+        supporter: peekLiveSupporterRunStartedAt(profileUserId) != null,
       });
     }
     void fetchLiveSupporterProfileLook(profileUserId).then((value) => {
-      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, rankPinned: value.rankPinned, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.look !== null });
+      if (alive) setSupporterFrame({ userId: profileUserId, frame: value.frame, nameStyle: value.nameStyle, nameFont: value.nameFont, nameOutline: value.nameOutline, profileTheme: value.profileTheme, profileThemeOptions: value.profileThemeOptions, customTheme: value.customTheme, profileStats: value.profileStats, profileSkillKeys: value.profileSkillKeys, profileStatsData: value.profileStatsData, profilePlays: value.profilePlays, companion: value.companion, runStartedAt: value.runStartedAt, rankPinned: value.rankPinned, renewing: value.renewing, patron: value.patron, shownRank: value.shownRank, rankFire: value.rankFire, supporter: value.runStartedAt !== null });
     });
     return () => {
       alive = false;
@@ -1276,8 +1275,9 @@ export function PlayerProfilePage({
   const profileStatsData = supporterFrame?.userId === profileUserId ? supporterFrame.profileStatsData : {};
   const viewerIsSupporter = useViewerIsSupporter(auth.viewer?.id);
   const extraStatPreviews = useExtraStatPreviews(profileStatsData);
-  // The owner's own look says whether they are a supporter; the stored hint
-  // only covers browsers that have been to /supporter.
+  // The owner's own look says whether they are a supporter (a run that is
+  // under way: a lapsed supporter can still have a look, and cannot change
+  // it); the stored hint only covers browsers that have been to /supporter.
   const ownerIsSupporter = supporterFrame?.userId === profileUserId && supporterFrame.supporter;
   // not while previewing a look tried on at /supporter, which saves nothing
   const canSwapStats = !!auth.viewer && auth.viewer.id === profileUserId && (viewerIsSupporter || ownerIsSupporter) && !supporterLookPreviewFor(profileUserId);

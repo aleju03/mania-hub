@@ -727,10 +727,12 @@ function SupporterPage() {
               {state && !state.supporter ? (
                 <div className="mb-6">
                   {state.expiresAt ? (
-                    <p className="text-[22px] font-semibold text-white">{t`Thank you for supporting before, ${viewer.username}.`}</p>
+                    <p className="text-[22px] font-semibold text-white">{t`Your supporter time has run out.`}</p>
                   ) : null}
                   <p className="mt-1 text-[13px] text-osu-f1">
-                    {t`Everything here is a preview until you support. Use your osu! username as your Ko-fi name so it counts for you.`}
+                    {state.expiresAt
+                      ? t`Anything you change here is a preview until you support again.`
+                      : t`Everything here is a preview until you support. Use your osu! username as your Ko-fi name so it counts for you.`}
                   </p>
                   <RedeemGiftCode viewerId={viewer.id} onClaimed={() => setReload((n) => n + 1)} />
                 </div>

@@ -4916,6 +4916,10 @@ msgstr "其他补充"
 msgid "Anything else that might help?"
 msgstr "还有什么可能有帮助的信息吗？"
 
+#: src/routes/supporter.tsx
+msgid "Anything you change here is a preview until you support again."
+msgstr "在你再次支持之前，这里的任何更改都只是预览。"
+
 #: src/routes/communities.tsx
 msgid "anywhere"
 msgstr "不限地区"
@@ -27805,10 +27809,6 @@ msgid "Thai"
 msgstr "泰语"
 
 #. placeholder {0}: viewer.username
-#: src/routes/supporter.tsx
-msgid "Thank you for supporting before, {0}."
-msgstr "感谢你此前的支持，{0}。"
-
 #. placeholder {0}: viewer.username
 #: src/routes/supporter.tsx
 msgid "Thank you for supporting, {0}."
@@ -33665,6 +33665,7 @@ msgid "Your support keeps the servers running and new features coming. These ext
 msgstr "你的支持让服务器持续运行，也让新功能不断上线。这些额外内容就是谢礼。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/supporter.tsx
 msgid "Your supporter time has run out."
 msgstr "你的支持者时长已用完。"
 
