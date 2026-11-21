@@ -3854,6 +3854,9 @@ export interface LiveGlobalRankingsParams {
   /* With pool "packs", narrows the pool to main-4K or main-7K players (the
      backend classifies from variant pp, falling back to farmed key stats). */
   keys?: 4 | 7;
+  /* On a country, "all" continues past the ranked rows with its tracked
+     players osu!'s ranking pages don't reach, by pp. */
+  members?: "all";
 }
 
 // The combined leaderboard across every tracked country's roster, ranked by pp.
@@ -3894,6 +3897,7 @@ export async function fetchLiveRankingsSnapshot(
     sort: params.sort ?? "rank",
     dir: params.dir === "asc" ? "asc" : "desc",
   });
+  if (params.members) query.set("members", params.members);
   const snapshot = await fetchLiveJson<Record<string, unknown>>(
     `/api/snapshots/rankings?${query.toString()}`,
   );

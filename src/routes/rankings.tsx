@@ -370,17 +370,26 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   const { warming } = useCountryWarming(selectedCountry);
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const selectedIsRegion = isRegionScope(selectedCountry);
+  // A country's first two pages are osu!'s own top 100. From page 3 on it
+  // lists the rest of its tracked players by pp, which only the backend has.
+  const countryMembersPage = !selectedIsGlobal && !selectedIsRegion && page > 2;
   // Global and regions share the live-backend board UI (the osu! API has no
   // leaderboard for either); only the fetcher differs. A country joins them
-  // while sorted by combined pp, which the osu! pages cannot order.
-  const boardScope = selectedIsGlobal || selectedIsRegion || sortBy === "combined";
+  // while sorted by combined pp, which the osu! pages cannot order, and past
+  // its second page.
+  const boardScope = selectedIsGlobal || selectedIsRegion || sortBy === "combined" || countryMembersPage;
   const [globalRankings, setGlobalRankings] = useState<LiveGlobalRankingEntry[] | null>(null);
   const [globalRankingsTotal, setGlobalRankingsTotal] = useState(0);
   const [globalRankingsLoading, setGlobalRankingsLoading] = useState(false);
   // A country switching to combined keeps its osu! table on screen, dimmed,
   // until the backend board arrives, rather than dropping to skeletons.
-  const boardView = selectedIsGlobal || selectedIsRegion || (sortBy === "combined" && globalRankings != null);
+  const boardView = selectedIsGlobal || selectedIsRegion || countryMembersPage || (sortBy === "combined" && globalRankings != null);
   const globalTotalPages = Math.max(1, Math.ceil(globalRankingsTotal / GLOBAL_RANKINGS_PAGE_SIZE));
+  // Everyone tracked in the country, the top 100 included; null until read.
+  const [countryMembersTotal, setCountryMembersTotal] = useState<{ country: string; total: number } | null>(null);
+  const countryTotalPages = countryMembersTotal?.country === selectedCountry
+    ? Math.ceil(countryMembersTotal.total / GLOBAL_RANKINGS_PAGE_SIZE)
+    : 0;
   const restrictedEntries = useRestrictedPpRankings(selectedIsGlobal || selectedIsRegion ? null : selectedCountry);
   const restrictedUserIds = useMemo(() => new Set(restrictedEntries.map((entry) => entry.user.id)), [restrictedEntries]);
   // The backend's roster page has no row for a simulated player; their own
@@ -424,7 +433,9 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
       sort: sortBy === "pp" ? ("rank" as const) : sortBy,
       dir: sortDir,
     };
-    (selectedIsGlobal ? fetchLiveGlobalRankings(params) : fetchLiveRankingsSnapshot(selectedCountry, params))
+    (selectedIsGlobal
+      ? fetchLiveGlobalRankings(params)
+      : fetchLiveRankingsSnapshot(selectedCountry, selectedIsRegion ? params : { ...params, members: "all" }))
       .then((snapshot) => {
         if (cancelled) return;
         if (selectedIsGlobal && page === 1 && sortBy === "rank" && sortDir === "desc") {
@@ -448,9 +459,10 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   useEffect(() => {
     if (boardScope) return;
     let cancelled = false;
-    fetchLiveRankingsSnapshot(selectedCountry, { page, pageSize: 50 })
+    fetchLiveRankingsSnapshot(selectedCountry, { page, pageSize: 50, members: "all" })
       .then((snapshot) => {
         if (cancelled) return;
+        setCountryMembersTotal({ country: selectedCountry, total: snapshot.total });
         setCountryVariantPp((current) => ({
           ...current,
           ...Object.fromEntries(snapshot.ranking.map((entry) => [entry.user.id, { pp_4k: entry.pp_4k, pp_7k: entry.pp_7k }])),
@@ -466,6 +478,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
     setLiveRankDeltas({});
     setCountryVariantPp({});
     setGlobalRankings(null);
+    setGlobalRankingsTotal(0);
     setRankDeltasReady(false);
     setError(null);
   }, [selectedCountry]);
@@ -486,11 +499,6 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
       navigate({ to: "/rankings", search: { page: 1, country: selectedCountry }, replace: true });
     }
   }, [hasNextPage, navigate, page, selectedCountry, totalPlayers]);
-
-  useEffect(() => {
-    if (boardScope || page <= 2) return;
-    navigate({ to: "/rankings", search: { page: 2, country: selectedCountry }, replace: true });
-  }, [boardScope, navigate, page, selectedCountry]);
 
   useEffect(() => {
     if (!pageRanking) return;
@@ -514,8 +522,9 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
   useEffect(() => {
     let cancelled = false;
     // Global and regions have no single-country leaderboard to fetch from the
-    // osu! API; the board effect above owns them.
-    if (isGlobalScope(selectedCountry) || isRegionScope(selectedCountry)) {
+    // osu! API, and a country's pages past the second come from the backend;
+    // the board effect above owns them.
+    if (isGlobalScope(selectedCountry) || isRegionScope(selectedCountry) || page > 2) {
       setRankingsLoading(false);
       return () => { cancelled = true; };
     }
@@ -707,6 +716,12 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
     <span className="text-[10px] text-osu-f1"><Trans>{formatNumber(globalRankingsTotal)} tracked players</Trans></span>
   ) : null;
 
+  // A single country's rows are all that country.
+  const showRowFlags = selectedIsGlobal || selectedIsRegion;
+  // Rank snapshots are only taken of the top 100, so the rows after it have no
+  // 7-day change to show. The 4K+7K board keeps the columns for its top-100 rows.
+  const showRankChanges = !countryMembersPage || sortBy === "combined";
+  const boardColumns = showRankChanges ? 11 : 9;
   const boardDimmed = globalRankingsLoading && globalRankings != null;
   // Only reachable while the combined board is still loading for a country.
   const countryDimmed = sortBy === "combined";
@@ -734,7 +749,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                 { field: "accuracy" as SortField, label: t`Acc` },
                 { field: "playcount" as SortField, label: t`Plays` },
                 { field: "combined" as SortField, label: "4K+7K" },
-              ]).map(({ field, label }) => {
+              ]).filter(({ field }) => showRankChanges || (field !== "7d" && field !== "cr7d")).map(({ field, label }) => {
                 const active = sortBy === field;
                 return (
                   <button
@@ -846,12 +861,12 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                               avatarUrl={entry.user.avatar_url}
                               className="text-sm font-semibold truncate"
                             />
-                            <CountryFlag code={entry.user.country_code} size="sm" />
+                            {showRowFlags && <CountryFlag code={entry.user.country_code} size="sm" />}
                           </div>
                           <div className="flex items-center gap-3 mt-0.5 text-[11px] text-osu-f1">
                             <span>{formatKnownAccuracy(entry.hit_accuracy)}</span>
-                            <RankDeltaLabel label={t`7d`} change={entry.global_change} />
-                            <RankDeltaLabel label={entry.user.country_code} change={entry.country_change} />
+                            {showRankChanges && <RankDeltaLabel label={t`7d`} change={entry.global_change} />}
+                            {showRankChanges && <RankDeltaLabel label={entry.user.country_code} change={entry.country_change} />}
                           </div>
                           {presenceByUser.get(entry.user.id) ? (
                             <PresenceTag presence={presenceByUser.get(entry.user.id)!} className="mt-0.5 max-w-full" />
@@ -873,8 +888,8 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                 <colgroup>
                   <col className="w-[5%]" />
                   <col />
-                  <col className="w-[11%]" />
-                  <col className="w-[9%]" />
+                  {showRankChanges && <col className="w-[11%]" />}
+                  {showRankChanges && <col className="w-[9%]" />}
                   <col className="w-[10%]" />
                   <col className="w-[11%]" />
                   <col className="w-[7%]" />
@@ -887,8 +902,8 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                   <tr className="bg-osu-b4 text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
                     <th className="py-2.5 px-3 text-left w-12">#</th>
                     <SortableHeader field="player" label={t`Player`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="left" />
-                    <SortableHeader field="7d" label={t`7d Global`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-32" />
-                    <SortableHeader field="cr7d" label={t`7d Country`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-24" />
+                    {showRankChanges && <SortableHeader field="7d" label={t`7d Global`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-32" />}
+                    {showRankChanges && <SortableHeader field="cr7d" label={t`7d Country`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-24" />}
                     <SortableHeader field="accuracy" label={t`Accuracy`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                     <SortableHeader field="playcount" label={t`Play Count`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                     <th className="py-2.5 px-3 text-right">PP</th>
@@ -905,7 +920,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                   {(globalRankings == null || globalRankingsLoading) && visibleGlobalRankings.length === 0 ? (
                     Array.from({ length: 10 }).map((_, i) => (
                       <tr key={i} className="border-t border-osu-b3/20">
-                        <td colSpan={11} className="px-3 py-1.5">
+                        <td colSpan={boardColumns} className="px-3 py-1.5">
                           <RankingRowSkeleton />
                         </td>
                       </tr>
@@ -935,18 +950,22 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                               avatarUrl={entry.user.avatar_url}
                               className="text-sm font-medium truncate min-w-0"
                             />
-                            <CountryFlag code={entry.user.country_code} size="sm" />
+                            {showRowFlags && <CountryFlag code={entry.user.country_code} size="sm" />}
                             {presenceByUser.get(entry.user.id) ? (
                               <PresenceTag presence={presenceByUser.get(entry.user.id)!} className="flex-1" />
                             ) : null}
                           </Link>
                         </td>
-                        <td className="py-2.5 px-3">
-                          <GlobalRankCell rankChange={entry.global_change} loaded />
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <CRRankCell change={entry.country_change} loaded />
-                        </td>
+                        {showRankChanges && (
+                          <td className="py-2.5 px-3">
+                            <GlobalRankCell rankChange={entry.global_change} loaded />
+                          </td>
+                        )}
+                        {showRankChanges && (
+                          <td className="py-2.5 px-3">
+                            <CRRankCell change={entry.country_change} loaded />
+                          </td>
+                        )}
                         <td className="py-2.5 px-3 text-sm text-osu-l2 text-right">{formatKnownAccuracy(entry.hit_accuracy)}</td>
                         <td className="py-2.5 px-3 text-sm text-osu-f1 text-right">{formatKnownCount(entry.play_count)}</td>
                         <td className="py-2.5 px-3 text-sm font-bold text-right">{formatNumber(Math.round(entry.pp))}</td>
@@ -969,7 +988,7 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={11} className="px-4 py-10 text-center text-xs text-osu-f1"><Trans>No ranked players yet.</Trans></td>
+                      <td colSpan={boardColumns} className="px-4 py-10 text-center text-xs text-osu-f1"><Trans>No ranked players yet.</Trans></td>
                     </tr>
                   )}
                 </tbody>
@@ -1309,7 +1328,21 @@ function PpRankingsBoard({ renderTabs }: { renderTabs: (right?: ReactNode) => Re
               </tbody>
             </table>
           </div>
-          {hasNextPage && (
+          {countryTotalPages > 2 ? (
+            <Pagination
+              page={page - 1}
+              totalPages={countryTotalPages}
+              onPageChange={(nextPage) => {
+                // The top 100 re-sorts within its page; the pages after it
+                // keep to the board's own order.
+                if (nextPage + 1 > 2 && sortBy !== "rank") {
+                  setSortBy("rank");
+                  setSortDir("desc");
+                }
+                navigate({ to: "/rankings", search: { page: nextPage + 1, country: selectedCountry } });
+              }}
+            />
+          ) : hasNextPage && (
             <div className="flex items-center justify-center gap-3 pt-4">
               <button
                 onClick={() => navigate({ to: "/rankings", search: { page: 1, country: selectedCountry } })}
