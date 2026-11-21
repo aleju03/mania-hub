@@ -4090,6 +4090,8 @@ export type LiveScoreSubmissionFailure =
   | "mames_unavailable"
   | "torii_not_linked"
   | "torii_unavailable"
+  | "ppysb_not_linked"
+  | "ppysb_unavailable"
   | "beatmap_not_found"
   | "chart_outdated"
   | "chart_unavailable"
@@ -4099,7 +4101,7 @@ export type LiveScoreSubmissionFailure =
 const SCORE_SUBMISSION_FAILURES = new Set<LiveScoreSubmissionFailure>([
   "invalid_link", "score_not_found", "not_mania", "not_owned", "not_passed",
   "player_untracked", "player_not_found", "osu_unavailable",
-  "mames_not_linked", "mames_unavailable", "torii_not_linked", "torii_unavailable", "beatmap_not_found", "chart_outdated", "chart_unavailable", "unsupported_mods", "rate_unknown",
+  "mames_not_linked", "mames_unavailable", "torii_not_linked", "torii_unavailable", "ppysb_not_linked", "ppysb_unavailable", "beatmap_not_found", "chart_outdated", "chart_unavailable", "unsupported_mods", "rate_unknown",
 ]);
 
 export interface LiveScoreSubmissionPlay {
@@ -4153,7 +4155,7 @@ export async function submitLiveMissingScore(userId: number, link: string): Prom
 
 /* The private servers "Add a missing score" takes plays from, each through
    its own backend routes (/api/<server>/...). */
-export type LivePrivateServer = "mamestagram" | "torii";
+export type LivePrivateServer = "mamestagram" | "torii" | "ppysb";
 
 /* A private server play, by link or by its id from a play list, credited to
    the osu! account that linked the play's account on that server. Answered at
@@ -4162,7 +4164,7 @@ export async function submitLiveServerScore(server: LivePrivateServer, userId: n
   return await postScoreSubmission(`/api/${server}/scores`, userId, play) as LiveScoreSubmissionResult;
 }
 
-/* "map" is Mamestagram's only. */
+/* "map" is Mamestagram's and ppy.sb's only. */
 export type LiveServerPlayList = "best" | "recent" | "map";
 
 export interface LiveServerPlay {
@@ -4183,7 +4185,7 @@ export type LiveServerPlaysResult =
   | { ok: false; reason: "not_linked" | "unavailable" | "rate_limited" | "beatmap_not_found" | "failed" };
 
 /* The plays of the account on `server` linked to a profile: its best, its
-   latest, or (Mamestagram) its plays on one chart. "account" names the linked
+   latest, or (Mamestagram, ppy.sb) its plays on one chart. "account" names the linked
    account without listing anything, so a closed list costs the server no
    request. */
 export async function fetchLiveServerPlays(server: LivePrivateServer, userId: number, list: LiveServerPlayList | "account", beatmapId?: number | null): Promise<LiveServerPlaysResult> {
@@ -4198,14 +4200,14 @@ export async function fetchLiveServerPlays(server: LivePrivateServer, userId: nu
   }
   const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
   if (response.ok && payload?.ok === true) {
-    const name = payload.mamesName ?? payload.toriiName;
+    const name = payload.mamesName ?? payload.toriiName ?? payload.accountName;
     return { ok: true, accountName: typeof name === "string" ? name : null, plays: Array.isArray(payload.plays) ? payload.plays as LiveServerPlay[] : [] };
   }
   const reason = payload?.error;
   return {
     ok: false,
-    reason: reason === "mames_not_linked" || reason === "torii_not_linked" ? "not_linked"
-      : reason === "mames_unavailable" || reason === "torii_unavailable" ? "unavailable"
+    reason: reason === "mames_not_linked" || reason === "torii_not_linked" || reason === "ppysb_not_linked" ? "not_linked"
+      : reason === "mames_unavailable" || reason === "torii_unavailable" || reason === "ppysb_unavailable" ? "unavailable"
       : reason === "rate_limited" || reason === "beatmap_not_found" ? reason
       : response.status === 429 ? "rate_limited" : "failed",
   };
@@ -4235,7 +4237,7 @@ export function beatmapIdFromLink(link: string): number | null {
 /* The private server a link is on, of the ones the dialog takes plays from, or null. */
 export function privateServerOfLink(link: string): LivePrivateServer | null {
   const key = detectPrivateServer(link)?.key;
-  return key === "mamestagram" || key === "torii" ? key : null;
+  return key === "mamestagram" || key === "torii" || key === "ppysb" ? key : null;
 }
 
 async function postScoreSubmission(path: string, userId: number, play: { link: string } | { scoreId: number }): Promise<LiveScoreSubmissionResponse> {

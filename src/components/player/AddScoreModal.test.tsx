@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { I18nProvider } from "@lingui/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getI18n, loadLocaleCatalog } from "../../lib/i18n";
-import { fetchLiveServerPlays, fetchLiveScoreImportStatuses, submitLiveServerScore, submitLiveMissingScore, type LiveScoreSubmissionResult } from "../../lib/live-backend";
+import { beatmapIdFromLink, fetchLiveServerPlays, fetchLiveScoreImportStatuses, privateServerOfLink, submitLiveServerScore, submitLiveMissingScore, type LiveScoreSubmissionResult } from "../../lib/live-backend";
 import { AddScoreModal } from "./AddScoreModal";
 import { useRecentPlayRatingLookup } from "./recent-play-ratings";
 
@@ -13,8 +13,8 @@ vi.mock("../../lib/live-backend", () => ({
   loadLiveMapSearchEntry: vi.fn().mockResolvedValue(null),
   submitLiveServerScore: vi.fn(),
   fetchLiveServerPlays: vi.fn(),
-  privateServerOfLink: () => null,
-  beatmapIdFromLink: () => null,
+  privateServerOfLink: vi.fn(() => null),
+  beatmapIdFromLink: vi.fn(() => null),
 }));
 vi.mock("../../lib/server-account-links", () => ({ fetchOwnServerLink: vi.fn(), changeOwnServerLink: vi.fn() }));
 vi.mock("../../lib/analytics", () => ({ track: vi.fn() }));
@@ -249,5 +249,33 @@ describe("AddScoreModal private server plays", () => {
     );
     await act(async () => {});
     expect(view.queryByRole("button", { name: /Plays from Mamestagram/ })).toBeNull();
+  });
+
+  it("sends a ppy.sb score link to ppy.sb, and lists a pasted chart's plays there", async () => {
+    vi.mocked(fetchLiveServerPlays).mockResolvedValue({ ok: true, accountName: "SbPlayer", plays: [] });
+    const added = success(5001);
+    if (!added.ok) throw new Error("unreachable");
+    added.play = { ...added.play, scoreUrl: "https://osu.ppy.sb/score/5001", source: "ppysb" };
+    vi.mocked(submitLiveServerScore).mockResolvedValueOnce(added);
+    const view = render(
+      <I18nProvider i18n={getI18n("en")}>
+        <AddScoreModal userId={123} username="Player" serverProfiles={["ppysb"]} onClose={vi.fn()} />
+      </I18nProvider>,
+    );
+    await act(async () => {});
+    expect(fetchLiveServerPlays).toHaveBeenCalledWith("ppysb", 123, "account", null);
+    expect(view.getByRole("button", { name: /Plays from ppy\.sb/ })).toBeTruthy();
+    const input = view.getByRole("textbox", { name: "osu! score link" });
+
+    vi.mocked(privateServerOfLink).mockReturnValue("ppysb");
+    await act(async () => fireEvent.paste(input, { clipboardData: { getData: () => "https://osu.ppy.sb/score/5001" } }));
+    expect(submitLiveServerScore).toHaveBeenCalledWith("ppysb", 123, { link: "https://osu.ppy.sb/score/5001" });
+    expect(submitLiveMissingScore).not.toHaveBeenCalled();
+
+    vi.mocked(beatmapIdFromLink).mockReturnValueOnce(77);
+    await act(async () => fireEvent.paste(input, { clipboardData: { getData: () => "https://osu.ppy.sh/beatmaps/77" } }));
+    expect(fetchLiveServerPlays).toHaveBeenLastCalledWith("ppysb", 123, "map", 77);
+    expect(view.getByRole("button", { name: "This chart" })).toBeTruthy();
+    vi.mocked(privateServerOfLink).mockReturnValue(null);
   });
 });

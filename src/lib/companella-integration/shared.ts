@@ -61,6 +61,9 @@ export const MAMESTAGRAM_APP = "mamestagram";
 /** The client id of plays added from a Torii score link; a private server too. */
 export const TORII_APP = "torii";
 
+/** The client id of plays added from ppy.sb; a private server too. */
+export const PPYSB_APP = "ppysb";
+
 /** The known app for a client id, or null. Own keys only: a client id like "toString" is not an app. */
 export function knownApp(clientId: string | null | undefined): (typeof KNOWN_APPS)[string] | null {
   return clientId && Object.hasOwn(KNOWN_APPS, clientId) ? KNOWN_APPS[clientId] : null;

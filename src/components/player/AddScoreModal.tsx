@@ -121,9 +121,13 @@ function ratingScore(item: AcceptedPlay): OsuScore | null {
 }
 
 /* The private servers whose plays the dialog takes, in the order their
-   sections show. Only Mamestagram can list one chart's plays. */
-const PRIVATE_SERVERS: readonly LivePrivateServer[] = ["mamestagram", "torii"];
-const SERVER_NAMES: Record<LivePrivateServer, string> = { mamestagram: "Mamestagram", torii: "Torii" };
+   sections show. */
+const PRIVATE_SERVERS: readonly LivePrivateServer[] = ["mamestagram", "torii", "ppysb"];
+const SERVER_NAMES: Record<LivePrivateServer, string> = { mamestagram: "Mamestagram", torii: "Torii", ppysb: "ppy.sb" };
+/* The ones that can list an account's plays on one chart. */
+const CHART_LIST_SERVERS: readonly LivePrivateServer[] = ["mamestagram", "ppysb"];
+/* The prefix of each server's failure codes and analytics events. */
+const SERVER_PREFIXES: Record<LivePrivateServer, string> = { mamestagram: "mames", torii: "torii", ppysb: "ppysb" };
 
 interface ServerSection {
   /* The account linked to this profile, whose plays the dialog lists: null
@@ -169,12 +173,13 @@ export function AddScoreModal({
   /* Only the profile's owner can link their private server accounts. */
   const isOwner = auth.viewer?.id === userId;
   const servers = PRIVATE_SERVERS.filter((server) => serverProfiles.includes(server));
-  const [sections, setSections] = useState<Record<LivePrivateServer, ServerSection>>({ mamestagram: CLOSED_SECTION, torii: CLOSED_SECTION });
+  const [sections, setSections] = useState<Record<LivePrivateServer, ServerSection>>({ mamestagram: CLOSED_SECTION, torii: CLOSED_SECTION, ppysb: CLOSED_SECTION });
   const updateSection = (server: LivePrivateServer, patch: Partial<ServerSection> | ((section: ServerSection) => Partial<ServerSection>)) => {
     setSections((current) => ({ ...current, [server]: { ...current[server], ...(typeof patch === "function" ? patch(current[server]) : patch) } }));
   };
-  /* The chart a pasted beatmap link named, whose Mamestagram plays are listed. */
-  const [mamesMap, setMamesMap] = useState<number | null>(null);
+  /* The chart a pasted beatmap link named, whose plays on the linked servers are listed. */
+  const [listedChart, setListedChart] = useState<number | null>(null);
+  const chartServers = CHART_LIST_SERVERS.filter((server) => sections[server].linked);
 
   useBodyScrollLock(true);
 
@@ -236,6 +241,7 @@ export function AddScoreModal({
         return t`Could not send that. Try again.`;
       case "mames_not_linked":
       case "torii_not_linked":
+      case "ppysb_not_linked":
         return !isOwner
           ? t`That ${name} account isn't linked to an osu! account here.`
           : server && servers.includes(server)
@@ -243,6 +249,7 @@ export function AddScoreModal({
             : t`Add your ${name} profile next to your name first.`;
       case "mames_unavailable":
       case "torii_unavailable":
+      case "ppysb_unavailable":
         return t`${name} didn't answer. Try again later.`;
       case "beatmap_not_found":
         return t`That chart isn't on osu!.`;
@@ -302,7 +309,7 @@ export function AddScoreModal({
     } else {
       track("add_score_failed", { add_score_player: username, add_score_reason: result.reason });
       const server = privateServerOfLink(item.link);
-      if ((result.reason === "mames_not_linked" || result.reason === "torii_not_linked") && server && isOwner && mountedRef.current) {
+      if (server && result.reason === `${SERVER_PREFIXES[server]}_not_linked` && isOwner && mountedRef.current) {
         updateSection(server, { open: true });
       }
       updateSubmission(item.key, { status: "failed", jobId: undefined, error: failureMessage(result.reason, result.owner, server) });
@@ -377,11 +384,11 @@ export function AddScoreModal({
   const send = (raw: string, retryKey?: number) => {
     const value = raw.trim();
     if (!value) return;
-    // A beatmap link lists the linked Mamestagram account's plays on that chart.
-    const beatmapId = sections.mamestagram.linked ? beatmapIdFromLink(value) : null;
+    // A beatmap link lists the linked accounts' plays on that chart.
+    const beatmapId = chartServers.length ? beatmapIdFromLink(value) : null;
     if (beatmapId != null) {
-      setMamesMap(beatmapId);
-      updateSection("mamestagram", { list: "map", expanded: true });
+      setListedChart(beatmapId);
+      for (const server of chartServers) updateSection(server, { list: "map", expanded: true });
       setLink("");
       return;
     }
@@ -534,7 +541,7 @@ export function AddScoreModal({
                 event.preventDefault();
                 void send(text);
               }}
-              placeholder={sections.mamestagram.linked ? t`paste a score or beatmap link for ${username}` : t`paste a score link for ${username}`}
+              placeholder={chartServers.length ? t`paste a score or beatmap link for ${username}` : t`paste a score link for ${username}`}
               spellCheck={false}
               autoComplete="off"
               aria-label={t`osu! score link`}
@@ -570,7 +577,7 @@ export function AddScoreModal({
                   server={server}
                   userId={userId}
                   list={section.list}
-                  beatmapId={server === "mamestagram" ? mamesMap : null}
+                  beatmapId={CHART_LIST_SERVERS.includes(server) ? listedChart : null}
                   expanded={section.expanded}
                   isOwner={isOwner}
                   onExpanded={(expanded) => updateSection(server, { expanded })}
@@ -602,8 +609,8 @@ export function AddScoreModal({
 
    Plays on Mamestagram have no page of their own, so there is no link to
    paste, and a Torii player would have to go find each one: the dialog lists
-   the linked account's plays instead, its best, its latest, or (Mamestagram)
-   its plays on a chart whose beatmap link was pasted. */
+   the linked account's plays instead, its best, its latest, or (Mamestagram,
+   ppy.sb) its plays on a chart whose beatmap link was pasted. */
 
 type ServerRowState = { kind: "adding" } | { kind: "added" } | { kind: "failed"; message: string };
 
@@ -661,7 +668,7 @@ function ServerPlays({ server, userId, list, beatmapId, expanded, isOwner, onExp
     try {
       const changed = await changeOwnServerLink({ data: { server, action: "unlink" } });
       if (changed.ok) {
-        track(server === "mamestagram" ? "mames_unlinked" : "torii_unlinked");
+        track(`${SERVER_PREFIXES[server]}_unlinked`);
         onLinked(false);
       }
     } catch {
@@ -850,7 +857,7 @@ function ServerLinkPanel({ server, open, onOpen, onLinked }: { server: LivePriva
     try {
       const result = await changeOwnServerLink({ data: { server, action: "verify" } });
       if (result.ok) {
-        track(server === "mamestagram" ? "mames_linked" : "torii_linked");
+        track(`${SERVER_PREFIXES[server]}_linked`);
         onLinked();
       } else {
         setError(errorMessage(result.error));

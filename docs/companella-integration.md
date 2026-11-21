@@ -117,7 +117,9 @@ Backend, all under `backend/src/integrations/companella/`:
 | `official-timing.ts` | Stores an import's timing for the official play osu! delivers for the same run, and pairs and clamps it for the skill compute. |
 | `replay-import.ts` | Admin replay imports: a player's `.osr` files dropped on `/admin/bridgers?tab=import`, staged as ordinary submissions and fed to the lane a few at a time (see "Admin replay imports"). |
 | `manual-scores.ts` | Plays an admin enters by hand on `/admin/players?tab=add`, with no replay: staged as submissions the ordinary job rates (see "Admin manual entries"). |
-| `mamestagram.ts` | Mamestagram plays in "Add a missing score": the account link, the rate-limited API client, the cached play lists, and staging a play as a manual entry (see "Mamestagram plays"). |
+| `bancho-py.ts` | Plays from a private server that runs bancho.py, in "Add a missing score": the account link, the rate-limited API client, the cached play lists, and staging a play as a manual entry. One `BanchoPyServer` per server, told apart by a spec. |
+| `mamestagram.ts` | Mamestagram as a `BanchoPyServer`, under its own names (see "Mamestagram plays"). |
+| `ppysb.ts` | ppy.sb as a `BanchoPyServer` (see "ppy.sb plays"). |
 | `torii.ts` | Torii plays in "Add a missing score", the same way (see "Torii plays"). |
 | `private-server-client.ts` | The rate limiter both servers' clients share. |
 | `analysis.ts` | Per-play MSD / SSR / LN / chart-dan through the existing engines. |
@@ -1429,8 +1431,9 @@ judgement counts, combo, score and a video link. `POST
 ## Mamestagram plays
 
 "Add a missing score" also takes plays from Mamestagram, a private osu! server
-with a public, keyless API (`https://api.mamesosu.net`,
-`MAMESTAGRAM_API_ORIGIN`, empty turns it off). A play becomes a manual entry
+that runs bancho.py, with its public, keyless API (`https://api.mamesosu.net`,
+`MAMESTAGRAM_API_ORIGIN`, empty turns it off). The code is `bancho-py.ts`,
+shared with ppy.sb. A play becomes a manual entry
 under the account's `mamestagram` installation, so everything in "Admin manual
 entries" applies, with provenance `mamestagram`; rows carry the server's logo
 (`companella.app` is `mamestagram`) and the details line reads "via
@@ -1468,6 +1471,29 @@ Mamestagram".
   a User-Agent naming the site. A 429 pauses every request for its
   `Retry-After` (10 minutes without one), a Cloudflare challenge for 30
   minutes. Nothing is crawled or synced.
+
+## ppy.sb plays
+
+ppy.sb runs bancho.py too (`https://api.ppy.sb`, `PPYSB_API_ORIGIN`, empty
+turns it off), so its plays go through the same code as Mamestagram's
+(`bancho-py.ts`) and everything above holds, with provenance `ppysb`, the
+idempotency key `ppysb:<score id>`, the link table `companella_ppysb_links`,
+routes under `/api/ppysb/` and failure codes that start with `ppysb_`. What
+differs:
+
+- **Account link.** The profile link is `osu.ppy.sb/user/@<handle>`,
+  `/user/<id>` or `/users/<id>`; the handle goes to `get_player_info` without
+  its `@`, which the API turns down. The site saves the userpage as HTML into
+  `userpage_content`, where the code is looked for.
+- **Score links.** Plays have pages, so a pasted `osu.ppy.sb/score/<id>` link
+  is one `get_score_info` request, and an added play links back to its page.
+- **Stable only.** There is no lazer API, so no play is read as a lazer one
+  and nothing is asked beyond the v1 and v2 endpoints.
+- **Lists.** The latest plays are one request (`get_player_scores` with
+  `scope=recent&include_failed=false`, newest first). `/v2/scores` carries the
+  geki count, so a play listed on a chart is added without a second read.
+- **Requests.** Its own limiter instance, at most
+  `PPYSB_REQUESTS_PER_MINUTE` (default 20).
 
 ## Torii plays
 

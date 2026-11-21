@@ -3,7 +3,7 @@ import { liveBridgeToken } from "./live-backend-tokens";
 import type { LivePrivateServer } from "./live-backend";
 
 /* The signed-in player's link to their account on a private server
-   (Mamestagram, Torii), which lets "Add a missing score" take that account's
+   (Mamestagram, Torii, ppy.sb), which lets "Add a missing score" take that account's
    plays. The account is the one the player's profile link for that server
    (ServerLinks) points at. Server functions like the wishlist's: the viewer
    comes from the osu! login cookie, never from client input, and the backend
@@ -31,12 +31,12 @@ export type ServerAccountLinkResult = { ok: true; link: ServerAccountLink } | { 
 function readError(value: unknown): ServerAccountLinkError | null {
   if (typeof value !== "string") return null;
   if (value === "no_profile_link" || value === "code_missing" || value === "rate_limited") return value;
-  const bare = value.replace(/^(mames|torii)_/, "");
+  const bare = value.replace(/^(mames|torii|ppysb)_/, "");
   return bare === "player_not_found" || bare === "taken" || bare === "unavailable" ? bare : null;
 }
 
 function readServer(value: unknown): LivePrivateServer {
-  if (value === "mamestagram" || value === "torii") return value;
+  if (value === "mamestagram" || value === "torii" || value === "ppysb") return value;
   throw new Error("Unknown private server.");
 }
 
@@ -55,7 +55,7 @@ async function getLinkTarget(server: LivePrivateServer): Promise<{ url: string; 
 function parseLink(value: unknown): ServerAccountLink | null {
   const link = (value as { link?: Record<string, unknown> } | null)?.link;
   if (!link || typeof link.code !== "string") return null;
-  const name = link.mamesName ?? link.toriiName;
+  const name = link.mamesName ?? link.toriiName ?? link.accountName;
   return {
     code: link.code,
     accountName: typeof name === "string" ? name : null,

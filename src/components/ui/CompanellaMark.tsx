@@ -5,7 +5,7 @@ import { useLingui } from "@lingui/react/macro";
 
 import { Video } from "lucide-react";
 
-import { KNOWN_APPS, MAMESTAGRAM_APP, MANUAL_ENTRY_APP, REPLAY_IMPORT_APP, TORII_APP, knownApp } from "../../lib/companella-integration/shared";
+import { KNOWN_APPS, MAMESTAGRAM_APP, MANUAL_ENTRY_APP, PPYSB_APP, REPLAY_IMPORT_APP, TORII_APP, knownApp } from "../../lib/companella-integration/shared";
 import { useScoreVideo } from "../../lib/score-videos";
 import { privateServer, privateServerLogo } from "../../lib/private-servers";
 
@@ -15,7 +15,7 @@ import { privateServer, privateServerLogo } from "../../lib/private-servers";
 // Rows draw their content above a full-row button with pointer events off, so the mark turns them back on for its
 // own hover label and, on a Hashi play, its link to /hashi. A play an admin imported from the player's replay
 // files carries no mark, and one an admin entered by hand carries a link to its video when it has one.
-// A play added from a private server (Mamestagram, Torii) carries the server's logo.
+// A play added from a private server (Mamestagram, Torii, ppy.sb) carries the server's logo.
 export function CompanellaMark({ app, video, className = "h-[18px] w-[18px]" }: { app?: string; video?: string; className?: string }) {
   const { t } = useLingui();
   const known = knownApp(app) ?? KNOWN_APPS.companella;
@@ -24,7 +24,7 @@ export function CompanellaMark({ app, video, className = "h-[18px] w-[18px]" }: 
 
   if (app === MANUAL_ENTRY_APP) return video ? <VideoMark video={video} className={className} /> : null;
   if (app === REPLAY_IMPORT_APP) return null;
-  if (app === MAMESTAGRAM_APP || app === TORII_APP) return <ServerMark server={app} className={className} />;
+  if (app === MAMESTAGRAM_APP || app === TORII_APP || app === PPYSB_APP) return <ServerMark server={app} className={className} />;
 
   const image = (
     <img
@@ -91,6 +91,7 @@ export function sentThrough(app: string | undefined, imported: boolean): { name:
   if (!imported || app === MANUAL_ENTRY_APP || app === REPLAY_IMPORT_APP) return null;
   if (app === MAMESTAGRAM_APP) return { name: "Mamestagram" };
   if (app === TORII_APP) return { name: "Torii" };
+  if (app === PPYSB_APP) return { name: "ppy.sb" };
   if (app === "mania-bridge") return { name: KNOWN_APPS["mania-bridge"].name, to: "/hashi" };
   return { name: (knownApp(app) ?? KNOWN_APPS.companella).name, to: "/news/companella" };
 }
