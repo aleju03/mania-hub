@@ -59,7 +59,7 @@ const PATREON_FOR_EVERYONE = true;
    features/crypto-wallet.ts). Admins only until it is set up; then only
    where CRYPTO_SUPPORT_COUNTRIES says. */
 const CRYPTO_FOR_EVERYONE = false;
-/* What each crypto pack length costs, in dollars: $4 a month, $40 a year. */
+/* What each crypto pack length costs in USDT (a dollar each): 4 a month, 40 a year. */
 const PACK_PRICE_USD: Record<PackMonths, number> = { 1: 4, 3: 12, 6: 24, 12: 40 };
 /* Signed-in buyers pay on an invoice the site makes through lava.top's API
    (LavaApiPay) instead of the public page above, whose payments never reach
@@ -701,7 +701,7 @@ function CryptoPay({ viewerId }: { viewerId: number | null | undefined }) {
         </div>
       ) : (
         <>
-          <LengthRows lengths={PACK_MONTHS} picked={months} onPick={setMonths} price={(value) => `$${PACK_PRICE_USD[value]}`} />
+          <LengthRows lengths={PACK_MONTHS} picked={months} onPick={setMonths} price={(value) => `${PACK_PRICE_USD[value]} USDT`} />
           <div className="border-t border-white/[0.07] pt-3">
             <div className="mb-1.5 text-[11px] text-osu-f1">{t`Network`}</div>
             <div role="radiogroup" aria-label={t`Network`} className={`grid gap-0.5 rounded-lg bg-osu-b5 p-0.5 ${networks.length === 3 ? "grid-cols-3" : networks.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
@@ -965,7 +965,7 @@ export function SupportCheckout({ methods, method, onMethod }: { methods: Suppor
     google: { name: "Google", detail: t`Google Pay`, marks: ["googlepay"] },
     lava: { name: "lava.top", detail: t`Card or PayPal`, marks: ["visa", "mastercard", "paypal"] },
     patreon: { name: "Patreon", detail: t`Card, PayPal or Apple Pay`, marks: ["visa", "mastercard", "paypal", "applepay"] },
-    crypto: { name: t`Crypto`, detail: t`USDT and other coins`, marks: ["tether"] },
+    crypto: { name: t`Crypto`, detail: "USDT", marks: ["tether"] },
   };
 
   return (

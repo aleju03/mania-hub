@@ -31466,8 +31466,8 @@ msgid "URL"
 msgstr "链接"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "USDT and other coins"
-msgstr "USDT 和其他币种"
+#~ msgid "USDT and other coins"
+#~ msgstr "USDT 和其他币种"
 
 #: src/routes/workshop.themes.index.tsx
 msgid "Use"
