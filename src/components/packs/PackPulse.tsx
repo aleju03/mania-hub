@@ -709,10 +709,7 @@ function PullLine({
             <span className="text-osu-f1/70">{t`pulled`}</span>
           )}
           {pull.pulledAt > 0 && (
-            <>
-              <span aria-hidden="true" className="h-2 w-px bg-osu-f1/30" />
-              <span className="tabular-nums text-osu-f1/50">{formatPreciseTimeAgo(pull.pulledAt, now, locale)}</span>
-            </>
+            <span className="tabular-nums text-osu-f1/50">{formatPreciseTimeAgo(pull.pulledAt, now, locale)}</span>
           )}
         </span>
       </span>
