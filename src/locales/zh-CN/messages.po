@@ -1548,6 +1548,7 @@ msgstr "{courseName} 上 {courseAccuracy}，低于其 {courseBar}。"
 msgid "{date}: {rating} points"
 msgstr "{date}：{rating} 点"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/SupportDaysPreview.tsx
 #: src/routes/snipes.tsx
 msgid "{days, plural, one {# day} other {# days}}"
@@ -4694,6 +4695,11 @@ msgstr "琥珀"
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "Amount"
 msgstr "数量"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgctxt "payment"
+msgid "Amount"
+msgstr "金额"
 
 #: src/components/supporter/SupportDaysPreview.tsx
 msgid "Amount in dollars"
@@ -8768,8 +8774,8 @@ msgid "Crypto"
 msgstr "加密货币"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Crypto payments are 1, 3, 6 or 12 months. For any other amount, pay with Ko-fi."
-msgstr "加密货币付款只有 1、3、6 或 12 个月。其他金额请用 Ko-fi 支付。"
+#~ msgid "Crypto payments are 1, 3, 6 or 12 months. For any other amount, pay with Ko-fi."
+#~ msgstr "加密货币付款只有 1、3、6 或 12 个月。其他金额请用 Ko-fi 支付。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Crypto payments aren't available right now; try again later."
@@ -10407,6 +10413,7 @@ msgstr "英语"
 msgid "Enjoy your supporter week, {0}."
 msgstr "好好享受你的支持者周，{0}。"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/SupportDaysPreview.tsx
 msgid "Enter an amount"
 msgstr "输入金额"
@@ -18968,6 +18975,7 @@ msgstr "占附近玩家比例"
 msgid "of players near you farm this"
 msgstr "与你水平相近的玩家刷这张"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/SupportDaysPreview.tsx
 msgid "of supporter"
 msgstr "的 supporter"
@@ -20639,12 +20647,12 @@ msgid "Pick a length and a currency, then pay on lava.top. Your supporter time s
 msgstr "选择时长和货币，然后在 lava.top 付款。lava.top 确认付款后，你的支持者时长就会开始。"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Pick a length and a network, then send USDT from your wallet. Your supporter time starts once the payment is confirmed on the blockchain."
-msgstr "选好时长和网络，再从你的钱包转 USDT。付款在区块链上确认后，支持者时长就会开始。"
+#~ msgid "Pick a length and a network, then send USDT from your wallet. Your supporter time starts once the payment is confirmed on the blockchain."
+#~ msgstr "选好时长和网络，再从你的钱包转 USDT。付款在区块链上确认后，支持者时长就会开始。"
 
 #: src/components/supporter/SupportCheckout.tsx
-msgid "Pick a length."
-msgstr "请选择时长。"
+#~ msgid "Pick a length."
+#~ msgstr "请选择时长。"
 
 #: src/components/player/FeaturedPlays.tsx
 msgid "Pick a play"
@@ -20669,6 +20677,10 @@ msgstr "先选一格再选卡片，或者把卡片拖到格子里。"
 #: src/components/me/GoalsPanel.tsx
 msgid "Pick a target above. Progress updates as your mania plays land."
 msgstr "在上面选一个目标，你的 mania 成绩一落地进度就会更新。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pick an amount and a network, then send USDT from your wallet. Your supporter time starts once the payment is confirmed on the blockchain."
+msgstr "选好金额和网络，再从你的钱包转 USDT。付款在区块链上确认后，支持者时长就会开始。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Pick an amount in Google's checkout."
@@ -27808,7 +27820,6 @@ msgstr "有问题的文本"
 msgid "Thai"
 msgstr "泰语"
 
-#. placeholder {0}: viewer.username
 #. placeholder {0}: viewer.username
 #: src/routes/supporter.tsx
 msgid "Thank you for supporting, {0}."

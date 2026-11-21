@@ -189,6 +189,8 @@ function SupportPage() {
   // how to pay: the visitor's pick, else the one their country fits
   const { methods: payMethods, initial: initialPayMethod } = useSupportMethods();
   const [pickedMethod, setPickedMethod] = useState<SupportMethod | null>(null);
+  // The one-time amount: the calculator's, and what the crypto panel pays.
+  const [onceAmount, setOnceAmount] = useState("4");
   const payMethod = pickedMethod && payMethods.includes(pickedMethod) ? pickedMethod : initialPayMethod;
   const reduced = useReducedMotion();
   const heroRef = useRef<HTMLDivElement>(null);
@@ -346,13 +348,13 @@ function SupportPage() {
                 <div>
                   <h2 className="text-[22px] font-bold text-white">{t`Support`}</h2>
                   {payMethod ? <SupportMethodSteps method={payMethod} /> : <KofiNameSteps />}
-                  <SupportPlans method={payMethod} />
+                  <SupportPlans method={payMethod} amount={onceAmount} onAmount={setOnceAmount} />
                   <p className="mt-4 text-[13px] leading-relaxed text-osu-l2">
                     {t`Pick your look on the supporter page. It saves as you go.`}{" "}
                     <Link to="/supporter" className="font-semibold text-osu-pink-light hover:underline">{t`Open the supporter page`}</Link>
                   </p>
                 </div>
-                <SupportCheckout methods={payMethods} method={payMethod} onMethod={setPickedMethod} />
+                <SupportCheckout methods={payMethods} method={payMethod} onMethod={setPickedMethod} amount={onceAmount} onAmount={setOnceAmount} />
               </Reveal>
             </section>
           </div>

@@ -12,10 +12,10 @@ const YEAR = 365;
    Ko-fi panel is a frame the page can't read the amount from. A slider picks
    the amount (the box takes anything past it); a bar shows the time against a
    year. One payment of $40 or more is a full year per $40 (supporterDaysFor):
-   the days it adds over the plain rate show in green. */
-export function SupportDaysPreview() {
+   the days it adds over the plain rate show in green. The amount (`raw`, the
+   box's digits) is the page's, since the crypto panel pays exactly it. */
+export function SupportDaysPreview({ raw, onRaw: setRaw }: { raw: string; onRaw: (raw: string) => void }) {
   const { t } = useLingui();
-  const [raw, setRaw] = useState("4");
   const amount = Number(raw);
   // whole dollars, as Ko-fi takes them
   const valid = raw !== "" && amount >= 1;
@@ -34,7 +34,7 @@ export function SupportDaysPreview() {
           <span className="text-[17px] font-bold text-osu-f1">$</span>
           <input
             value={raw}
-            onChange={(event) => setRaw(event.target.value.replace(/\D/g, "").replace(/^0+/, "").slice(0, 4))}
+            onChange={(event) => setRaw(cleanAmount(event.target.value))}
             inputMode="numeric"
             aria-label={t`Amount in dollars`}
             className="h-full w-20 bg-transparent pl-1 pr-3 text-[17px] font-bold tabular-nums text-white outline-none"
@@ -109,6 +109,11 @@ export function SupportDaysPreview() {
       <p className="mt-3 text-[12px] leading-relaxed text-osu-f1">{t`Any amount counts, to the day, and adds to the time you have left: $4 is 30 days. Paying $40 or more at once buys a full year for every $40.`}</p>
     </div>
   );
+}
+
+/** What an amount box holds: up to four digits, no leading zero. */
+export function cleanAmount(typed: string): string {
+  return typed.replace(/\D/g, "").replace(/^0+/, "").slice(0, 4);
 }
 
 /* The amount slider: a soft track whose year-deal zone (from $40) is tinted

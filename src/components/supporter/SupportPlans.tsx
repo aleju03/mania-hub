@@ -20,10 +20,10 @@ const GOLD = SUPPORTER_RANKS.find((rank) => rank.id === "gold") ?? SUPPORTER_RAN
    the twelve ranks, as a subscriber's does, and the ladder under it lifts the
    rank it is on. Both are paid on the checkout beside this. Patreon and
    lava.top only sell a membership, so One-time can't be picked while one of
-   them is the method, and crypto only sells one-off packs, so Monthly
-   can't be with it; Google takes a one-off but only in set amounts, which
-   the plan says. */
-export function SupportPlans({ method }: { method: SupportMethod | null }) {
+   them is the method, and crypto is paid once, so Monthly can't be with
+   it; Google takes a one-off but only in set amounts, which the plan says.
+   `amount` is the calculator's, which the crypto panel pays. */
+export function SupportPlans({ method, amount, onAmount }: { method: SupportMethod | null; amount: string; onAmount: (amount: string) => void }) {
   const { t } = useLingui();
   const [picked, setPlan] = useState<Plan>("monthly");
   const index = useClimbingRank();
@@ -40,12 +40,10 @@ export function SupportPlans({ method }: { method: SupportMethod | null }) {
       </div>
       {plan === "monthly" ? <MonthlyPerks index={index} method={method} /> : (
         <>
-          <SupportDaysPreview />
-          {method === "google" || method === "crypto" ? (
+          <SupportDaysPreview raw={amount} onRaw={onAmount} />
+          {method === "google" ? (
             <p className="mt-2.5 rounded-xl bg-osu-b4 px-4 py-3 text-[12.5px] leading-relaxed text-osu-l2 ring-1 ring-inset ring-white/[0.06]">
-              {method === "google"
-                ? t`Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi.`
-                : t`Crypto payments are 1, 3, 6 or 12 months. For any other amount, pay with Ko-fi.`}
+              {t`Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi.`}
             </p>
           ) : null}
         </>

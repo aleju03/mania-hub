@@ -760,9 +760,6 @@ export const createLavaCheckout = createServerFn({ method: "POST" })
     return { paymentUrl: body.paymentUrl, startedAt };
   });
 
-export const PACK_MONTHS = [1, 3, 6, 12] as const;
-export type PackMonths = (typeof PACK_MONTHS)[number];
-
 /* The networks the owner's wallet takes (backend /api/supporters/crypto-options). */
 export const readCryptoOptions = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ networks: WalletNetwork[] }> => {
@@ -777,16 +774,21 @@ export const readCryptoOptions = createServerFn({ method: "GET" }).handler(
 
 export const WALLET_NETWORKS = ["tron", "bsc", "polygon"] as const;
 export type WalletNetwork = (typeof WALLET_NETWORKS)[number];
-export interface WalletTransfer { id: number; network: WalletNetwork; address: string; amount: string; months: PackMonths; expiresAt: number }
+export interface WalletTransfer { id: number; network: WalletNetwork; address: string; amount: string; expiresAt: number }
+/* Whole dollars a crypto payment can be (backend CRYPTO_MIN_CENTS / CRYPTO_MAX_CENTS). */
+export const WALLET_MIN_USD = 1;
+export const WALLET_MAX_USD = 9999;
 
 /* A direct USDT transfer to the owner's wallet (backend
-   features/crypto-wallet.ts): the address and the exact amount to send.
-   Errors are the backend's codes, which the panel words. */
+   features/crypto-wallet.ts) for any whole amount of dollars: the address
+   and the exact amount to send. Errors are the backend's codes, which the
+   panel words. */
 export const openWalletTransfer = createServerFn({ method: "POST" })
-  .validator((data: { months?: unknown; network?: unknown }) => {
-    if (!(PACK_MONTHS as readonly unknown[]).includes(data?.months)) throw new Error("invalid_tier");
+  .validator((data: { usd?: unknown; network?: unknown }) => {
+    const usd = data?.usd;
+    if (typeof usd !== "number" || !Number.isInteger(usd) || usd < WALLET_MIN_USD || usd > WALLET_MAX_USD) throw new Error("invalid_amount");
     if (!(WALLET_NETWORKS as readonly unknown[]).includes(data?.network)) throw new Error("unavailable");
-    return { months: data.months as PackMonths, network: data.network as WalletNetwork };
+    return { usd, network: data.network as WalletNetwork };
   })
   .handler(async ({ data }): Promise<WalletTransfer> => {
     const viewer = await requireViewer();
@@ -794,11 +796,11 @@ export const openWalletTransfer = createServerFn({ method: "POST" })
     const response = await fetch(`${viewer.base}/api/supporters/self/wallet-transfer`, {
       method: "POST",
       headers: bridgeAuthHeaders(true),
-      body: JSON.stringify({ userId: viewer.userId, username: viewer.username, months: data.months, network: data.network }),
+      body: JSON.stringify({ userId: viewer.userId, username: viewer.username, cents: data.usd * 100, network: data.network }),
     });
     const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; id?: unknown; address?: unknown; amount?: unknown; expiresAt?: unknown } | null;
     if (!response.ok || body?.ok !== true || typeof body.address !== "string" || typeof body.amount !== "string") throw new Error(String(body?.error ?? "unavailable"));
-    return { id: Number(body.id), network: data.network, address: body.address, amount: body.amount, months: data.months, expiresAt: Number(body.expiresAt) };
+    return { id: Number(body.id), network: data.network, address: body.address, amount: body.amount, expiresAt: Number(body.expiresAt) };
   });
 
 /* Whether an open transfer has been paid: the backend looks at the wallet
@@ -829,7 +831,7 @@ export const claimWalletTransfer = createServerFn({ method: "POST" })
     if (!/^(0x)?[0-9a-fA-F]{64}$/.test(txHash)) throw new Error("invalid_tx");
     return { txHash };
   })
-  .handler(async ({ data }): Promise<{ months: number }> => {
+  .handler(async ({ data }): Promise<{ ok: true }> => {
     const viewer = await requireViewer();
     if (!viewer) throw new Error("signin");
     const response = await fetch(`${viewer.base}/api/supporters/self/wallet-claim`, {
@@ -837,9 +839,9 @@ export const claimWalletTransfer = createServerFn({ method: "POST" })
       headers: bridgeAuthHeaders(true),
       body: JSON.stringify({ userId: viewer.userId, txHash: data.txHash }),
     });
-    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; months?: unknown } | null;
+    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown } | null;
     if (!response.ok || body?.ok !== true) throw new Error(String(body?.error ?? "unavailable"));
-    return { months: Number(body.months) };
+    return { ok: true };
   });
 
 /* Asks the backend to look for the viewer's lava.top payment now (it checks

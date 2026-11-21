@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { plural } from "@lingui/core/macro";
-import { useLingui } from "@lingui/react/macro";
+import { Plural, useLingui } from "@lingui/react/macro";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { ExternalLink } from "lucide-react";
@@ -20,8 +20,8 @@ import {
   readCryptoOptions,
   type WalletNetwork,
   type WalletTransfer,
-  PACK_MONTHS,
-  type PackMonths,
+  WALLET_MAX_USD,
+  WALLET_MIN_USD,
   LAVA_CHECKOUT_CURRENCIES,
   LAVA_CHECKOUT_MONTHS,
   readPatreonConnection,
@@ -30,7 +30,9 @@ import {
   type LavaCheckoutMonths,
   type PaymentClaimProvider,
 } from "../../lib/supporter-look-settings";
+import { supporterDaysFor } from "../../lib/supporter-ranks";
 import { rememberViewerSupporter } from "../../lib/viewer-supporter";
+import { cleanAmount } from "./SupportDaysPreview";
 import { useNearView } from "./SupportMotion";
 import { useShowcaseViewer } from "./SupportShowcase";
 import { KofiNameSteps } from "./KofiNameSteps";
@@ -59,8 +61,6 @@ const PATREON_FOR_EVERYONE = true;
    features/crypto-wallet.ts). Admins only until it is set up; then only
    where CRYPTO_SUPPORT_COUNTRIES says. */
 const CRYPTO_FOR_EVERYONE = true;
-/* What each crypto pack length costs in USDT (a dollar each): 4 a month, 40 a year. */
-const PACK_PRICE_USD: Record<PackMonths, number> = { 1: 4, 3: 12, 6: 24, 12: 40 };
 /* Signed-in buyers pay on an invoice the site makes through lava.top's API
    (LavaApiPay) instead of the public page above, whose payments never reach
    the site. Admins only while this is false; once true, a signed-out visitor
@@ -476,8 +476,8 @@ function LavaApiPay({ viewerId }: { viewerId: number }) {
 /* A payment that reached no account (lava.top paid outside the button's
    link or signed out, Ko-fi under a name and message that match no osu!
    username); the payer names it here by the email they paid with. */
-/* The lengths to pick from, one row each with its price: the lava.top,
-   crypto panels. A year is ten months' price. */
+/* The lengths to pick from, one row each with its price, on the lava.top
+   panel. A year is ten months' price. */
 function LengthRows<M extends number>({ lengths, picked, onPick, price }: { lengths: readonly M[]; picked: M; onPick: (months: M) => void; price: (months: M) => string }) {
   const { t } = useLingui();
   const lengthLabel = (value: number) => (value === 12 ? t`1 year` : t`${plural(value, { one: "# month", other: "# months" })}`);
@@ -508,13 +508,14 @@ function LengthRows<M extends number>({ lengths, picked, onPick, price }: { leng
 }
 
 /* Crypto: USDT sent straight to the owner's wallet (backend
-   features/crypto-wallet.ts). The buyer picks a length and a network and
-   gets the address and an exact amount whose odd decimals are theirs alone.
+   features/crypto-wallet.ts). The buyer picks an amount (the calculator's,
+   in whole dollars, a USDT each) and a network and gets the address and an
+   exact amount whose odd decimals are theirs alone.
    While it is open the panel asks every 20 seconds whether it has been paid
    (the backend looks at the wallet's incoming USDT), and switches to the
    thank-you on its own; pasting the transaction id is the fallback. The open
    transfer is kept in the browser for its 24 hours, so a buyer who leaves to
-   pay from a phone finds it again. One-off packs only. */
+   pay from a phone finds it again. Paid once, never monthly. */
 const WALLET_TRANSFER_KEY = "mania-wallet-transfer";
 const WALLET_NETWORK_LABEL: Record<WalletNetwork, string> = { tron: "TRON (TRC-20)", bsc: "BNB Chain (BEP-20)", polygon: "Polygon" };
 const WALLET_NETWORK_NAME: Record<WalletNetwork, string> = { tron: "TRON", bsc: "BNB Chain", polygon: "Polygon" };
@@ -538,10 +539,12 @@ function readStoredTransfer(): WalletTransfer | null {
 
 const WALLET_POLL_MS = 20_000;
 
-function CryptoPay({ viewerId }: { viewerId: number | null | undefined }) {
+function CryptoPay({ viewerId, amount, onAmount }: { viewerId: number | null | undefined; amount: string; onAmount: (amount: string) => void }) {
   const { t } = useLingui();
   const [networks, setNetworks] = useState<WalletNetwork[] | null>(null);
-  const [months, setMonths] = useState<PackMonths>(1);
+  const usd = Number(amount);
+  const valid = amount !== "" && usd >= WALLET_MIN_USD && usd <= WALLET_MAX_USD;
+  const days = valid ? Math.floor(supporterDaysFor(usd)) : 0;
   const [network, setNetwork] = useState<WalletNetwork | null>(null);
   const [transfer, setTransfer] = useState<WalletTransfer | null>(null);
   const [txHash, setTxHash] = useState("");
@@ -557,7 +560,6 @@ function CryptoPay({ viewerId }: { viewerId: number | null | undefined }) {
         const stored = readStoredTransfer();
         if (stored && value.networks.includes(stored.network)) {
           setTransfer(stored);
-          setMonths(stored.months);
           setNetwork(stored.network);
         } else {
           setNetwork(value.networks[0] ?? null);
@@ -615,7 +617,7 @@ function CryptoPay({ viewerId }: { viewerId: number | null | undefined }) {
     return <p className="px-5 py-10 text-center text-[12.5px] text-osu-f1">{t`Crypto payments aren't set up yet.`}</p>;
   }
   const errorText = (code: string): string => ({
-    invalid_tier: t`Pick a length.`,
+    invalid_amount: t`Enter an amount`,
     invalid_tx: t`That isn't a transaction id. Copy it from your wallet or the block explorer.`,
     no_transfer: t`Get an address first, then send to it.`,
     not_found: t`That transaction wasn't found. Check it's on the network you picked.`,
@@ -632,10 +634,10 @@ function CryptoPay({ viewerId }: { viewerId: number | null | undefined }) {
     setError(null);
   };
   const getAddress = () => {
-    if (!network) return;
+    if (!network || !valid) return;
     setBusy(true);
     setError(null);
-    openWalletTransfer({ data: { months, network } })
+    openWalletTransfer({ data: { usd, network } })
       .then((value) => {
         track("support_wallet_open");
         window.localStorage.setItem(WALLET_TRANSFER_KEY, JSON.stringify(value));
@@ -701,7 +703,31 @@ function CryptoPay({ viewerId }: { viewerId: number | null | undefined }) {
         </div>
       ) : (
         <>
-          <LengthRows lengths={PACK_MONTHS} picked={months} onPick={setMonths} price={(value) => `${PACK_PRICE_USD[value]} USDT`} />
+          <div className="border-t border-white/[0.07] py-4">
+            <div className="mb-1.5 text-[11px] text-osu-f1">{t({ message: "Amount", context: "payment" })}</div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <label className="flex h-11 items-center rounded-lg bg-osu-b5 pr-3 ring-1 ring-inset ring-white/[0.08] focus-within:ring-osu-pink/60">
+                <input
+                  value={amount}
+                  onChange={(event) => onAmount(cleanAmount(event.target.value))}
+                  inputMode="numeric"
+                  aria-label={t({ message: "Amount", context: "payment" })}
+                  className="h-full w-[72px] bg-transparent pl-3 pr-2 text-[17px] font-bold tabular-nums text-white outline-none"
+                />
+                <span className="text-[13px] font-bold text-osu-f1">USDT</span>
+              </label>
+              {valid ? (
+                <span className="text-[17px] font-bold leading-tight">
+                  <span className="tabular-nums text-osu-pink-light">
+                    <Plural value={days} one="# day" other="# days" />
+                  </span>
+                  <span className="ml-1.5 text-[13px] font-medium text-osu-l2">{t`of supporter`}</span>
+                </span>
+              ) : (
+                <span className="text-[13px] font-medium text-osu-f1">{t`Enter an amount`}</span>
+              )}
+            </div>
+          </div>
           <div className="border-t border-white/[0.07] pt-3">
             <div className="mb-1.5 text-[11px] text-osu-f1">{t`Network`}</div>
             <div role="radiogroup" aria-label={t`Network`} className={`grid gap-0.5 rounded-lg bg-osu-b5 p-0.5 ${networks.length === 3 ? "grid-cols-3" : networks.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
@@ -729,7 +755,7 @@ function CryptoPay({ viewerId }: { viewerId: number | null | undefined }) {
             </div>
           </div>
           <div className="flex flex-col gap-3 border-t border-white/[0.07] pt-4">
-            <button type="button" disabled={busy || !network} onClick={getAddress} className={`${pill} w-full cursor-pointer bg-osu-pink py-3 text-[14px] font-semibold disabled:cursor-default disabled:opacity-50`}>
+            <button type="button" disabled={busy || !network || !valid} onClick={getAddress} className={`${pill} w-full cursor-pointer bg-osu-pink py-3 text-[14px] font-semibold disabled:cursor-default disabled:opacity-50`}>
               {t`Get the address`}
             </button>
             <p className="text-center text-[12px] text-osu-f1">{t`Paid once, it doesn't renew. Send USDT from your own wallet; this page sees it arrive.`}</p>
@@ -922,7 +948,7 @@ export function SupportMethodSteps({ method }: { method: SupportMethod }) {
     return (
       <p className="mt-2 text-[14px] leading-relaxed text-osu-l2">
         {signedIn
-          ? t`Pick a length and a network, then send USDT from your wallet. Your supporter time starts once the payment is confirmed on the blockchain.`
+          ? t`Pick an amount and a network, then send USDT from your wallet. Your supporter time starts once the payment is confirmed on the blockchain.`
           : t`Sign in first, then pay in crypto here, so your supporter time reaches your account.`}
       </p>
     );
@@ -945,7 +971,7 @@ export function SupportMethodSteps({ method }: { method: SupportMethod }) {
   );
 }
 
-export function SupportCheckout({ methods, method, onMethod }: { methods: SupportMethod[]; method: SupportMethod | null; onMethod: (method: SupportMethod) => void }) {
+export function SupportCheckout({ methods, method, onMethod, amount, onAmount }: { methods: SupportMethod[]; method: SupportMethod | null; onMethod: (method: SupportMethod) => void; amount: string; onAmount: (amount: string) => void }) {
   const { t } = useLingui();
   const auth = useAuth();
   const viewerId = auth.viewer?.id;
@@ -1033,7 +1059,7 @@ export function SupportCheckout({ methods, method, onMethod }: { methods: Suppor
       ) : null}
       {method === "google" ? <GoogleContribution viewerId={viewerId} /> : null}
       {method === "patreon" ? <PatreonPay viewerId={viewerId} /> : null}
-      {method === "crypto" ? <CryptoPay viewerId={viewerId} /> : null}
+      {method === "crypto" ? <CryptoPay viewerId={viewerId} amount={amount} onAmount={onAmount} /> : null}
       {/* Ko-fi's page is heavy to start, so it loads once the visitor has
           paused near it rather than mid-scroll on the way down */}
       <div ref={frameRef} className={method === "kofi" || method === null ? "" : "hidden"}>
