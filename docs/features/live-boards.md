@@ -37,6 +37,18 @@ Board read: `/api/snapshots/snipe-board?country=XX&beatmap=<id>&mods=DT,HD&lazer
 
 Detected country top plays live in `top_play_events`. When a score lands near the player's known top-play threshold, `refresh_user_top_scores` confirms through osu! whether it entered their top plays (window ~30 min), records the pp gain, and emits `top_play`.
 
+Every tracked player gets top plays. They are stored in two shapes:
+
+- `top_play_marks` (`features/top-play-marks.ts`): one small row per top play for every player, kept for good: the play, its map, its pp, the pp it added and when it was set. 36.5 bytes a mark, measured. My data's Top plays tab and stats, the weekly recap and the tracker's gain badges read marks. A mark's play comes from its `top_play_events` row while one exists, else from the activity history's best play of that day on that map; a play beaten on the same map the same day leaves its gain to the play that beat it.
+- `top_play_events`: the full play with the indexes the Top plays page sorts a country by, 593 bytes a row. Only a country's ranked list (its top 100) gets these rows, so the page and its All time view list the ranked lists only.
+
+Only the ranked list costs an osu! call:
+
+- **Ranked list:** the job fetches the player's best 200 from osu!, stores it in `user_top_scores`, writes the row and the mark, and emits `top_play`.
+- **Everyone else:** the job checks the play against the best 200 already stored (`readBestWindowBefore` in `features/player-profiles.ts`): the newer of their profile snapshot and `user_top_scores`, then the top plays confirmed since and the tracked plays since. It is the list the profile page projects, merged by the same rules, so no osu! call is made. It writes the mark alone. It emits `followed_top_play`, an event only the Discord bot reads, and only when a channel feed lists the player or someone follows them by DM. A player with no stored window at all falls back to the fetch.
+
+`users.top_play_min_pp` holds each player's floor either way, and a play under it (less `TOP_PLAY_MARGIN_PP`) is never queued.
+
 - Snapshot reads select the page's rowids before loading payloads; shallow GLOBAL pp/gain pages try a bounded prefix of the sort index first. Responses share a five-second cache that new events invalidate.
 - **All time** (`window=all`) ranks tracked ranked members' stored osu! bests (`user_top_scores`) by pp, capped at 1,000, cached 10 minutes per scope and filter. Stored bests have no pp gain, so the gain sort falls back to pp.
 - `rates=nm,dt,ht` filters on the promoted `rate_mod` column (1 DT/NC, -1 HT/DC, 0 neither; `backfillTopPlayRateMods` filled older rows).
