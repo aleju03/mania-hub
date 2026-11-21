@@ -6764,6 +6764,10 @@ msgstr "Los charts donde solo una parte de las notas son notas largas, y los cha
 msgid "chasing your first {chaseTarget}pp play"
 msgstr "buscando tu primer play de {chaseTarget}pp"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Check"
+msgstr "Comprobar"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "checker"
 msgstr "cuadros"
@@ -7854,6 +7858,7 @@ msgstr "Coordenadas"
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ShareClipButton.tsx
 #: src/components/supporter/KofiNameSteps.tsx
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/workshop.themes.spec.tsx
 msgid "Copied"
@@ -7888,6 +7893,7 @@ msgstr "Copias de la imagen flotan sobre tu carta, detrás de todo lo impreso en
 #: src/components/replay/ShareClipButton.tsx
 #: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/KofiNameSteps.tsx
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/ui/MessageText.tsx
 msgid "Copy"
 msgstr "Copiar"
@@ -8740,6 +8746,22 @@ msgstr "Corona"
 #: src/components/supporter/loadout.ts
 msgid "CRT monitor"
 msgstr "Monitor CRT"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Crypto"
+msgstr "Cripto"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Crypto payments are 1, 3, 6 or 12 months. For any other amount, pay with Ko-fi."
+msgstr "Los pagos en cripto son de 1, 3, 6 o 12 meses. Para cualquier otro monto, paga con Ko-fi."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Crypto payments aren't available right now; try again later."
+msgstr "Los pagos en cripto no están disponibles ahora; intenta más tarde."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Crypto payments aren't set up yet."
+msgstr "Los pagos en cripto todavía no están listos."
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Crystal cave"
@@ -12104,9 +12126,17 @@ msgstr "Consigue {grade} {speed} en {map}"
 msgid "Get a share link"
 msgstr "Obtener enlace para compartir"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Get an address first, then send to it."
+msgstr "Primero pide una dirección y luego envía a ella."
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Get my link"
 msgstr "Obtener mi enlace"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Get the address"
+msgstr "Ver la dirección"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Getting the map out of osu!"
@@ -13469,8 +13499,8 @@ msgstr "Si cargas tus amigos de osu!, el sitio vuelve a iniciar tu sesión con e
 #~ msgstr "Si pagas con Ko-fi o lava.top, el sitio recibe el monto, la moneda y la fecha del pago, el nombre y el mensaje que diste, y un código hecho a partir de tu correo (nunca el correo en sí), que sirve para reconocer un pago repetido o un reembolso. Un correo que escribas en la página de Support antes de pagar en lava.top se guarda igual, como código, solo para vincular ese pago a tu cuenta. Se guardan en privado para vincular el estado de supporter a tu cuenta de osu! y no se muestran públicamente. Los datos de tu tarjeta y banco se quedan en la plataforma de pago."
 
 #: src/routes/privacy.tsx
-msgid "If you pay through Ko-fi, lava.top or Patreon, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. Connecting Patreon on the Support page keeps your Patreon account's id, so its payments reach your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
-msgstr "Si pagas con Ko-fi, lava.top o Patreon, el sitio recibe el monto, la moneda y la fecha del pago, el nombre y el mensaje que diste, y un código hecho a partir de tu correo (nunca el correo en sí), que sirve para reconocer un pago repetido o un reembolso. Un correo que escribas en la página de Support antes de pagar en lava.top se guarda igual, como código, solo para vincular ese pago a tu cuenta. Conectar Patreon en la página de Support guarda el id de tu cuenta de Patreon, para que sus pagos lleguen a tu cuenta. Se guardan en privado para vincular el estado de supporter a tu cuenta de osu! y no se muestran públicamente. Los datos de tu tarjeta y banco se quedan en la plataforma de pago."
+msgid "If you pay through Ko-fi, lava.top or Patreon, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. Connecting Patreon on the Support page keeps your Patreon account's id, so its payments reach your account. A USDT transfer straight to the site's wallet keeps its transaction id and network. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+msgstr "Si pagas con Ko-fi, lava.top o Patreon, el sitio recibe el monto, la moneda y la fecha del pago, el nombre y el mensaje que diste, y un código hecho a partir de tu correo (nunca el correo en sí), que sirve para reconocer un pago repetido o un reembolso. Un correo que escribas en la página de Support antes de pagar en lava.top se guarda igual, como código, solo para vincular ese pago a tu cuenta. Conectar Patreon en la página de Support guarda el id de tu cuenta de Patreon, para que sus pagos lleguen a tu cuenta. Una transferencia de USDT directa a la wallet del sitio guarda su id de transacción y su red. Se guardan en privado para vincular el estado de supporter a tu cuenta de osu! y no se muestran públicamente. Los datos de tu tarjeta y banco se quedan en la plataforma de pago."
 
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -17151,6 +17181,10 @@ msgstr "Orejas de neón"
 msgid "Neon lines"
 msgstr "Líneas de neón"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Network"
+msgstr "Red"
+
 #: src/components/companella/InstallationList.tsx
 #~ msgid "Never"
 #~ msgstr ""
@@ -18606,6 +18640,10 @@ msgstr "Aún no se trackea"
 msgid "Not unlocked yet."
 msgstr "Aún no se desbloquea."
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "Not with crypto"
+msgstr "No con cripto"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Note"
 msgstr "Nota"
@@ -19009,7 +19047,9 @@ msgstr "Top play más antiguo"
 msgid "On"
 msgstr "Sí"
 
+#. placeholder {0}: WALLET_NETWORK_LABEL[transfer.network]
 #. placeholder {0}: formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)
+#: src/components/supporter/SupportCheckout.tsx
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "on {0}"
 msgstr "el {0}"
@@ -19281,6 +19321,10 @@ msgstr "Solo el tema se ve detrás de la cabecera de tu perfil, sin tu banner de
 #: src/components/discord/FeedPlayersModal.tsx
 #~ msgid "Only these"
 #~ msgstr "Solo estos"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Only USDT, only on this network, and exactly this amount: the odd decimals tell your payment apart. Sending from an exchange like Binance? Its withdraw page shows a \"Receive amount\"; make that exactly this amount. Open for 24 hours."
+msgstr "Solo USDT, solo en esta red y exactamente este monto: los decimales raros distinguen tu pago. ¿Envías desde un exchange como Binance? Su página de retiro muestra un \"monto a recibir\"; haz que sea exactamente este monto. Abierta por 24 horas."
 
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -20079,12 +20123,20 @@ msgid "Page scroll"
 msgstr "Scroll de la página"
 
 #: src/components/supporter/SupportCheckout.tsx
+msgid "Paid and it hasn't shown up? Paste the transaction id."
+msgstr "¿Ya pagaste y no aparece? Pega el id de la transacción."
+
+#: src/components/supporter/SupportCheckout.tsx
 msgid "Paid on Ko-fi and it didn't count? Enter the email you paid with."
 msgstr "¿Pagaste en Ko-fi y no se contó? Escribe el correo con el que pagaste."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Paid on lava.top already? Enter the email you paid with."
 msgstr "¿Ya pagaste en lava.top? Pon el email con el que pagaste."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Paid once, it doesn't renew. Send USDT from your own wallet; this page sees it arrive."
+msgstr "Se paga una vez, no se renueva. Envía USDT desde tu propia wallet; esta página ve cuando llega."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Paid with Google already?"
@@ -20394,8 +20446,8 @@ msgstr "Paga con Google aquí. Tu tiempo de supporter empieza apenas se procese 
 #~ msgstr "Los pagos pasan por Ko-fi, Google o lava.top, que los procesan bajo sus propios términos. Mania Tracker nunca ve los datos de tu tarjeta o banco. Una suscripción mensual se renueva sola hasta que la canceles en la plataforma donde la empezaste; cancelar detiene el siguiente pago, y el tiempo ya pagado se mantiene hasta que se acabe."
 
 #: src/routes/terms.tsx
-msgid "Payments go through Ko-fi, lava.top or Patreon, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
-msgstr "Los pagos pasan por Ko-fi, lava.top o Patreon, que los procesan bajo sus propios términos. Mania Tracker nunca ve los datos de tu tarjeta o banco. Una suscripción mensual se renueva sola hasta que la canceles en la plataforma donde la empezaste; cancelar detiene el siguiente pago, y el tiempo ya pagado se mantiene hasta que se acabe."
+msgid "Payments go through Ko-fi, lava.top or Patreon, which process them under their own terms, or arrive as a direct USDT transfer. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+msgstr "Los pagos pasan por Ko-fi, lava.top o Patreon, que los procesan bajo sus propios términos, o llegan como una transferencia directa de USDT. Mania Tracker nunca ve los datos de tu tarjeta o banco. Una suscripción mensual se renueva sola hasta que la canceles en la plataforma donde la empezaste; cancelar detiene el siguiente pago, y el tiempo ya pagado se mantiene hasta que se acabe."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "PayPal"
@@ -20569,6 +20621,14 @@ msgstr "Elige una capa para cambiarla. Su posición, efectos y movimiento aparec
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Pick a length and a currency, then pay on lava.top. Your supporter time starts once lava.top confirms the payment."
 msgstr "Elige cuánto tiempo y la moneda, y paga en lava.top. Tu tiempo de supporter empieza apenas lava.top confirme el pago."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pick a length and a network, then send USDT from your wallet. Your supporter time starts once the payment is confirmed on the blockchain."
+msgstr "Elige una duración y una red, y envía USDT desde tu wallet. Tu tiempo de supporter empieza cuando el pago se confirma en la blockchain."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pick a length."
+msgstr "Elige una duración."
 
 #: src/components/player/FeaturedPlays.tsx
 msgid "Pick a play"
@@ -24555,6 +24615,10 @@ msgstr "Enviar atrás"
 msgid "Send backward or bring forward"
 msgstr "Enviar atrás o traer adelante"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Send exactly"
+msgstr "Envía exactamente"
+
 #: src/routes/report.tsx
 msgid "Send feedback"
 msgstr "Enviar sugerencia"
@@ -25503,6 +25567,10 @@ msgstr "Inicia sesión primero y luego conecta tu Patreon aquí, para que tu tie
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account."
 msgstr "Inicia sesión, pon el email con el que vas a pagar y paga en lava.top, así tu tiempo de supporter llega a tu cuenta."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first, then pay in crypto here, so your supporter time reaches your account."
+msgstr "Inicia sesión primero y luego paga en cripto aquí, para que tu tiempo de supporter llegue a tu cuenta."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Sign in first, then pay on lava.top here, so your supporter time reaches your account."
@@ -26739,6 +26807,10 @@ msgstr "Empezar aquí"
 msgid "Start one"
 msgstr "Empieza uno"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Start over"
+msgstr "Empezar de nuevo"
+
 #: src/components/companella/AuthorizePage.tsx
 msgid "Start the connection again from the app."
 msgstr "Vuelve a iniciar la conexión desde la app."
@@ -27909,6 +27981,10 @@ msgstr "Ese listado es tuyo."
 msgid "That isn't a profile link."
 msgstr "Ese no es un enlace de perfil."
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That isn't a transaction id. Copy it from your wallet or the block explorer."
+msgstr "Eso no es un id de transacción. Cópialo de tu wallet o del explorador de bloques."
+
 #: src/components/supporter/frames/FrameEditor.tsx
 msgid "That layer is locked."
 msgstr "Esa capa está bloqueada."
@@ -28021,6 +28097,22 @@ msgstr "Esa skin no tiene archivo para descargar"
 msgid "That theme isn't in the gallery anymore."
 msgstr "Ese tema ya no está en la galería."
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That transaction didn't send the exact amount to this address."
+msgstr "Esa transacción no envió el monto exacto a esta dirección."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That transaction isn't confirmed yet. Try again in a minute."
+msgstr "Esa transacción todavía no está confirmada. Intenta de nuevo en un minuto."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That transaction was already used."
+msgstr "Esa transacción ya se usó."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That transaction wasn't found. Check it's on the network you picked."
+msgstr "No se encontró esa transacción. Revisa que esté en la red que elegiste."
+
 #: src/routes/replay_.uploads.tsx
 #: src/routes/replay.tsx
 msgid "That upload is already gone."
@@ -28045,6 +28137,10 @@ msgstr "Son muchos reportes por hoy. Intenta de nuevo mañana."
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "That's a lot of saves in a minute. Wait a moment and save again."
 msgstr "Son muchos guardados en un minuto. Espera un momento y vuelve a guardar."
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That's a lot of tries today; try again tomorrow."
+msgstr "Son muchos intentos por hoy; intenta mañana."
 
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
@@ -30179,6 +30275,7 @@ msgstr "Título, artista, dificultad, mapper, rating de estrellas y dan."
 msgid "to"
 msgstr "a"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "To"
 msgstr "Hasta"
@@ -30535,6 +30632,10 @@ msgstr "Color de la estela"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Trail thickness"
 msgstr "Grosor de la estela"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Transaction id"
+msgstr "Id de la transacción"
 
 #: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
@@ -31352,6 +31453,10 @@ msgstr "UR"
 msgid "URL"
 msgstr "URL"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "USDT and other coins"
+msgstr "USDT y otras monedas"
+
 #: src/routes/workshop.themes.index.tsx
 msgid "Use"
 msgstr "Usar"
@@ -31857,6 +31962,10 @@ msgstr "Esperando el próximo cálculo. El play se calcula entonces y esta lista
 #: src/components/supporter/themes/RowFramer.tsx
 msgid "Waiting for the theme"
 msgstr "Esperando el tema"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Waiting for your payment. This updates by itself once it's confirmed."
+msgstr "Esperando tu pago. Esto se actualiza solo cuando se confirme."
 
 #: src/lib/chain-run.ts
 msgid "Wallet"

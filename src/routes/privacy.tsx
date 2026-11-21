@@ -88,7 +88,8 @@ function PrivacyPage() {
             address (never the address itself), used to recognise a repeat payment or a refund. An
             email you type on the Support page before paying on lava.top is kept the same way, as a
             code, only to match that payment to your account. Connecting Patreon on the Support page
-            keeps your Patreon account's id, so its payments reach your account.
+            keeps your Patreon account's id, so its payments reach your account. A USDT transfer
+            straight to the site's wallet keeps its transaction id and network.
             These are kept privately to link supporter status to your osu! account and are not
             shown publicly. Your card and bank details stay with the payment platform.
           </Trans>

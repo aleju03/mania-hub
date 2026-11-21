@@ -20,7 +20,8 @@ const GOLD = SUPPORTER_RANKS.find((rank) => rank.id === "gold") ?? SUPPORTER_RAN
    the twelve ranks, as a subscriber's does, and the ladder under it lifts the
    rank it is on. Both are paid on the checkout beside this. Patreon and
    lava.top only sell a membership, so One-time can't be picked while one of
-   them is the method; Google takes a one-off but only in set amounts, which
+   them is the method, and crypto only sells one-off packs, so Monthly
+   can't be with it; Google takes a one-off but only in set amounts, which
    the plan says. */
 export function SupportPlans({ method }: { method: SupportMethod | null }) {
   const { t } = useLingui();
@@ -28,20 +29,23 @@ export function SupportPlans({ method }: { method: SupportMethod | null }) {
   const index = useClimbingRank();
   const rank = SUPPORTER_RANKS[index];
   const noOnce = method === "patreon" ? t`Not on Patreon` : method === "lava" ? t`Not on lava.top` : null;
-  // The pick is kept, so it comes back with a method that takes a one-off.
-  const plan: Plan = noOnce ? "monthly" : picked;
+  const noMonthly = method === "crypto" ? t`Not with crypto` : null;
+  // The pick is kept, so it comes back with a method that takes it.
+  const plan: Plan = noOnce ? "monthly" : noMonthly ? "once" : picked;
   return (
     <div className="mt-7">
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t`How to support`}>
-        <PlanCard on={plan === "monthly"} onPick={() => setPlan("monthly")} gem={<RankGem rank={rank} renewing className="h-10 w-10" />} title={t`Monthly`} price={t`$4 a month`} />
+        <PlanCard on={plan === "monthly"} off={noMonthly != null} onPick={() => setPlan("monthly")} gem={<RankGem rank={rank} renewing className="h-10 w-10" />} title={t`Monthly`} price={noMonthly ?? t`$4 a month`} />
         <PlanCard on={plan === "once"} off={noOnce != null} onPick={() => setPlan("once")} gem={<SupporterRankIcon rank={rank} className="h-10 w-10" />} title={t`One-time`} price={noOnce ?? t`Any amount`} />
       </div>
       {plan === "monthly" ? <MonthlyPerks index={index} method={method} /> : (
         <>
           <SupportDaysPreview />
-          {method === "google" ? (
+          {method === "google" || method === "crypto" ? (
             <p className="mt-2.5 rounded-xl bg-osu-b4 px-4 py-3 text-[12.5px] leading-relaxed text-osu-l2 ring-1 ring-inset ring-white/[0.06]">
-              {t`Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi.`}
+              {method === "google"
+                ? t`Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi.`
+                : t`Crypto payments are 1, 3, 6 or 12 months. For any other amount, pay with Ko-fi.`}
             </p>
           ) : null}
         </>

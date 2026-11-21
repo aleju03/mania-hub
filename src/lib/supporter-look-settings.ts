@@ -760,6 +760,88 @@ export const createLavaCheckout = createServerFn({ method: "POST" })
     return { paymentUrl: body.paymentUrl, startedAt };
   });
 
+export const PACK_MONTHS = [1, 3, 6, 12] as const;
+export type PackMonths = (typeof PACK_MONTHS)[number];
+
+/* The networks the owner's wallet takes (backend /api/supporters/crypto-options). */
+export const readCryptoOptions = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ networks: WalletNetwork[] }> => {
+    const base = getServerLiveBackendUrl();
+    if (!base) return { networks: [] };
+    const response = await fetch(`${base}/api/supporters/crypto-options`, { headers: bridgeAuthHeaders() });
+    const body = await response.json().catch(() => null) as { networks?: unknown } | null;
+    if (!response.ok || !body) return { networks: [] };
+    return { networks: Array.isArray(body.networks) ? body.networks.filter((name): name is WalletNetwork => (WALLET_NETWORKS as readonly unknown[]).includes(name)) : [] };
+  },
+);
+
+export const WALLET_NETWORKS = ["tron", "bsc", "polygon"] as const;
+export type WalletNetwork = (typeof WALLET_NETWORKS)[number];
+export interface WalletTransfer { id: number; network: WalletNetwork; address: string; amount: string; months: PackMonths; expiresAt: number }
+
+/* A direct USDT transfer to the owner's wallet (backend
+   features/crypto-wallet.ts): the address and the exact amount to send.
+   Errors are the backend's codes, which the panel words. */
+export const openWalletTransfer = createServerFn({ method: "POST" })
+  .validator((data: { months?: unknown; network?: unknown }) => {
+    if (!(PACK_MONTHS as readonly unknown[]).includes(data?.months)) throw new Error("invalid_tier");
+    if (!(WALLET_NETWORKS as readonly unknown[]).includes(data?.network)) throw new Error("unavailable");
+    return { months: data.months as PackMonths, network: data.network as WalletNetwork };
+  })
+  .handler(async ({ data }): Promise<WalletTransfer> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("signin");
+    const response = await fetch(`${viewer.base}/api/supporters/self/wallet-transfer`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, username: viewer.username, months: data.months, network: data.network }),
+    });
+    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; id?: unknown; address?: unknown; amount?: unknown; expiresAt?: unknown } | null;
+    if (!response.ok || body?.ok !== true || typeof body.address !== "string" || typeof body.amount !== "string") throw new Error(String(body?.error ?? "unavailable"));
+    return { id: Number(body.id), network: data.network, address: body.address, amount: body.amount, months: data.months, expiresAt: Number(body.expiresAt) };
+  });
+
+/* Whether an open transfer has been paid: the backend looks at the wallet
+   first, so the panel can just ask every 20 seconds. */
+export const checkWalletTransfer = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown }) => {
+    const id = Number(data?.id);
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error("no_transfer");
+    return { id };
+  })
+  .handler(async ({ data }): Promise<{ paid: boolean }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("signin");
+    const response = await fetch(`${viewer.base}/api/supporters/self/wallet-check`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, id: data.id }),
+    });
+    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; paid?: unknown } | null;
+    if (!response.ok || body?.ok !== true) throw new Error(String(body?.error ?? "unavailable"));
+    return { paid: body.paid === true };
+  });
+
+/* Checks a pasted transaction id against the viewer's open transfers. */
+export const claimWalletTransfer = createServerFn({ method: "POST" })
+  .validator((data: { txHash?: unknown }) => {
+    const txHash = typeof data?.txHash === "string" ? data.txHash.trim() : "";
+    if (!/^(0x)?[0-9a-fA-F]{64}$/.test(txHash)) throw new Error("invalid_tx");
+    return { txHash };
+  })
+  .handler(async ({ data }): Promise<{ months: number }> => {
+    const viewer = await requireViewer();
+    if (!viewer) throw new Error("signin");
+    const response = await fetch(`${viewer.base}/api/supporters/self/wallet-claim`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, txHash: data.txHash }),
+    });
+    const body = await response.json().catch(() => null) as { ok?: unknown; error?: unknown; months?: unknown } | null;
+    if (!response.ok || body?.ok !== true) throw new Error(String(body?.error ?? "unavailable"));
+    return { months: Number(body.months) };
+  });
+
 /* Asks the backend to look for the viewer's lava.top payment now (it checks
    lava.top's invoices). `paid` is whether a lava.top payment of theirs has
    arrived since `since` (createLavaCheckout's startedAt), so someone who was

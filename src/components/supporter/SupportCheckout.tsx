@@ -14,6 +14,14 @@ import {
   claimGoogleContribution,
   claimPayments,
   createLavaCheckout,
+  checkWalletTransfer,
+  claimWalletTransfer,
+  openWalletTransfer,
+  readCryptoOptions,
+  type WalletNetwork,
+  type WalletTransfer,
+  PACK_MONTHS,
+  type PackMonths,
   LAVA_CHECKOUT_CURRENCIES,
   LAVA_CHECKOUT_MONTHS,
   readPatreonConnection,
@@ -47,6 +55,12 @@ const LAVA_FOR_EVERYONE = true;
    connected their Patreon here (backend features/patreon.ts). */
 const PATREON_JOIN_URL = "https://www.patreon.com/c/maniatracker/membership";
 const PATREON_FOR_EVERYONE = true;
+/* Crypto: USDT sent straight to the owner's wallet (backend
+   features/crypto-wallet.ts). Admins only until it is set up; then only
+   where CRYPTO_SUPPORT_COUNTRIES says. */
+const CRYPTO_FOR_EVERYONE = false;
+/* What each crypto pack length costs, in dollars: $4 a month, $40 a year. */
+const PACK_PRICE_USD: Record<PackMonths, number> = { 1: 4, 3: 12, 6: 24, 12: 40 };
 /* Signed-in buyers pay on an invoice the site makes through lava.top's API
    (LavaApiPay) instead of the public page above, whose payments never reach
    the site. Admins only while this is false; once true, a signed-out visitor
@@ -89,6 +103,20 @@ const LAVA_SUPPORT_COUNTRIES = new Set(["RU", "BY", "IR", "CU", "SY", "KP"]);
 const getSupportUsesLava = createServerFn({ method: "GET" }).handler(() => {
   const country = readEdgeCountry(getRequest().headers);
   return country != null && LAVA_SUPPORT_COUNTRIES.has(country);
+});
+
+// Countries where crypto is offered: where Ko-fi's PayPal can't take a
+// payment (lava.top's list above, and others PayPal does not serve) and
+// mainland China, where PayPal is rare and Alipay and WeChat Pay can't be
+// taken. Everywhere else the card and PayPal routes cover it, so the tab
+// stays out of the way. Admins see it everywhere.
+const CRYPTO_SUPPORT_COUNTRIES = new Set([...LAVA_SUPPORT_COUNTRIES, "CN", "PK", "BD", "AF", "IQ", "LB", "LY", "SD", "MM"]);
+
+/* The visitor's country, read after load like getSupportUsesLava: whether
+   lava.top comes first and whether crypto is offered. */
+const getSupportRegion = createServerFn({ method: "GET" }).handler((): { lavaFirst: boolean; crypto: boolean } => {
+  const country = readEdgeCountry(getRequest().headers);
+  return { lavaFirst: country != null && LAVA_SUPPORT_COUNTRIES.has(country), crypto: country != null && CRYPTO_SUPPORT_COUNTRIES.has(country) };
 });
 
 /* Google's checkout: its own button and dialog. A signed-in payer's order is
@@ -363,7 +391,6 @@ function LavaApiPay({ viewerId }: { viewerId: number }) {
   }, []);
   const currency: LavaCheckoutCurrency = picked ?? (rubles ? "RUB" : "USD");
   const price = lavaPrice(currency, months);
-  const lengthLabel = (value: LavaCheckoutMonths) => (value === 12 ? t`1 year` : t`${plural(value, { one: "# month", other: "# months" })}`);
   /* Every length is a lava.top membership: it charges again after that long. */
   const renews = months === 12
     ? t`Renews every year until you cancel it on lava.top.`
@@ -416,28 +443,7 @@ function LavaApiPay({ viewerId }: { viewerId: number }) {
           })}
         </div>
       </div>
-      <div role="radiogroup" aria-label={t`Length`}>
-        {LAVA_CHECKOUT_MONTHS.map((value) => {
-          const on = value === months;
-          return (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              onClick={() => setMonths(value)}
-              className={`flex w-full cursor-pointer items-center gap-3 border-t border-white/[0.07] px-0.5 py-3 text-left transition-colors ${on ? "text-white" : "text-osu-l2 hover:text-white"}`}
-            >
-              <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ring-2 ring-inset ${on ? "ring-osu-pink" : "ring-white/25"}`}>
-                {on ? <span className="h-2 w-2 rounded-full bg-osu-pink" /> : null}
-              </span>
-              <span className={`text-[15px] ${on ? "font-bold" : "font-medium"}`}>{lengthLabel(value)}</span>
-              {value === 12 ? <span className="text-[11.5px] font-semibold text-osu-pink">{t`2 months free`}</span> : null}
-              <span className="ml-auto text-[16px] font-bold tabular-nums">{lavaPrice(currency, value)}</span>
-            </button>
-          );
-        })}
-      </div>
+      <LengthRows lengths={LAVA_CHECKOUT_MONTHS} picked={months} onPick={setMonths} price={(value) => lavaPrice(currency, value)} />
       <div className="flex flex-col gap-3 border-t border-white/[0.07] pt-4">
         <input
           id="lava-pay-email"
@@ -470,6 +476,297 @@ function LavaApiPay({ viewerId }: { viewerId: number }) {
 /* A payment that reached no account (lava.top paid outside the button's
    link or signed out, Ko-fi under a name and message that match no osu!
    username); the payer names it here by the email they paid with. */
+/* The lengths to pick from, one row each with its price: the lava.top,
+   crypto panels. A year is ten months' price. */
+function LengthRows<M extends number>({ lengths, picked, onPick, price }: { lengths: readonly M[]; picked: M; onPick: (months: M) => void; price: (months: M) => string }) {
+  const { t } = useLingui();
+  const lengthLabel = (value: number) => (value === 12 ? t`1 year` : t`${plural(value, { one: "# month", other: "# months" })}`);
+  return (
+    <div role="radiogroup" aria-label={t`Length`}>
+      {lengths.map((value) => {
+        const on = value === picked;
+        return (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onPick(value)}
+            className={`flex w-full cursor-pointer items-center gap-3 border-t border-white/[0.07] px-0.5 py-3 text-left transition-colors ${on ? "text-white" : "text-osu-l2 hover:text-white"}`}
+          >
+            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ring-2 ring-inset ${on ? "ring-osu-pink" : "ring-white/25"}`}>
+              {on ? <span className="h-2 w-2 rounded-full bg-osu-pink" /> : null}
+            </span>
+            <span className={`text-[15px] ${on ? "font-bold" : "font-medium"}`}>{lengthLabel(value)}</span>
+            {value === 12 ? <span className="text-[11.5px] font-semibold text-osu-pink">{t`2 months free`}</span> : null}
+            <span className="ml-auto text-[16px] font-bold tabular-nums">{price(value)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* Crypto: USDT sent straight to the owner's wallet (backend
+   features/crypto-wallet.ts). The buyer picks a length and a network and
+   gets the address and an exact amount whose odd decimals are theirs alone.
+   While it is open the panel asks every 20 seconds whether it has been paid
+   (the backend looks at the wallet's incoming USDT), and switches to the
+   thank-you on its own; pasting the transaction id is the fallback. The open
+   transfer is kept in the browser for its 24 hours, so a buyer who leaves to
+   pay from a phone finds it again. One-off packs only. */
+const WALLET_TRANSFER_KEY = "mania-wallet-transfer";
+const WALLET_NETWORK_LABEL: Record<WalletNetwork, string> = { tron: "TRON (TRC-20)", bsc: "BNB Chain (BEP-20)", polygon: "Polygon" };
+const WALLET_NETWORK_NAME: Record<WalletNetwork, string> = { tron: "TRON", bsc: "BNB Chain", polygon: "Polygon" };
+const WALLET_NETWORK_STANDARD: Record<WalletNetwork, string> = { tron: "TRC-20", bsc: "BEP-20", polygon: "PoS" };
+/* Each network's mark: BNB Chain and Polygon from Simple Icons, TRON from
+   cryptocurrency-icons (both CC0), viewBoxes cropped to the glyph. */
+const WALLET_NETWORK_MARK: Record<WalletNetwork, { viewBox: string; d: string }> = {
+  tron: { viewBox: "0 0 18.18 19.13", d: "M14.432 2.663L0 .007 7.595 19.12 18.178 6.225l-3.746-3.562zm-.232 1.17l2.208 2.099-6.038 1.093 3.83-3.192zM9.058 6.806L2.694 1.528l10.402 1.914-4.038 3.364zm-.453.934l-1.038 8.58L1.972 2.237 8.605 7.74zm.96.455l6.687-1.21-7.67 9.343.983-8.133z" },
+  bsc: { viewBox: "1.6 0 20.7 24", d: "M5.631 3.676 12.001 0l6.367 3.676-2.34 1.358L12 2.716 7.972 5.034l-2.34-1.358Zm12.737 4.636-2.34-1.358L12 9.272 7.972 6.954l-2.34 1.358v2.716l4.026 2.318v4.636L12 19.341l2.341-1.359v-4.636l4.027-2.318V8.312Zm0 7.352v-2.716l-2.34 1.358v2.716l2.34-1.358Zm1.663.96-4.027 2.318v2.717l6.368-3.677V10.63l-2.34 1.358v4.636Zm-2.34-10.63 2.34 1.358v2.716l2.341-1.358V5.994l-2.34-1.358-2.342 1.358ZM9.657 19.926v2.716L12 24l2.341-1.358v-2.716l-2.34 1.358-2.343-1.358Zm-4.027-4.262 2.341 1.358v-2.716l-2.34-1.358v2.716Zm4.027-9.67L12 7.352l2.341-1.358-2.34-1.358-2.343 1.358Zm-5.69 1.358L6.31 5.994 3.968 4.636l-2.34 1.358V8.71l2.34 1.358V7.352Zm0 4.636-2.34-1.358v7.352l6.368 3.677v-2.717l-4.028-2.318v-4.636Z" },
+  polygon: { viewBox: "0 1.4 24 21.3", d: "m17.82 16.342 5.692-3.287A.98.98 0 0 0 24 12.21V5.635a.98.98 0 0 0-.488-.846l-5.693-3.286a.98.98 0 0 0-.977 0L11.15 4.789a.98.98 0 0 0-.489.846v11.747L6.67 19.686l-3.992-2.304v-4.61l3.992-2.304 2.633 1.52V8.896L7.158 7.658a.98.98 0 0 0-.977 0L.488 10.945a.98.98 0 0 0-.488.846v6.573a.98.98 0 0 0 .488.847l5.693 3.286a.981.981 0 0 0 .977 0l5.692-3.286a.98.98 0 0 0 .489-.846V6.618l.072-.041 3.92-2.263 3.99 2.305v4.609l-3.99 2.304-2.63-1.517v3.092l2.14 1.236a.981.981 0 0 0 .978 0v-.001Z" },
+};
+
+function readStoredTransfer(): WalletTransfer | null {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(WALLET_TRANSFER_KEY) ?? "null") as WalletTransfer | null;
+    return raw && typeof raw.address === "string" && typeof raw.amount === "string" && raw.expiresAt > Date.now() ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+const WALLET_POLL_MS = 20_000;
+
+function CryptoPay({ viewerId }: { viewerId: number | null | undefined }) {
+  const { t } = useLingui();
+  const [networks, setNetworks] = useState<WalletNetwork[] | null>(null);
+  const [months, setMonths] = useState<PackMonths>(1);
+  const [network, setNetwork] = useState<WalletNetwork | null>(null);
+  const [transfer, setTransfer] = useState<WalletTransfer | null>(null);
+  const [txHash, setTxHash] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    readCryptoOptions()
+      .then((value) => {
+        if (cancelled) return;
+        setNetworks(value.networks);
+        const stored = readStoredTransfer();
+        if (stored && value.networks.includes(stored.network)) {
+          setTransfer(stored);
+          setMonths(stored.months);
+          setNetwork(stored.network);
+        } else {
+          setNetwork(value.networks[0] ?? null);
+        }
+      })
+      .catch(() => !cancelled && setNetworks([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  // Asks whether the open transfer is paid, every 20 seconds while the tab
+  // is in front, and once more as soon as it comes back to the front.
+  useEffect(() => {
+    if (!transfer || done) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const ask = () => {
+      if (cancelled || document.visibilityState !== "visible") return;
+      checkWalletTransfer({ data: { id: transfer.id } })
+        .then(({ paid }) => {
+          if (cancelled || !paid) return;
+          track("support_wallet_paid");
+          window.localStorage.removeItem(WALLET_TRANSFER_KEY);
+          setDone(true);
+          requestSupporterWelcome();
+        })
+        .catch(() => undefined);
+    };
+    const loop = () => {
+      ask();
+      timer = setTimeout(loop, WALLET_POLL_MS);
+    };
+    timer = setTimeout(loop, WALLET_POLL_MS);
+    const onVisible = () => document.visibilityState === "visible" && ask();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [transfer, done]);
+  const pill = "inline-flex items-center justify-center gap-1.5 rounded-full px-5 text-white transition hover:brightness-110";
+  if (!viewerId) {
+    return (
+      <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+        <p className="max-w-[300px] text-[12.5px] text-osu-f1">{t`Sign in first so it counts toward your account.`}</p>
+        <a href={`/api/auth/osu?next=${encodeURIComponent("/support#checkout")}`} className={`${pill} bg-osu-pink py-2.5 text-[13px] font-semibold`}>
+          {t`Log in with osu!`}
+        </a>
+      </div>
+    );
+  }
+  if (!networks) return <div className="h-[360px]" />;
+  if (!networks.length) {
+    return <p className="px-5 py-10 text-center text-[12.5px] text-osu-f1">{t`Crypto payments aren't set up yet.`}</p>;
+  }
+  const errorText = (code: string): string => ({
+    invalid_tier: t`Pick a length.`,
+    invalid_tx: t`That isn't a transaction id. Copy it from your wallet or the block explorer.`,
+    no_transfer: t`Get an address first, then send to it.`,
+    not_found: t`That transaction wasn't found. Check it's on the network you picked.`,
+    not_confirmed: t`That transaction isn't confirmed yet. Try again in a minute.`,
+    no_match: t`That transaction didn't send the exact amount to this address.`,
+    already_claimed: t`That transaction was already used.`,
+    rate_limited: t`That's a lot of tries today; try again tomorrow.`,
+    signin: t`Sign in first so it counts toward your account.`,
+  })[code] ?? t`Crypto payments aren't available right now; try again later.`;
+  const forget = () => {
+    window.localStorage.removeItem(WALLET_TRANSFER_KEY);
+    setTransfer(null);
+    setTxHash("");
+    setError(null);
+  };
+  const getAddress = () => {
+    if (!network) return;
+    setBusy(true);
+    setError(null);
+    openWalletTransfer({ data: { months, network } })
+      .then((value) => {
+        track("support_wallet_open");
+        window.localStorage.setItem(WALLET_TRANSFER_KEY, JSON.stringify(value));
+        setTransfer(value);
+      })
+      .catch((reason: unknown) => setError(errorText(reason instanceof Error ? reason.message : "")))
+      .finally(() => setBusy(false));
+  };
+  const check = () => {
+    if (!txHash.trim()) return;
+    setBusy(true);
+    setError(null);
+    claimWalletTransfer({ data: { txHash: txHash.trim() } })
+      .then(() => {
+        track("support_wallet_claimed");
+        window.localStorage.removeItem(WALLET_TRANSFER_KEY);
+        setDone(true);
+        requestSupporterWelcome();
+      })
+      .catch((reason: unknown) => setError(errorText(reason instanceof Error ? reason.message : "")))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="flex flex-col px-5 pb-6 pt-5">
+      <div className="pb-2.5 text-[18px] font-bold text-white">{t`Supporter`}</div>
+      {done ? (
+        <p role="status" className="border-t border-white/[0.07] py-6 text-center text-[13px] text-osu-l2">{t`Thank you! Your supporter time is on.`}</p>
+      ) : transfer ? (
+        <div className="flex flex-col gap-3 border-t border-white/[0.07] pt-4">
+          <CopyRow label={t`Send exactly`} value={`${transfer.amount} USDT`} copy={transfer.amount} big />
+          <div className="-mt-2 text-[12px] text-osu-l2">{t`on ${WALLET_NETWORK_LABEL[transfer.network]}`}</div>
+          <CopyRow label={t`To`} value={transfer.address} copy={transfer.address} mono />
+          <p className="text-[12px] leading-relaxed text-osu-f1">
+            {t`Only USDT, only on this network, and exactly this amount: the odd decimals tell your payment apart. Sending from an exchange like Binance? Its withdraw page shows a "Receive amount"; make that exactly this amount. Open for 24 hours.`}
+          </p>
+          <p role="status" className="flex items-center gap-2 text-[12.5px] text-osu-l2">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-osu-pink opacity-60 motion-reduce:hidden" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-osu-pink" />
+            </span>
+            {t`Waiting for your payment. This updates by itself once it's confirmed.`}
+          </p>
+          <div className="border-t border-white/[0.07] pt-3">
+            <div className="mb-1.5 text-[11px] text-osu-f1">{t`Paid and it hasn't shown up? Paste the transaction id.`}</div>
+            <div className="flex items-center gap-2">
+              <input
+                value={txHash}
+                onChange={(event) => setTxHash(event.target.value)}
+                placeholder={t`Transaction id`}
+                aria-label={t`Transaction id`}
+                spellCheck={false}
+                className="h-9 min-w-0 flex-1 rounded-lg bg-osu-b5 px-3 font-mono text-[12px] text-white outline-none ring-1 ring-inset ring-white/[0.08] placeholder:font-sans placeholder:text-osu-f1 focus:ring-osu-pink/60"
+              />
+              <button type="button" disabled={busy || !txHash.trim()} onClick={check} className={`${pill} h-9 cursor-pointer bg-osu-b3 text-[13px] font-semibold hover:bg-osu-b2 disabled:cursor-default disabled:opacity-50`}>
+                {t`Check`}
+              </button>
+            </div>
+          </div>
+          <button type="button" onClick={forget} className="cursor-pointer self-center text-[12px] text-osu-f1 transition-colors hover:text-white">
+            {t`Start over`}
+          </button>
+        </div>
+      ) : (
+        <>
+          <LengthRows lengths={PACK_MONTHS} picked={months} onPick={setMonths} price={(value) => `$${PACK_PRICE_USD[value]}`} />
+          <div className="border-t border-white/[0.07] pt-3">
+            <div className="mb-1.5 text-[11px] text-osu-f1">{t`Network`}</div>
+            <div role="radiogroup" aria-label={t`Network`} className={`grid gap-0.5 rounded-lg bg-osu-b5 p-0.5 ${networks.length === 3 ? "grid-cols-3" : networks.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+              {networks.map((value) => {
+                const on = network === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => setNetwork(value)}
+                    className={`cursor-pointer rounded-md px-2 py-1.5 text-center transition-colors ${on ? "bg-osu-b2 text-white" : "text-osu-l2 hover:text-white"}`}
+                  >
+                    <span className="flex items-center justify-center gap-1.5 text-[13px] font-bold">
+                      <svg viewBox={WALLET_NETWORK_MARK[value].viewBox} className="h-3.5 w-3.5 shrink-0" fill="currentColor" aria-hidden="true">
+                        <path d={WALLET_NETWORK_MARK[value].d} />
+                      </svg>
+                      {WALLET_NETWORK_NAME[value]}
+                    </span>
+                    <span className={`block text-[11px] ${on ? "text-osu-l2" : "text-osu-f1"}`}>{WALLET_NETWORK_STANDARD[value]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 border-t border-white/[0.07] pt-4">
+            <button type="button" disabled={busy || !network} onClick={getAddress} className={`${pill} w-full cursor-pointer bg-osu-pink py-3 text-[14px] font-semibold disabled:cursor-default disabled:opacity-50`}>
+              {t`Get the address`}
+            </button>
+            <p className="text-center text-[12px] text-osu-f1">{t`Paid once, it doesn't renew. Send USDT from your own wallet; this page sees it arrive.`}</p>
+          </div>
+        </>
+      )}
+      {error ? <p className="mt-2 text-center text-[12px] text-osu-red-light">{error}</p> : null}
+    </div>
+  );
+}
+
+/* A value to copy: the amount or the address. */
+function CopyRow({ label, value, copy, big = false, mono = false }: { label: string; value: string; copy: string; big?: boolean; mono?: boolean }) {
+  const { t } = useLingui();
+  const [copied, setCopied] = useState(false);
+  return (
+    <div>
+      <div className="text-[11px] text-osu-f1">{label}</div>
+      <div className="mt-0.5 flex items-center gap-2">
+        <span className={`min-w-0 flex-1 break-all text-white ${big ? "text-[22px] font-bold tabular-nums" : "text-[13px]"} ${mono ? "font-mono" : ""}`}>{value}</span>
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard?.writeText(copy).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            });
+          }}
+          className="h-7 shrink-0 cursor-pointer rounded-md bg-osu-b3 px-2.5 text-[12px] font-semibold text-white transition hover:bg-osu-b2"
+        >
+          {copied ? t`Copied` : t`Copy`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PaymentClaim({ provider, wide = false }: { provider: PaymentClaimProvider; wide?: boolean }) {
   const { t } = useLingui();
   const [email, setEmail] = useState("");
@@ -533,10 +830,11 @@ const PAYMENT_MARKS = {
   discover: { title: "Discover", viewBox: "0 10 24 4", d: "M14.58 12a2.023 2.023 0 1 1-2.025-2.023h.002c1.118 0 2.023.906 2.023 2.023zm-5.2-2.001c-1.124 0-2.025.884-2.025 1.99 0 1.118.878 1.984 2.007 1.984.319 0 .593-.063.93-.221v-.873c-.296.297-.559.416-.895.416-.747 0-1.277-.542-1.277-1.312 0-.73.547-1.306 1.243-1.306.354 0 .622.126.93.428v-.873a1.898 1.898 0 0 0-.913-.233zm-3.352 1.545c-.445-.165-.576-.273-.576-.479 0-.239.233-.422.553-.422.222 0 .405.091.598.308l.388-.508a1.665 1.665 0 0 0-1.117-.422c-.673 0-1.186.467-1.186 1.089 0 .524.239.792.936 1.043.291.103.438.171.513.217a.456.456 0 0 1 .222.394c0 .308-.245.536-.576.536-.354 0-.639-.177-.809-.507l-.479.461c.342.502.752.724 1.317.724.771 0 1.311-.513 1.311-1.249-.002-.603-.252-.876-1.095-1.185zM24 10.3a.29.29 0 0 1-.288.291.29.29 0 0 1-.291-.291v-.003A.29.29 0 1 1 24 10.3zm-.059.001a.235.235 0 0 0-.231-.239.234.234 0 0 0-.232.239c0 .132.104.239.232.239a.235.235 0 0 0 .231-.239zM3.472 13.887h.742v-3.803h-.742v3.803zm12.702-1.248l-1.014-2.554h-.81l1.614 3.9h.399l1.643-3.9h-.804l-1.028 2.554zm2.166 1.248h2.104v-.644h-1.362v-1.027h1.312v-.644h-1.312v-.844h1.362v-.644H18.34v3.803zm5.409-3.557l.11.138h-.097l-.094-.13v.13h-.08v-.334h.107c.081 0 .126.036.126.103.001.046-.025.08-.072.093zm-.006-.092c0-.029-.021-.043-.06-.043h-.014v.087h.014c.039 0 .06-.014.06-.044zm-1.228 2.047l1.197 1.602H22.8l-1.027-1.528h-.097v1.528h-.741v-3.803h1.1c.855 0 1.346.411 1.346 1.123 0 .583-.308.965-.866 1.078zm.103-1.038c0-.37-.251-.563-.713-.563h-.228v1.152h.217c.473-.001.724-.207.724-.589zm-19.487.742a1.91 1.91 0 0 1-.69 1.46c-.365.303-.781.439-1.357.439H.001v-3.803H1.09c1.202 0 2.041.781 2.041 1.904zm-.764-.006c0-.364-.154-.718-.411-.947-.245-.222-.536-.308-1.015-.308H.742v2.515h.199c.479 0 .782-.092 1.015-.302.256-.228.411-.593.411-.958z" },
   jcb: { title: "JCB", viewBox: "0 8.9 24 6.3", d: "M13.05 9.8643c.9723.0736 1.7257.3671 2.3545.6843v-1.31s-1.2577-.3162-2.4408-.368c-4.1256-.1849-5.295 1.4344-5.295 3.1292 0 1.6947 1.1694 3.3145 5.295 3.1296 1.1831-.0536 2.4408-.3694 2.4408-.3694v-1.3086c-.6193.3081-1.3826.6107-2.3545.683-1.6793.1272-2.6898-.6907-2.6898-2.1342 0-1.4448 1.0105-2.2613 2.6898-2.1354m7.685 4.1223c-.0513.0105-.1581.02-.215.02h-1.8005V12.376H20.52c.0568 0 .1636.01.2149.02a.8056.8056 0 01.6325.7951c0 .4162-.2872.721-.6325.796zm-2.0155-4.0374h1.6325c.059 0 .1454.0077.1772.0137.3376.0572.6256.3307.6256.7392 0 .409-.288.6815-.626.7392a1.571 1.571 0 01-.1773.0137h-1.6311V9.9506zm3.4994 1.9856v-.0364c.9133-.1331 1.4149-.726 1.4149-1.4199 0-.8828-.7343-1.3916-1.7293-1.4416-.0772-.0032-.203-.011-.3044-.011h-5.3323v5.9467h5.7548c1.13 0 1.9774-.6043 1.9774-1.5466 0-.8701-.7724-1.4222-1.781-1.4917zm-17.8644.6788c0 .8787-.5906 1.5311-1.6656 1.5311-.917 0-1.8174-.2726-2.6889-.6938V14.76s1.4021.383 3.191.383c2.9714 0 3.8374-1.125 3.8374-2.529V9.0266H4.3541v3.5876Z" },
   dinersclub: { title: "Diners Club", viewBox: "0 1.6 24 20.7", d: "M16.506 11.982a6.026 6.026 0 0 0-3.866-5.618V17.6a6.025 6.025 0 0 0 3.866-5.618zM8.33 17.598V6.365a6.03 6.03 0 0 0-3.863 5.617 6.028 6.028 0 0 0 3.863 5.616zm2.156-15.113A9.497 9.497 0 0 0 .99 11.982a9.495 9.495 0 0 0 9.495 9.494c5.245 0 9.495-4.25 9.496-9.494a9.499 9.499 0 0 0-9.496-9.497Zm-.023 19.888C4.723 22.4 0 17.75 0 12.09 0 5.905 4.723 1.626 10.463 1.627h2.69C18.822 1.627 24 5.903 24 12.09c0 5.658-5.176 10.283-10.848 10.283" },
+  tether: { title: "Tether", viewBox: "0 1.6 24 20.9", d: "M18.7538 10.5176c0 .6251-2.2379 1.1483-5.2381 1.2812l.0028.0007c-.0848.0064-.5233.0325-1.5012.0325-.7778 0-1.33-.0233-1.5237-.0325-3.0059-.1322-5.2495-.6555-5.2495-1.2819s2.2436-1.149 5.2495-1.2834v2.0442c.1965.0142.7594.0474 1.5372.0474.9334 0 1.4008-.0389 1.4849-.0466V9.2356c2.9994.1337 5.2381.657 5.2381 1.282zm5.19.5466L12.1248 22.389a.1803.1803 0 0 1-.2496 0L.0562 11.0635a.1781.1781 0 0 1-.0382-.2079l4.3762-9.1921a.1767.1767 0 0 1 .1626-.1026h14.8878a.1768.1768 0 0 1 .1612.1032l4.3762 9.1922a.1782.1782 0 0 1-.0382.2079zm-4.478-.4038c0-.8068-2.5515-1.4799-5.9473-1.6369V7.195h4.186V4.4055H6.3076V7.195h4.1852v1.8286c-3.4018.1562-5.9601.83-5.9601 1.6376 0 .8075 2.5583 1.4806 5.9601 1.6376v5.8618h3.025v-5.8639c3.394-.1563 5.948-.8295 5.948-1.6363z" },
 } as const;
 type PaymentMark = keyof typeof PAYMENT_MARKS;
 /* Drawn height of each mark, so wordmarks and badges weigh the same. */
-const PAYMENT_MARK_HEIGHT: Record<PaymentMark, number> = { paypal: 14, googlepay: 14, applepay: 14, dinersclub: 13, mastercard: 12, visa: 10, jcb: 9, venmo: 7.5, discover: 7 };
+const PAYMENT_MARK_HEIGHT: Record<PaymentMark, number> = { paypal: 14, googlepay: 14, applepay: 14, tether: 13, dinersclub: 13, mastercard: 12, visa: 10, jcb: 9, venmo: 7.5, discover: 7 };
 /* Every way Patreon takes a payment (its help page "What are my members'
    payment options?"): Apple Pay only in US dollars, Venmo only in the US. */
 const PATREON_MARKS = ["visa", "mastercard", "discover", "jcb", "dinersclub", "paypal", "applepay", "venmo"] as const satisfies readonly PaymentMark[];
@@ -562,7 +860,7 @@ function PaymentMarks({ marks, label, className = "mt-1 h-3.5 gap-2" }: { marks:
    processor), Google (Google Pay and the cards saved there) and lava.top
    (cards or PayPal, in rubles, dollars or euros), which also works where
    Ko-fi does not. */
-export type SupportMethod = "kofi" | "google" | "lava" | "patreon";
+export type SupportMethod = "kofi" | "google" | "lava" | "patreon" | "crypto";
 
 /* Google's checkout. It refuses every host but mania-tracker.com, so
    locally it only shows its button. A claim that fails on the spot falls
@@ -576,12 +874,12 @@ const GOOGLE_OFFERED = false;
    visitor's country is being asked. */
 export function useSupportMethods() {
   const auth = useAuth();
-  const [lavaFirst, setLavaFirst] = useState<boolean | null>(null);
+  const [region, setRegion] = useState<{ lavaFirst: boolean; crypto: boolean } | null>(null);
   useEffect(() => {
     let cancelled = false;
-    getSupportUsesLava()
-      .then((value) => !cancelled && setLavaFirst(value))
-      .catch(() => !cancelled && setLavaFirst(false));
+    getSupportRegion()
+      .then((value) => !cancelled && setRegion(value))
+      .catch(() => !cancelled && setRegion({ lavaFirst: false, crypto: false }));
     return () => {
       cancelled = true;
     };
@@ -589,10 +887,19 @@ export function useSupportMethods() {
   const google = GOOGLE_OFFERED && !!GOOGLE_RRM_PUBLICATION_ID;
   const lava = LAVA_FOR_EVERYONE || auth.isAdmin;
   const patreon = PATREON_FOR_EVERYONE || auth.isAdmin;
-  const methods: SupportMethod[] = ["kofi", ...(patreon ? ["patreon" as const] : []), ...(google ? ["google" as const] : []), ...(lava ? ["lava" as const] : [])];
-  // Back from connecting Patreon (/api/auth/patreon adds ?patreon=...): Patreon again.
-  const backFromPatreon = patreon && typeof window !== "undefined" && new URLSearchParams(window.location.search).has("patreon");
-  const initial: SupportMethod | null = lavaFirst == null ? null : backFromPatreon ? "patreon" : lavaFirst && lava ? "lava" : "kofi";
+  const crypto = (CRYPTO_FOR_EVERYONE && !!region?.crypto) || auth.isAdmin;
+  const methods: SupportMethod[] = [
+    "kofi",
+    ...(patreon ? ["patreon" as const] : []),
+    ...(google ? ["google" as const] : []),
+    ...(lava ? ["lava" as const] : []),
+    ...(crypto ? ["crypto" as const] : []),
+  ];
+  // Back from Patreon or a crypto invoice (each return URL adds its own
+  // ?name=...): that method again.
+  const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const backTo: SupportMethod | null = patreon && search?.has("patreon") ? "patreon" : crypto && search?.has("crypto") ? "crypto" : null;
+  const initial: SupportMethod | null = region == null ? null : backTo ?? (region.lavaFirst && lava ? "lava" : "kofi");
   return { methods, initial };
 }
 
@@ -608,6 +915,15 @@ export function SupportMethodSteps({ method }: { method: SupportMethod }) {
         {signedIn
           ? t`Connect your Patreon here, then join the Supporter tier on Patreon. Each payment adds supporter time to your account.`
           : t`Sign in first, then connect your Patreon here, so your supporter time reaches your account.`}
+      </p>
+    );
+  }
+  if (method === "crypto") {
+    return (
+      <p className="mt-2 text-[14px] leading-relaxed text-osu-l2">
+        {signedIn
+          ? t`Pick a length and a network, then send USDT from your wallet. Your supporter time starts once the payment is confirmed on the blockchain.`
+          : t`Sign in first, then pay in crypto here, so your supporter time reaches your account.`}
       </p>
     );
   }
@@ -649,12 +965,13 @@ export function SupportCheckout({ methods, method, onMethod }: { methods: Suppor
     google: { name: "Google", detail: t`Google Pay`, marks: ["googlepay"] },
     lava: { name: "lava.top", detail: t`Card or PayPal`, marks: ["visa", "mastercard", "paypal"] },
     patreon: { name: "Patreon", detail: t`Card, PayPal or Apple Pay`, marks: ["visa", "mastercard", "paypal", "applepay"] },
+    crypto: { name: t`Crypto`, detail: t`USDT and other coins`, marks: ["tether"] },
   };
 
   return (
     <div className="overflow-hidden rounded-xl bg-osu-b4">
       {/* a choice only when there is one to make */}
-      {methods.length > 1 && <div role="radiogroup" aria-label={t`How to pay`} className={`grid gap-1 border-b border-white/[0.07] p-1.5 ${methods.length >= 4 ? "grid-cols-2 sm:grid-cols-4" : methods.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+      {methods.length > 1 && <div role="radiogroup" aria-label={t`How to pay`} className={`grid gap-1 border-b border-white/[0.07] p-1.5 ${methods.length >= 6 ? "grid-cols-3 sm:grid-cols-6" : methods.length === 5 ? "grid-cols-3 sm:grid-cols-5" : methods.length === 4 ? "grid-cols-2 sm:grid-cols-4" : methods.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
         {methods.map((id) => {
           const on = id === method;
           return (
@@ -716,6 +1033,7 @@ export function SupportCheckout({ methods, method, onMethod }: { methods: Suppor
       ) : null}
       {method === "google" ? <GoogleContribution viewerId={viewerId} /> : null}
       {method === "patreon" ? <PatreonPay viewerId={viewerId} /> : null}
+      {method === "crypto" ? <CryptoPay viewerId={viewerId} /> : null}
       {/* Ko-fi's page is heavy to start, so it loads once the visitor has
           paused near it rather than mid-scroll on the way down */}
       <div ref={frameRef} className={method === "kofi" || method === null ? "" : "hidden"}>

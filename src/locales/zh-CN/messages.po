@@ -6776,6 +6776,10 @@ msgstr "只有部分音符是长条的谱面，以及由长条组成的慢速谱
 msgid "chasing your first {chaseTarget}pp play"
 msgstr "正在冲击你的第一个 {chaseTarget}pp 成绩"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Check"
+msgstr "检查"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "checker"
 msgstr "棋盘格"
@@ -7866,6 +7870,7 @@ msgstr "坐标"
 #: src/components/replay/ReplayInfo.tsx
 #: src/components/replay/ShareClipButton.tsx
 #: src/components/supporter/KofiNameSteps.tsx
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/workshop.themes.spec.tsx
 msgid "Copied"
@@ -7900,6 +7905,7 @@ msgstr "图片会复制成多份，在卡面所有印刷内容的后方飘过，
 #: src/components/replay/ShareClipButton.tsx
 #: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/KofiNameSteps.tsx
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/ui/MessageText.tsx
 msgid "Copy"
 msgstr "复制"
@@ -8752,6 +8758,22 @@ msgstr "王冠"
 #: src/components/supporter/loadout.ts
 msgid "CRT monitor"
 msgstr "CRT 显示器"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Crypto"
+msgstr "加密货币"
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Crypto payments are 1, 3, 6 or 12 months. For any other amount, pay with Ko-fi."
+msgstr "加密货币付款只有 1、3、6 或 12 个月。其他金额请用 Ko-fi 支付。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Crypto payments aren't available right now; try again later."
+msgstr "加密货币付款暂时不可用，请稍后再试。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Crypto payments aren't set up yet."
+msgstr "加密货币付款还没有开通。"
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Crystal cave"
@@ -12116,9 +12138,17 @@ msgstr "在 {map} 上以 {speed} 拿到 {grade}"
 msgid "Get a share link"
 msgstr "获取分享链接"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Get an address first, then send to it."
+msgstr "请先获取地址，再向它转账。"
+
 #: src/components/me/DynamicRendersPanel.tsx
 msgid "Get my link"
 msgstr "获取我的链接"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Get the address"
+msgstr "获取地址"
 
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Getting the map out of osu!"
@@ -13481,8 +13511,8 @@ msgstr "如果你加载 osu! 好友，本站会用 friends.read 权限重新登�
 #~ msgstr "如果你通过 Ko-fi 或 lava.top 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及由你邮箱地址生成的一串代码（绝不是地址本身），用于识别重复付款或退款。你在 Support 页面付款前在 lava.top 一栏填写的邮箱也只以代码形式保存，只用于把那笔付款关联到你的账号。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
 
 #: src/routes/privacy.tsx
-msgid "If you pay through Ko-fi, lava.top or Patreon, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. Connecting Patreon on the Support page keeps your Patreon account's id, so its payments reach your account. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
-msgstr "如果你通过 Ko-fi、lava.top 或 Patreon 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及由你邮箱地址生成的一串代码（绝不是地址本身），用于识别重复付款或退款。你在 Support 页面付款前在 lava.top 一栏填写的邮箱也只以代码形式保存，只用于把那笔付款关联到你的账号。在 Support 页面连接 Patreon 会保存你的 Patreon 账号 id，让它的付款记到你的账号上。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
+msgid "If you pay through Ko-fi, lava.top or Patreon, the site receives the amount, currency, and date of the payment, the name and message you gave, and a code made from your email address (never the address itself), used to recognise a repeat payment or a refund. An email you type on the Support page before paying on lava.top is kept the same way, as a code, only to match that payment to your account. Connecting Patreon on the Support page keeps your Patreon account's id, so its payments reach your account. A USDT transfer straight to the site's wallet keeps its transaction id and network. These are kept privately to link supporter status to your osu! account and are not shown publicly. Your card and bank details stay with the payment platform."
+msgstr "如果你通过 Ko-fi、lava.top 或 Patreon 付款，本站会收到付款的金额、币种和日期、你填写的名字和留言，以及由你邮箱地址生成的一串代码（绝不是地址本身），用于识别重复付款或退款。你在 Support 页面付款前在 lava.top 一栏填写的邮箱也只以代码形式保存，只用于把那笔付款关联到你的账号。在 Support 页面连接 Patreon 会保存你的 Patreon 账号 id，让它的付款记到你的账号上。直接转到本站钱包的 USDT 付款会保存交易哈希和网络。这些信息会私下保存，用于把支持者身份关联到你的 osu! 账号，不会公开显示。你的银行卡和银行信息由支付平台保管。"
 
 #: src/routes/privacy.tsx
 #~ msgid "If you sign in with osu!, the site receives the osu! account details allowed by the identify and public OAuth scopes, such as user ID, username, avatar URL, and country, and keeps a record of when your account signed in. The site stores a signed HTTP-only session cookie so it can recognize you while the session is active."
@@ -17163,6 +17193,10 @@ msgstr "霓虹耳朵"
 msgid "Neon lines"
 msgstr "霓虹线条"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Network"
+msgstr "网络"
+
 #: src/components/companella/InstallationList.tsx
 #~ msgid "Never"
 #~ msgstr ""
@@ -18618,6 +18652,10 @@ msgstr "尚未追踪"
 msgid "Not unlocked yet."
 msgstr "尚未解锁。"
 
+#: src/components/supporter/SupportPlans.tsx
+msgid "Not with crypto"
+msgstr "加密货币不支持"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Note"
 msgstr "音符"
@@ -19021,7 +19059,9 @@ msgstr "最早的最佳成绩"
 msgid "On"
 msgstr "开"
 
+#. placeholder {0}: WALLET_NETWORK_LABEL[transfer.network]
 #. placeholder {0}: formatDate(new Date(displayedPullAt).toISOString(), viewerTimeZone)
+#: src/components/supporter/SupportCheckout.tsx
 #: src/routes/pull/$ownerId/$cardId.tsx
 msgid "on {0}"
 msgstr "于 {0}"
@@ -19293,6 +19333,10 @@ msgstr "个人资料头部背后只显示主题，不显示你的 osu! 横幅。
 #: src/components/discord/FeedPlayersModal.tsx
 #~ msgid "Only these"
 #~ msgstr "仅这些"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Only USDT, only on this network, and exactly this amount: the odd decimals tell your payment apart. Sending from an exchange like Binance? Its withdraw page shows a \"Receive amount\"; make that exactly this amount. Open for 24 hours."
+msgstr "只能用 USDT、只能走这个网络，并且金额必须完全一致：尾数用来区分你的付款。从币安等交易所转出？提币页面会显示\"到账数量\"，请让它正好等于这个金额。24 小时内有效。"
 
 #: src/components/skins/SkinCard.tsx
 #: src/routes/skins_.$id.tsx
@@ -20091,12 +20135,20 @@ msgid "Page scroll"
 msgstr "页面滚动"
 
 #: src/components/supporter/SupportCheckout.tsx
+msgid "Paid and it hasn't shown up? Paste the transaction id."
+msgstr "已经付款但没显示？请粘贴交易哈希。"
+
+#: src/components/supporter/SupportCheckout.tsx
 msgid "Paid on Ko-fi and it didn't count? Enter the email you paid with."
 msgstr "在 Ko-fi 付款了但没有生效？请输入你付款时用的邮箱。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Paid on lava.top already? Enter the email you paid with."
 msgstr "已经在 lava.top 付款了？输入你付款时用的邮箱。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Paid once, it doesn't renew. Send USDT from your own wallet; this page sees it arrive."
+msgstr "一次性付款，不会续费。从你自己的钱包转 USDT，本页面会自动检测到账。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Paid with Google already?"
@@ -20406,8 +20458,8 @@ msgstr "在这里用 Google 支付。付款完成后，你的支持者时长立�
 #~ msgstr "付款通过 Ko-fi、Google 或 lava.top 进行，并按各平台自己的条款处理。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
 
 #: src/routes/terms.tsx
-msgid "Payments go through Ko-fi, lava.top or Patreon, which process them under their own terms. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
-msgstr "付款通过 Ko-fi、lava.top 或 Patreon 进行，并按各平台自己的条款处理。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
+msgid "Payments go through Ko-fi, lava.top or Patreon, which process them under their own terms, or arrive as a direct USDT transfer. Mania Tracker never sees your card or bank details. A monthly subscription renews by itself until you cancel it on the platform you started it on; cancelling stops the next payment, and the time already paid for stays until it runs out."
+msgstr "付款通过 Ko-fi、lava.top 或 Patreon 进行，并按各平台自己的条款处理，或以 USDT 直接转账的方式到账。Mania Tracker 永远看不到你的银行卡或银行信息。按月订阅会自动续费，直到你在开通的平台上取消；取消后不再扣下一笔款，已付费的时长会保留到用完为止。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "PayPal"
@@ -20581,6 +20633,14 @@ msgstr "选择一个图层来修改。它的位置、效果和运动会显示在
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Pick a length and a currency, then pay on lava.top. Your supporter time starts once lava.top confirms the payment."
 msgstr "选择时长和货币，然后在 lava.top 付款。lava.top 确认付款后，你的支持者时长就会开始。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pick a length and a network, then send USDT from your wallet. Your supporter time starts once the payment is confirmed on the blockchain."
+msgstr "选好时长和网络，再从你的钱包转 USDT。付款在区块链上确认后，支持者时长就会开始。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Pick a length."
+msgstr "请选择时长。"
 
 #: src/components/player/FeaturedPlays.tsx
 msgid "Pick a play"
@@ -24567,6 +24627,10 @@ msgstr "下移一层"
 msgid "Send backward or bring forward"
 msgstr "后移或前移一层"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Send exactly"
+msgstr "请准确转账"
+
 #: src/routes/report.tsx
 msgid "Send feedback"
 msgstr "发送建议"
@@ -25515,6 +25579,10 @@ msgstr "请先登录，再在这里连接你的 Patreon，这样支持者时长�
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Sign in first, then give the email you'll pay with and pay on lava.top, so your supporter time reaches your account."
 msgstr "先登录，再填写你将用来付款的邮箱并在 lava.top 付款，这样支持者时长就会记到你的账号上。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Sign in first, then pay in crypto here, so your supporter time reaches your account."
+msgstr "请先登录，再在这里用加密货币付款，这样支持者时长才会记到你的账号上。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Sign in first, then pay on lava.top here, so your supporter time reaches your account."
@@ -26751,6 +26819,10 @@ msgstr "在此开始"
 msgid "Start one"
 msgstr "新建一个"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Start over"
+msgstr "重新开始"
+
 #: src/components/companella/AuthorizePage.tsx
 msgid "Start the connection again from the app."
 msgstr "请从应用中重新发起连接。"
@@ -27921,6 +27993,10 @@ msgstr "这是你自己的条目。"
 msgid "That isn't a profile link."
 msgstr "这不是个人资料链接。"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That isn't a transaction id. Copy it from your wallet or the block explorer."
+msgstr "这不是交易哈希。请从钱包或区块浏览器复制。"
+
 #: src/components/supporter/frames/FrameEditor.tsx
 msgid "That layer is locked."
 msgstr "该图层已锁定。"
@@ -28033,6 +28109,22 @@ msgstr "这套皮肤没有可下载的文件"
 msgid "That theme isn't in the gallery anymore."
 msgstr "那个主题已不在画廊中。"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That transaction didn't send the exact amount to this address."
+msgstr "这笔交易没有向这个地址转入准确的金额。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That transaction isn't confirmed yet. Try again in a minute."
+msgstr "这笔交易还没有确认。请过一分钟再试。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That transaction was already used."
+msgstr "这笔交易已经被使用过了。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That transaction wasn't found. Check it's on the network you picked."
+msgstr "找不到这笔交易。请确认它在你选择的网络上。"
+
 #: src/routes/replay_.uploads.tsx
 #: src/routes/replay.tsx
 msgid "That upload is already gone."
@@ -28057,6 +28149,10 @@ msgstr "今天的报告已经很多了，明天再试吧。"
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "That's a lot of saves in a minute. Wait a moment and save again."
 msgstr "一分钟内保存次数太多了，请稍等片刻再保存。"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "That's a lot of tries today; try again tomorrow."
+msgstr "今天尝试次数太多了，请明天再试。"
 
 #: src/components/replay/ReplayControls.tsx
 #~ msgid "That's longer than this browser can export in one go. Pick a shorter range or a lower preset."
@@ -30191,6 +30287,7 @@ msgstr "标题、艺术家、难度、谱师、星级和段位。"
 msgid "to"
 msgstr "至"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 msgid "To"
 msgstr "结束色"
@@ -30547,6 +30644,10 @@ msgstr "拖尾颜色"
 #: src/components/settings/SettingsPanel.tsx
 msgid "Trail thickness"
 msgstr "拖尾粗细"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Transaction id"
+msgstr "交易哈希"
 
 #: src/components/supporter/frames/FrameTools.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
@@ -31364,6 +31465,10 @@ msgstr "UR"
 msgid "URL"
 msgstr "链接"
 
+#: src/components/supporter/SupportCheckout.tsx
+msgid "USDT and other coins"
+msgstr "USDT 和其他币种"
+
 #: src/routes/workshop.themes.index.tsx
 msgid "Use"
 msgstr "使用"
@@ -31869,6 +31974,10 @@ msgstr "等待下一轮评分。届时会评分，此列表会自动更新。"
 #: src/components/supporter/themes/RowFramer.tsx
 msgid "Waiting for the theme"
 msgstr "正在等待主题"
+
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Waiting for your payment. This updates by itself once it's confirmed."
+msgstr "正在等待你的付款。确认后这里会自动更新。"
 
 #: src/lib/chain-run.ts
 msgid "Wallet"

@@ -131,7 +131,7 @@ function TermsPage() {
         </LegalParagraph>
         <LegalParagraph>
           <Trans>
-            Payments go through Ko-fi, lava.top or Patreon, which process them under their own terms.
+            Payments go through Ko-fi, lava.top or Patreon, which process them under their own terms, or arrive as a direct USDT transfer.
             Mania Tracker never sees your card or bank details. A monthly subscription renews by
             itself until you cancel it on the platform you started it on; cancelling stops the next
             payment, and the time already paid for stays until it runs out.
