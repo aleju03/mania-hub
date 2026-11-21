@@ -2018,7 +2018,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
           className="cursor-pointer"
           title={score.user?.username ? `Open ${score.user.username}'s profile` : undefined}
         >
-          <Avatar url={score.user?.avatar_url} size={36} />
+          <Avatar url={score.user?.avatar_url} userId={score.user?.id} size={36} framed />
         </button>
         <div className="flex-1 min-w-0">
           {/* Row 1: Username + time (mobile) */}
