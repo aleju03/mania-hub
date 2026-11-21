@@ -164,10 +164,24 @@ export interface ChartLabelGroup {
   reports: ChartLabelGroupReport[];
 }
 
+/** What a report asks to change. */
+export type ChartLabelKind = "skillset" | "level" | "rateable";
+
 export interface ChartLabelPage {
   groups: ChartLabelGroup[];
   total: number;
   counts: Record<ChartLabelStatus, number>;
+  /** Charts per filter option, with the other filters on. */
+  facets: { keys: ChartLabelCount[]; kinds: ChartLabelCount[]; withNote: number };
+}
+
+export interface ChartLabelListQuery {
+  status?: ChartLabelStatus;
+  limit?: number;
+  offset?: number;
+  keys?: number | null;
+  kind?: ChartLabelKind | null;
+  withNote?: boolean;
 }
 
 async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -180,7 +194,7 @@ async function adminFetch(path: string, init: RequestInit = {}): Promise<Respons
 }
 
 export const listChartLabelGroups = createServerFn({ method: "GET" })
-  .validator((data: { status?: ChartLabelStatus; limit?: number; offset?: number } | undefined) => data ?? {})
+  .validator((data: ChartLabelListQuery | undefined) => data ?? {})
   .handler(async ({ data }): Promise<ChartLabelPage> => {
     const { requireAdminAccess } = await import("./auth");
     await requireAdminAccess("Chart label reports");
@@ -188,6 +202,9 @@ export const listChartLabelGroups = createServerFn({ method: "GET" })
     if (data.status) query.set("status", data.status);
     if (data.limit != null) query.set("limit", String(data.limit));
     if (data.offset != null) query.set("offset", String(data.offset));
+    if (data.keys != null) query.set("keys", String(data.keys));
+    if (data.kind) query.set("kind", data.kind);
+    if (data.withNote) query.set("withNote", "1");
     const response = await adminFetch(`/api/admin/chart-label-reports?${query}`);
     if (!response.ok) throw new Error(`Chart label reports failed (${response.status}).`);
     return await response.json() as ChartLabelPage;

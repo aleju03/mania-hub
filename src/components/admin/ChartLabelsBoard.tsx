@@ -14,6 +14,8 @@ import {
   type ChartLabelCount,
   type ChartLabelGroup,
   type ChartLabelGroupReport,
+  type ChartLabelKind,
+  type ChartLabelPage,
   type ChartLabelStatus,
 } from "../../lib/chart-label-reports";
 
@@ -43,6 +45,30 @@ const REASON_LABELS: Record<string, string> = {
   joke: "Joke or broken",
   rate_only: "Only at this rate",
 };
+
+const KINDS: Array<{ value: ChartLabelKind; label: string }> = [
+  { value: "skillset", label: "Skillset" },
+  { value: "level", label: "Dan level" },
+  { value: "rateable", label: "Should count" },
+];
+
+const PAGE_SIZE = 100;
+
+function FilterChip({ active, label, count, onClick }: { active: boolean; label: string; count?: number; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12px] font-semibold transition-colors duration-[120ms] ${
+        active ? "bg-white/[0.1] text-white" : "text-osu-f1 hover:bg-white/[0.05] hover:text-osu-l1"
+      }`}
+    >
+      {label}
+      {count != null ? <span className="tabular-nums opacity-60">{count}</span> : null}
+    </button>
+  );
+}
 
 function tileName(tile: string): string {
   if (tile === "chordstream") return "Chordstream";
@@ -243,31 +269,51 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
   const [status, setStatus] = useState<ChartLabelStatus>("open");
   const [groups, setGroups] = useState<ChartLabelGroup[] | null>(null);
   const [counts, setCounts] = useState<Record<ChartLabelStatus, number>>({ open: 0, resolved: 0, dismissed: 0 });
+  const [facets, setFacets] = useState<ChartLabelPage["facets"] | null>(null);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [commentsOnly, setCommentsOnly] = useState(false);
+  const [keys, setKeys] = useState<number | null>(null);
+  const [kind, setKind] = useState<ChartLabelKind | null>(null);
+
+  const query = useMemo(() => ({ status, keys, kind, withNote: commentsOnly }), [status, keys, kind, commentsOnly]);
 
   const load = useCallback(async () => {
     setGroups(null);
     setError(null);
     try {
-      const page = await listChartLabelGroups({ data: { status, limit: 200 } });
+      const page = await listChartLabelGroups({ data: { ...query, limit: PAGE_SIZE } });
       setGroups(page.groups);
       setCounts(page.counts);
+      setFacets(page.facets);
+      setTotal(page.total);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load the label reports.");
       setGroups([]);
     }
-  }, [status]);
+  }, [query]);
   useEffect(() => {
     void load();
   }, [load]);
 
-  const withNotes = useMemo(() => groups?.filter((group) => group.reports.some((report) => report.note)).length ?? 0, [groups]);
-  const shown = useMemo(
-    () => (commentsOnly ? groups?.filter((group) => group.reports.some((report) => report.note)) : groups) ?? null,
-    [groups, commentsOnly],
-  );
+  const loadMore = async () => {
+    if (!groups) return;
+    setLoadingMore(true);
+    try {
+      const page = await listChartLabelGroups({ data: { ...query, limit: PAGE_SIZE, offset: groups.length } });
+      const seen = new Set(groups.map((group) => `${group.beatmapId}:${group.rate}`));
+      setGroups([...groups, ...page.groups.filter((group) => !seen.has(`${group.beatmapId}:${group.rate}`))]);
+      setTotal(page.total);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load more.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const shown = groups;
 
   const act = async (group: ChartLabelGroup, next: ChartLabelStatus) => {
     const key = `${group.beatmapId}:${group.rate}`;
@@ -279,6 +325,7 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
       return;
     }
     setGroups((list) => list?.filter((entry) => `${entry.beatmapId}:${entry.rate}` !== key) ?? list);
+    setTotal((value) => Math.max(0, value - 1));
     setCounts((previous) => ({ ...previous, [group.status]: Math.max(0, previous[group.status] - 1), [next]: previous[next] + 1 }));
   };
 
@@ -306,7 +353,7 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
               }`}
             >
               <MessageSquare className="h-3.5 w-3.5" />
-              With a comment {groups ? withNotes : ""}
+              With a comment {facets ? facets.withNote : ""}
             </button>
             <button
               type="button"
@@ -344,6 +391,34 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
           })}
         </div>
 
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex flex-wrap items-center gap-0.5">
+            <FilterChip active={keys == null} label="All keys" onClick={() => setKeys(null)} />
+            {facets?.keys.filter((entry) => entry.value !== "unknown").map((entry) => (
+              <FilterChip
+                key={entry.value}
+                active={keys === Number(entry.value)}
+                label={`${entry.value}K`}
+                count={entry.count}
+                onClick={() => setKeys(keys === Number(entry.value) ? null : Number(entry.value))}
+              />
+            ))}
+          </div>
+          <span aria-hidden className="hidden h-4 w-px bg-white/15 sm:block" />
+          <div className="flex flex-wrap items-center gap-0.5">
+            <FilterChip active={kind == null} label="Anything" onClick={() => setKind(null)} />
+            {KINDS.map((option) => (
+              <FilterChip
+                key={option.value}
+                active={kind === option.value}
+                label={option.label}
+                count={facets?.kinds.find((entry) => entry.value === option.value)?.count}
+                onClick={() => setKind(kind === option.value ? null : option.value)}
+              />
+            ))}
+          </div>
+        </div>
+
         {error && <p className="text-[12px] text-osu-red-light">{error}</p>}
 
         {shown === null ? (
@@ -357,7 +432,7 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
           </div>
         ) : shown.length === 0 ? (
           <div className="rounded-xl border border-dashed border-osu-b3/30 px-3 py-10 text-center text-[12px] text-osu-f1">
-            {commentsOnly ? "No comments here." : status === "open" ? "No open reports." : "Nothing here."}
+            {keys != null || kind != null || commentsOnly ? "Nothing matches these filters." : status === "open" ? "No open reports." : "Nothing here."}
           </div>
         ) : (
           <div className="space-y-4">
@@ -369,6 +444,16 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
                 onStatus={(next) => void act(group, next)}
               />
             ))}
+            {shown.length < total ? (
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+                className="w-full cursor-pointer rounded-xl bg-osu-b4/60 py-2.5 text-[12px] font-semibold text-osu-l1 transition-colors duration-[120ms] hover:bg-osu-b4 disabled:cursor-default disabled:opacity-60"
+              >
+                {loadingMore ? "Loading..." : `Show more (${total - shown.length})`}
+              </button>
+            ) : null}
           </div>
         )}
       </div>
