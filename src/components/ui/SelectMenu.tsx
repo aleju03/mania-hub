@@ -105,18 +105,28 @@ export function SelectMenu<T extends string>({
       const above = rect.top - 8;
       const up = below < MENU_MAX_HEIGHT_PX && above > below;
       setDropUp(up);
+      // Kept on screen: a menu wider than the room beside a narrow trigger
+      // used to open past the left edge of a phone.
+      const width = menuRef.current?.offsetWidth ?? 0;
+      const edge = Math.max(8, window.innerWidth - width - 8);
       setPlace({
         position: "fixed",
         ...(up ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
-        ...(align === "right" ? { right: window.innerWidth - rect.right } : { left: rect.left }),
+        ...(align === "right"
+          ? { right: Math.min(window.innerWidth - rect.right, edge) }
+          : { left: Math.min(rect.left, edge) }),
+        maxWidth: window.innerWidth - 16,
         ...(block ? { width: rect.width } : {}),
         maxHeight: Math.max(120, Math.min(MENU_MAX_HEIGHT_PX, (up ? above : below) - 4)),
       });
     };
     measure();
+    // Again once the menu is drawn, now that its width is known.
+    const frame = requestAnimationFrame(measure);
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
@@ -190,7 +200,7 @@ export function SelectMenu<T extends string>({
         {triggerLabel ? null : selected?.leading}
         {/* flex-1 rather than letting justify-between space it: with a leading
             flag the label would otherwise float in the middle of the button. */}
-        <span className={`${selected?.colorClass ?? ""} ${block ? "flex-1 truncate text-left" : ""}`}>
+        <span className={`${selected?.colorClass ?? ""} ${block ? "flex-1 truncate text-left" : "whitespace-nowrap"}`}>
           {triggerLabel ?? selected?.label}
         </span>
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />

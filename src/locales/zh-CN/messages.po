@@ -4546,6 +4546,10 @@ msgstr "全 MAX"
 msgid "All mods"
 msgstr "全部模组"
 
+#: src/routes/discord.tsx
+msgid "All note shapes"
+msgstr "全部音符形状"
+
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "all of them"
@@ -5055,6 +5059,7 @@ msgstr "箭头"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/routes/discord.tsx
 msgid "Arrows"
 msgstr "箭头"
 
@@ -5492,6 +5497,7 @@ msgstr "条形"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/lib/signature-shared.ts
+#: src/routes/discord.tsx
 msgid "Bars"
 msgstr "条形"
 
@@ -5943,6 +5949,10 @@ msgstr "机器人"
 #: src/routes/support.tsx
 #~ msgid "Bot DMs"
 #~ msgstr "机器人私信"
+
+#: src/routes/discord.tsx
+msgid "Both"
+msgstr "都要"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bottom"
@@ -6951,6 +6961,7 @@ msgstr "圆形"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/routes/discord.tsx
 msgid "Circles"
 msgstr "圆形"
 
@@ -9697,8 +9708,8 @@ msgid "Double Time"
 msgstr "Double Time"
 
 #: src/components/maps/MapScoresBoard.tsx
-msgid "Double Time / Nightcore"
-msgstr "Double Time / Nightcore"
+#~ msgid "Double Time / Nightcore"
+#~ msgstr "Double Time / Nightcore"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "Double Time stars"
@@ -12592,8 +12603,8 @@ msgid "Half Time"
 msgstr "Half Time"
 
 #: src/components/maps/MapScoresBoard.tsx
-msgid "Half Time / Daycore"
-msgstr "Half Time / Daycore"
+#~ msgid "Half Time / Daycore"
+#~ msgstr "Half Time / Daycore"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "Half Time stars"
@@ -13147,7 +13158,6 @@ msgstr "长条"
 msgid "Hold notes don't need their release timed."
 msgstr "长条的放手不需要掐准时机。"
 
-#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Hold Off"
 msgstr "Hold Off"
@@ -13944,7 +13954,6 @@ msgstr "谱面 ID 无效。"
 msgid "Inverse"
 msgstr "反键"
 
-#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Invert"
 msgstr "Invert"
@@ -14812,6 +14821,7 @@ msgid "lazer"
 msgstr "lazer"
 
 #: src/components/tools/StableAccCalculator.tsx
+#: src/routes/discord.tsx
 msgid "Lazer"
 msgstr ""
 
@@ -17366,6 +17376,10 @@ msgstr "新成绩会通过此连接实时推送。"
 msgid "New set"
 msgstr "新建卡组"
 
+#: src/routes/discord.tsx
+msgid "New skins"
+msgstr "新皮肤"
+
 #: src/routes/workshop.themes.index.tsx
 msgid "New theme"
 msgstr "新建主题"
@@ -18097,7 +18111,6 @@ msgstr "本回合没有剩余重抽次数。"
 msgid "No regions found"
 msgstr "未找到区域"
 
-#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "No Release"
 msgstr "无放手"
@@ -18710,6 +18723,7 @@ msgstr "音符雨"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/routes/discord.tsx
 msgid "Note shape"
 msgstr "音符形状"
 
@@ -21358,6 +21372,10 @@ msgstr "发布玩家新的最佳成绩，即进入其前 200 名的成绩。"
 #: src/routes/discord.tsx
 msgid "Posts each new line of the website's changelog."
 msgstr "发布网站更新日志的每一条新内容。"
+
+#: src/routes/discord.tsx
+msgid "Posts each skin uploaded to the skins page."
+msgstr "每个上传到皮肤页面的皮肤都会发出。"
 
 #: src/routes/discord.tsx
 msgid "Posts every pass from the players you pick."
@@ -26626,6 +26644,7 @@ msgid "stable"
 msgstr "stable"
 
 #: src/components/tools/StableAccCalculator.tsx
+#: src/routes/discord.tsx
 msgid "Stable"
 msgstr ""
 
@@ -26636,6 +26655,10 @@ msgstr "stable 准确率计算器"
 #: src/routes/stable-acc.tsx
 msgid "Stable acc calculator"
 msgstr "Stable 准确率计算器"
+
+#: src/routes/discord.tsx
+msgid "Stable and lazer"
+msgstr "Stable 和 lazer"
 
 #: src/routes/snipes.tsx
 msgid "Stable and lazer scores are on separate boards because their scoring is different."
@@ -33800,23 +33823,3 @@ msgstr "放大或缩小"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Zoom in to lay cards down."
 msgstr "放大后才能放下卡牌。"
-
-#: src/routes/discord.tsx
-msgid "New skins"
-msgstr "新皮肤"
-
-#: src/routes/discord.tsx
-msgid "Posts each skin uploaded to the skins page."
-msgstr "每个上传到皮肤页面的皮肤都会发出。"
-
-#: src/routes/discord.tsx
-msgid "Both"
-msgstr "都要"
-
-#: src/routes/discord.tsx
-msgid "All note shapes"
-msgstr "全部音符形状"
-
-#: src/routes/discord.tsx
-msgid "Stable and lazer"
-msgstr "Stable 和 lazer"

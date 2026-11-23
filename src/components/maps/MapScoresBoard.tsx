@@ -258,11 +258,12 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
   }, [countries, viewerCountry, viewerId, locale, t]);
 
   // The usual board first, then DT, HT and the note-mod boards, each with its
-  // badges and the players on it. The speed boards name both of their mods,
-  // since Nightcore plays sit on Double Time's and Daycore ones on Half Time's. A board the list no longer has (a stale
-  // cache) stays selectable while it is the one shown.
+  // badges and the players on it, named by acronym so the picker fits beside
+  // the search box on a phone. The speed boards name both of their mods, since
+  // Nightcore plays sit on Double Time's and Daycore ones on Half Time's. A
+  // board the list no longer has (a stale cache) stays selectable while it is the one shown.
   const boardOptions = useMemo<SelectMenuOption<string>[]>(() => {
-    const names: Record<string, string> = { dt: t`Double Time / Nightcore`, ht: t`Half Time / Daycore`, IN: t`Invert`, HO: t`Hold Off`, NR: t`No Release` };
+    const names: Record<string, string> = { dt: "DT/NC", ht: "HT/DC" };
     const badges = (entry: LiveMapBoard) => [...(entry.speed === "usual" ? [] : [entry.speed.toUpperCase()]), ...entry.mods];
     const listed = boards.some((entry) => boardKey(entry) === modBoard) ? boards : [...boards, { ...boardOfKey(modBoard), count: 0 }];
     return listed.map((entry) => {
@@ -327,7 +328,7 @@ export function MapScoresBoard({ beatmapId, onOpen }: { beatmapId: number; onOpe
   const emptyBoard = current && board != null && board.entries.length === 0 && !filtered && !boards.some((entry) => entry.count > 0);
   const controls = !emptyBoard ? (
     <div className="mb-2 flex items-center gap-2">
-      <div className="relative min-w-0 flex-1">
+      <div className="relative min-w-[5rem] flex-1">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" aria-hidden="true" />
         <input
           value={queryInput}

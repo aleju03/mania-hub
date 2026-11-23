@@ -4534,6 +4534,10 @@ msgstr "Todo MAX"
 msgid "All mods"
 msgstr "Todos los mods"
 
+#: src/routes/discord.tsx
+msgid "All note shapes"
+msgstr "Todas las formas de nota"
+
 #: src/components/packs/collections/CollectorShelf.tsx
 #: src/components/packs/collections/RecordBoards.tsx
 msgid "all of them"
@@ -5043,6 +5047,7 @@ msgstr "flechas"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/routes/discord.tsx
 msgid "Arrows"
 msgstr "Flechas"
 
@@ -5480,6 +5485,7 @@ msgstr "barras"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 #: src/lib/signature-shared.ts
+#: src/routes/discord.tsx
 msgid "Bars"
 msgstr "Barras"
 
@@ -5931,6 +5937,10 @@ msgstr "Bot"
 #: src/routes/support.tsx
 #~ msgid "Bot DMs"
 #~ msgstr "DMs del bot"
+
+#: src/routes/discord.tsx
+msgid "Both"
+msgstr "Los dos"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Bottom"
@@ -6939,6 +6949,7 @@ msgstr "círculos"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/routes/discord.tsx
 msgid "Circles"
 msgstr "Círculos"
 
@@ -9685,8 +9696,8 @@ msgid "Double Time"
 msgstr "Double Time"
 
 #: src/components/maps/MapScoresBoard.tsx
-msgid "Double Time / Nightcore"
-msgstr "Double Time / Nightcore"
+#~ msgid "Double Time / Nightcore"
+#~ msgstr "Double Time / Nightcore"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "Double Time stars"
@@ -12580,8 +12591,8 @@ msgid "Half Time"
 msgstr "Half Time"
 
 #: src/components/maps/MapScoresBoard.tsx
-msgid "Half Time / Daycore"
-msgstr "Half Time / Daycore"
+#~ msgid "Half Time / Daycore"
+#~ msgstr "Half Time / Daycore"
 
 #: src/components/maps/MapSearchSection.tsx
 msgid "Half Time stars"
@@ -13135,7 +13146,6 @@ msgstr "Hold Note"
 msgid "Hold notes don't need their release timed."
 msgstr "No hace falta soltar las hold notes a tiempo."
 
-#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Hold Off"
 msgstr "Hold Off"
@@ -13932,7 +13942,6 @@ msgstr "ID de beatmap no válido."
 msgid "Inverse"
 msgstr "Inverse"
 
-#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "Invert"
 msgstr "Invert"
@@ -14800,6 +14809,7 @@ msgid "lazer"
 msgstr "lazer"
 
 #: src/components/tools/StableAccCalculator.tsx
+#: src/routes/discord.tsx
 msgid "Lazer"
 msgstr ""
 
@@ -17354,6 +17364,10 @@ msgstr "Los scores nuevos llegan en vivo por esta conexión."
 msgid "New set"
 msgstr "Nuevo set"
 
+#: src/routes/discord.tsx
+msgid "New skins"
+msgstr "Skins nuevas"
+
 #: src/routes/workshop.themes.index.tsx
 msgid "New theme"
 msgstr "Nuevo tema"
@@ -18085,7 +18099,6 @@ msgstr "No quedan cambios esta ronda."
 msgid "No regions found"
 msgstr "No se encontraron regiones"
 
-#: src/components/maps/MapScoresBoard.tsx
 #: src/lib/pack-run.ts
 msgid "No Release"
 msgstr "No Release"
@@ -18698,6 +18711,7 @@ msgstr "Lluvia de notas"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
+#: src/routes/discord.tsx
 msgid "Note shape"
 msgstr "Forma de las notas"
 
@@ -21346,6 +21360,10 @@ msgstr "Publica la nueva top play de un jugador, una jugada que entra en sus mej
 #: src/routes/discord.tsx
 msgid "Posts each new line of the website's changelog."
 msgstr "Publica cada línea nueva del changelog del sitio."
+
+#: src/routes/discord.tsx
+msgid "Posts each skin uploaded to the skins page."
+msgstr "Publica cada skin que se sube a la página de skins."
 
 #: src/routes/discord.tsx
 msgid "Posts every pass from the players you pick."
@@ -26614,6 +26632,7 @@ msgid "stable"
 msgstr "stable"
 
 #: src/components/tools/StableAccCalculator.tsx
+#: src/routes/discord.tsx
 msgid "Stable"
 msgstr ""
 
@@ -26624,6 +26643,10 @@ msgstr "calculadora de acc de stable"
 #: src/routes/stable-acc.tsx
 msgid "Stable acc calculator"
 msgstr "Calculadora de acc de stable"
+
+#: src/routes/discord.tsx
+msgid "Stable and lazer"
+msgstr "Stable y lazer"
 
 #: src/routes/snipes.tsx
 msgid "Stable and lazer scores are on separate boards because their scoring is different."
@@ -33788,23 +33811,3 @@ msgstr "Acercar o alejar"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Zoom in to lay cards down."
 msgstr "Acércate para poner cartas."
-
-#: src/routes/discord.tsx
-msgid "New skins"
-msgstr "Skins nuevas"
-
-#: src/routes/discord.tsx
-msgid "Posts each skin uploaded to the skins page."
-msgstr "Publica cada skin que se sube a la página de skins."
-
-#: src/routes/discord.tsx
-msgid "Both"
-msgstr "Los dos"
-
-#: src/routes/discord.tsx
-msgid "All note shapes"
-msgstr "Todas las formas de nota"
-
-#: src/routes/discord.tsx
-msgid "Stable and lazer"
-msgstr "Stable y lazer"
