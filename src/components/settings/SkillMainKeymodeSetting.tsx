@@ -6,6 +6,7 @@ import { fetchLivePlayerSkillsDirect, refreshLivePlayerSkillsDirect } from "../.
 import { qualifyingSkillModes } from "../../lib/skill-axes";
 import { getMySkillMainKeymode, setMySkillMainKeymode } from "../../lib/skill-privacy";
 import { SelectMenu } from "../ui/SelectMenu";
+import { DanVerifiedClearsSetting } from "./DanVerifiedClearsSetting";
 import { PanelGroup } from "./PanelGroup";
 
 /* Before the player's own ratings load (or when they are hidden from the
@@ -106,6 +107,7 @@ export function SkillMainKeymodeSetting() {
           }}
         />
       </div>
+      <DanVerifiedClearsSetting />
     </PanelGroup>
   );
 }

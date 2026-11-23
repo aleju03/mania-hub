@@ -83,6 +83,10 @@ Fresh analyses register families; `recompute_chart_family_sweep` backfills from 
 - At the full bar the baseline is exactly the named tier, with no overclear bonus. Within one point under the bar it takes the "-" credit, and only lifts a tile the player's clears already opened. A tile already at or over that credit but still under the level keeps its number and shows the near clear. Below that, or on 4K LN, nothing.
 - The credit applies only inside the registered skillset (a Release/General chart credits Release; General keeps the ordinary credit). Sides with only practice credit carry `skillsetsOnly` and show no overall dan until ordinary evidence or a course supports one.
 
+## Turning verified clears off
+
+A player can turn their verified clears off in Settings > Preferences > Skills ("Count verified clears"; `features/dan-verified-clears.ts`, a row in `user_dan_verified_clears_off`). `loadPlayerDanCourseClears` then returns nothing for them, so neither course passes nor practice-pack clears credit a dan in the compute, the sweeps, the evidence window or the Companella merge, and their dans are the plain average of their plays for everyone. The native worker mirrors the check (`skills-io` `load_player_dan_course_clears`). Changing it queues a recompute at manual-add priority.
+
 ## Adding missing evidence
 
 - **Add a missing score** (Skills tab, anyone): an osu! score link is verified as a passed mania score owned by that player and goes through the ordinary `ScoreIngestor` and dan gates. It is historical ingest: projections and skills update, but no tracker, snipe, top-play, session or goal event is created. Links queue in the browser one at a time. Mamestagram, ppy.sb and Torii plays take another path: on a profile that linked its account on that server, the dialog lists that account's plays to add (a ppy.sb or Torii score link works too), and they are stored as imports, never ingested (`docs/companella-integration.md`, "Mamestagram plays", "ppy.sb plays" and "Torii plays").

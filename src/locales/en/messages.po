@@ -3684,6 +3684,10 @@ msgstr "A pass has to be on one of these difficulties, or on another upload of o
 #~ msgid "A pass only counts if it was really that chart, played straight. <0/>, <1/> and anything that changes the OD (<2/>, <3/>) disqualify it, and so does slowing the chart down; Mirror, the visibility mods and <4/>/<5/> are fine. The charts are matched by their notes and OD rather than by beatmap id, so any upload of the same file counts, while edits and rate versions do not."
 #~ msgstr "A pass only counts if it was really that chart, played straight. <0/>, <1/> and anything that changes the OD (<2/>, <3/>) disqualify it, and so does slowing the chart down; Mirror, the visibility mods and <4/>/<5/> are fine. The charts are matched by their notes and OD rather than by beatmap id, so any upload of the same file counts, while edits and rate versions do not."
 
+#: src/components/settings/DanVerifiedClearsSetting.tsx
+msgid "A pass or near pass on a real dan course or a dan practice chart puts your dan at that level by itself."
+msgstr "A pass or near pass on a real dan course or a dan practice chart puts your dan at that level by itself."
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar, 6K/7K LN to 1 point. 4K LN has a curve of its own, because its bar is written in ScoreV2 and a 100% is out of reach on most charts with long notes: it credits down to 94.5% and bottoms out a level and a half down there, and its bonus reaches its top at 99.7% rather than at an accuracy nobody sets:"
 #~ msgstr "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar, 6K/7K LN to 1 point. 4K LN has a curve of its own, because its bar is written in ScoreV2 and a 100% is out of reach on most charts with long notes: it credits down to 94.5% and bottoms out a level and a half down there, and its bonus reaches its top at 99.7% rather than at an accuracy nobody sets:"
@@ -8152,6 +8156,7 @@ msgstr "Could not load this leaderboard."
 msgid "Could not load this score."
 msgstr "Could not load this score."
 
+#: src/components/settings/DanVerifiedClearsSetting.tsx
 #: src/components/settings/SkillMainKeymodeSetting.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx
 msgid "Could not load this. Close and reopen settings to try again."
@@ -8239,6 +8244,7 @@ msgstr "Could not revoke the connections."
 msgid "Could not save that."
 msgstr "Could not save that."
 
+#: src/components/settings/DanVerifiedClearsSetting.tsx
 #: src/components/settings/SkillMainKeymodeSetting.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx
 msgid "Could not save that. Try again in a bit."
@@ -8581,6 +8587,10 @@ msgstr "Count"
 #: src/components/player/ActivityPanel.tsx
 msgid "Count for the brightest color"
 msgstr "Count for the brightest color"
+
+#: src/components/settings/DanVerifiedClearsSetting.tsx
+msgid "Count verified clears"
+msgstr "Count verified clears"
 
 #. placeholder {0}: String(threshold)
 #: src/components/me/GoalsPanel.tsx
@@ -15681,6 +15691,7 @@ msgstr "Loading..."
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/settings/DanVerifiedClearsSetting.tsx
 #: src/components/settings/SkillMainKeymodeSetting.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx
 #: src/routes/player/$username.tsx
@@ -33340,6 +33351,10 @@ msgstr "Your dan"
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
 #~ msgstr "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
+
+#: src/components/settings/DanVerifiedClearsSetting.tsx
+msgid "Your dans come from your other plays only."
+msgstr "Your dans come from your other plays only."
 
 #: src/lib/chain-run.ts
 msgid "Your deck can't go below 4 cards."

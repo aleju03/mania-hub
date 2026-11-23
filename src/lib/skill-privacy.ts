@@ -132,3 +132,43 @@ export const setMySkillMainKeymode = createServerFn({ method: "POST" })
       return { ok: false };
     }
   });
+
+/* Whether the signed-in player's verified clears (dan course passes and
+   practice-pack clears) count toward their dans (live-backend
+   features/dan-verified-clears.ts). Turning them off rates their dans from
+   their plays alone, for everyone. */
+export const getMyDanVerifiedClears = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ ok: true; counted: boolean } | { ok: false }> => {
+    await noStore();
+    const id = await viewerId();
+    const base = backendBase();
+    if (!id || !base) return { ok: false };
+    try {
+      const response = await fetch(`${base}/api/session/dan-verified-clears?userId=${id}`, { headers: bridgeAuthHeaders() });
+      const body = (await response.json().catch(() => null)) as { counted?: unknown } | null;
+      return response.ok && typeof body?.counted === "boolean" ? { ok: true, counted: body.counted } : { ok: false };
+    } catch {
+      return { ok: false };
+    }
+  },
+);
+
+export const setMyDanVerifiedClears = createServerFn({ method: "POST" })
+  .validator((data: { counted?: unknown }) => ({ counted: data?.counted !== false }))
+  .handler(async ({ data }): Promise<{ ok: true; counted: boolean } | { ok: false }> => {
+    await noStore();
+    const id = await viewerId();
+    const base = backendBase();
+    if (!id || !base) return { ok: false };
+    try {
+      const response = await fetch(`${base}/api/session/dan-verified-clears`, {
+        method: "POST",
+        headers: bridgeAuthHeaders(true),
+        body: JSON.stringify({ userId: id, counted: data.counted }),
+      });
+      const body = (await response.json().catch(() => null)) as { counted?: unknown } | null;
+      return response.ok && typeof body?.counted === "boolean" ? { ok: true, counted: body.counted } : { ok: false };
+    } catch {
+      return { ok: false };
+    }
+  });

@@ -3673,6 +3673,10 @@ msgstr "通过必须是在这些难度之一上，或是在音符、OD 和 HP �
 #~ msgid "A pass only counts if it was really that chart, played straight. <0/>, <1/> and anything that changes the OD (<2/>, <3/>) disqualify it, and so does slowing the chart down; Mirror, the visibility mods and <4/>/<5/> are fine. The charts are matched by their notes and OD rather than by beatmap id, so any upload of the same file counts, while edits and rate versions do not."
 #~ msgstr "只有真的按这张谱面原样打的成绩才算。<0/>、<1/> 以及任何改变 OD 的东西（<2/>、<3/>）都会让它作废，拖慢谱面也一样；Mirror、可见度类 Mod 和 <4/>/<5/> 都没问题。谱面是按音符和 OD 来核对的，不是按 beatmap id，所以同一份文件的任何上传都算，改编版和变速版不算。"
 
+#: src/components/settings/DanVerifiedClearsSetting.tsx
+msgid "A pass or near pass on a real dan course or a dan practice chart puts your dan at that level by itself."
+msgstr "通过或差一点通过真正的段位课题或段位练习谱面，会单独把你的段位定在那个等级。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "A pass right at the bar credits the chart's full level, exactly as passing the course would, and so does the first stretch above it: a 96.9% on a 96% ladder is a bare clear, not a bonus. Above that the bonus stays small until 99%, where the real ramp opens. A near miss under the bar still credits something: a play counts as a clear of a lower level, bottoming out a level and a quarter down at the cutoff. The regular ladders keep crediting to 4 points under the bar, 6K/7K LN to 1 point. 4K LN has a curve of its own, because its bar is written in ScoreV2 and a 100% is out of reach on most charts with long notes: it credits down to 94.5% and bottoms out a level and a half down there, and its bonus reaches its top at 99.7% rather than at an accuracy nobody sets:"
 #~ msgstr "正好达到通过线的通过，会按谱面的完整段位计入，就像通过真正的段位课题一样；通过线上方的第一小段也是如此：在 96% 的段位表上打出 96.9% 只算普通通过，没有加成。再往上加成也一直很小，到 99% 才真正开始上升。差一点没到通过线也仍有计入：成绩会按更低的段位计为通过，最低到截止处比谱面段位低一又四分之一级。普通段位表在通过线以下 4 个百分点内仍然计入，6K/7K LN 只到 1 个百分点。4K LN 有自己的一条曲线：它的通过线以 ScoreV2 计算，而在大多数有长条的谱面上 100% 根本打不出来，所以它向下计入到 94.5%，并在那里降到低一级半，加成也在 99.7% 就到顶，而不是停在一个没人打得出的准确率上："
@@ -8137,6 +8141,7 @@ msgstr "无法加载该排行榜。"
 msgid "Could not load this score."
 msgstr "无法加载此成绩。"
 
+#: src/components/settings/DanVerifiedClearsSetting.tsx
 #: src/components/settings/SkillMainKeymodeSetting.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx
 msgid "Could not load this. Close and reopen settings to try again."
@@ -8224,6 +8229,7 @@ msgstr "无法撤销这些连接。"
 msgid "Could not save that."
 msgstr "无法保存。"
 
+#: src/components/settings/DanVerifiedClearsSetting.tsx
 #: src/components/settings/SkillMainKeymodeSetting.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx
 msgid "Could not save that. Try again in a bit."
@@ -8566,6 +8572,10 @@ msgstr "条数"
 #: src/components/player/ActivityPanel.tsx
 msgid "Count for the brightest color"
 msgstr "最亮颜色对应的数量"
+
+#: src/components/settings/DanVerifiedClearsSetting.tsx
+msgid "Count verified clears"
+msgstr "计入已认证通过"
 
 #. placeholder {0}: String(threshold)
 #: src/components/me/GoalsPanel.tsx
@@ -15643,6 +15653,7 @@ msgstr "加载中..."
 #: src/components/player/SkillPlaysExplorer.tsx
 #: src/components/player/SkillPlaysModal.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/components/settings/DanVerifiedClearsSetting.tsx
 #: src/components/settings/SkillMainKeymodeSetting.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx
 #: src/routes/player/$username.tsx
@@ -33286,6 +33297,10 @@ msgstr "你的段位"
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Your dan averages your best {averageWindow} clears, and each skillset averages up to {averageWindow} of its own. Only your two best rate plays per chart count. With less evidence, it averages what you have and the estimate is still filling in."
 #~ msgstr "你的段位取你最好的 {averageWindow} 次通过的平均，每个技能组各自最多平均 {averageWindow} 次。同一张谱面只计入你最好的两个变速成绩。证据更少时，会用现有的记录求平均，估算仍在完善中。"
+
+#: src/components/settings/DanVerifiedClearsSetting.tsx
+msgid "Your dans come from your other plays only."
+msgstr "你的段位只根据你的其他成绩计算。"
 
 #: src/lib/chain-run.ts
 msgid "Your deck can't go below 4 cards."
