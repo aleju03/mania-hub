@@ -11177,8 +11177,8 @@ msgstr "Sugerencia enviada"
 #~ msgstr "Los feeds publican solos en un canal: <0>Top plays</0>, <1>Mapas nuevos para farmear</1> y <2>Changelog del sitio</2>, que publica cada línea nueva del changelog. Actívalos con <3>/setup</3> o en Tus servidores arriba."
 
 #: src/routes/discord.tsx
-msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4> and <5>Website changelog</5>, which posts each new changelog line. Turn them on with <6>/setup</6> or under Your servers above."
-msgstr "Los feeds publican solos en un canal: <0>Top plays</0>, <1>Plays recientes</1>, <2>Clears de dan</2>, que publica cuando un jugador casi hace clear, hace clear u overclear de un dan o de un chart de práctica, <3>Metas</3>, <4>Mapas nuevos para farmear</4> y <5>Changelog del sitio</5>, que publica cada línea nueva del changelog. Actívalos con <6>/setup</6> o en Tus servidores arriba."
+msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4>, <5>New skins</5> and <6>Website changelog</6>, which posts each new changelog line. Turn them on with <7>/setup</7> or under Your servers above."
+msgstr "Los feeds publican solos en un canal: <0>Top plays</0>, <1>Plays recientes</1>, <2>Clears de dan</2>, que publica cuando un jugador casi hace clear, hace clear u overclear de un dan o de un chart de práctica, <3>Metas</3>, <4>Mapas nuevos para farmear</4>, <5>Skins nuevas</5> y <6>Changelog del sitio</6>, que publica cada línea nueva del changelog. Actívalos con <7>/setup</7> o en Tus servidores arriba."
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
@@ -33788,3 +33788,23 @@ msgstr "Acercar o alejar"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Zoom in to lay cards down."
 msgstr "Acércate para poner cartas."
+
+#: src/routes/discord.tsx
+msgid "New skins"
+msgstr "Skins nuevas"
+
+#: src/routes/discord.tsx
+msgid "Posts each skin uploaded to the skins page."
+msgstr "Publica cada skin que se sube a la página de skins."
+
+#: src/routes/discord.tsx
+msgid "Both"
+msgstr "Los dos"
+
+#: src/routes/discord.tsx
+msgid "All note shapes"
+msgstr "Todas las formas de nota"
+
+#: src/routes/discord.tsx
+msgid "Stable and lazer"
+msgstr "Stable y lazer"

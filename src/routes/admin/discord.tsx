@@ -57,7 +57,7 @@ interface DiscordGuild {
   memberCount: number | null;
 }
 
-const FEED_LABELS: Record<string, string> = { top_play: "Top plays", snipe: "Snipes", new_map: "New farm maps" };
+const FEED_LABELS: Record<string, string> = { top_play: "Top plays", snipe: "Snipes", new_map: "New farm maps", new_skin: "New skins" };
 
 // Past this many servers the list leaves the top row for a section of its own
 // with a search field.

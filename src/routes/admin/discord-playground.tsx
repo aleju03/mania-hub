@@ -90,7 +90,7 @@ interface InteractionRequest {
 }
 
 interface FeedRequest {
-  feed: "top_play" | "recent_play" | "recent_play_image" | "dan_clear" | "dan_clear_image" | "goal" | "snipe" | "new_map" | "inflated_map" | "ranked_set" | "changelog";
+  feed: "top_play" | "recent_play" | "recent_play_image" | "dan_clear" | "dan_clear_image" | "goal" | "snipe" | "new_map" | "inflated_map" | "ranked_set" | "new_skin" | "new_skin_run" | "changelog";
   country: string;
 }
 
@@ -179,6 +179,8 @@ const FEEDS: Array<{ feed: FeedRequest["feed"]; label: string }> = [
   { feed: "goal", label: "Goal" },
   { feed: "inflated_map", label: "Inflated map" },
   { feed: "ranked_set", label: "Ranked set" },
+  { feed: "new_skin", label: "New skin" },
+  { feed: "new_skin_run", label: "New skins (one uploader)" },
   { feed: "changelog", label: "Site update" },
 ];
 

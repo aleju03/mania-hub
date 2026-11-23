@@ -11215,8 +11215,8 @@ msgstr "Feedback sent"
 #~ msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
 
 #: src/routes/discord.tsx
-msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4> and <5>Website changelog</5>, which posts each new changelog line. Turn them on with <6>/setup</6> or under Your servers above."
-msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4> and <5>Website changelog</5>, which posts each new changelog line. Turn them on with <6>/setup</6> or under Your servers above."
+msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4>, <5>New skins</5> and <6>Website changelog</6>, which posts each new changelog line. Turn them on with <7>/setup</7> or under Your servers above."
+msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4>, <5>New skins</5> and <6>Website changelog</6>, which posts each new changelog line. Turn them on with <7>/setup</7> or under Your servers above."
 
 #: src/routes/recommendations.tsx
 msgid "feels off for your level? mark it and your recs will adjust"
@@ -33854,3 +33854,23 @@ msgstr "Zoom in or out"
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Zoom in to lay cards down."
 msgstr "Zoom in to lay cards down."
+
+#: src/routes/discord.tsx
+msgid "New skins"
+msgstr "New skins"
+
+#: src/routes/discord.tsx
+msgid "Posts each skin uploaded to the skins page."
+msgstr "Posts each skin uploaded to the skins page."
+
+#: src/routes/discord.tsx
+msgid "Both"
+msgstr "Both"
+
+#: src/routes/discord.tsx
+msgid "All note shapes"
+msgstr "All note shapes"
+
+#: src/routes/discord.tsx
+msgid "Stable and lazer"
+msgstr "Stable and lazer"

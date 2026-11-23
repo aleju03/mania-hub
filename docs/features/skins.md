@@ -21,6 +21,7 @@ Skins carry a `visibility` (`public`/`private`) beside `status`.
 - `published_at`: when the `.osk` was uploaded. Shown as "Uploaded" on the skin page.
 - `listed_at`: when the skin first became public, stamped by `finishSkin` for a public upload or by `setSkinVisibility` the first time a private one goes public. Only the first listing stamps, so toggling visibility cannot bump a skin to the top.
 - Every `/skins` sort and the relative times use `coalesce(listed_at, published_at)`.
+- The Discord New skins feed posts a skin when `listed_at` is first stamped, and takes its posts down when the skin is deleted, hidden or made private (`docs/discord.md`).
 
 ## Likes
 

@@ -23,6 +23,8 @@ import {
   type BotAlertsPatch,
   type BotFeedPlayer,
   type BotServer,
+  type BotSkinClient,
+  type BotSkinShape,
   type BotServerChange,
   type BotServers,
 } from "../lib/discord-bot";
@@ -624,9 +626,9 @@ function danLevelChoices(keys: number[], current: number): number[] {
 }
 // Feeds with a row of filters under their channel: the feeds of players'
 // plays, and New farm maps (keymodes and stars).
-const FILTERED_FEEDS = ["top_play", "recent_play", "dan_clear", "goal", "new_map"];
+const FILTERED_FEEDS = ["top_play", "recent_play", "dan_clear", "goal", "new_map", "new_skin"];
 
-type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "mix"; excluded: BotFeedPlayer[]; countries: string[]; minDan: number; nearClears: boolean; minMsd: number; imagePosts: boolean; minStars: number; maxStars: number; mapsMode: "farm" | "all"; ppAccuracy: number; ppClient: PpClient };
+type TopPlayFilterState = { minPp: number; keys: number[]; keymodeTop: number; players: BotFeedPlayer[]; playersMode: "only" | "mix"; excluded: BotFeedPlayer[]; countries: string[]; minDan: number; nearClears: boolean; minMsd: number; imagePosts: boolean; minStars: number; maxStars: number; mapsMode: "farm" | "all"; ppAccuracy: number; ppClient: PpClient; skinShapes: BotSkinShape[]; skinClient: BotSkinClient };
 type SavedFeedFilters = Omit<TopPlayFilterState, "players" | "excluded"> & { players: number[]; excluded: number[] };
 
 function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState {
@@ -634,6 +636,7 @@ function filtersOf(sub: BotServer["subscriptions"][number]): TopPlayFilterState 
     minPp: sub.minPp, keys: sub.keys ?? [], keymodeTop: sub.keymodeTop ?? 0, players: sub.players ?? [], playersMode: sub.playersMode ?? "only", excluded: sub.excluded ?? [],
     countries: sub.countries ?? [], minDan: sub.minDan ?? 0, nearClears: sub.nearClears ?? true, minMsd: sub.minMsd ?? 0, imagePosts: sub.imagePosts ?? false,
     minStars: sub.minStars ?? 0, maxStars: sub.maxStars ?? 0, mapsMode: sub.mapsMode ?? "farm", ppAccuracy: sub.ppAccuracy ?? DEFAULT_PP_ACCURACY, ppClient: sub.ppClient ?? "stable",
+    skinShapes: sub.skinShapes ?? [], skinClient: sub.skinClient ?? "any",
   };
 }
 
@@ -758,7 +761,7 @@ function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
   defaultCountry?: string | null;
   onSave: (filters: SavedFeedFilters) => Promise<boolean>;
 }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const [picking, setPicking] = useState(false);
   const [filters, setFilters] = useState(() => filtersOf(sub));
   const pending = useRef(0);
@@ -797,6 +800,8 @@ function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
   // A Goals feed only has its players to choose.
   const goals = sub.feedType === "goal";
   const newMaps = sub.feedType === "new_map";
+  const newSkins = sub.feedType === "new_skin";
+  const { skinShapes, skinClient } = filters;
 
   const row = "flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3";
   const label = "shrink-0 text-[12px] text-osu-f1 sm:w-24";
@@ -839,6 +844,36 @@ function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
           ))}
         </div>
       </div>
+      {newSkins ? (
+        <>
+          <div className={row}>
+            <span className={label}><Trans>Note shape</Trans></span>
+            <div className="flex flex-wrap items-center gap-1">
+              <button type="button" className={chip(skinShapes.length === 0, skinShapes.length > 0)} onClick={() => { if (skinShapes.length) save({ skinShapes: [] }); }}><Trans>All</Trans></button>
+              {SKIN_SHAPES.map((shape) => (
+                <button
+                  key={shape}
+                  type="button"
+                  className={chip(skinShapes.includes(shape))}
+                  onClick={() => save({ skinShapes: skinShapes.includes(shape) ? skinShapes.filter((v) => v !== shape) : SKIN_SHAPES.filter((v) => v === shape || skinShapes.includes(v)) })}
+                >
+                  {i18n._(SKIN_SHAPE_NAMES[shape])}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className={row}>
+            <span className={label}><Trans>Client</Trans></span>
+            <div className="flex flex-wrap items-center gap-1">
+              {(["any", "stable", "lazer"] as const).map((client) => (
+                <button key={client} type="button" className={chip(skinClient === client, skinClient !== client)} onClick={() => { if (skinClient !== client) save({ skinClient: client }); }}>
+                  {client === "any" ? <Trans>Both</Trans> : client === "stable" ? <Trans>Stable</Trans> : <Trans>Lazer</Trans>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : null}
       {newMaps ? (
         <div className={row}>
           <span className={label}><Trans>Stars</Trans></span>
@@ -868,7 +903,7 @@ function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
             onChange={(minPp, ppAccuracy, ppClient) => save({ minPp, ppAccuracy, ppClient })}
           />
         </div>
-      ) : recent ? (
+      ) : newSkins ? null : recent ? (
         <>
           {noDans ? null : (
             <div className={row}>
@@ -969,7 +1004,7 @@ function TopPlayFilters({ sub, channelName, defaultCountry, onSave }: {
       )}
       </>
       )}
-      {newMaps ? null : (
+      {newMaps || newSkins ? null : (
       <div className={row}>
         <span className={label}><Trans>Players</Trans></span>
         <div className="flex flex-wrap items-center gap-2">
@@ -1194,12 +1229,20 @@ function ServerSkeleton() {
   );
 }
 
+const SKIN_SHAPES: BotSkinShape[] = ["circle", "arrow", "bar"];
+const SKIN_SHAPE_NAMES: Record<BotSkinShape, ReturnType<typeof msg>> = {
+  circle: msg`Circles`,
+  arrow: msg`Arrows`,
+  bar: msg`Bars`,
+};
+
 const FEED_NAMES: Record<string, ReturnType<typeof msg>> = {
   top_play: msg`Top plays`,
   recent_play: msg`Recent plays`,
   dan_clear: msg`Dan clears`,
   goal: msg`Goals`,
   new_map: msg`New farm maps`,
+  new_skin: msg`New skins`,
   changelog: msg`Website changelog`,
 };
 
@@ -1209,6 +1252,7 @@ const FEED_HINTS: Record<string, ReturnType<typeof msg>> = {
   dan_clear: msg`Posts a player's near clear, clear or overclear of a dan course or practice chart.`,
   goal: msg`Posts a goal when its player completes it.`,
   new_map: msg`Posts newly ranked maps that players are gaining pp on, and new 4K and 7K charts that give more pp than their difficulty.`,
+  new_skin: msg`Posts each skin uploaded to the skins page.`,
   changelog: msg`Posts each new line of the website's changelog.`,
 };
 
@@ -1256,6 +1300,13 @@ function FeedSummary({ sub }: { sub: ServerSub }) {
     const min = sub.minStars ?? 0;
     const max = sub.maxStars ?? 0;
     parts.push(min && max ? <Trans>{min}★ to {max}★</Trans> : min ? <Trans>{min}★ and up</Trans> : max ? <Trans>Up to {max}★</Trans> : <Trans>Any stars</Trans>);
+    return <SummaryParts parts={parts} />;
+  }
+  if (sub.feedType === "new_skin") {
+    const shapes = sub.skinShapes ?? [];
+    parts.push(shapes.length ? shapes.map((shape) => i18n._(SKIN_SHAPE_NAMES[shape])).join(", ") : <Trans>All note shapes</Trans>);
+    const client = sub.skinClient ?? "any";
+    parts.push(client === "stable" ? <Trans>Stable</Trans> : client === "lazer" ? <Trans>Lazer</Trans> : <Trans>Stable and lazer</Trans>);
     return <SummaryParts parts={parts} />;
   }
   if (sub.feedType === "recent_play") {
@@ -1541,6 +1592,7 @@ const FEED_PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
   { id: "feed-dan-clears", label: FEED_NAMES.dan_clear },
   { id: "feed-goals", label: FEED_NAMES.goal },
   { id: "feed-new-maps", label: FEED_NAMES.new_map },
+  { id: "feed-new-skins", label: FEED_NAMES.new_skin },
   { id: "feed-changelog", label: FEED_NAMES.changelog },
 ];
 
@@ -1636,7 +1688,7 @@ function CommandsPanel({ commands }: { commands: DiscordPublicInfo["commands"] }
       </p>
       <p className="mt-2 text-[13px] text-osu-f1">
         <Trans>
-          Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">Recent plays</span>, <span className="font-semibold text-osu-l2">Dan clears</span>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <span className="font-semibold text-osu-l2">Goals</span>, <span className="font-semibold text-osu-l2">New farm maps</span> and <span className="font-semibold text-osu-l2">Website changelog</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
+          Feeds post on their own in a channel: <span className="font-semibold text-osu-l2">Top plays</span>, <span className="font-semibold text-osu-l2">Recent plays</span>, <span className="font-semibold text-osu-l2">Dan clears</span>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <span className="font-semibold text-osu-l2">Goals</span>, <span className="font-semibold text-osu-l2">New farm maps</span>, <span className="font-semibold text-osu-l2">New skins</span> and <span className="font-semibold text-osu-l2">Website changelog</span>, which posts each new changelog line. Turn them on with <code className="font-semibold text-osu-pink-light">/setup</code> or under Your servers above.
         </Trans>
       </p>
     </Panel>
