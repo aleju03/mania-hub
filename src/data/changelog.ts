@@ -64,6 +64,7 @@ export const CELEBRATIONS: Record<string, ChangelogCelebration> = {
 };
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-11-23", text: "Added sorting by dan, LN dan and MSD to the Discord bot's /top, which now shows its plays as an image.", to: "/discord", more: [{ text: "Names on /rankings are in each player's avatar color like on the site." }] },
   { date: "2026-11-23", text: "Added a New skins feed to the Discord bot.", bold: "New skins", to: "/discord", image: { src: "/images/changelog/2026-11-23-discord-new-skins-feed.webp", alt: "A New skins post from the bot: the skin's name, its uploader, the preview with three screenshots, its keymodes and description", width: 448, height: 581 } },
   { date: "2026-11-19", text: "Added a frame editor to the Workshop, to draw your own avatar frames.", to: "/workshop/frames" },
   { date: "2026-11-19", text: "Added image posts to the Discord bot, for /profile and the Recent plays and Dan clears feeds.", to: "/discord", image: { src: "/images/changelog/2026-11-19-discord-profile-image.webp", alt: "The Discord bot answering m!p img with a profile image: pp, rank, a 90-day rank graph, top plays and skill ratings", width: 640, height: 390 }, more: [{ text: "Recent plays and Dan clears post like this when a channel has Image posts on.", image: { src: "/images/changelog/2026-11-19-discord-feed-images.webp", alt: "Two image posts from the bot, a 7K recent play at 98.30% and a 4K 10th dan overclear at 97.84% with its pass bar", width: 560, height: 527 } }] },
