@@ -191,7 +191,7 @@ function band(sort: TopBoardSort, item: TopBoardRow, index: number, emblem: stri
           : label(mod.toUpperCase(), { marginLeft: "10px", fontSize: "25px", fontWeight: 900, color: SOFT })),
         item.aside && sort === "pp"
           ? row({ marginLeft: "18px", flexShrink: 0 }, label(item.aside, { fontSize: "26px", color: MUTED }), image(STAR, 20, 20, { marginLeft: "4px" }))
-          : item.aside ? label(`${count(item.aside)}pp`, { marginLeft: "18px", fontSize: "26px", color: MUTED }) : null,
+          : item.aside ? label(`${count(item.aside)}pp`, { marginLeft: "18px", flexShrink: 0, fontSize: "26px", color: MUTED }) : null,
         item.version ? oneLine(item.version, { marginLeft: "18px", flexShrink: 1, fontSize: "26px", color: MUTED }) : null,
       ),
     ),

@@ -65,6 +65,10 @@ msgstr ", hidden from everyone else"
 msgid ", mostly on <0>{0}</0>"
 msgstr ", mostly on <0>{0}</0>"
 
+#: src/routes/discord.tsx
+msgid "/top replies with one image, unless you set image to false."
+msgstr "/top replies with one image, unless you set image to false."
+
 #: src/lib/streak-game.ts
 msgid "? 7K top plays"
 msgstr "? 7K top plays"
@@ -92,6 +96,10 @@ msgstr "? ranked score"
 #: src/lib/streak-game.ts
 msgid "? replay views"
 msgstr "? replay views"
+
+#: src/routes/discord.tsx
+msgid "Top plays as an image"
+msgstr "Top plays as an image"
 
 #. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
 #: src/components/player/DanEvidenceModal.tsx

@@ -77,6 +77,10 @@ msgstr "，其他人不可见"
 msgid ", mostly on <0>{0}</0>"
 msgstr "，多在<0>{0}</0>"
 
+#: src/routes/discord.tsx
+msgid "/top replies with one image, unless you set image to false."
+msgstr "/top 会以一张图片回复，除非你把 image 设为 false。"
+
 #: src/lib/streak-game.ts
 msgid "? 7K top plays"
 msgstr "? 个 7K 最佳成绩"
@@ -104,6 +108,10 @@ msgstr "? Ranked 分数"
 #: src/lib/streak-game.ts
 msgid "? replay views"
 msgstr "? 次回放观看"
+
+#: src/routes/discord.tsx
+msgid "Top plays as an image"
+msgstr "以图片显示最佳成绩"
 
 #. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
 #: src/components/player/DanEvidenceModal.tsx

@@ -309,6 +309,12 @@ function parseBlocks(source: string): Block[] {
     }
     const bullet = /^\s*[-*] +(\S.*)$/.exec(line);
     const numbered = /^\s*(\d{1,9})\. +(\S.*)$/.exec(line);
+    // An indented line under a list item stays in that item, on its own line, as Discord draws it.
+    const previous = blocks[blocks.length - 1];
+    if (!bullet && !numbered && previous?.kind === "list" && /^ {2,}\S/.test(line)) {
+      previous.items[previous.items.length - 1] += `\n${line.trim()}`;
+      continue;
+    }
     if (bullet || numbered) {
       const ordered = Boolean(numbered);
       const item = (bullet ? bullet[1] : numbered![2]);
@@ -356,7 +362,11 @@ export function DiscordMarkdown({ content }: { content: string }) {
               </div>
             );
           case "list": {
-            const items = block.items.map((item, itemIndex) => <li key={itemIndex} className="pl-0">{parseInline(item, false)}</li>);
+            const items = block.items.map((item, itemIndex) => (
+              <li key={itemIndex} className="pl-0">
+                {item.split("\n").map((part, partIndex) => <Fragment key={partIndex}>{partIndex ? <br /> : null}{parseInline(part, false)}</Fragment>)}
+              </li>
+            ));
             return block.ordered
               ? <ol key={index} start={block.start} className="my-0 list-decimal pl-6 whitespace-normal">{items}</ol>
               : <ul key={index} className="my-0 list-disc pl-6 whitespace-normal">{items}</ul>;

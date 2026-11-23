@@ -110,7 +110,7 @@ function DiscordToolPage() {
             {/* After the servers: feeds matter to more people than DMs. */}
             {info.configured && account?.signedIn && account.alerts?.supporter ? <DmAlertsSection account={account} alerts={account.alerts} onChange={setAccount} /> : null}
             {info.configured && account?.alerts && !account.alerts.supporter ? <DmPerkLine /> : null}
-            {info.configured ? <PreviewPanel initialProfile={profilePreview} /> : null}
+            {info.configured ? <PreviewPanel initialProfile={profilePreview} imageSettings={account?.settings ? `${account.settings.profileImage ? 1 : 0}${account.settings.topImage ? 1 : 0}` : null} /> : null}
             {info.configured ? <CommandsPanel commands={info.commands} /> : null}
           </div>
         </div>
@@ -290,6 +290,15 @@ function AccountPanel({ account, onChange }: { account: BotAccount | null; onCha
               label={<Trans>Profile as an image</Trans>}
             />
             <p className="mt-1.5 text-[12px] text-osu-f1"><Trans>/profile replies with one image, unless you set image to false.</Trans></p>
+          </div>
+          <div>
+            <Toggle
+              checked={account.settings?.topImage ?? true}
+              disabled={busy}
+              onChange={(value) => void run(() => saveBotPreferences({ data: { topImage: value } }))}
+              label={<Trans>Top plays as an image</Trans>}
+            />
+            <p className="mt-1.5 text-[12px] text-osu-f1"><Trans>/top replies with one image, unless you set image to false.</Trans></p>
           </div>
         </div>
       ) : null}
@@ -1596,10 +1605,21 @@ const FEED_PREVIEWS: Array<{ id: string; label: ReturnType<typeof msg> }> = [
   { id: "feed-changelog", label: FEED_NAMES.changelog },
 ];
 
-function PreviewPanel({ initialProfile }: { initialProfile: DiscordMessageJson | null }) {
+function PreviewPanel({ initialProfile, imageSettings }: { initialProfile: DiscordMessageJson | null; imageSettings: string | null }) {
   const { i18n } = useLingui();
   const [view, setView] = useState("profile");
   const [messages, setMessages] = useState<Record<string, DiscordMessageJson | null | undefined>>(() => (initialProfile ? { profile: initialProfile } : {}));
+
+  // /profile and /top preview as the viewer's image settings answer: a changed setting draws them again.
+  const seenSettings = useRef(imageSettings);
+  useEffect(() => {
+    if (seenSettings.current === imageSettings) return;
+    const first = seenSettings.current == null;
+    seenSettings.current = imageSettings;
+    // The account arriving after load is no change: the backend drew the first previews with these settings.
+    if (first) return;
+    setMessages((current) => ({ ...current, profile: undefined, top: undefined }));
+  }, [imageSettings]);
 
   useEffect(() => {
     if (messages[view] !== undefined) return;

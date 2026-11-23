@@ -16,6 +16,8 @@ export interface BotPreferences {
   privateReplies: boolean;
   /** /profile answers with one image in place of the text. */
   profileImage: boolean;
+  /** /top answers with one image in place of the text list (on unless turned off). */
+  topImage: boolean;
 }
 
 export interface BotAccount {
@@ -253,6 +255,7 @@ export const saveBotPreferences = createServerFn({ method: "POST" })
     if (data && "defaultKeys" in data) patch.defaultKeys = data.defaultKeys === "4k" || data.defaultKeys === "7k" ? data.defaultKeys : null;
     if (data && "privateReplies" in data) patch.privateReplies = data.privateReplies === true;
     if (data && "profileImage" in data) patch.profileImage = data.profileImage === true;
+    if (data && "topImage" in data) patch.topImage = data.topImage === true;
     return patch;
   })
   .handler(async ({ data }): Promise<BotAccount> => {
