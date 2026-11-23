@@ -54,6 +54,8 @@ export interface RankingsBoardRow {
   emblem?: RankingsBoardEmblem | null;
   /** A supporter's name style, font, outline and avatar frame. */
   look?: OgSupporterLook | null;
+  /** The avatar accent the name is set in, as the site sets it. */
+  accent?: string | null;
 }
 
 export interface RankingsBoardEmblem {
@@ -83,7 +85,7 @@ export function readRankingsBoard(payload: string | null, signature: string | nu
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as unknown;
     if (!Array.isArray(parsed) || parsed.length === 0) return null;
     return parsed.slice(0, MAX_ROWS).map((row) => {
-      const [rank, userId, name, value, place, emblem, look] = row as unknown[];
+      const [rank, userId, name, value, place, emblem, look, accent] = row as unknown[];
       return {
         rank: Number(rank),
         userId: Number(userId),
@@ -92,6 +94,7 @@ export function readRankingsBoard(payload: string | null, signature: string | nu
         place: String(place ?? "").slice(0, 12),
         emblem: emblem == null ? null : readEmblem(emblem),
         look: readOgSupporterLook(look),
+        accent: typeof accent === "string" && /^[0-9a-f]{6}$/.test(accent) ? `#${accent}` : null,
       };
     }).filter((row) => Number.isSafeInteger(row.rank) && Number.isSafeInteger(row.userId) && row.userId > 0);
   } catch {
@@ -133,7 +136,7 @@ function rowElement(row: RankingsBoardRow, index: number, withEmblems: boolean, 
     h("div", { key: "rank", style: { display: "flex", width: `${RANK_WIDTH}px`, fontSize: "30px", fontWeight: 900, color: RANK_COLORS[row.rank] ?? "#8b8e98" } }, String(row.rank)),
     // The avatar is laid over this gap by sharp.
     h("div", { key: "avatar", style: { display: "flex", width: `${AVATAR_SIZE + AVATAR_GAP}px` } }),
-    h("div", { key: "name", style: { display: "flex", flexGrow: 1, fontSize: `${NAME_SIZE}px`, fontWeight: 900, color: "#fff" } }, styledName ? "" : row.name),
+    h("div", { key: "name", style: { display: "flex", flexGrow: 1, fontSize: `${NAME_SIZE}px`, fontWeight: 900, color: row.accent ?? "#fff" } }, styledName ? "" : row.name),
     h(
       "div",
       { key: "value", style: { display: "flex", alignItems: "baseline", justifyContent: "flex-end", width: "240px", fontSize: `${VALUE_SIZE}px`, fontWeight: 900, color: "#fff" } },
@@ -162,7 +165,7 @@ export async function drawRankingsBoard(
   const { default: sharp } = await import("sharp");
   // Supporters' names in their style and font, drawn apart and laid over their rows.
   const nameTags: Array<OgNameTag | null> = await Promise.all(rows.map((row) => lookSources && row.look?.name
-    ? drawNameTag({ name: row.name, look: row.look.name, fontSize: NAME_SIZE, color: "#fff", maxWidth: nameWidth(withEmblems) - 16, fonts: lookSources.fonts })
+    ? drawNameTag({ name: row.name, look: row.look.name, fontSize: NAME_SIZE, color: row.accent ?? "#fff", maxWidth: nameWidth(withEmblems) - 16, fonts: lookSources.fonts })
     : null));
   const height = rows.length * ROW_HEIGHT + PAD_Y * 2;
   const fontList = ogFontList(...fonts);

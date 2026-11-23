@@ -36,6 +36,7 @@ import { drawPlayCard, fetchPlayCardSources, playCardGradeFile, readPlayCard, ty
 import { drawProfileCard, fetchProfileCardSources, readProfileCard, type ProfileCardData } from "../../lib/profile-card";
 import { liveBridgeToken } from "../../lib/live-backend-tokens";
 import { readBannerLook, type OgSupporterLook } from "../../lib/og-supporter-look";
+import { drawTopBoard, fetchTopBoardCovers, readTopBoard, type TopBoardData } from "../../lib/top-board";
 import { drawRankingsBoard, fetchRankingsBoardAvatars, fetchRankingsBoardFlags, readRankingsBoard, type RankingsBoardRow } from "../../lib/rankings-board";
 import {
   getDisplayedAccuracy,
@@ -1990,6 +1991,47 @@ async function renderProfileCardOg(request: Request, key: string, data: ProfileC
   // The bot sends the picture only once it has read a card back: a site that
   // does not know this kind yet answers with its default card.
   return imageResponse(await pending, "image/jpeg", OG_CACHE_HEADER, { "X-Og-Kind": "profile-card" });
+}
+
+// The picture in the Discord bot's /top reply (lib/top-board.ts). Not kept
+// in R2: the URL is the page's contents, and Discord and the CDN hold their
+// copies by URL.
+const inFlightTopBoards = new Map<string, Promise<Buffer>>();
+
+async function renderTopBoardOg(request: Request, key: string, data: TopBoardData): Promise<Response> {
+  let pending = inFlightTopBoards.get(key);
+  if (!pending) {
+    pending = (async () => {
+      const family = data.sort === "ln" ? "ln" : "dan";
+      // One fetch per badge, however many rows wear it.
+      const badges = new Map<string, ReturnType<typeof fetchDanEmblemSource>>();
+      const badgeFor = (label: string | null) => {
+        if (!label || !data.keyCount) return null;
+        let art = badges.get(label);
+        if (!art) {
+          art = fetchDanEmblemSource(request, label, family, data.keyCount).catch(() => null);
+          badges.set(label, art);
+        }
+        return art;
+      };
+      const [fonts, covers, emblems, gradeIcons, modIcons] = await Promise.all([
+        loadOgFonts(request),
+        fetchTopBoardCovers(data),
+        Promise.all(data.rows.map((item) => badgeFor(item.emblem))),
+        // A play with no stored grade draws none, not an F.
+        Promise.all(data.rows.map((item) => item.grade ? playCardIcon(request, `/images/badges/score-ranks-v2019/${playCardGradeFile(item.grade)}.svg`, "image/svg+xml") : null)),
+        Promise.all(data.rows.map((item) => Promise.all(item.mods.map((mod) => playCardIcon(request, `/images/discord/emojis/mod_${mod}.png`, "image/png"))))),
+      ]);
+      // Only the drawing holds a render slot, not the waits on the image hosts.
+      return ogRenderGate.run(() => drawTopBoard({ data, covers, emblems, gradeIcons, modIcons, fonts }));
+    })().finally(() => {
+      inFlightTopBoards.delete(key);
+    });
+    inFlightTopBoards.set(key, pending);
+  }
+  // The bot sends the picture only once it has read a board back: a site that
+  // does not know this kind yet answers with its default card.
+  return imageResponse(await pending, "image/jpeg", OG_CACHE_HEADER, { "X-Og-Kind": "top-board" });
 }
 
 // The picture in the Discord bot's /rankings reply (lib/rankings-board.ts).
@@ -5537,6 +5579,18 @@ export const Route = createFileRoute("/api/og")({
             } catch (err) {
               if (!isOgFallbackError(err)) console.warn("[og] dan-emblem render failed, falling back", err);
             }
+          }
+        }
+
+        if (kind === "top-board") {
+          const payload = url.searchParams.get("d");
+          const data = readTopBoard(payload, url.searchParams.get("s"), liveBridgeToken());
+          if (!data || !payload) return new Response(null, { status: 400 });
+          try {
+            return await renderTopBoardOg(request, payload, data);
+          } catch (err) {
+            console.warn("[og] top board render failed", err);
+            return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
           }
         }
 
