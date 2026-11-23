@@ -115,7 +115,7 @@ export function PartnerUsageCard() {
   }, []);
 
   return (
-    <SectionCard title="Partner API">
+    <SectionCard title="Partner keys (PARTNER_API_KEYS)">
       {unsupported ? (
         <div className="text-[11px] text-osu-f1">The live backend does not serve this report yet.</div>
       ) : (

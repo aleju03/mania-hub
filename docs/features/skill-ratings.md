@@ -31,6 +31,7 @@ Per-player MSD/SSR ratings, pattern axes and the Skills tab (`backend/src/featur
 
 - Views: Ratings, MSD plays, Dan plays, Unrated plays ([profiles-rankings.md](profiles-rankings.md#unrated-plays)).
 - `/api/profiles/:id/skills` carries `tracked`. Untracked players only have their osu! top plays rated, and the tab says so; the owner gets the **Track my plays** action (login alone does not track).
+- The Mania Tracker API (`/api/public/v1/players/{user}/skills` and its batch form, see the Mania Tracker API section of `../backend.md`) serves the same decorated breakdown, Companella merge included, in a frozen v1 shape. It reads with `allowEnqueue: false` (`readProfileSkills`), so it never queues a compute or a merge and always reports `refreshing: false`.
 - `/api/profiles/:id/skill-plays`: Best and Recent each form a max-200 cohort fetched once and filtered client-side. MSD axes rank by their SSR, pattern axes by Overall SSR on tagged charts. `rejected=1` adds sub-floor plays as "not rated" rows. `scoreId` resolves one exact play for share links (`/player/:username/skills?score=&keys=&map=&rating=`).
 - Score dialogs use compact score details stored in `plays_json` (`player-skill-score-details.ts` fills older caches from local scores). Opening a dialog never calls osu!.
 - Vibro exclusions show as "Vibro detected at 1.50x" / "in this chart" only when rejected plays are requested; structural stacks keep `chart_ineligible`.

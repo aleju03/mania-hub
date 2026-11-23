@@ -16,6 +16,7 @@ import { Route as BridgeRouteImport } from './routes/bridge'
 import { Route as CommunitiesRouteImport } from './routes/communities'
 import { Route as CompanellaRouteImport } from './routes/companella'
 import { Route as DanEstimatesRouteImport } from './routes/dan-estimates'
+import { Route as DevelopersRouteImport } from './routes/developers'
 import { Route as DiscordRouteImport } from './routes/discord'
 import { Route as DynamicRendersRouteImport } from './routes/dynamic-renders'
 import { Route as FarmHelperRouteImport } from './routes/farm-helper'
@@ -193,6 +194,11 @@ const CompanellaRoute = CompanellaRouteImport.update({
 const DanEstimatesRoute = DanEstimatesRouteImport.update({
   id: '/dan-estimates',
   path: '/dan-estimates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevelopersRoute = DevelopersRouteImport.update({
+  id: '/developers',
+  path: '/developers',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DiscordRoute = DiscordRouteImport.update({
@@ -939,6 +945,7 @@ export interface FileRoutesByFullPath {
   '/communities': typeof CommunitiesRoute
   '/companella': typeof CompanellaRoute
   '/dan-estimates': typeof DanEstimatesRoute
+  '/developers': typeof DevelopersRoute
   '/discord': typeof DiscordRoute
   '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
@@ -1091,6 +1098,7 @@ export interface FileRoutesByTo {
   '/communities': typeof CommunitiesRoute
   '/companella': typeof CompanellaRoute
   '/dan-estimates': typeof DanEstimatesRoute
+  '/developers': typeof DevelopersRoute
   '/discord': typeof DiscordRoute
   '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
@@ -1244,6 +1252,7 @@ export interface FileRoutesById {
   '/communities': typeof CommunitiesRoute
   '/companella': typeof CompanellaRoute
   '/dan-estimates': typeof DanEstimatesRoute
+  '/developers': typeof DevelopersRoute
   '/discord': typeof DiscordRoute
   '/dynamic-renders': typeof DynamicRendersRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
@@ -1398,6 +1407,7 @@ export interface FileRouteTypes {
     | '/communities'
     | '/companella'
     | '/dan-estimates'
+    | '/developers'
     | '/discord'
     | '/dynamic-renders'
     | '/farm-helper'
@@ -1550,6 +1560,7 @@ export interface FileRouteTypes {
     | '/communities'
     | '/companella'
     | '/dan-estimates'
+    | '/developers'
     | '/discord'
     | '/dynamic-renders'
     | '/farm-helper'
@@ -1702,6 +1713,7 @@ export interface FileRouteTypes {
     | '/communities'
     | '/companella'
     | '/dan-estimates'
+    | '/developers'
     | '/discord'
     | '/dynamic-renders'
     | '/farm-helper'
@@ -1855,6 +1867,7 @@ export interface RootRouteChildren {
   CommunitiesRoute: typeof CommunitiesRoute
   CompanellaRoute: typeof CompanellaRoute
   DanEstimatesRoute: typeof DanEstimatesRoute
+  DevelopersRoute: typeof DevelopersRoute
   DiscordRoute: typeof DiscordRoute
   DynamicRendersRoute: typeof DynamicRendersRoute
   FarmHelperRoute: typeof FarmHelperRouteWithChildren
@@ -2033,6 +2046,13 @@ declare module '@tanstack/react-router' {
       path: '/dan-estimates'
       fullPath: '/dan-estimates'
       preLoaderRoute: typeof DanEstimatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers': {
+      id: '/developers'
+      path: '/developers'
+      fullPath: '/developers'
+      preLoaderRoute: typeof DevelopersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/discord': {
@@ -3193,6 +3213,7 @@ const rootRouteChildren: RootRouteChildren = {
   CommunitiesRoute: CommunitiesRoute,
   CompanellaRoute: CompanellaRoute,
   DanEstimatesRoute: DanEstimatesRoute,
+  DevelopersRoute: DevelopersRoute,
   DiscordRoute: DiscordRoute,
   DynamicRendersRoute: DynamicRendersRoute,
   FarmHelperRoute: FarmHelperRouteWithChildren,

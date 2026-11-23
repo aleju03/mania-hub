@@ -33,6 +33,7 @@ import { CountryFlag } from "../../components/ui/CountryFlag";
 import { SectionCard } from "../../components/admin/SectionCard";
 import { MapDownloadsCard } from "../../components/admin/map-downloads/MapDownloadsCard";
 import { PartnerUsageCard } from "../../components/admin/partner-usage/PartnerUsageCard";
+import { ApiKeysCard } from "../../components/admin/partner-usage/ApiKeysCard";
 import { AnalyticsMonitorPanel } from "../../components/admin/analytics/AnalyticsMonitorPanel";
 import { SweepsMonitorPanel, SweepsSummary } from "../../components/admin/sweeps/SweepsMonitorPanel";
 import { VpsMonitorPanel } from "../../components/admin/vps/VpsMonitorPanel";
@@ -780,7 +781,8 @@ function LiveBackendPage() {
             <MapDownloadsCard />
           </Section>
 
-          <Section title="Partner API">
+          <Section title="Mania Tracker API">
+            <ApiKeysCard />
             <PartnerUsageCard />
           </Section>
 
