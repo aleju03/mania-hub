@@ -65,10 +65,6 @@ msgstr ", oculta para todos los demás"
 msgid ", mostly on <0>{0}</0>"
 msgstr ", principalmente en <0>{0}</0>"
 
-#: src/routes/discord.tsx
-msgid "/top replies with one image, unless you set image to false."
-msgstr "/top responde con una sola imagen, a menos que pongas image en false."
-
 #: src/lib/streak-game.ts
 msgid "? 7K top plays"
 msgstr "? top plays de 7K"
@@ -96,10 +92,6 @@ msgstr "? ranked score"
 #: src/lib/streak-game.ts
 msgid "? replay views"
 msgstr "? vistas de replays"
-
-#: src/routes/discord.tsx
-msgid "Top plays as an image"
-msgstr "Top plays como imagen"
 
 #. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
 #: src/components/player/DanEvidenceModal.tsx
@@ -2479,6 +2471,10 @@ msgstr "/skills"
 msgid "/top"
 msgstr "/top"
 
+#: src/routes/discord.tsx
+msgid "/top replies with one image, unless you set image to false."
+msgstr "/top responde con una sola imagen, a menos que pongas image en false."
+
 #. placeholder {0}: head.rank
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "#{0} all time"
@@ -4405,11 +4401,6 @@ msgstr "Después de puntuar, la fila se juega otra vez desde la primera carta y 
 #: src/routes/hashi.tsx
 msgid "After each play"
 msgstr "Después de cada play"
-
-#: src/components/supporter/SupporterExtras.tsx
-#: src/routes/support.tsx
-msgid "After exporting a replay video, get a link that plays it right in Discord chat."
-msgstr "Después de exportar un video de replay, obtén un enlace que se reproduce directo en el chat de Discord."
 
 #: src/lib/chain-run.ts
 msgid "After it scores, the link into it triggers again and it scores again."
@@ -11196,6 +11187,10 @@ msgstr "Sugerencia enviada"
 #~ msgstr "Los feeds publican solos en un canal: <0>Top plays</0>, <1>Mapas nuevos para farmear</1> y <2>Changelog del sitio</2>, que publica cada línea nueva del changelog. Actívalos con <3>/setup</3> o en Tus servidores arriba."
 
 #: src/routes/discord.tsx
+#~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4> and <5>Website changelog</5>, which posts each new changelog line. Turn them on with <6>/setup</6> or under Your servers above."
+#~ msgstr "Los feeds publican solos en un canal: <0>Top plays</0>, <1>Plays recientes</1>, <2>Clears de dan</2>, que publica cuando un jugador casi hace clear, hace clear u overclear de un dan o de un chart de práctica, <3>Metas</3>, <4>Mapas nuevos para farmear</4> y <5>Changelog del sitio</5>, que publica cada línea nueva del changelog. Actívalos con <6>/setup</6> o en Tus servidores arriba."
+
+#: src/routes/discord.tsx
 msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4>, <5>New skins</5> and <6>Website changelog</6>, which posts each new changelog line. Turn them on with <7>/setup</7> or under Your servers above."
 msgstr "Los feeds publican solos en un canal: <0>Top plays</0>, <1>Plays recientes</1>, <2>Clears de dan</2>, que publica cuando un jugador casi hace clear, hace clear u overclear de un dan o de un chart de práctica, <3>Metas</3>, <4>Mapas nuevos para farmear</4>, <5>Skins nuevas</5> y <6>Changelog del sitio</6>, que publica cada línea nueva del changelog. Actívalos con <7>/setup</7> o en Tus servidores arriba."
 
@@ -14819,7 +14814,7 @@ msgstr "lazer"
 #: src/components/tools/StableAccCalculator.tsx
 #: src/routes/discord.tsx
 msgid "Lazer"
-msgstr ""
+msgstr "Lazer"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer accuracy is recalculated from the judgements into the stable formula used here: a lazer 95.5% is the same hits as a stable 96%. Both clients are held to the same bar."
@@ -21548,6 +21543,11 @@ msgstr "Pulsa Enter o una coma para añadir una etiqueta. Máximo {USER_COLLECTI
 msgid "Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds."
 msgstr "Sonidos al presionar de tu skin o de los samples por defecto. Desactívalo para escuchar solo los hitsounds del mapa."
 
+#: src/components/supporter/SupporterExtras.tsx
+#: src/routes/support.tsx
+msgid "Press Share video on a replay to get a link that plays it right in Discord chat."
+msgstr "Dale a Compartir video en un replay para obtener un enlace que se reproduce directo en el chat de Discord."
+
 #: src/routes/news_.prism.tsx
 msgid "Pressing while other fingers of the same hand are holding costs more the more fingers are held and the longer they hold, and letting go of a long hold costs too."
 msgstr "Presionar mientras otros dedos de la misma mano mantienen un hold cuesta más cuantos más dedos estén sosteniendo y cuanto más tiempo lo hagan, y soltar un hold largo también cuesta."
@@ -26642,7 +26642,7 @@ msgstr "stable"
 #: src/components/tools/StableAccCalculator.tsx
 #: src/routes/discord.tsx
 msgid "Stable"
-msgstr ""
+msgstr "Stable"
 
 #: src/components/tools/StableAccCalculator.tsx
 msgid "stable acc calculator"
@@ -30560,6 +30560,10 @@ msgstr "Top plays"
 msgctxt "Maniacard history"
 msgid "Top plays"
 msgstr "Mejores jugadas"
+
+#: src/routes/discord.tsx
+msgid "Top plays as an image"
+msgstr "Top plays como imagen"
 
 #: src/routes/discord.tsx
 msgid "Top plays from"

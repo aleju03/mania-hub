@@ -65,10 +65,6 @@ msgstr ", hidden from everyone else"
 msgid ", mostly on <0>{0}</0>"
 msgstr ", mostly on <0>{0}</0>"
 
-#: src/routes/discord.tsx
-msgid "/top replies with one image, unless you set image to false."
-msgstr "/top replies with one image, unless you set image to false."
-
 #: src/lib/streak-game.ts
 msgid "? 7K top plays"
 msgstr "? 7K top plays"
@@ -96,10 +92,6 @@ msgstr "? ranked score"
 #: src/lib/streak-game.ts
 msgid "? replay views"
 msgstr "? replay views"
-
-#: src/routes/discord.tsx
-msgid "Top plays as an image"
-msgstr "Top plays as an image"
 
 #. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
 #: src/components/player/DanEvidenceModal.tsx
@@ -2502,6 +2494,10 @@ msgstr "/skills"
 msgid "/top"
 msgstr "/top"
 
+#: src/routes/discord.tsx
+msgid "/top replies with one image, unless you set image to false."
+msgstr "/top replies with one image, unless you set image to false."
+
 #. placeholder {0}: head.rank
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "#{0} all time"
@@ -4432,11 +4428,6 @@ msgstr "After a row scores, it plays again from the first card and keeps its com
 #: src/routes/hashi.tsx
 msgid "After each play"
 msgstr "After each play"
-
-#: src/components/supporter/SupporterExtras.tsx
-#: src/routes/support.tsx
-msgid "After exporting a replay video, get a link that plays it right in Discord chat."
-msgstr "After exporting a replay video, get a link that plays it right in Discord chat."
 
 #: src/lib/chain-run.ts
 msgid "After it scores, the link into it triggers again and it scores again."
@@ -11232,6 +11223,10 @@ msgstr "Feedback sent"
 #: src/routes/discord.tsx
 #~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
 #~ msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>New farm maps</1> and <2>Website changelog</2>, which posts each new changelog line. Turn them on with <3>/setup</3> or under Your servers above."
+
+#: src/routes/discord.tsx
+#~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4> and <5>Website changelog</5>, which posts each new changelog line. Turn them on with <6>/setup</6> or under Your servers above."
+#~ msgstr "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4> and <5>Website changelog</5>, which posts each new changelog line. Turn them on with <6>/setup</6> or under Your servers above."
 
 #: src/routes/discord.tsx
 msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4>, <5>New skins</5> and <6>Website changelog</6>, which posts each new changelog line. Turn them on with <7>/setup</7> or under Your servers above."
@@ -21598,6 +21593,11 @@ msgstr "Press Enter or comma to add a tag. Up to {USER_COLLECTION_MAX_TAGS} tags
 msgid "Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds."
 msgstr "Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds."
 
+#: src/components/supporter/SupporterExtras.tsx
+#: src/routes/support.tsx
+msgid "Press Share video on a replay to get a link that plays it right in Discord chat."
+msgstr "Press Share video on a replay to get a link that plays it right in Discord chat."
+
 #: src/routes/news_.prism.tsx
 msgid "Pressing while other fingers of the same hand are holding costs more the more fingers are held and the longer they hold, and letting go of a long hold costs too."
 msgstr "Pressing while other fingers of the same hand are holding costs more the more fingers are held and the longer they hold, and letting go of a long hold costs too."
@@ -30626,6 +30626,10 @@ msgstr "Top plays"
 msgctxt "Maniacard history"
 msgid "Top plays"
 msgstr "Top plays"
+
+#: src/routes/discord.tsx
+msgid "Top plays as an image"
+msgstr "Top plays as an image"
 
 #: src/routes/discord.tsx
 msgid "Top plays from"

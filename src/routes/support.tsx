@@ -301,7 +301,7 @@ function SupportPage() {
               id="sharing"
               title={t`Video share links`}
               count={t`Up to 200 MB`}
-              body={t`After exporting a replay video, get a link that plays it right in Discord chat.`}
+              body={t`Press Share video on a replay to get a link that plays it right in Discord chat.`}
             >
               <ClipShowcase />
             </Perk>

@@ -77,10 +77,6 @@ msgstr "，其他人不可见"
 msgid ", mostly on <0>{0}</0>"
 msgstr "，多在<0>{0}</0>"
 
-#: src/routes/discord.tsx
-msgid "/top replies with one image, unless you set image to false."
-msgstr "/top 会以一张图片回复，除非你把 image 设为 false。"
-
 #: src/lib/streak-game.ts
 msgid "? 7K top plays"
 msgstr "? 个 7K 最佳成绩"
@@ -108,10 +104,6 @@ msgstr "? Ranked 分数"
 #: src/lib/streak-game.ts
 msgid "? replay views"
 msgstr "? 次回放观看"
-
-#: src/routes/discord.tsx
-msgid "Top plays as an image"
-msgstr "以图片显示最佳成绩"
 
 #. placeholder {0}: (Math.floor(section.weightedClears * 10) / 10).toLocaleString("en-US")
 #: src/components/player/DanEvidenceModal.tsx
@@ -2491,6 +2483,10 @@ msgstr "/skills"
 msgid "/top"
 msgstr "/top"
 
+#: src/routes/discord.tsx
+msgid "/top replies with one image, unless you set image to false."
+msgstr "/top 会以一张图片回复，除非你把 image 设为 false。"
+
 #. placeholder {0}: head.rank
 #: src/components/packs/run/chain/ChainBoardPanel.tsx
 msgid "#{0} all time"
@@ -4417,11 +4413,6 @@ msgstr "一排计分后会从第一张卡再打一遍，连击保留。"
 #: src/routes/hashi.tsx
 msgid "After each play"
 msgstr "每局之后"
-
-#: src/components/supporter/SupporterExtras.tsx
-#: src/routes/support.tsx
-msgid "After exporting a replay video, get a link that plays it right in Discord chat."
-msgstr "导出回放视频后，获取可在 Discord 聊天中直接播放的链接。"
 
 #: src/lib/chain-run.ts
 msgid "After it scores, the link into it triggers again and it scores again."
@@ -11208,6 +11199,10 @@ msgstr "建议已发送"
 #~ msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>新的刷分图</1>和<2>网站更新日志</2>（每条新的更新日志都会发出）。用 <3>/setup</3> 或在上方的你的服务器中开启。"
 
 #: src/routes/discord.tsx
+#~ msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4> and <5>Website changelog</5>, which posts each new changelog line. Turn them on with <6>/setup</6> or under Your servers above."
+#~ msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>最近游玩</1>、<2>段位通过</2>（玩家在段位谱或练习谱上接近通过、通过或超额通过时发出）、<3>目标</3>、<4>新的刷分图</4>和<5>网站更新日志</5>（每条新的更新日志都会发出）。用 <6>/setup</6> 或在上方的你的服务器中开启。"
+
+#: src/routes/discord.tsx
 msgid "Feeds post on their own in a channel: <0>Top plays</0>, <1>Recent plays</1>, <2>Dan clears</2>, which posts a player's near clear, clear or overclear of a dan course or practice chart, <3>Goals</3>, <4>New farm maps</4>, <5>New skins</5> and <6>Website changelog</6>, which posts each new changelog line. Turn them on with <7>/setup</7> or under Your servers above."
 msgstr "推送会自动发到频道：<0>最佳成绩</0>、<1>最近游玩</1>、<2>段位通过</2>（玩家在段位谱或练习谱上接近通过、通过或超额通过时发出）、<3>目标</3>、<4>新的刷分图</4>、<5>新皮肤</5>和<6>网站更新日志</6>（每条新的更新日志都会发出）。用 <7>/setup</7> 或在上方的你的服务器中开启。"
 
@@ -14831,7 +14826,7 @@ msgstr "lazer"
 #: src/components/tools/StableAccCalculator.tsx
 #: src/routes/discord.tsx
 msgid "Lazer"
-msgstr ""
+msgstr "Lazer"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "Lazer accuracy is recalculated from the judgements into the stable formula used here: a lazer 95.5% is the same hits as a stable 96%. Both clients are held to the same bar."
@@ -21560,6 +21555,11 @@ msgstr "按回车键或英文逗号添加标签，最多可添加 {USER_COLLECTI
 msgid "Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds."
 msgstr "来自皮肤或默认采样的按键反馈音。关闭后只听谱面自己的打击音。"
 
+#: src/components/supporter/SupporterExtras.tsx
+#: src/routes/support.tsx
+msgid "Press Share video on a replay to get a link that plays it right in Discord chat."
+msgstr "在回放中点击“分享视频”，获取可在 Discord 聊天中直接播放的链接。"
+
 #: src/routes/news_.prism.tsx
 msgid "Pressing while other fingers of the same hand are holding costs more the more fingers are held and the longer they hold, and letting go of a long hold costs too."
 msgstr "同一只手的其他手指按着长条时再按键，按住的手指越多、按得越久，难度越高；放开一个长条也有难度。"
@@ -26654,7 +26654,7 @@ msgstr "stable"
 #: src/components/tools/StableAccCalculator.tsx
 #: src/routes/discord.tsx
 msgid "Stable"
-msgstr ""
+msgstr "Stable"
 
 #: src/components/tools/StableAccCalculator.tsx
 msgid "stable acc calculator"
@@ -30572,6 +30572,10 @@ msgstr "最佳成绩"
 msgctxt "Maniacard history"
 msgid "Top plays"
 msgstr "最佳成绩"
+
+#: src/routes/discord.tsx
+msgid "Top plays as an image"
+msgstr "以图片显示最佳成绩"
 
 #: src/routes/discord.tsx
 msgid "Top plays from"
