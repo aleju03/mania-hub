@@ -12,6 +12,7 @@ import {
   imageResponse,
   isOgFallbackError,
   loadOgFonts,
+  loadOgArt,
   ogLookSources,
   MAX_CONCURRENT_OG_RENDERS,
   ogFontList,
@@ -1974,15 +1975,16 @@ async function renderProfileCardOg(request: Request, key: string, data: ProfileC
     pending = (async () => {
       const badge = (label: string | null, family: string, keyCount: number) =>
         label ? fetchDanEmblemSource(request, label, family, keyCount).catch(() => null) : null;
-      const [fonts, sources, emblems, gradeIcons, modIcons] = await Promise.all([
+      const [fonts, sources, emblems, gradeIcons, modIcons, stand] = await Promise.all([
         loadOgFonts(request),
         fetchProfileCardSources(data),
         Promise.all(data.modes.map(async (mode) => ({ rice: await badge(mode.rice, "dan", mode.keyCount), ln: await badge(mode.ln, "ln", mode.keyCount) }))),
         Promise.all(data.plays.map((play) => playCardIcon(request, `/images/badges/score-ranks-v2019/${playCardGradeFile(play.grade)}.svg`, "image/svg+xml"))),
         Promise.all(data.plays.map((play) => Promise.all(play.mods.map((mod) => playCardIcon(request, `/images/discord/emojis/mod_${mod}.png`, "image/png"))))),
+        data.stand ? loadOgArt(request, data.stand) : null,
       ]);
       // Only the drawing holds a render slot, not the waits on the image hosts.
-      return ogRenderGate.run(() => drawProfileCard({ data, ...sources, emblems, gradeIcons, modIcons, fonts, lookSources: ogLookSources(request, fonts[1]) }));
+      return ogRenderGate.run(() => drawProfileCard({ data, ...sources, emblems, gradeIcons, modIcons, fonts, stand, lookSources: ogLookSources(request, fonts[1]) }));
     })().finally(() => {
       inFlightProfileCards.delete(key);
     });

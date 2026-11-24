@@ -11,6 +11,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createElement as h, type ReactNode } from "react";
 
+import { starBadgeText, starRatingColor } from "#/components/ui/StarRating";
+
 import { renderOgPng } from "./og-image-response";
 import { ogFontList } from "./og-render";
 
@@ -29,8 +31,20 @@ const BAND_RGB = "41,42,49";
 const MUTED = "#a3a6b1";
 const SOFT = "#e3e5ec";
 const PINK = "#ff66ab";
-// The board's font has no star glyph.
-const STAR = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#a3a6b1" d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>').toString("base64")}`;
+// The board's font has no star glyph; the star takes the pill's text colour.
+const star = (color: string) =>
+  `data:image/svg+xml;base64,${Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="${color}" d="M12 1.7l3.1 6.9 7.2.8-5.4 5 1.5 7.2L12 17.9l-6.4 3.7 1.5-7.2-5.4-5 7.2-.8L12 1.7z"/></svg>`).toString("base64")}`;
+
+// The site's star pill (ui/StarRating.tsx): osu!'s difficulty colour, dark text turning yellow at 6.5.
+function starPill(aside: string): Child {
+  const stars = Number(aside);
+  if (!Number.isFinite(stars)) return null;
+  const color = starBadgeText(stars);
+  return row({ marginLeft: "14px", flexShrink: 0, height: "30px", padding: "0 13px", borderRadius: "15px", backgroundColor: starRatingColor(stars) },
+    image(star(color), 18, 18, { marginRight: "6px" }),
+    label(stars.toFixed(2), { fontSize: "22px", fontWeight: 900, color }),
+  );
+}
 const PLACE_COLORS: Record<number, string> = { 1: "#f5c542", 2: "#c9ced6", 3: "#d08a52" };
 
 export type TopBoardSort = "pp" | "dan" | "ln" | "msd";
@@ -190,7 +204,7 @@ function band(sort: TopBoardSort, item: TopBoardRow, index: number, emblem: stri
           ? image(modIcons[modIndex]!, 43, 30, { marginLeft: "8px" })
           : label(mod.toUpperCase(), { marginLeft: "10px", fontSize: "25px", fontWeight: 900, color: SOFT })),
         item.aside && sort === "pp"
-          ? row({ marginLeft: "18px", flexShrink: 0 }, label(item.aside, { fontSize: "26px", color: MUTED }), image(STAR, 20, 20, { marginLeft: "4px" }))
+          ? starPill(item.aside)
           : item.aside ? label(`${count(item.aside)}pp`, { marginLeft: "18px", flexShrink: 0, fontSize: "26px", color: MUTED }) : null,
         item.version ? oneLine(item.version, { marginLeft: "18px", flexShrink: 1, fontSize: "26px", color: MUTED }) : null,
       ),

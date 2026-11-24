@@ -54,18 +54,21 @@ export async function loadOgFonts(request: Request): Promise<[ArrayBuffer, Array
 export function ogLookSources(request: Request, heavyFont: ArrayBuffer): { fonts: { base: ArrayBuffer; load: (file: string) => Promise<ArrayBuffer> }; loadArt: (source: string) => Promise<Buffer | null> } {
   return {
     fonts: { base: heavyFont, load: (file) => getFont(request, `name/ttf/${file}.ttf`) },
-    loadArt: async (source) => {
-      try {
-        const url = /^https:\/\//.test(source) ? source : new URL(source, getAssetOrigin(request)).toString();
-        const response = await fetch(url, { signal: AbortSignal.timeout(FONT_FETCH_TIMEOUT_MS) });
-        if (!response.ok) return null;
-        const buffer = Buffer.from(await response.arrayBuffer());
-        return buffer.length > 0 && buffer.length <= 8 * 1024 * 1024 ? buffer : null;
-      } catch {
-        return null;
-      }
-    },
+    loadArt: (source) => loadOgArt(request, source),
   };
+}
+
+/** An image's bytes, by site path or full URL; null when it cannot be read. */
+export async function loadOgArt(request: Request, source: string): Promise<Buffer | null> {
+  try {
+    const url = /^https:\/\//.test(source) ? source : new URL(source, getAssetOrigin(request)).toString();
+    const response = await fetch(url, { signal: AbortSignal.timeout(FONT_FETCH_TIMEOUT_MS) });
+    if (!response.ok) return null;
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return buffer.length > 0 && buffer.length <= 8 * 1024 * 1024 ? buffer : null;
+  } catch {
+    return null;
+  }
 }
 
 export function ogFontList(regularFont: ArrayBuffer, heavyFont: ArrayBuffer) {

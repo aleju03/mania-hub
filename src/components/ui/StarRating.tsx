@@ -72,7 +72,7 @@ export function starSpectrumGradient(lo: number, hi: number, position?: (stars: 
 // that flips to the expert-plus yellow at 6.5★ and above. Given a range, the
 // fill runs the spectrum from the low end to the high end and each number
 // takes its own end's text colour.
-function starBadgeText(stars: number): string {
+export function starBadgeText(stars: number): string {
   return stars >= 6.5 ? "hsl(45, 100%, 70%)" : "hsl(200, 10%, 10%)";
 }
 

@@ -137,7 +137,7 @@ function Thumbnail({ url, description }: { url: string; description?: string }) 
 
 function MediaGallery({ items }: { items: NonNullable<DiscordComponentJson["items"]> }) {
   if (items.length === 1) {
-    return <img src={items[0].media.url} alt={items[0].description ?? ""} title={items[0].description} className="block h-auto max-h-[350px] w-auto max-w-full rounded-lg object-contain" loading="lazy" />;
+    return <img src={items[0].media.url} alt={items[0].description ?? ""} title={items[0].description} className="block h-auto max-h-[350px] w-auto max-w-full self-start rounded-lg object-contain" loading="lazy" />;
   }
   return (
     <div className="grid grid-cols-2 gap-1">

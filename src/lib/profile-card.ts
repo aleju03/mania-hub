@@ -17,6 +17,7 @@ import { renderOgPng } from "./og-image-response";
 import { drawNameTag, type OgNameTag } from "./og-name-tag";
 import { ogFontList } from "./og-render";
 import { lookLayer, readOgSupporterLook, type OgLookSources, type OgSupporterLook } from "./og-supporter-look";
+import { builtInCompanion } from "./supporter-companions";
 
 export const PROFILE_CARD_WIDTH = 1100;
 const PAD_X = 44;
@@ -33,6 +34,10 @@ const MODES_PER_LINE = 3;
 export const PROFILE_CARD_MODES = 6;
 const MODE_LINE = 76;
 const EMBLEM = 72;
+// A supporter's stand leads the keymodes' lines, as tall as one of them.
+const STAND_HEIGHT = 84;
+const STAND_MAX_WIDTH = 100;
+const STAND_GAP = 24;
 
 const BACKGROUND = { r: 28, g: 23, b: 25 };
 const BAND_RGB = "40,33,36";
@@ -79,6 +84,8 @@ export interface ProfileCardData {
   modes: ProfileCardMode[];
   /** A supporter's name style, font, outline and avatar frame. */
   look: OgSupporterLook | null;
+  /** A supporter's stand as a still: a site path or an uploaded picture's URL. */
+  stand: string | null;
 }
 
 // The kind is signed with the payload: another picture's signed payload is not this one's.
@@ -115,6 +122,14 @@ function readPlay(raw: unknown): ProfileCardPlay | null {
     version: text(raw[5], 80),
     beatmapsetId: number(raw[6], 1, Number.MAX_SAFE_INTEGER),
   };
+}
+
+// One of the site's own by id (its still), or an uploaded picture by file name.
+// The keycap is a drawing with no still, so it draws as no stand.
+function readStand(raw: unknown): string | null {
+  const value = text(raw, 64);
+  if (/^[a-f0-9]{64}$/.test(value)) return `https://cdn.mania-tracker.com/companions/${value}.webp`;
+  return builtInCompanion(value)?.thumb ?? null;
 }
 
 function readMode(raw: unknown): ProfileCardMode | null {
@@ -168,6 +183,7 @@ export function readProfileCard(payload: string | null, signature: string | null
       plays: Array.isArray(raw.p) ? raw.p.slice(0, PROFILE_CARD_PLAYS).map(readPlay).filter((play): play is ProfileCardPlay => play != null) : [],
       modes: Array.isArray(raw.k) ? raw.k.slice(0, PROFILE_CARD_MODES).map(readMode).filter((mode): mode is ProfileCardMode => mode != null) : [],
       look: readOgSupporterLook(raw.lk),
+      stand: readStand(raw.sd),
     };
   } catch {
     return null;
@@ -193,6 +209,8 @@ export interface ProfileCardParts {
   fonts: [ArrayBuffer, ArrayBuffer];
   /** The name fonts and frame art of a supporter's look; without them the look is not drawn. */
   lookSources?: OgLookSources;
+  /** The stand's still; without it no stand is drawn. */
+  stand?: Buffer | null;
 }
 
 type Style = Record<string, string | number>;
@@ -458,10 +476,21 @@ export async function drawProfileCard(parts: ProfileCardParts): Promise<Buffer> 
     });
   }
 
-  const [avatar, flag, emblems] = await Promise.all([
+  // The still trimmed to the figure, so it stands on the same line whatever its margins.
+  const standStill = async (): Promise<{ url: string; width: number; height: number } | null> => {
+    if (!parts.stand) return null;
+    try {
+      const { data: png, info } = await sharp(parts.stand).trim().resize(STAND_MAX_WIDTH * 2, STAND_HEIGHT * 2, { fit: "inside" }).png().toBuffer({ resolveWithObject: true });
+      return { url: pngUrl(png), width: Math.round(info.width / 2), height: Math.round(info.height / 2) };
+    } catch {
+      return null;
+    }
+  };
+  const [avatar, flag, emblems, stand] = await Promise.all([
     framedAvatar ? null : masked(parts.avatar, 136, 136, 68),
     masked(parts.flag, 72, 48, 8),
     Promise.all(data.modes.map(async (_mode, index) => ({ rice: await badge(parts.emblems[index]?.rice ?? null), ln: await badge(parts.emblems[index]?.ln ?? null) }))),
+    standStill(),
   ]);
 
   const lines = modeLines(data.modes.map((mode, index) => ({ mode, emblems: emblems[index] })));
@@ -470,11 +499,19 @@ export async function drawProfileCard(parts: ProfileCardParts): Promise<Buffer> 
     box({ position: "relative", width: `${PROFILE_CARD_WIDTH}px`, height: `${height}px`, fontFamily: fontList[0].name },
       playerColumn(data, avatar, flag, look, Boolean(parts.avatar)),
       ...data.plays.map((play, index) => playBand(play, index, parts.gradeIcons[index] ?? null, parts.modIcons[index] ?? [])),
-      lines.length
-        ? col({ ...at(standingHeight(data), PAD_X, PROFILE_CARD_WIDTH - PAD_X * 2, height - standingHeight(data)), justifyContent: "center" },
-          ...lines.map((line) => row({ height: `${MODE_LINE}px`, justifyContent: "center" }, ...line.map((cell, index) => modeCell(cell.mode, index, cell.emblems)))),
+      lines.length && stand
+        // The stand takes the card's side margins: three keymodes and the stand need the width.
+        ? row({ ...at(standingHeight(data), 0, PROFILE_CARD_WIDTH, height - standingHeight(data)), justifyContent: "center", alignItems: "center" },
+          image(stand.url, stand.width, stand.height, { marginRight: `${STAND_GAP}px` }),
+          col({ alignItems: "center" },
+            ...lines.map((line) => row({ height: `${MODE_LINE}px` }, ...line.map((cell, index) => modeCell(cell.mode, index, cell.emblems)))),
+          ),
         )
-        : null,
+        : lines.length
+          ? col({ ...at(standingHeight(data), PAD_X, PROFILE_CARD_WIDTH - PAD_X * 2, height - standingHeight(data)), justifyContent: "center" },
+            ...lines.map((line) => row({ height: `${MODE_LINE}px`, justifyContent: "center" }, ...line.map((cell, index) => modeCell(cell.mode, index, cell.emblems)))),
+          )
+          : null,
     ),
     { width: PROFILE_CARD_WIDTH, height, fonts: fontList },
   );

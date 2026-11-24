@@ -42,7 +42,19 @@ describe("readProfileCard", () => {
     expect(readProfileCard(edited, signature, "secret")).toBeNull();
   });
 
-  it("leaves out a rank history that is not one", () => {
+  it("reads a stand as its still: one of the site's own, or an uploaded picture", () => {
+    const stand = (sd: unknown) => {
+      const [payload, signature] = signed({ ...profile, sd });
+      return readProfileCard(payload, signature, "secret")?.stand;
+    };
+    expect(stand("plush-teto")).toBe("/models/companions/thumbs/plush-teto.webp");
+    expect(stand("a".repeat(64))).toBe(`https://cdn.mania-tracker.com/companions/${"a".repeat(64)}.webp`);
+    expect(stand("sahur-keycap")).toBeNull();
+    expect(stand("https://example.com/x.webp")).toBeNull();
+    expect(stand(undefined)).toBeNull();
+  });
+
+    it("leaves out a rank history that is not one", () => {
     const [payload, signature] = signed({ ...profile, rh: [10, -20, 5] });
     expect(readProfileCard(payload, signature, "secret")).toMatchObject({ history: [], historyDays: null });
   });
