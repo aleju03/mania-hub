@@ -2966,8 +2966,12 @@ msgid "$4 a month on Patreon"
 msgstr "$4 al mes en Patreon"
 
 #: src/routes/support.tsx
-msgid "$4 buys a month of supporter, and every payment adds more time."
-msgstr "$4 compran un mes de supporter, y cada pago suma más tiempo."
+#~ msgid "$4 buys a month of supporter, and every payment adds more time."
+#~ msgstr "$4 compran un mes de supporter, y cada pago suma más tiempo."
+
+#: src/routes/support.tsx
+msgid "$4 buys a month of supporter, and every payment adds more time. Once you've paid for a month, your customizations keep showing even after your time runs out."
+msgstr "$4 compran un mes de supporter, y cada pago suma más tiempo. Si ya pagaste un mes, tus personalizaciones se siguen viendo aunque se te acabe el tiempo."
 
 #: src/routes/support.tsx
 #~ msgid "$4 is a month"
@@ -3549,8 +3553,11 @@ msgstr "El análisis de una play terminada en Hashi, convertido en un mapa de pr
 msgid "A fourth charm slot"
 msgstr "Un cuarto espacio de amuleto"
 
-#: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
+msgid "A frame around your avatar on your profile and in maniabot's image replies."
+msgstr "Un marco alrededor de tu avatar en tu perfil y en las respuestas con imagen de maniabot."
+
+#: src/components/supporter/SupporterExtras.tsx
 msgid "A frame around your avatar on your profile."
 msgstr "Un marco alrededor de tu avatar en tu perfil."
 
@@ -33449,9 +33456,12 @@ msgid "Your name"
 msgstr "Tu nombre"
 
 #: src/components/supporter/SupporterExtras.tsx
-#: src/routes/support.tsx
 msgid "Your name in its own style and font, on your profile and in every list it shows up in."
 msgstr "Tu nombre con su propio estilo y fuente, en tu perfil y en cada lista donde aparece."
+
+#: src/routes/support.tsx
+msgid "Your name in its own style and font, on your profile, in every list it shows up in and in maniabot's image replies."
+msgstr "Tu nombre con su propio estilo y fuente, en tu perfil, en cada lista donde aparece y en las respuestas con imagen de maniabot."
 
 #: src/lib/pack-run.ts
 msgid "Your next pack has at least one card with a finish."

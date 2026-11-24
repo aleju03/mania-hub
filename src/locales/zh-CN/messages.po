@@ -2978,8 +2978,12 @@ msgid "$4 a month on Patreon"
 msgstr "Patreon 上每月 $4"
 
 #: src/routes/support.tsx
-msgid "$4 buys a month of supporter, and every payment adds more time."
-msgstr "$4 可购买一个月的支持者时长，每次付款都会累加时间。"
+#~ msgid "$4 buys a month of supporter, and every payment adds more time."
+#~ msgstr "$4 可购买一个月的支持者时长，每次付款都会累加时间。"
+
+#: src/routes/support.tsx
+msgid "$4 buys a month of supporter, and every payment adds more time. Once you've paid for a month, your customizations keep showing even after your time runs out."
+msgstr "$4 可购买一个月的支持者时长，每次付款都会累加时间。只要付费满一个月，即使时间用完，你的自定义外观也会继续显示。"
 
 #: src/routes/support.tsx
 #~ msgid "$4 is a month"
@@ -3561,8 +3565,11 @@ msgstr "Hashi 中一局已完成游玩的分析，被做成在 osu! 中打开的
 msgid "A fourth charm slot"
 msgstr "第四个护符栏位"
 
-#: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
+msgid "A frame around your avatar on your profile and in maniabot's image replies."
+msgstr "个人资料页和 maniabot 图片回复中头像周围的边框。"
+
+#: src/components/supporter/SupporterExtras.tsx
 msgid "A frame around your avatar on your profile."
 msgstr "个人资料页头像周围的边框。"
 
@@ -33461,9 +33468,12 @@ msgid "Your name"
 msgstr "你的名字"
 
 #: src/components/supporter/SupporterExtras.tsx
-#: src/routes/support.tsx
 msgid "Your name in its own style and font, on your profile and in every list it shows up in."
 msgstr "你的名字拥有专属样式和字体，显示在个人资料和所有列表中。"
+
+#: src/routes/support.tsx
+msgid "Your name in its own style and font, on your profile, in every list it shows up in and in maniabot's image replies."
+msgstr "你的名字拥有专属样式和字体，显示在个人资料、所有列表以及 maniabot 的图片回复中。"
 
 #: src/lib/pack-run.ts
 msgid "Your next pack has at least one card with a finish."

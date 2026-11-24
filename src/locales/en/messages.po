@@ -2989,8 +2989,12 @@ msgid "$4 a month on Patreon"
 msgstr "$4 a month on Patreon"
 
 #: src/routes/support.tsx
-msgid "$4 buys a month of supporter, and every payment adds more time."
-msgstr "$4 buys a month of supporter, and every payment adds more time."
+#~ msgid "$4 buys a month of supporter, and every payment adds more time."
+#~ msgstr "$4 buys a month of supporter, and every payment adds more time."
+
+#: src/routes/support.tsx
+msgid "$4 buys a month of supporter, and every payment adds more time. Once you've paid for a month, your customizations keep showing even after your time runs out."
+msgstr "$4 buys a month of supporter, and every payment adds more time. Once you've paid for a month, your customizations keep showing even after your time runs out."
 
 #: src/routes/support.tsx
 #~ msgid "$4 is a month"
@@ -3572,8 +3576,11 @@ msgstr "A finished play's analysis in Hashi, turned into a practice map that ope
 msgid "A fourth charm slot"
 msgstr "A fourth charm slot"
 
-#: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
+msgid "A frame around your avatar on your profile and in maniabot's image replies."
+msgstr "A frame around your avatar on your profile and in maniabot's image replies."
+
+#: src/components/supporter/SupporterExtras.tsx
 msgid "A frame around your avatar on your profile."
 msgstr "A frame around your avatar on your profile."
 
@@ -33515,9 +33522,12 @@ msgid "Your name"
 msgstr "Your name"
 
 #: src/components/supporter/SupporterExtras.tsx
-#: src/routes/support.tsx
 msgid "Your name in its own style and font, on your profile and in every list it shows up in."
 msgstr "Your name in its own style and font, on your profile and in every list it shows up in."
+
+#: src/routes/support.tsx
+msgid "Your name in its own style and font, on your profile, in every list it shows up in and in maniabot's image replies."
+msgstr "Your name in its own style and font, on your profile, in every list it shows up in and in maniabot's image replies."
 
 #: src/lib/pack-run.ts
 msgid "Your next pack has at least one card with a finish."

@@ -212,7 +212,7 @@ function SupportPage() {
                 <motion.p variants={HERO_LINE} className="mt-3 text-[15px] leading-relaxed text-osu-l2">
                   {t`Supporting keeps the servers running and new features coming. As thanks, supporters get everything on this page.`}
                 </motion.p>
-                <motion.p variants={HERO_LINE} className="mt-3 text-[15px] leading-relaxed text-osu-l2">{t`$4 buys a month of supporter, and every payment adds more time.`}</motion.p>
+                <motion.p variants={HERO_LINE} className="mt-3 text-[15px] leading-relaxed text-osu-l2">{t`$4 buys a month of supporter, and every payment adds more time. Once you've paid for a month, your customizations keep showing even after your time runs out.`}</motion.p>
                 <motion.div variants={HERO_LINE} className="mt-5 flex flex-wrap items-center gap-2">
                   <SupportButton />
                   <Link to="/supporter" className="inline-flex h-10 items-center rounded-full bg-osu-b4 px-5 text-[14px] font-semibold text-white transition-colors hover:bg-osu-b3">
@@ -246,7 +246,7 @@ function SupportPage() {
               id="frames"
               title={t`Avatar frames`}
               count={<Trans><CountUp value={SUPPORTER_AVATAR_FRAMES.length} /> frames, or your own</Trans>}
-              body={t`A frame around your avatar on your profile.`}
+              body={t`A frame around your avatar on your profile and in maniabot's image replies.`}
               more={<Trans>Or <Link to="/workshop/frames">draw a frame of your own</Link> and submit it for everyone to wear.</Trans>}
             >
               <FramesShowcase />
@@ -256,7 +256,7 @@ function SupportPage() {
               id="names"
               title={t`Name styles and fonts`}
               count={<Trans><CountUp value={SUPPORTER_NAME_STYLES.length} /> styles, <CountUp value={SUPPORTER_NAME_FONTS.length} /> fonts</Trans>}
-              body={t`Your name in its own style and font, on your profile and in every list it shows up in.`}
+              body={t`Your name in its own style and font, on your profile, in every list it shows up in and in maniabot's image replies.`}
             >
               <NamesShowcase />
             </Perk>
