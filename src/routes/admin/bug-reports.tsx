@@ -981,7 +981,9 @@ function BugReportsAdminPage() {
       ))}
     </div>
   );
-  return view === "labels" ? <ChartLabelsBoard viewSwitch={viewSwitch} /> : <BugReportsBoard viewSwitch={viewSwitch} />;
+  return view === "labels"
+    ? <ChartLabelsBoard onShowReports={() => void navigate({ search: {}, replace: true })} />
+    : <BugReportsBoard viewSwitch={viewSwitch} />;
 }
 
 function BugReportsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {

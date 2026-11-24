@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Check, Inbox, MessageSquare, RefreshCw, RotateCcw, X, type LucideIcon } from "lucide-react";
+import { Check, ChevronDown, MessageSquare, RefreshCw, RotateCcw, X, type LucideIcon } from "lucide-react";
 
 import { Avatar } from "../ui/Avatar";
 import { Skeleton } from "../ui/LoadingSkeleton";
@@ -28,16 +28,14 @@ import {
    dataset (npm run label-reports:export), and acting on one means changing a
    model, never the chart. */
 
-const STATUSES: Array<{ value: ChartLabelStatus; label: string; Icon: LucideIcon; text: string; hint: string }> = [
-  { value: "open", label: "Open", Icon: Inbox, text: "text-osu-pink-light", hint: "Charts the models still file differently from what players said" },
+const STATUSES: Array<{ value: ChartLabelStatus; label: string; hint: string }> = [
+  { value: "open", label: "Open", hint: "Charts the models still file differently from what players said" },
   {
     value: "resolved",
     label: "Fixed",
-    Icon: Check,
-    text: "text-emerald-300",
     hint: "Charts a later analysis now files the way most reporters said (these move here on their own), or that you marked fixed",
   },
-  { value: "dismissed", label: "Dismissed", Icon: X, text: "text-osu-f1", hint: "Charts where you decided the reporters were wrong" },
+  { value: "dismissed", label: "Dismissed", hint: "Charts where you decided the reporters were wrong" },
 ];
 
 const REASON_LABELS: Record<string, string> = {
@@ -61,21 +59,102 @@ const FILED: Array<{ value: ChartLabelFiled; label: string }> = [
 
 const PAGE_SIZE = 100;
 
-function FilterChip({ active, label, count, onClick }: { active: boolean; label: string; count?: number; onClick: () => void }) {
+interface FilterOption {
+  value: string;
+  label: string;
+  count?: number;
+}
+
+function MenuOption({ label, count, active, onClick }: { label: string; count?: number; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
-      aria-pressed={active}
+      role="option"
+      aria-selected={active}
       onClick={onClick}
-      className={`inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12px] font-semibold transition-colors duration-[120ms] ${
-        active ? "bg-white/[0.1] text-white" : "text-osu-f1 hover:bg-white/[0.05] hover:text-osu-l1"
+      className={`flex h-7 w-full cursor-pointer items-center justify-between gap-3 rounded-md px-2.5 text-[13px] font-semibold transition-colors duration-[120ms] ${
+        active ? "bg-white/[0.09] text-white" : "text-osu-l1 hover:bg-white/[0.05] hover:text-white"
       }`}
     >
-      {label}
-      {count != null ? <span className="tabular-nums opacity-60">{count}</span> : null}
+      <span className="truncate">{label}</span>
+      {count != null ? <span className="text-[12px] font-normal tabular-nums text-osu-f1">{count}</span> : null}
     </button>
   );
 }
+
+/** One dropdown of the filter bar. The first option clears it; more than one
+    group lays the groups out as columns (Players say: Rice beside LN). */
+function FilterMenu({ label, value, valueLabel, all, groups, onChange }: {
+  label: string;
+  value: string | null;
+  valueLabel: string;
+  all: string;
+  groups: Array<{ title?: string; options: FilterOption[] }>;
+  onChange: (value: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  const shown = groups.filter((group) => group.options.length > 0);
+  const columns = shown.length > 1;
+  const pick = (next: string | null) => {
+    onChange(next);
+    setOpen(false);
+  };
+  const active = value != null;
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((previous) => !previous)}
+        className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[7px] pl-3 pr-2.5 text-[12.5px] font-semibold transition-colors duration-[120ms] ${
+          active ? "bg-osu-pink/15 text-osu-pink-light hover:bg-osu-pink/20" : "bg-white/[0.05] text-white hover:bg-white/[0.08]"
+        }`}
+      >
+        <span className={active ? "opacity-80" : "text-osu-f1"}>{label}</span>
+        <span>{valueLabel}</span>
+        <ChevronDown className={`h-3.5 w-3.5 opacity-60 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label={label}
+          className={`absolute left-0 top-full z-30 mt-1.5 max-w-[calc(100vw-2rem)] rounded-[10px] bg-osu-b5 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.5)] ${columns ? "w-[380px]" : "w-[210px]"}`}
+        >
+          <MenuOption label={all} active={value == null} onClick={() => pick(null)} />
+          <div className={columns ? "grid grid-cols-2 gap-x-2" : ""}>
+            {shown.map((group) => (
+              <div key={group.title ?? "options"}>
+                {group.title ? <div className="px-2.5 pb-1 pt-2 text-[11px] text-osu-f1">{group.title}</div> : null}
+                {group.options.map((option) => (
+                  <MenuOption key={option.value} label={option.label} count={option.count} active={value === option.value} onClick={() => pick(option.value)} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const isLnTile = (value: string) => value === "ln" || value.startsWith("ln");
 
 function tileName(tile: string): string {
   if (tile === "chordstream") return "Chordstream";
@@ -272,7 +351,7 @@ function GroupCard({ group, onStatus, busy }: { group: ChartLabelGroup; onStatus
   );
 }
 
-export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
+export function ChartLabelsBoard({ onShowReports }: { onShowReports: () => void }) {
   const [status, setStatus] = useState<ChartLabelStatus>("open");
   const [groups, setGroups] = useState<ChartLabelGroup[] | null>(null);
   const [counts, setCounts] = useState<Record<ChartLabelStatus, number>>({ open: 0, resolved: 0, dismissed: 0 });
@@ -344,45 +423,43 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
     setCounts((previous) => ({ ...previous, [group.status]: Math.max(0, previous[group.status] - 1), [next]: previous[next] + 1 }));
   };
 
+  const anyFilter = keys != null || kind != null || filed != null || says != null || commentsOnly;
+  const clearFilters = () => {
+    setKeys(null);
+    setKind(null);
+    setFiled(null);
+    setSays(null);
+    setCommentsOnly(false);
+  };
+  const saysLabel = (value: string, short: boolean) =>
+    value === "ln" ? "Any LN" : short ? tileName(value).replace(/^LN /, "") : tileName(value);
+
   return (
     <div className="flex-1 bg-osu-b5 min-h-[calc(100vh-60px)]">
-      <div className="mx-auto max-w-[1000px] space-y-4 px-4 py-6 sm:px-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="h-4 w-1 rounded-full bg-osu-pink" />
-              <h1 className="text-sm font-bold uppercase tracking-[0.14em] text-osu-l1">Chart labels</h1>
-            </div>
-            <p className="mt-1 text-[11px] text-osu-f1">
-              What players say a chart is filed wrong as, from the map card. Nothing here changes a chart.
-            </p>
-            {viewSwitch}
-          </div>
-          <div className="flex items-center gap-2">
+      <div className="mx-auto max-w-[1000px] px-4 py-6 sm:px-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-baseline gap-[18px]">
             <button
               type="button"
-              onClick={() => setCommentsOnly((value) => !value)}
-              aria-pressed={commentsOnly}
-              className={`inline-flex h-[30px] cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold transition-colors duration-[120ms] ${
-                commentsOnly ? "border-osu-pink/45 bg-osu-pink/15 text-osu-pink-light" : "border-osu-b3/50 bg-osu-b6/70 text-osu-f1 hover:text-osu-l1"
-              }`}
+              onClick={onShowReports}
+              className="cursor-pointer text-[19px] font-extrabold tracking-[-0.01em] text-osu-f1 transition-colors duration-[120ms] hover:text-osu-l1"
             >
-              <MessageSquare className="h-3.5 w-3.5" />
-              With a comment {facets ? facets.withNote : ""}
+              Reports
             </button>
-            <button
-              type="button"
-              onClick={() => void load()}
-              aria-label="Refresh"
-              title="Refresh"
-              className="inline-flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-md border border-osu-b3/50 bg-osu-b4/60 text-osu-f1 transition-colors duration-[120ms] hover:text-white"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${groups === null ? "animate-spin" : ""}`} />
-            </button>
+            <h1 className="text-[19px] font-extrabold tracking-[-0.01em] text-white">Labels</h1>
           </div>
+          <button
+            type="button"
+            onClick={() => void load()}
+            aria-label="Refresh"
+            title="Refresh"
+            className="inline-flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-md bg-white/[0.05] text-osu-f1 transition-colors duration-[120ms] hover:text-white"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${groups === null ? "animate-spin" : ""}`} />
+          </button>
         </div>
 
-        <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b5/40">
+        <div className="mt-3.5 flex gap-[22px] border-b border-white/[0.07]">
           {STATUSES.map((option) => {
             const active = status === option.value;
             return (
@@ -391,84 +468,92 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
                 type="button"
                 title={option.hint}
                 onClick={() => setStatus(option.value)}
-                className={`relative cursor-pointer border-r border-osu-b3/20 px-3 py-2 text-left transition-colors duration-[120ms] last:border-r-0 ${
-                  active ? "bg-osu-b4/45" : "hover:bg-osu-b4/25"
+                className={`relative flex cursor-pointer items-baseline gap-[7px] pb-2.5 pt-2 text-[14px] font-semibold transition-colors duration-[120ms] ${
+                  active ? "text-white" : "text-osu-f1 hover:text-osu-l1"
                 }`}
               >
-                {active ? <span className="absolute inset-x-0 top-0 h-[2px] bg-osu-pink" /> : null}
-                <span className="flex items-center gap-1.5">
-                  <option.Icon className={`h-3.5 w-3.5 shrink-0 ${option.text}`} />
-                  <span className="truncate text-[11px] font-semibold uppercase tracking-wider text-osu-f1">{option.label}</span>
-                </span>
-                <span className="mt-0.5 block text-[17px] font-bold tabular-nums text-white">{counts[option.value]}</span>
+                {option.label}
+                <span className="text-[13px] tabular-nums opacity-75">{counts[option.value]}</span>
+                {active ? <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-osu-pink" /> : null}
               </button>
             );
           })}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="flex flex-wrap items-center gap-0.5">
-            <FilterChip active={keys == null} label="All keys" onClick={() => setKeys(null)} />
-            {facets?.keys.filter((entry) => entry.value !== "unknown").map((entry) => (
-              <FilterChip
-                key={entry.value}
-                active={keys === Number(entry.value)}
-                label={`${entry.value}K`}
-                count={entry.count}
-                onClick={() => setKeys(keys === Number(entry.value) ? null : Number(entry.value))}
-              />
-            ))}
-          </div>
-          <span aria-hidden className="hidden h-4 w-px bg-white/15 sm:block" />
-          <div className="flex flex-wrap items-center gap-0.5">
-            <FilterChip active={kind == null} label="Anything" onClick={() => setKind(null)} />
-            {KINDS.map((option) => (
-              <FilterChip
-                key={option.value}
-                active={kind === option.value}
-                label={option.label}
-                count={facets?.kinds.find((entry) => entry.value === option.value)?.count}
-                onClick={() => setKind(kind === option.value ? null : option.value)}
-              />
-            ))}
-          </div>
+        <div className="mt-3.5 mb-4 flex flex-wrap items-center gap-1.5">
+          <FilterMenu
+            label="Keys"
+            value={keys == null ? null : String(keys)}
+            valueLabel={keys == null ? "All" : `${keys}K`}
+            all="All keys"
+            groups={[{
+              options: (facets?.keys ?? []).filter((entry) => entry.value !== "unknown").map((entry) => ({ value: entry.value, label: `${entry.value}K`, count: entry.count })),
+            }]}
+            onChange={(value) => setKeys(value == null ? null : Number(value))}
+          />
+          <FilterMenu
+            label="About"
+            value={kind}
+            valueLabel={KINDS.find((option) => option.value === kind)?.label ?? "Anything"}
+            all="Anything"
+            groups={[{
+              options: KINDS.map((option) => ({ ...option, count: facets?.kinds.find((entry) => entry.value === option.value)?.count })),
+            }]}
+            onChange={(value) => setKind(value as ChartLabelKind | null)}
+          />
+          <FilterMenu
+            label="Filed as"
+            value={filed}
+            valueLabel={FILED.find((option) => option.value === filed)?.label ?? "Any"}
+            all="Any"
+            groups={[{
+              options: FILED.flatMap((option) => {
+                const count = facets?.filed?.find((entry) => entry.value === option.value)?.count ?? 0;
+                return count === 0 && filed !== option.value ? [] : [{ ...option, count }];
+              }),
+            }]}
+            onChange={(value) => setFiled(value as ChartLabelFiled | null)}
+          />
+          <FilterMenu
+            label="Players say"
+            value={says}
+            valueLabel={says == null ? "Anything" : saysLabel(says, false)}
+            all="Anything"
+            groups={[
+              { title: "Rice", options: saysOptions.filter((entry) => !isLnTile(entry.value)).map((entry) => ({ value: entry.value, label: saysLabel(entry.value, true), count: entry.count })) },
+              { title: "LN", options: saysOptions.filter((entry) => isLnTile(entry.value)).map((entry) => ({ value: entry.value, label: saysLabel(entry.value, true), count: entry.count })) },
+            ]}
+            onChange={setSays}
+          />
+          <button
+            type="button"
+            onClick={() => setCommentsOnly((value) => !value)}
+            aria-pressed={commentsOnly}
+            className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[7px] px-3 text-[12.5px] font-semibold transition-colors duration-[120ms] ${
+              commentsOnly ? "bg-osu-pink/15 text-osu-pink-light hover:bg-osu-pink/20" : "bg-white/[0.05] text-osu-f1 hover:bg-white/[0.08] hover:text-osu-l1"
+            }`}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            With a comment
+            {facets ? <span className="tabular-nums opacity-60">{facets.withNote}</span> : null}
+          </button>
+          {anyFilter ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="cursor-pointer px-1.5 text-[12px] text-osu-f1 transition-colors duration-[120ms] hover:text-osu-l1"
+            >
+              Clear
+            </button>
+          ) : null}
+          {groups !== null ? (
+            <span className="ml-auto text-[12px] text-osu-f1">
+              <span className="text-[14px] font-bold tabular-nums text-white">{total}</span> {total === 1 ? "chart" : "charts"}
+            </span>
+          ) : null}
         </div>
 
-        <div className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="flex flex-wrap items-center gap-0.5">
-            <span className="mr-1.5 text-[11px] text-osu-f1">Filed as</span>
-            <FilterChip active={filed == null} label="Any" onClick={() => setFiled(null)} />
-            {FILED.map((option) => {
-              const count = facets?.filed?.find((entry) => entry.value === option.value)?.count ?? 0;
-              if (count === 0 && filed !== option.value) return null;
-              return (
-                <FilterChip
-                  key={option.value}
-                  active={filed === option.value}
-                  label={option.label}
-                  count={count}
-                  onClick={() => setFiled(filed === option.value ? null : option.value)}
-                />
-              );
-            })}
-          </div>
-          <span aria-hidden className="hidden h-4 w-px bg-white/15 sm:block" />
-          <div className="flex flex-wrap items-center gap-0.5">
-            <span className="mr-1.5 text-[11px] text-osu-f1">Players say</span>
-            <FilterChip active={says == null} label="Anything" onClick={() => setSays(null)} />
-            {saysOptions.map((entry) => (
-              <FilterChip
-                key={entry.value}
-                active={says === entry.value}
-                label={entry.value === "ln" ? "Any LN" : tileName(entry.value)}
-                count={entry.count}
-                onClick={() => setSays(says === entry.value ? null : entry.value)}
-              />
-            ))}
-          </div>
-        </div>
-
-        {error && <p className="text-[12px] text-osu-red-light">{error}</p>}
+        {error && <p className="mb-3 text-[12px] text-osu-red-light">{error}</p>}
 
         {shown === null ? (
           <div className="space-y-2">
