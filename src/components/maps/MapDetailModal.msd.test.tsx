@@ -83,3 +83,9 @@ it("keeps one badge under a rate mod unless the chart is a hybrid at 1.0x and at
   render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={LN_ENTRY} rate={1.5} rateMsd={{ Overall: 27.1, LN: 25.2 }} rateDan={{ label: "11", family: "ln", rawDan: 11.1 }} rateSecondaryDan={{ label: "zeta", family: "dan", rawDan: 16 }} /></I18nProvider>);
   expect(screen.queryByText("hybrid")).toBeNull();
 });
+
+it("shows no rating block for a chart the calc rated at zero", () => {
+  const entry = { ...LN_ENTRY, lnCount: 0, msd: { Overall: 0, Stream: 0, Jumpstream: 0, Stamina: 0 }, dan: { rawDan: 0, label: "0", family: "rc" as const } };
+  const { container } = render(<I18nProvider i18n={getI18n("en")}><MsdBlock entry={entry} /></I18nProvider>);
+  expect(container.textContent).toBe("");
+});

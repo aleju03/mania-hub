@@ -637,7 +637,8 @@ export function MsdBlock({
   // with player ratings. Bulk search rows carry them, so the number shows from first
   // paint; the lazily fetched analysis only overrides when it is fresher than
   // the index (base msd remains for pre-msdLn cached payloads).
-  if (!msd || overall == null) return null;
+  // A chart the calc could not rate comes back all zero: there is no rating to show.
+  if (!msd || overall == null || !(overall > 0)) return null;
   // An LN number shows on 4K and on the keymodes whose LN axis is published
   // (hasLnAxis), never from an older cached artifact of another keymode. The backend
   // publishes the LN number on every chart past the hold line, LN identity
