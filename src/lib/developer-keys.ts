@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { liveBridgeToken } from "./live-backend-tokens";
 
-/* Mania Tracker API keys for the signed-in player (/developers).
+/* Mania Tracker API keys for the signed-in player (/developers), and their
+   API access: invite only for now, so a player without it asks for it here
+   and can make keys once the owner lets them in.
 
    Server functions like the wishlist's: the viewer always comes from the osu!
    login cookie, never from client input, so a player only ever lists, makes or
@@ -18,7 +20,15 @@ export interface DeveloperKey {
   revokedAt: number | null;
 }
 
+export type DeveloperAccessStatus = "none" | "requested" | "active" | "paused";
+
+export interface DeveloperAccess {
+  status: DeveloperAccessStatus;
+  requestedAt: number | null;
+}
+
 export interface DeveloperKeys {
+  access: DeveloperAccess;
   keys: DeveloperKey[];
   maxActiveKeys: number;
   ratePerMinute: number;
@@ -26,7 +36,7 @@ export interface DeveloperKeys {
 
 export type DeveloperKeyMutation =
   | { status: "ok"; state: DeveloperKeys; key?: string }
-  | { status: "refused"; reason: "key_limit" | "not_found" };
+  | { status: "refused"; reason: "key_limit" | "not_found" | "no_access" };
 
 export type DeveloperKeyReveal =
   | { status: "ok"; key: string }
@@ -44,12 +54,22 @@ async function getTarget(): Promise<{ url: string; headers: HeadersInit } | null
   return { url: `${base}/api/developer-keys/${auth.viewer.id}`, headers };
 }
 
+const ACCESS_STATUSES: readonly DeveloperAccessStatus[] = ["none", "requested", "active", "paused"];
+
+function parseAccess(value: unknown): DeveloperAccess {
+  const raw = (value ?? {}) as { status?: unknown; requestedAt?: unknown };
+  const status = ACCESS_STATUSES.find((entry) => entry === raw.status) ?? "none";
+  const requestedAt = Number(raw.requestedAt);
+  return { status, requestedAt: Number.isFinite(requestedAt) && requestedAt > 0 ? requestedAt : null };
+}
+
 function parseState(value: unknown): DeveloperKeys {
-  const body = (value ?? {}) as { keys?: unknown; maxActiveKeys?: unknown; ratePerMinute?: unknown };
+  const body = (value ?? {}) as { access?: unknown; keys?: unknown; maxActiveKeys?: unknown; ratePerMinute?: unknown };
   const keys = (Array.isArray(body.keys) ? body.keys : [])
     .map((raw) => raw as Partial<DeveloperKey>)
     .filter((raw): raw is DeveloperKey => Math.floor(Number(raw?.id) || 0) > 0 && typeof raw.prefix === "string");
   return {
+    access: parseAccess(body.access),
     keys,
     maxActiveKeys: Math.max(1, Math.floor(Number(body.maxActiveKeys) || 2)),
     ratePerMinute: Math.max(1, Math.floor(Number(body.ratePerMinute) || 60)),
@@ -74,7 +94,10 @@ export const fetchOwnDeveloperKeys = createServerFn({ method: "GET" }).handler(
 );
 
 export const mutateOwnDeveloperKeys = createServerFn({ method: "POST" })
-  .validator((input: { action?: unknown; label?: unknown; id?: unknown }) => {
+  .validator((input: { action?: unknown; label?: unknown; id?: unknown; note?: unknown }) => {
+    if (input?.action === "request") {
+      return { action: "request" as const, note: typeof input.note === "string" ? input.note.slice(0, 300) : "" };
+    }
     if (input?.action === "create") {
       return { action: "create" as const, label: typeof input.label === "string" ? input.label.slice(0, 40) : "" };
     }
@@ -89,6 +112,7 @@ export const mutateOwnDeveloperKeys = createServerFn({ method: "POST" })
     const response = await fetch(target.url, { method: "POST", headers: target.headers, body: JSON.stringify(data) });
     if (response.status === 409) return { status: "refused", reason: "key_limit" };
     if (response.status === 404) return { status: "refused", reason: "not_found" };
+    if (response.status === 403) return { status: "refused", reason: "no_access" };
     if (!response.ok) throw new Error(`Key change failed (${response.status}).`);
     const body = (await response.json()) as { key?: unknown };
     return {

@@ -1580,8 +1580,16 @@ msgid "{DEFAULT_EXPORT_CLIP_SECONDS}s from here"
 msgstr "从此处 {DEFAULT_EXPORT_CLIP_SECONDS}s"
 
 #: src/routes/developers.tsx
-msgid "{DEFAULT_RATE} requests a minute per key, and each player in a batch counts as one request. Responses can be cached for 10 minutes. Over the limit you get a 429 with a <0>Retry-After</0> header."
-msgstr "每个密钥每分钟 {DEFAULT_RATE} 次请求，批量请求中的每位玩家计为一次请求。响应可缓存 10 分钟。超出限制会返回 429，并带有 <0>Retry-After</0> 头。"
+#~ msgid "{DEFAULT_RATE} requests a minute per key, and each player in a batch counts as one request. Responses can be cached for 10 minutes. Over the limit you get a 429 with a <0>Retry-After</0> header."
+#~ msgstr "每个密钥每分钟 {DEFAULT_RATE} 次请求，批量请求中的每位玩家计为一次请求。响应可缓存 10 分钟。超出限制会返回 429，并带有 <0>Retry-After</0> 头。"
+
+#: src/routes/developers.tsx
+msgid "{DEFAULT_RATE} requests a minute per key, and each player or beatmap in a batch counts as one request. Responses can be cached for 10 minutes, rankings for 5 and top plays for 1. Over the limit you get a 429 with a <0>Retry-After</0> header."
+msgstr "每个密钥每分钟可发送 {DEFAULT_RATE} 次请求，批量请求中的每位玩家或每张谱面各算一次请求。响应可缓存 10 分钟，排行榜为 5 分钟，最佳成绩为 1 分钟。超出限制会收到 429，并附带 <0>Retry-After</0> 响应头。"
+
+#: src/routes/developers.tsx
+#~ msgid "{DEFAULT_RATE} requests a minute per key, and each player or beatmap in a batch counts as one request. Responses can be cached for 10 minutes, rankings for 5. Over the limit you get a 429 with a <0>Retry-After</0> header."
+#~ msgstr "每个密钥每分钟可发送 {DEFAULT_RATE} 次请求，批量请求中的每位玩家或每张谱面各算一次请求。响应可缓存 10 分钟，排行榜为 5 分钟。超出限制会收到 429，并附带 <0>Retry-After</0> 响应头。"
 
 #: src/components/skins/SkinCard.tsx
 msgid "{downloadCountLabel} downloads"
@@ -2872,6 +2880,14 @@ msgstr "全球 <0>#{global}</0>"
 msgid "<0>+pp</0> is the estimated gain if you hit the target score, after weighting against your current top plays."
 msgstr "<0>+pp</0> 是你达到目标分数后的预计收益，已按你当前的最佳成绩加权。"
 
+#: src/routes/developers.tsx
+msgid "<0>24h</0> (the default), <1>3d</1>, <2>7d</2> or <3>30d</3>, counted from when the play was set."
+msgstr "<0>24h</0>（默认）、<1>3d</1>、<2>7d</2> 或 <3>30d</3>，从成绩达成时开始计算。"
+
+#: src/routes/developers.tsx
+msgid "<0>4</0> for 4K only, <1>other</1> for every other key count. Leave it out for all."
+msgstr "<0>4</0> 仅限 4K，<1>other</1> 为其他所有键数。不填则为全部。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "<0>4K LN</0> goes through that same analyser's LN table, with a small model of our own filling in the easy charts that sit below where the table starts."
 #~ msgstr "<0>4K LN</0> 走的是同一个分析器的 LN 表，表的起点以下那些简单谱面由我们自己的一个小模型补上。"
@@ -2945,8 +2961,20 @@ msgid "<0>Page</0><1/><2>of {totalPages}</2>"
 msgstr "<0>第</0><1/><2>页 / 共 {totalPages} 页</2>"
 
 #: src/routes/developers.tsx
+msgid "<0>ranked</0>, <1>loved</1>, <2>qualified</2>, <3>pending</3>, <4>graveyard</4> and so on, as on osu!."
+msgstr "<0>ranked</0>、<1>loved</1>、<2>qualified</2>、<3>pending</3>、<4>graveyard</4> 等，与 osu! 上一致。"
+
+#: src/routes/developers.tsx
 msgid "<0>ready</0>, <1>pending</1> (never rated) or <2>failed</2> (the last rating failed)."
 msgstr "<0>ready</0>、<1>pending</1>（从未评分）或 <2>failed</2>（上次评分失败）。"
+
+#: src/routes/developers.tsx
+msgid "<0>recent</0> (the default), <1>pp</1>, or <2>gain</2> for the pp the play added."
+msgstr "<0>recent</0>（默认）、<1>pp</1>，或 <2>gain</2>（按该成绩增加的 pp）。"
+
+#: src/routes/developers.tsx
+msgid "<0>sha256=</0> and the HMAC-SHA256 of the timestamp header, a dot and the raw body, keyed with the webhook's secret."
+msgstr "<0>sha256=</0> 加上时间戳请求头、一个点和原始请求体的 HMAC-SHA256，以该 webhook 的密钥签名。"
 
 #. placeholder {0}: topSharePercent(percentile)
 #. placeholder {1}: percentile.population.toLocaleString("en-US")
@@ -2954,6 +2982,10 @@ msgstr "<0>ready</0>、<1>pending</1>（从未评分）或 <2>failed</2>（上�
 #: src/components/player/SkillBreakdown.tsx
 msgid "<0>top {0}%</0> of {1} tracked {2}K mains"
 msgstr "在已追踪的 {1} 名 {2}K 主玩家中位列<0>前 {0}%</0>"
+
+#: src/routes/developers.tsx
+msgid "<0>top_play</0> or <1>snipe</1>."
+msgstr "<0>top_play</0> 或 <1>snipe</1>。"
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "<0>Tracking is on.</0> Your recent plays are being pulled in and will be rated here in a few minutes."
@@ -3001,6 +3033,10 @@ msgstr "$4 可购买一个月的支持者时长，每次付款都会累加时间
 #~ msgid "$4 is a month"
 #~ msgstr "$4 即一个月"
 
+#: src/routes/developers.tsx
+msgid "0 to 1."
+msgstr "0 到 1。"
+
 #: src/lib/format.ts
 msgid "0h"
 msgstr "0 小时"
@@ -3024,6 +3060,14 @@ msgstr "1 个难度"
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "1 error in the code"
 msgstr "代码中有 1 处错误"
+
+#: src/routes/developers.tsx
+msgid "1 if left out, up to 20."
+msgstr "不填则为 1，最多 20。"
+
+#: src/routes/developers.tsx
+msgid "1 if left out."
+msgstr "不填则为 1。"
 
 #: src/components/packs/CardSpotlight.tsx
 msgid "1 other"
@@ -3889,6 +3933,18 @@ msgstr "一个主题最多放八张图片。"
 #~ msgid "A Top plays or Dan clears feed turned on from here posts players from this country until you choose its players."
 #~ msgstr ""
 
+#: src/routes/developers.tsx
+msgid "A two-letter country code. Leave it out for every country."
+msgstr "两个字母的国家代码。不填则为所有国家。"
+
+#: src/routes/developers.tsx
+msgid "A two-letter country code. Leave it out for the global board."
+msgstr "两个字母的国家代码。不填则为全球排行。"
+
+#: src/routes/developers.tsx
+msgid "A two-letter country code. Leave it out for the global ranking."
+msgstr "两个字母的国家代码。不填则为全球排行榜。"
+
 #: src/components/supporter/WorkshopFrames.tsx
 #~ msgid "A WebM with alpha (VP9), the same square, under 2 MB. Make the first frame match the picture so it doesn't jump when it starts."
 #~ msgstr "带 alpha 通道的 WebM（VP9），同样的正方形，小于 2 MB。让第一帧与图片一致，开始播放时就不会跳动。"
@@ -4359,6 +4415,10 @@ msgstr "添加到卡组…"
 msgid "Add to the list"
 msgstr "加入列表"
 
+#: src/routes/developers.tsx
+msgid "Add webhook"
+msgstr "添加 webhook"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "Add your {name} profile next to your name first."
 msgstr "请先在你的名字旁添加 {name} 个人资料链接。"
@@ -4537,6 +4597,10 @@ msgstr "全部 Discord 服务器"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "All five cards have to be the same rarity."
 #~ msgstr "五张卡必须是同一个稀有度。"
+
+#: src/routes/developers.tsx
+msgid "All key counts"
+msgstr "全部键数"
 
 #: src/components/skins/SkinBackdropPicker.tsx
 msgid "all keymodes"
@@ -4781,6 +4845,10 @@ msgid "an old score you could probably beat"
 msgstr "一个你多半能超过的旧成绩"
 
 #: src/routes/developers.tsx
+msgid "An osu! beatmap id (one difficulty, not the set)."
+msgstr "osu! 谱面 id（单个难度，不是谱面集）。"
+
+#: src/routes/developers.tsx
 msgid "An osu! user id, or <0>@</0> and a username: <1>12345</1>, <2>@PlayerName</2>."
 msgstr "osu! 用户 id，或 <0>@</0> 加用户名：<1>12345</1>、<2>@PlayerName</2>。"
 
@@ -4850,6 +4918,10 @@ msgstr "已有一个回放视频正在导出，请先完成或取消它。"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Another skin or archive inside it"
 msgstr "里面还有另一个皮肤或压缩包"
+
+#: src/routes/developers.tsx
+msgid "Answer with a 2xx within 8 seconds. A failed delivery is tried twice more. After 10 failures in a row, or once Discord says the webhook was deleted, it turns off until you turn it back on. Each webhook takes up to 60 events a minute (25 messages for Discord, with up to 10 events in one)."
+msgstr "请在 8 秒内返回 2xx。发送失败会再重试两次。连续失败 10 次，或 Discord 表示该 webhook 已被删除时，它会关闭，直到你重新开启。每个 webhook 每分钟最多接收 60 个事件（Discord 为 25 条消息，每条最多 10 个事件）。"
 
 #: src/lib/supporter-pack-style.ts
 msgid "Anti-static bag"
@@ -5165,6 +5237,10 @@ msgstr "Asgard [lvl 88] 的 2:34，一张 OD 2 的谱面，不看音符，以固
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Asgard [lvl 88] at 2:34, at 0.35x speed, OD 2. On the right, the pink bars are presses on a steady beat, and each note takes the colour of what the nearest press in its lane scores on it: blue for a 300, green 200, yellow 100, orange 50, red a miss."
 #~ msgstr ""
+
+#: src/routes/developers.tsx
+#~ msgid "Ask for access"
+#~ msgstr "申请访问权限"
 
 #: src/components/player/bbcode/ImageEditorModal.tsx
 msgid "Aspect ratio locked"
@@ -5637,6 +5713,10 @@ msgstr "该游玩倍速下的谱面难度"
 msgid "Beatmap hitsounds"
 msgstr "谱面打击音"
 
+#: src/routes/developers.tsx
+msgid "Beatmap ids separated by commas."
+msgstr "以逗号分隔的谱面 id。"
+
 #: src/components/prism/PrismVisualizer.tsx
 #~ msgid "Beatmap link or id"
 #~ msgstr ""
@@ -5653,9 +5733,9 @@ msgstr "谱面查找"
 msgid "Beatmap page"
 msgstr "谱面页面"
 
-#: src/components/discord/CommandShowcase.tsx
-#~ msgid "Beatmaps"
-#~ msgstr "谱面"
+#: src/routes/developers.tsx
+msgid "Beatmaps"
+msgstr "谱面"
 
 #. placeholder {0}: beatmapResults.length
 #: src/components/replay/ReplayBrowseView.tsx
@@ -8546,6 +8626,10 @@ msgid "Couldn't load your keys. Refresh to try again."
 msgstr "无法加载你的密钥。请刷新重试。"
 
 #: src/routes/developers.tsx
+msgid "Couldn't load your webhooks. Refresh to try again."
+msgstr "无法加载你的 webhook。请刷新重试。"
+
+#: src/routes/developers.tsx
 msgid "Couldn't make the key. Try again."
 msgstr "无法创建密钥。请重试。"
 
@@ -8605,6 +8689,10 @@ msgstr "目标保存失败，请稍后再试。"
 msgid "Couldn't save that. Try again in a moment."
 msgstr "保存失败。请稍后再试。"
 
+#: src/routes/developers.tsx
+msgid "Couldn't save that. Try again."
+msgstr "保存失败。请重试。"
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "Couldn't save the collection."
 msgstr "无法保存这个收藏夹。"
@@ -8624,6 +8712,10 @@ msgstr "暂时无法保存你的页面。"
 #: src/components/me/GoalsPanel.tsx
 msgid "Couldn't save. Try again."
 msgstr "保存失败，请重试。"
+
+#: src/routes/developers.tsx
+msgid "Couldn't send that. Try again."
+msgstr "发送失败。请重试。"
 
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Couldn't start the comparison"
@@ -8677,6 +8769,7 @@ msgstr "国内"
 #: src/components/packs/run/chain/ChainHowTo.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/lib/chain-run.ts
+#: src/routes/developers.tsx
 #: src/routes/player/$username.tsx
 msgid "Country"
 msgstr "国家/地区"
@@ -8684,6 +8777,10 @@ msgstr "国家/地区"
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Country (or global) leaderboard, top players by pp."
 #~ msgstr "国家/地区(或全球)排行榜，按 pp 排列的顶尖玩家。"
+
+#: src/routes/developers.tsx
+msgid "Country code, empty for every country"
+msgstr "国家代码，留空则为所有国家"
 
 #: src/routes/discord.tsx
 #~ msgid "Country for top plays"
@@ -9148,6 +9245,22 @@ msgstr "成绩消息段位回复"
 #~ msgid "Dan on score posts in every channel"
 #~ msgstr "所有频道的成绩消息段位回复"
 
+#: src/routes/developers.tsx
+msgid "Dan only. <0>overall</0> if left out, or one skillset, like <1>jack</1>. A wrong one answers with the list."
+msgstr "仅限段位。不填则为 <0>overall</0>，也可填一个技能组，例如 <1>jack</1>。填错时响应会列出可选值。"
+
+#: src/routes/developers.tsx
+#~ msgid "Dan only. <0>overall</0> if left out, or one skillset. A wrong one answers with the list."
+#~ msgstr "仅限段位。不填则为 <0>overall</0>，也可填一个技能组。填错时响应会列出可选值。"
+
+#: src/routes/developers.tsx
+msgid "Dan only. <0>rc</0> (rice, the default) or <1>ln</1>."
+msgstr "仅限段位。<0>rc</0>（rice，默认）或 <1>ln</1>。"
+
+#: src/routes/developers.tsx
+msgid "Dan only. Shaped like <0>dan.rc</0> in player skills."
+msgstr "仅限段位。格式与玩家技能中的 <0>dan.rc</0> 相同。"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Dan plays"
 msgstr "段位成绩"
@@ -9310,6 +9423,7 @@ msgstr "延迟"
 #: src/components/supporter/frames/FrameLayersPanel.tsx
 #: src/components/supporter/themes/LayerPanel.tsx
 #: src/components/supporter/WorkshopFrames.tsx
+#: src/routes/developers.tsx
 #: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Delete"
@@ -9412,6 +9526,14 @@ msgstr "删除这个上传"
 msgid "Delete this upload? Its share link stops working and the file is gone for good."
 msgstr "删除这个上传？它的分享链接会失效，文件也会被永久删除。"
 
+#: src/routes/developers.tsx
+msgid "Delete this webhook?"
+msgstr "删除此 webhook？"
+
+#: src/routes/developers.tsx
+msgid "Delete webhook"
+msgstr "删除 webhook"
+
 #: src/components/me/MyDataPanel.tsx
 msgid "Delete what's new"
 msgstr "删除新增内容"
@@ -9488,6 +9610,10 @@ msgstr "桌面图标"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Detected in the .osk"
 msgstr "在 .osk 中检测到"
+
+#: src/routes/developers.tsx
+msgid "Detected pattern tags, strongest first."
+msgstr "检测到的谱型标签，最强的排在最前。"
 
 #: src/components/maps/MapDetailModal.tsx
 msgid "Detected sections"
@@ -9594,6 +9720,10 @@ msgstr "Discord"
 #: src/components/layout/Nav.tsx
 msgid "Discord bot"
 msgstr "Discord 机器人"
+
+#: src/routes/developers.tsx
+msgid "Discord channel"
+msgstr "Discord 频道"
 
 #: src/routes/communities.tsx
 msgid "Discord did not finish connecting. Try again."
@@ -11101,6 +11231,10 @@ msgstr "彩灯串"
 #: src/lib/signature-style.ts
 msgid "Falling notes"
 msgstr "下落音符"
+
+#: src/routes/developers.tsx
+msgid "False until the site has analysed the chart. Until then the fields below are empty."
+msgstr "网站分析该谱面之前为 false，在此之前下方字段为空。"
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "far over"
@@ -13013,6 +13147,10 @@ msgstr "隐藏上架、approved 和 qualified 谱面上的成绩"
 #~ msgid "Hide ranked maps"
 #~ msgstr "隐藏上架谱面"
 
+#: src/routes/developers.tsx
+msgid "Hide secret"
+msgstr "隐藏密钥"
+
 #. placeholder {0}: section.label
 #: src/components/player/DanEvidenceModal.tsx
 msgid "Hide the {0} clears"
@@ -13436,6 +13574,10 @@ msgstr "有多少与你水平相近的玩家打过它"
 #~ msgid "How many plays of the same chart the list may repeat. Click to change."
 #~ msgstr "同一张谱面在列表中最多重复几次成绩。点击可切换。"
 
+#: src/routes/developers.tsx
+msgid "How many, 50 if left out, up to 100."
+msgstr "数量，不填则为 50，最多 100。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "How much this moves you depends on how uneven your skills are, which is the point. The typical 4K player drops about a level, and the gap between a player's best and worst skill runs a median of 1.7 levels and reaches 4.3 at the 90th percentile - that gap is what used to be invisible."
 #~ msgstr "这个改动对你影响多大，取决于你有多偏科，而这正是重点所在。典型的 4K 玩家会掉一级左右。玩家最强与最弱技能之间的差距，中位数是 1.7 级，到 90 分位则达到 4.3 级，而这个差距过去是完全看不见的。"
@@ -13447,6 +13589,10 @@ msgstr "推荐是如何生成的"
 #: src/routes/discord.tsx
 msgid "How the pp is worked out"
 msgstr "pp 的计算方式"
+
+#: src/routes/developers.tsx
+msgid "How the site files a chart: its dan, skillsets, MSD and patterns, the same as the map card. Up to {MAX_BATCH} beatmaps in one request."
+msgstr "网站对谱面的归类：段位、技能组、MSD 和谱型，与谱面卡片一致。单次请求最多 {MAX_BATCH} 张谱面。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "How to pay"
@@ -14525,9 +14671,17 @@ msgstr "按键"
 msgid "Key Change"
 msgstr "Key Change"
 
-#: src/components/companella/SubmissionDetail.tsx
-#~ msgid "Key count"
-#~ msgstr ""
+#: src/routes/developers.tsx
+msgid "Key count"
+msgstr "键数"
+
+#: src/routes/developers.tsx
+msgid "Key count, 4 if left out. Skill rankings cover 4K to 18K, dan rankings 4K, 6K and 7K."
+msgstr "键数，不填则为 4。技能排行榜覆盖 4K 到 18K，段位排行榜覆盖 4K、6K 和 7K。"
+
+#: src/routes/developers.tsx
+msgid "Key count, overall difficulty, BPM and length in seconds."
+msgstr "键数、OD、BPM 和时长（秒）。"
 
 #: src/routes/developers.tsx
 msgid "Key created"
@@ -14827,6 +14981,11 @@ msgstr "最后在线 1 天前"
 #: src/components/supporter/LoadoutSlots.tsx
 #~ msgid "Last seen 2d ago"
 #~ msgstr "2 天前在线"
+
+#. placeholder {0}: formatTimeAgo(new Date(hook.lastDeliveryAt).toISOString(), locale)
+#: src/routes/developers.tsx
+msgid "Last sent {0}"
+msgstr "上次发送：{0}"
 
 #: src/components/legal/LegalDocument.tsx
 msgid "Last updated {updatedAt}"
@@ -16680,6 +16839,10 @@ msgid "MinaCalc rated jumptrill charts much harder than they are to play."
 msgstr "MinaCalc 把对拍谱面评得比实际打起来难得多。"
 
 #: src/routes/developers.tsx
+msgid "MinaCalc skillsets at 1.0x, the same numbers as the map card."
+msgstr "1.0x 下的 MinaCalc 技能组，与谱面卡片上的数值相同。"
+
+#: src/routes/developers.tsx
 msgid "MinaCalc skillsets by Etterna name."
 msgstr "MinaCalc 技能组，使用 Etterna 的名称。"
 
@@ -16776,6 +16939,10 @@ msgstr "你的收藏册里还没有。"
 #: src/components/player/ActivityPanel.tsx
 #~ msgid "mixed keys"
 #~ msgstr "混合键数"
+
+#: src/routes/developers.tsx
+msgid "Mod acronyms."
+msgstr "Mod 缩写。"
 
 #: src/components/me/MyDataPanel.tsx
 msgid "Mod filter"
@@ -16928,6 +17095,10 @@ msgstr "观看回放后可查看更多统计！"
 #: src/routes/support.tsx
 msgid "More stats"
 msgstr "更多数据"
+
+#: src/routes/developers.tsx
+msgid "More than {MAX_BATCH} beatmaps in one request."
+msgstr "单次请求超过 {MAX_BATCH} 张谱面。"
 
 #: src/routes/developers.tsx
 msgid "More than {MAX_BATCH} players in one request."
@@ -17510,6 +17681,14 @@ msgstr "新皮肤"
 #: src/routes/workshop.themes.index.tsx
 msgid "New theme"
 msgstr "新建主题"
+
+#: src/routes/developers.tsx
+msgid "New top plays and snipes sent to your URL as the site records them, so you don't have to poll. A Discord channel's webhook URL gets them as messages."
+msgstr "网站记录到新的最佳成绩和 snipe 时会发送到你的 URL，无需轮询。若是 Discord 频道的 webhook URL，则以消息形式发送。"
+
+#: src/routes/developers.tsx
+msgid "New top plays from the Top plays page, {RANKING_PAGE_SIZE} a page. It covers the players in each country's top 100, for the last 30 days."
+msgstr "最佳成绩页面上的新最佳成绩，每页 {RANKING_PAGE_SIZE} 条。覆盖每个国家前 100 名的玩家，最近 30 天。"
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "New top plays will show up here as players set them."
@@ -18460,6 +18639,10 @@ msgstr "没有匹配的更新。"
 #~ msgid "No vibro plays yet."
 #~ msgstr ""
 
+#: src/routes/developers.tsx
+msgid "No webhooks yet."
+msgstr "还没有 webhook。"
+
 #: src/components/packs/WishlistLine.tsx
 msgid "No wishes yet. Choose a missing player to get started."
 msgstr "还没有心愿。选择一位尚未拥有的玩家开始吧。"
@@ -18642,6 +18825,10 @@ msgstr "普通"
 msgid "Norwegian"
 msgstr "挪威语"
 
+#: src/routes/developers.tsx
+msgid "Not 4K"
+msgstr "非 4K"
+
 #: src/routes/report.tsx
 msgid "not a bug"
 msgstr "并非问题"
@@ -18653,6 +18840,10 @@ msgstr "暂不支持这个服务器。"
 #: src/routes/team/$teamId.tsx
 msgid "Not a team id."
 msgstr "不是有效的战队 ID。"
+
+#: src/routes/developers.tsx
+msgid "Not a two-letter country code."
+msgstr "不是两个字母的国家代码。"
 
 #: src/components/companella/SubmissionDetail.tsx
 msgid "Not analyzed yet."
@@ -18753,6 +18944,14 @@ msgstr "已不在 osu! 上"
 #: src/components/supporter/SupportPlans.tsx
 #~ msgid "Not on Patreon"
 #~ msgstr "Patreon 不支持"
+
+#: src/routes/developers.tsx
+msgid "Not one of that ranking's choices. The response lists them."
+msgstr "不是该排行榜的可选值。响应会列出可选值。"
+
+#: src/routes/developers.tsx
+msgid "Not one of the top plays choices. The response lists them."
+msgstr "不是最佳成绩的可选值。响应会列出可选值。"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "not passed yet"
@@ -18969,6 +19168,11 @@ msgstr "没有缺少的卡牌。你已收集此卡池中的所有卡牌。"
 #~ msgid "Nothing missing. Every team in the pool is in your collection."
 #~ msgstr "没有缺少的战队，卡池中的每个战队都在你的收藏里。"
 
+#. placeholder {0}: hostOf(deleting.url)
+#: src/routes/developers.tsx
+msgid "Nothing more is sent to {0}."
+msgstr "将不再向 {0} 发送任何内容。"
+
 #: src/components/packs/collections/ShowcaseTab.tsx
 msgid "Nothing of this kind is on the wall yet."
 msgstr "墙上还没有这类内容。"
@@ -18992,6 +19196,10 @@ msgstr "没有略高于你 {axisLabel} 评分且你还没玩过的 ranked 谱面
 #: src/components/companella/SecurityActivity.tsx
 msgid "Nothing recorded yet."
 msgstr "还没有任何记录。"
+
+#: src/routes/developers.tsx
+msgid "Nothing sent yet"
+msgstr "尚未发送"
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "Nothing submitted."
@@ -19142,12 +19350,18 @@ msgstr "关闭"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/supporter/frames/FrameTools.tsx
+#: src/routes/developers.tsx
 msgid "Off"
 msgstr "关"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "Off /skins; only you see this page. Your replays keep playing in it"
 msgstr "不出现在 /skins，只有你能看到这个页面。你的回放仍然用它播放"
+
+#. placeholder {0}: hook.failures
+#: src/routes/developers.tsx
+msgid "Off after {0} failed deliveries in a row."
+msgstr "连续 {0} 次发送失败后已关闭。"
 
 #: src/components/settings/SettingsPanel.tsx
 msgid "Off means you are only part of the count. Needs you signed in."
@@ -19156,6 +19370,10 @@ msgstr "关闭后你只计入人数统计。需要登录。"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Off the list, no download. Your replays still play in it."
 msgstr "不在列表中，也无法下载。你的回放仍然用它播放。"
+
+#: src/routes/developers.tsx
+msgid "Off: Discord says this webhook was deleted."
+msgstr "已关闭：Discord 表示此 webhook 已被删除。"
 
 #: src/components/supporter/frames/FrameInspector.tsx
 msgid "Offset"
@@ -19689,7 +19907,6 @@ msgstr "在 osu! 客户端中打开"
 msgid "Open in the BBCode editor"
 msgstr "在 BBCode 编辑器中打开"
 
-#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Open Ko-fi in a new tab"
 msgstr "在新标签页中打开 Ko-fi"
@@ -20401,6 +20618,10 @@ msgstr "纵向平移"
 msgid "Paperclip"
 msgstr "回形针"
 
+#: src/routes/developers.tsx
+msgid "Parameters"
+msgstr "参数"
+
 #: src/routes/replay.tsx
 msgid "Parsing the file and finding its beatmap."
 msgstr "正在解析文件并查找对应谱面。"
@@ -20932,6 +21153,10 @@ msgstr "选择你要发布的服务器。"
 msgid "Pick them back up"
 msgstr "全部收回"
 
+#: src/routes/developers.tsx
+msgid "Pick top plays, snipes or both."
+msgstr "请选择最佳成绩、snipe 或两者。"
+
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Pick two scores"
 msgstr "选择两份成绩"
@@ -21243,6 +21468,14 @@ msgid "Player Peak"
 msgstr "玩家最高排名"
 
 #: src/routes/developers.tsx
+msgid "Player ratings leave the chart's vibro sections out."
+msgstr "玩家评分会排除该谱面的 vibro 段落。"
+
+#: src/routes/developers.tsx
+msgid "Player ratings leave the whole chart out."
+msgstr "玩家评分会排除整张谱面。"
+
+#: src/routes/developers.tsx
 msgid "Player skills"
 msgstr "玩家技能"
 
@@ -21282,6 +21515,10 @@ msgstr "已制卡玩家"
 #: src/routes/discord.tsx
 msgid "Players for #{channelName}"
 msgstr "#{channelName} 的玩家"
+
+#: src/routes/developers.tsx
+msgid "Players in the ranking."
+msgstr "排行榜中的玩家数。"
 
 #: src/components/farm-helper/NeighborhoodGraph.tsx
 msgid "Players near your pp"
@@ -22346,6 +22583,7 @@ msgstr "Ranked 分数 {0}"
 msgid "rankings"
 msgstr "排行榜"
 
+#: src/routes/developers.tsx
 #: src/routes/index.tsx
 msgid "Rankings"
 msgstr "排行榜"
@@ -23587,6 +23825,14 @@ msgstr "已举报，管理员会查看。"
 #~ msgstr "这里展示每种已检测键型的代表性片段。"
 
 #: src/routes/developers.tsx
+msgid "Request access"
+msgstr "申请访问权限"
+
+#: src/routes/developers.tsx
+msgid "Request body"
+msgstr "请求体"
+
+#: src/routes/developers.tsx
 msgid "Requests that use this key stop working right away."
 msgstr "使用此密钥的请求会立即失效。"
 
@@ -24709,6 +24955,10 @@ msgstr "第二个抽到"
 #~ msgid "Second to pull this card"
 #~ msgstr "第二个抽到这张卡片"
 
+#: src/routes/developers.tsx
+msgid "Secret"
+msgstr "密钥"
+
 #: src/components/prism/PrismVisualizer.tsx
 #~ msgid "Section {songTime}"
 #~ msgstr ""
@@ -24892,9 +25142,17 @@ msgstr "发送建议"
 msgid "Send report"
 msgstr "提交反馈"
 
+#: src/routes/developers.tsx
+msgid "Send request"
+msgstr "发送申请"
+
 #: src/routes/report.tsx
 msgid "Send something else"
 msgstr "再发一条"
+
+#: src/routes/developers.tsx
+msgid "Send test"
+msgstr "发送测试"
 
 #: src/components/companella/AuthorizePage.tsx
 msgid "Send the chart file when the site does not already have it"
@@ -25199,6 +25457,10 @@ msgid "Seven Keys"
 msgstr "七键"
 
 #: src/routes/developers.tsx
+msgid "Several beatmaps come back as <0>beatmaps</0>, in the order asked, and <1>notFound</1>, the ids the site doesn't have."
+msgstr "多张谱面时返回 <0>beatmaps</0>（按请求顺序）和 <1>notFound</1>（网站没有的 id）。"
+
+#: src/routes/developers.tsx
 msgid "Several players"
 msgstr "多位玩家"
 
@@ -25229,6 +25491,10 @@ msgstr "形状"
 #: src/components/supporter/frames/FrameLayersPanel.tsx
 msgid "Shape round the avatar"
 msgstr "围绕头像的形状"
+
+#: src/routes/developers.tsx
+msgid "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>."
+msgstr "格式与 <0>/top-plays</0> 或 <1>/snipes</1> 中的一条相同。"
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -25585,6 +25851,10 @@ msgstr "在展示区显示"
 msgid "show popular maps"
 msgstr "查看热门谱面"
 
+#: src/routes/developers.tsx
+msgid "Show secret"
+msgstr "显示密钥"
+
 #: src/routes/recommendations.tsx
 msgid "show skillboost"
 msgstr "显示技能提升谱面"
@@ -25818,6 +26088,10 @@ msgid "Sign in"
 msgstr "登录"
 
 #: src/routes/developers.tsx
+msgid "Sign in again to change webhooks."
+msgstr "请重新登录以更改 webhook。"
+
+#: src/routes/developers.tsx
 msgid "Sign in again to make a key."
 msgstr "请重新登录后再创建密钥。"
 
@@ -25892,8 +26166,8 @@ msgid "Sign in to save."
 msgstr "登录后即可保存。"
 
 #: src/routes/developers.tsx
-msgid "Sign in to see and make your keys."
-msgstr "登录后即可查看和创建你的密钥。"
+#~ msgid "Sign in to see and make your keys."
+#~ msgstr "登录后即可查看和创建你的密钥。"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
@@ -25922,6 +26196,10 @@ msgstr "使用 osu! 登录"
 msgid "Sign in with osu! first, then connect Discord."
 msgstr "请先用 osu! 登录，再关联 Discord。"
 
+#: src/routes/developers.tsx
+#~ msgid "Sign in with osu! to ask for access."
+#~ msgstr "使用 osu! 登录以申请访问权限。"
+
 #: src/routes/companella.tsx
 msgid "Sign in with osu! to connect Companella and see the plays it imported."
 msgstr "用 osu! 登录以连接 Companella，并查看它导入的成绩。"
@@ -25937,6 +26215,10 @@ msgstr "使用 osu! 登录以绑定你的 Discord 账号，之后使用指令无
 #: src/components/packs/StreakGame.tsx
 msgid "Sign in with osu! to play blitz."
 msgstr "用 osu! 登录后即可玩闪电战。"
+
+#: src/routes/developers.tsx
+msgid "Sign in with osu! to request access."
+msgstr "使用 osu! 登录以申请访问权限。"
 
 #: src/components/packs/CardCollectors.tsx
 msgid "Sign in with osu! to see who has pulled your card."
@@ -26174,6 +26456,26 @@ msgstr "技能"
 #: src/routes/player/$username.tsx
 msgid "Skills"
 msgstr "技能"
+
+#: src/routes/developers.tsx
+#~ msgid "Skills only. <0>Overall</0> if left out. A wrong one answers with the list for that key count."
+#~ msgstr "仅限技能。不填则为 <0>Overall</0>。填错时响应会列出该键数的可选值。"
+
+#: src/routes/developers.tsx
+msgid "Skills only. The rating, the same number the profile shows."
+msgstr "仅限技能。评分，与个人资料上显示的数值相同。"
+
+#: src/routes/developers.tsx
+msgid "Skills only. The skillset as the Rankings page names it, like <0>Stream</0> on 4K or <1>Bracket</1> on 7K. <2>Overall</2> if left out. A wrong one answers with the list for that key count."
+msgstr "仅限技能。排行榜页面上显示的技能组名称，例如 4K 的 <0>Stream</0> 或 7K 的 <1>Bracket</1>。不填则为 <2>Overall</2>。填错时响应会列出该键数的可选值。"
+
+#: src/routes/developers.tsx
+msgid "Skills only. Too few plays for a settled number."
+msgstr "仅限技能。成绩太少，数值尚未稳定。"
+
+#: src/routes/developers.tsx
+msgid "Skills only. Where the rating sits among every rated player, 0 to 100."
+msgstr "仅限技能。该评分在所有有评分玩家中的位置，0 到 100。"
 
 #: src/routes/dan-estimates.tsx
 msgid "Skills with fewer than four passes are left out rather than counted as zero. At the top of a ladder the \"~\" becomes \">\", meaning beyond that level."
@@ -26433,6 +26735,7 @@ msgstr "狙击者"
 msgid "snipes"
 msgstr "Snipe"
 
+#: src/routes/developers.tsx
 #: src/routes/snipes.tsx
 msgid "Snipes"
 msgstr "Snipe"
@@ -28033,9 +28336,23 @@ msgstr "测试"
 msgid "Test client"
 msgstr "测试客户端"
 
+#. placeholder {0}: result.test.status
+#: src/routes/developers.tsx
+msgid "Test failed. Your URL answered {0}."
+msgstr "测试失败。你的 URL 返回了 {0}。"
+
+#: src/routes/developers.tsx
+msgid "Test failed. Your URL couldn't be reached."
+msgstr "测试失败。无法连接到你的 URL。"
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Test key cleared."
 msgstr "测试密钥已清除。"
+
+#. placeholder {0}: result.test.status
+#: src/routes/developers.tsx
+msgid "Test sent. Your URL answered {0}."
+msgstr "测试已发送。你的 URL 返回了 {0}。"
 
 #: src/lib/supporter-companions.ts
 msgid "Teto"
@@ -28401,6 +28718,10 @@ msgstr "找不到这笔交易。请确认它在你选择的网络上。"
 msgid "That upload is already gone."
 msgstr "这个上传已经不存在了。"
 
+#: src/routes/developers.tsx
+msgid "That URL can't be used. It has to be https on the normal port and reach the public internet."
+msgstr "该 URL 无法使用。必须是标准端口的 https，且可从公网访问。"
+
 #: src/components/packs/GoatPoll.tsx
 msgid "That username doesn't look right."
 msgstr "这个用户名看起来不对。"
@@ -28520,6 +28841,10 @@ msgstr "该账号已从 osu! 消失、被限制，或该玩家隐藏了自己的
 msgid "The album is unavailable right now. Try again in a bit."
 msgstr "卡册暂时不可用。请稍后再试。"
 
+#: src/routes/developers.tsx
+msgid "The API is invite only for now."
+msgstr "API 目前仅限受邀使用。"
+
 #: src/components/skins/SkinAssetExplorer.tsx
 msgid "The archive could not be read. Tap to try again."
 msgstr "无法读取压缩包。点击重试。"
@@ -28543,6 +28868,14 @@ msgstr "按 Etterna 评定玩家的方式取最好的 {best} 个技能组的平�
 #: src/routes/dan-estimates.tsx
 msgid "the average of your skills"
 msgstr "各技能的平均"
+
+#: src/routes/developers.tsx
+msgid "The beatmap as osu! names it."
+msgstr "osu! 上的谱面名称。"
+
+#: src/routes/developers.tsx
+msgid "The beatmap isn't a number."
+msgstr "谱面不是数字。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The bigger limit is that only the plays the site has can count towards it. Your osu! top plays are always in, but anything below them exists only if the site tracks you, which means sitting in your country's top 100 or turning tracking on yourself, and only from the day that started. Someone who stopped playing years ago is judged on their top 200 alone and reads low for that reason."
@@ -28962,6 +29295,10 @@ msgstr "本站尚未开启 Companella 测试版。"
 #~ msgid "The comparison budget ran out; this is still being checked."
 #~ msgstr ""
 
+#: src/routes/developers.tsx
+msgid "The country has to be a two-letter code."
+msgstr "国家必须是两个字母的代码。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "The courses are the real ones, by beatmap: Dan ~ REFORM ~ on 4K regular, the 4K LN dan courses through 17th, Jinjin's 7K regular and LN phases, Arkman's 6K regular courses and sunnyxxy's 6K LN bands. Re-uploads of those packs by other people are not counted, and nothing about this changes how a chart is rated - it only changes what your own passes are worth."
 #~ msgstr "课题是真正的那些，按谱面认：4K regular 的 Dan ~ REFORM ~、4K LN 到 17 段的 LN 段位课题、Jinjin 的 7K regular 与 LN 各期、Arkman 的 6K regular 课题，以及 sunnyxxy 的 6K LN 各段。别人重新上传的同名图包不算，而且这一切都不会改变谱面本身怎么评级，只会改变你自己的成绩值多少。"
@@ -28989,6 +29326,10 @@ msgstr "自定义设置太大，无法保存"
 #: src/routes/developers.tsx
 msgid "The dan as the site shows it (<0>label</0>), its position on the ladder (<1>value</1>), and whether the player is past the last level (<2>beyondTable</2>)."
 msgstr "网站显示的段位（<0>label</0>）、在段位表中的位置（<1>value</1>），以及该玩家是否已超过最高一级（<2>beyondTable</2>）。"
+
+#: src/routes/developers.tsx
+msgid "The dan the chart is filed under at 1.0x (<0>label</0>), rice or LN (<1>family</1>: <2>rc</2> or <3>ln</3>), and its position on the ladder (<4>value</4>)."
+msgstr "谱面在 1.0x 下归入的段位（<0>label</0>）、rice 或 LN（<1>family</1>：<2>rc</2> 或 <3>ln</3>），以及在段位表中的位置（<4>value</4>）。"
 
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The delete failed. Try again."
@@ -29191,8 +29532,12 @@ msgid "The judgements saved in this replay don't match its key presses, so it's 
 msgstr "这个回放里保存的判定和它的按键对不上，所以已暂扣待审核。"
 
 #: src/routes/developers.tsx
-msgid "The key is missing, wrong or revoked."
-msgstr "密钥缺失、错误或已撤销。"
+msgid "The key is missing, wrong or revoked, or your access is paused."
+msgstr "密钥缺失、错误或已撤销，或你的访问权限已暂停。"
+
+#: src/routes/developers.tsx
+#~ msgid "The key is missing, wrong or revoked."
+#~ msgstr "密钥缺失、错误或已撤销。"
 
 #: src/lib/chain-run.ts
 msgid "The last 3 cards always link."
@@ -29264,6 +29609,10 @@ msgstr "新文件没有 {0} 部分，所以皮肤页面上的这些预览图会�
 msgid "The new GOAT"
 msgstr "新的 GOAT"
 
+#: src/routes/developers.tsx
+msgid "The newest snipes on a country's leaderboards, newest first, as on the Snipes page."
+msgstr "某个国家排行榜上的最新 snipe，最新的排在最前，与 Snipes 页面一致。"
+
 #: src/components/player/SkillBreakdown.tsx
 msgid "The next rating pass is next up in the analyzer queue."
 msgstr "下一轮评分在分析器队列中排在最前。"
@@ -29316,6 +29665,14 @@ msgstr "页面超过了 osu! 的 60,000 字符上限。"
 #: src/lib/pack-run.ts
 msgid "The pattern's notes and combo are halved."
 msgstr "谱型的音符与连击减半。"
+
+#: src/routes/developers.tsx
+msgid "The place on the board the sniper took."
+msgstr "snipe 者在排行榜上取得的名次。"
+
+#: src/routes/developers.tsx
+msgid "The play's pp."
+msgstr "该成绩的 pp。"
 
 #: src/routes/developers.tsx
 msgid "The player is tracked, so their loved and graveyard plays count too."
@@ -29395,6 +29752,10 @@ msgstr "彩虹卡面"
 msgid "The rankings are here, but this country was added recently. New plays will start showing up once players submit them."
 msgstr "排行榜已就绪，但该国家/地区是最近才添加的。玩家提交新成绩后就会显示在这里。"
 
+#: src/routes/developers.tsx
+msgid "The rankings don't cover that key count."
+msgstr "排行榜不包含该键数。"
+
 #: src/components/packs/album/AlbumView.tsx
 msgid "The rankings lookup failed."
 msgstr "排行榜查询失败。"
@@ -29470,6 +29831,10 @@ msgstr "排数用完了，还没达到目标。再试一次：把共享更多特
 #: src/routes/dan-estimates.tsx
 #~ msgid "the same 96% and 95%"
 #~ msgstr "同样是 96% 和 95%"
+
+#: src/routes/developers.tsx
+msgid "The same for every retry of one event, so you can skip ones you've seen."
+msgstr "同一事件的每次重试都相同，可用来跳过已处理的事件。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The same goes for any session where you never set a score on a ranked, qualified or loved chart: the site never notices you are playing, so nothing from that session is recorded either. <0>Why that is</0>. If your estimate reads low, that is usually the reason, and the only fix is to play more."
@@ -29567,6 +29932,10 @@ msgstr "本站会缓存、排队并复用数据，以避免反复向 osu! 请求
 #~ msgid "The site does not use the accuracy the game showed you. It works it out again from your judgements, the 300s, 200s, 100s and so on. Mania has two ways of adding those up, the stable formula and the ScoreV2 one that lazer shows, and each ladder writes its bar in one of them: 4K regular in stable, 4K LN in ScoreV2. Since the two print different numbers for the same play, recomputing is what makes that play count, or not count, the same on either client."
 #~ msgstr "本站不用游戏里显示给你的准确率，而是拿你的判定，300、200、100 这些，重新算一遍。mania 有两种加总方式，stable 的算法和 lazer 显示的 ScoreV2 算法，每张段位表的线都是用其中一种写的：4K 单点用 stable，4K LN 用 ScoreV2。同一个成绩在两种算法下算出来的数字不一样，所以只有重新算一遍，这个成绩算不算数在两个客户端上才是一致的。"
 
+#: src/routes/developers.tsx
+msgid "The site doesn't have that beatmap."
+msgstr "网站没有该谱面。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "The site downloads the chart file, reads the notes, and runs the pattern through a rating engine. Which engine depends on the keymode, because no single one is best at all of them:"
 #~ msgstr "本站会下载谱面文件，读出音符，再把谱型交给一个评分算法。用哪个算法取决于键数，因为没有哪一个在所有键数上都是最好的："
@@ -29603,9 +29972,17 @@ msgstr "本站读取每张谱面的物件，用按键数选定的引擎来评级
 #~ msgid "The site recalculates accuracy from the score's judgements instead of using the number shown in-game. This matters because stable and lazer calculate accuracy differently. Regular 4K uses stable accuracy, while 4K LN uses ScoreV2 accuracy. Recalculating it lets scores from either client count the same way."
 #~ msgstr "本站不使用游戏内显示的准确率，而是根据成绩的判定重新计算。这一点很重要，因为 stable 和 lazer 计算准确率的方式不同。普通 4K 用 stable 的准确率，4K LN 用 ScoreV2 的准确率。重新计算之后，来自两个客户端的成绩就能以同样的方式计入。"
 
+#: src/routes/developers.tsx
+msgid "The skill and dan rankings from the Rankings page, {RANKING_PAGE_SIZE} players a page."
+msgstr "排行榜页面上的技能和段位排行榜，每页 {RANKING_PAGE_SIZE} 位玩家。"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "The skill breakdown"
 #~ msgstr "按技能拆开看"
+
+#: src/routes/developers.tsx
+msgid "The skillsets the chart files under, strongest first. LN charts list their LN skillsets."
+msgstr "谱面归入的技能组，最强的排在最前。LN 谱面列出其 LN 技能组。"
 
 #: src/components/replay/ReplayControls.tsx
 #: src/components/settings/OwnerReplaySkinCustomizeModal.tsx
@@ -30620,6 +30997,14 @@ msgstr "以制作你自己的头像框。"
 msgid "to make your own profile themes."
 msgstr "以制作你自己的个人资料主题。"
 
+#: src/routes/developers.tsx
+#~ msgid "To post new top plays as they come in, ask for <0>sort=recent</0> every minute or so and skip the <1>scoreId</1>s you've seen."
+#~ msgstr "要在新最佳成绩出现时发布，大约每分钟请求一次 <0>sort=recent</0>，并跳过已见过的 <1>scoreId</1>。"
+
+#: src/routes/developers.tsx
+msgid "To post new top plays as they come in, use a <0>webhook</0>."
+msgstr "要在新最佳成绩出现时发布，请使用 <0>webhook</0>。"
+
 #: src/routes/privacy.tsx
 #~ msgid "To prevent abuse, the server counts requests per IP address for rate limiting and caps concurrent live connections per IP. These counters live in memory only: the backend does not write IP addresses or user agents to its database or logs. Hosting providers keep standard request logs, and the server records operational details such as job activity, upstream osu! API calls, and errors to monitor service health."
 #~ msgstr "为防止滥用，服务器会按 IP 地址统计请求以进行限流，并对每个 IP 的并发实时连接数设上限。这些计数器只存在于内存中：后端不会把 IP 地址或 user agent 写入其数据库或日志。托管服务商会保留标准的请求日志，服务器也会记录运行细节，例如任务活动、对上游 osu! API 的调用和错误，以监控服务健康状况。"
@@ -30826,6 +31211,7 @@ msgid "top plays"
 msgstr "最佳成绩"
 
 #: src/components/me/MyDataPanel.tsx
+#: src/routes/developers.tsx
 #: src/routes/discord.tsx
 msgid "Top plays"
 msgstr "最佳成绩"
@@ -31121,6 +31507,7 @@ msgstr "开启音乐"
 
 #: src/components/me/dynamic-renders/controls.tsx
 #: src/components/settings/SkillVisibilitySetting.tsx
+#: src/routes/developers.tsx
 msgid "Turn off"
 msgstr "关闭"
 
@@ -31131,6 +31518,10 @@ msgstr "全部关闭"
 #: src/components/settings/SkillVisibilitySetting.tsx
 msgid "Turn off your skill ratings?"
 msgstr "关闭你的技能评分？"
+
+#: src/routes/developers.tsx
+msgid "Turn on"
+msgstr "开启"
 
 #: src/routes/discord.tsx
 msgid "Turn on in every channel"
@@ -31365,6 +31756,10 @@ msgstr "取消隐藏"
 #: src/lib/supporter-profile-themes.ts
 msgid "Universe Shifter"
 msgstr "Universe Shifter"
+
+#: src/routes/developers.tsx
+msgid "Unix seconds when it was sent. Refuse old ones, so a copied request can't be sent to you again later."
+msgstr "发送时的 Unix 秒数。请拒绝过旧的请求，以免被复制的请求日后再次发给你。"
 
 #: src/components/packs/collections/CollectorDirectory.tsx
 #: src/components/packs/collections/CollectorShelf.tsx
@@ -32246,6 +32641,10 @@ msgstr "投票已结束。感谢你的选择。"
 msgid "vs"
 msgstr "vs"
 
+#: src/routes/developers.tsx
+msgid "Wait a few seconds before sending another test."
+msgstr "请等几秒再发送下一次测试。"
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Wait for the image resize to finish, then copy again."
 msgstr "请等图片缩放完成后再复制。"
@@ -32452,6 +32851,14 @@ msgstr "佩戴中"
 msgid "web.archive.org link to their osu! profile"
 msgstr "指向其 osu! 主页的 web.archive.org 链接"
 
+#: src/routes/developers.tsx
+msgid "Webhook URL"
+msgstr "Webhook URL"
+
+#: src/routes/developers.tsx
+msgid "Webhooks"
+msgstr "Webhook"
+
 #: src/routes/discord.tsx
 msgid "Website changelog"
 msgstr "网站更新日志"
@@ -32497,9 +32904,21 @@ msgstr "在该客户端以该准确率游玩、按帖子标注的速度能拿到
 msgid "What are these maps for? Mention the skill focus, difficulty, or suggested play order."
 msgstr "这些谱面适合用来做什么？可以介绍训练重点、难度或推荐游玩顺序。"
 
+#: src/routes/developers.tsx
+msgid "What are you making?"
+msgstr "你在做什么项目？"
+
+#: src/routes/developers.tsx
+msgid "What are you making? (optional)"
+msgstr "你在做什么项目？（可选）"
+
 #: src/routes/discord.tsx
 #~ msgid "What Dan on score posts does"
 #~ msgstr ""
+
+#: src/routes/developers.tsx
+msgid "What gets sent"
+msgstr "发送内容"
 
 #: src/components/communities/CommunityEditModal.tsx
 #: src/components/communities/CommunitySubmitModal.tsx
@@ -32550,6 +32969,10 @@ msgstr "默认国家/地区的作用"
 #: src/routes/dan-estimates.tsx
 #~ msgid "What the number is not"
 #~ msgstr "这个数字不是什么"
+
+#: src/routes/developers.tsx
+msgid "What the play added to the player's total pp."
+msgstr "该成绩为玩家总 pp 增加的数值。"
 
 #: src/components/me/RemovePlaysSheet.tsx
 msgid "What to do"
@@ -32638,6 +33061,14 @@ msgstr "登录后，你可以在<0>我的数据</0>中停止追踪或删除你�
 #: src/routes/discord.tsx
 msgid "When someone pulls my card"
 msgstr "有人抽到我的卡时"
+
+#: src/routes/developers.tsx
+msgid "When the play was set."
+msgstr "成绩达成的时间。"
+
+#: src/routes/developers.tsx
+msgid "When the ranking was last built. It's rebuilt every 5 minutes."
+msgstr "排行榜上次生成的时间。每 5 分钟重新生成一次。"
 
 #: src/routes/developers.tsx
 msgid "When the ratings were last worked out. The API never asks for new ones, so this is how old they are."
@@ -32748,6 +33179,10 @@ msgstr "谁在刷这张"
 #: src/components/packs/CardCollectors.tsx
 msgid "Who has your card"
 msgstr "谁拥有你的卡片"
+
+#: src/routes/developers.tsx
+msgid "Who set the score, and the highest-placed player they passed."
+msgstr "达成该成绩的玩家，以及被其超过的最高名次玩家。"
 
 #: src/components/communities/CommunitySubmitModal.tsx
 msgid "Who the server is for, what happens in it, when it is busy. Line breaks are kept."
@@ -33143,9 +33578,22 @@ msgstr "你的收藏夹数量已达上限。"
 msgid "You already have the most keys an account can have."
 msgstr "你的密钥数量已达上限。"
 
+#: src/routes/developers.tsx
+msgid "You already have the most webhooks an account can have."
+msgstr "你的 webhook 数量已达到账号上限。"
+
 #: src/components/packs/PackStage.tsx
 msgid "You are cutting through the cards"
 msgstr "你正在划开卡片"
+
+#. placeholder {0}: formatDate(new Date(state.access.requestedAt).toISOString(), "UTC", locale)
+#: src/routes/developers.tsx
+#~ msgid "You asked for access on {0}. Once it's granted you can make keys here."
+#~ msgstr "你已于 {0} 申请访问权限。获批后即可在此创建密钥。"
+
+#: src/routes/developers.tsx
+#~ msgid "You asked for access. Once it's granted you can make keys here."
+#~ msgstr "你已申请访问权限。获批后即可在此创建密钥。"
 
 #: src/routes/hashi.tsx
 msgid "You can also open it in a window the size of osu!'s and play the map there with its song, or watch autoplay."
@@ -33235,6 +33683,10 @@ msgstr "潜在收益"
 #: src/components/packs/ForgePanel.tsx
 #~ msgid "You do not have five duplicate copies of that tier."
 #~ msgstr "你没有该等级的五张重复卡。"
+
+#: src/routes/developers.tsx
+msgid "You don't have API access."
+msgstr "你没有 API 访问权限。"
 
 #: src/routes/discord.tsx
 msgid "You don't manage any Discord servers."
@@ -33368,6 +33820,15 @@ msgstr "你已没有这张卡片了。"
 msgid "You reported this chart's label"
 msgstr "你已报告此谱面的标签"
 
+#. placeholder {0}: formatDate(new Date(state.access.requestedAt).toISOString(), "UTC", locale)
+#: src/routes/developers.tsx
+msgid "You requested access on {0}. Once it's granted you can make keys here."
+msgstr "你已于 {0} 申请访问权限。获批后即可在此创建密钥。"
+
+#: src/routes/developers.tsx
+msgid "You requested access. Once it's granted you can make keys here."
+msgstr "你已申请访问权限。获批后即可在此创建密钥。"
+
 #: src/routes/recommendations.tsx
 msgid "You sit at {yourPp}pp while players near you average {median}pp, so there is headroom on a rerun."
 msgstr "你是 {yourPp}pp，而水平相近的玩家平均 {median}pp，所以再打一次还有提升空间。"
@@ -33488,6 +33949,10 @@ msgstr "你这个 {yourPp}pp 的成绩已经过去 {age}。水平相近的玩家
 #: src/routes/news_.prism.tsx
 msgid "Your 6K, 7K and 8K skill ratings are being recalculated with Prism. Until a player's are, they don't show on those keymodes' leaderboards."
 msgstr "你的 6K、7K 和 8K 技能评分正在用 Prism 重新计算。在某位玩家的评分算完之前，该玩家不会出现在这些键数的排行榜上。"
+
+#: src/routes/developers.tsx
+msgid "Your access is paused, so your keys don't work right now."
+msgstr "你的访问权限已暂停，密钥暂时无法使用。"
 
 #: src/routes/discord.tsx
 msgid "Your account"
