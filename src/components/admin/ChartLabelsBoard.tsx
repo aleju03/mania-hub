@@ -12,6 +12,7 @@ import {
   listChartLabelGroups,
   setChartLabelGroupStatus,
   type ChartLabelCount,
+  type ChartLabelFiled,
   type ChartLabelGroup,
   type ChartLabelGroupReport,
   type ChartLabelKind,
@@ -50,6 +51,12 @@ const KINDS: Array<{ value: ChartLabelKind; label: string }> = [
   { value: "skillset", label: "Skillset" },
   { value: "level", label: "Dan level" },
   { value: "rateable", label: "Should count" },
+];
+
+const FILED: Array<{ value: ChartLabelFiled; label: string }> = [
+  { value: "rice", label: "Rice" },
+  { value: "ln", label: "LN" },
+  { value: "none", label: "No verdict" },
 ];
 
 const PAGE_SIZE = 100;
@@ -277,8 +284,16 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
   const [commentsOnly, setCommentsOnly] = useState(false);
   const [keys, setKeys] = useState<number | null>(null);
   const [kind, setKind] = useState<ChartLabelKind | null>(null);
+  const [filed, setFiled] = useState<ChartLabelFiled | null>(null);
+  const [says, setSays] = useState<string | null>(null);
 
-  const query = useMemo(() => ({ status, keys, kind, withNote: commentsOnly }), [status, keys, kind, commentsOnly]);
+  const query = useMemo(() => ({ status, keys, kind, filed, says, withNote: commentsOnly }), [status, keys, kind, filed, says, commentsOnly]);
+  // Any LN first, then the skillsets by how many charts ask for them; the picked one stays even at 0.
+  const saysOptions = useMemo(() => {
+    const list = [...(facets?.says ?? [])].sort((a, b) => Number(b.value === "ln") - Number(a.value === "ln"));
+    if (says && !list.some((entry) => entry.value === says)) list.push({ value: says, count: 0 });
+    return list;
+  }, [facets, says]);
 
   const load = useCallback(async () => {
     setGroups(null);
@@ -419,6 +434,40 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
           </div>
         </div>
 
+        <div className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex flex-wrap items-center gap-0.5">
+            <span className="mr-1.5 text-[11px] text-osu-f1">Filed as</span>
+            <FilterChip active={filed == null} label="Any" onClick={() => setFiled(null)} />
+            {FILED.map((option) => {
+              const count = facets?.filed?.find((entry) => entry.value === option.value)?.count ?? 0;
+              if (count === 0 && filed !== option.value) return null;
+              return (
+                <FilterChip
+                  key={option.value}
+                  active={filed === option.value}
+                  label={option.label}
+                  count={count}
+                  onClick={() => setFiled(filed === option.value ? null : option.value)}
+                />
+              );
+            })}
+          </div>
+          <span aria-hidden className="hidden h-4 w-px bg-white/15 sm:block" />
+          <div className="flex flex-wrap items-center gap-0.5">
+            <span className="mr-1.5 text-[11px] text-osu-f1">Players say</span>
+            <FilterChip active={says == null} label="Anything" onClick={() => setSays(null)} />
+            {saysOptions.map((entry) => (
+              <FilterChip
+                key={entry.value}
+                active={says === entry.value}
+                label={entry.value === "ln" ? "Any LN" : tileName(entry.value)}
+                count={entry.count}
+                onClick={() => setSays(says === entry.value ? null : entry.value)}
+              />
+            ))}
+          </div>
+        </div>
+
         {error && <p className="text-[12px] text-osu-red-light">{error}</p>}
 
         {shown === null ? (
@@ -432,7 +481,7 @@ export function ChartLabelsBoard({ viewSwitch }: { viewSwitch: ReactNode }) {
           </div>
         ) : shown.length === 0 ? (
           <div className="rounded-xl border border-dashed border-osu-b3/30 px-3 py-10 text-center text-[12px] text-osu-f1">
-            {keys != null || kind != null || commentsOnly ? "Nothing matches these filters." : status === "open" ? "No open reports." : "Nothing here."}
+            {keys != null || kind != null || filed != null || says != null || commentsOnly ? "Nothing matches these filters." : status === "open" ? "No open reports." : "Nothing here."}
           </div>
         ) : (
           <div className="space-y-4">

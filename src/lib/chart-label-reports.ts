@@ -167,12 +167,14 @@ export interface ChartLabelGroup {
 /** What a report asks to change. */
 export type ChartLabelKind = "skillset" | "level" | "rateable";
 
+export type ChartLabelFiled = "rice" | "ln" | "none";
+
 export interface ChartLabelPage {
   groups: ChartLabelGroup[];
   total: number;
   counts: Record<ChartLabelStatus, number>;
   /** Charts per filter option, with the other filters on. */
-  facets: { keys: ChartLabelCount[]; kinds: ChartLabelCount[]; withNote: number };
+  facets: { keys: ChartLabelCount[]; kinds: ChartLabelCount[]; filed: ChartLabelCount[]; says: ChartLabelCount[]; withNote: number };
 }
 
 export interface ChartLabelListQuery {
@@ -181,6 +183,10 @@ export interface ChartLabelListQuery {
   offset?: number;
   keys?: number | null;
   kind?: ChartLabelKind | null;
+  /** How the chart is filed now. */
+  filed?: ChartLabelFiled | null;
+  /** A skillset some reporter asked for; "ln" matches any LN answer. */
+  says?: string | null;
   withNote?: boolean;
 }
 
@@ -204,6 +210,8 @@ export const listChartLabelGroups = createServerFn({ method: "GET" })
     if (data.offset != null) query.set("offset", String(data.offset));
     if (data.keys != null) query.set("keys", String(data.keys));
     if (data.kind) query.set("kind", data.kind);
+    if (data.filed) query.set("filed", data.filed);
+    if (data.says) query.set("says", data.says);
     if (data.withNote) query.set("withNote", "1");
     const response = await adminFetch(`/api/admin/chart-label-reports?${query}`);
     if (!response.ok) throw new Error(`Chart label reports failed (${response.status}).`);
