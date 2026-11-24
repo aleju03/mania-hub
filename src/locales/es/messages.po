@@ -1567,6 +1567,10 @@ msgstr "hace {days}d"
 msgid "{DEFAULT_EXPORT_CLIP_SECONDS}s from here"
 msgstr "{DEFAULT_EXPORT_CLIP_SECONDS}s desde aquí"
 
+#: src/routes/developers.tsx
+msgid "{DEFAULT_RATE} requests a minute per key, and each player in a batch counts as one request. Responses can be cached for 10 minutes. Over the limit you get a 429 with a <0>Retry-After</0> header."
+msgstr "{DEFAULT_RATE} requests por minuto por key, y cada jugador de un batch cuenta como un request. Las respuestas se pueden guardar en caché 10 minutos. Si pasas el límite recibes un 429 con un header <0>Retry-After</0>."
+
 #: src/components/skins/SkinCard.tsx
 msgid "{downloadCountLabel} downloads"
 msgstr "{downloadCountLabel} descargas"
@@ -2295,6 +2299,10 @@ msgstr "Pack {typeName}"
 msgid "{typeName} pack, {typeBlurb}"
 msgstr "Pack {typeName}, {typeBlurb}"
 
+#: src/routes/developers.tsx
+msgid "{used} of {maxKeys} keys used. Each key can make {rate} requests a minute."
+msgstr "{used} de {maxKeys} keys usadas. Cada key puede hacer {rate} requests por minuto."
+
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "{USER_COLLECTION_MIN_ITEMS} maps minimum"
 msgstr "mínimo {USER_COLLECTION_MIN_ITEMS} mapas"
@@ -2923,6 +2931,10 @@ msgstr "<0>osu!stable</0> guarda cada mapa como archivos sueltos: abre osu!/Song
 #: src/components/packs/CollectionPanel.tsx
 msgid "<0>Page</0><1/><2>of {totalPages}</2>"
 msgstr "<0>Página</0><1/><2>de {totalPages}</2>"
+
+#: src/routes/developers.tsx
+msgid "<0>ready</0>, <1>pending</1> (never rated) or <2>failed</2> (the last rating failed)."
+msgstr "<0>ready</0>, <1>pending</1> (nunca calculado) o <2>failed</2> (el último cálculo falló)."
 
 #. placeholder {0}: topSharePercent(percentile)
 #. placeholder {1}: percentile.population.toLocaleString("en-US")
@@ -3727,6 +3739,10 @@ msgstr "Una play por debajo del OD mínimo de su escala no da nada: 5.5 en chart
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "A play with a mod only lazer has (DA, IN, HO, NR and others) now counts as a lazer play when the site can't tell which client it was set on, so its LN accuracy is read the way lazer judges holds."
 #~ msgstr ""
+
+#: src/routes/developers.tsx
+msgid "A player's ratings by key count, the same numbers as the Skills tab on their profile."
+msgstr "Los ratings de un jugador por cantidad de teclas, los mismos números que la pestaña Skills de su perfil."
 
 #: src/components/supporter/WorkshopFrames.tsx
 msgid "A PNG or WebP with transparency. It's also what lists, Safari and reduced motion show."
@@ -4685,6 +4701,10 @@ msgstr "Alt = desde el centro"
 msgid "Always available."
 msgstr "Siempre disponible."
 
+#: src/routes/developers.tsx
+msgid "Always false on the API."
+msgstr "Siempre es false en la API."
+
 #: src/components/settings/SettingsPanel.tsx
 msgid "Always reveal all"
 msgstr "Revelar todas siempre"
@@ -4747,6 +4767,10 @@ msgstr "Un PB viejo que probablemente podrías superar."
 #: src/routes/recommendations.tsx
 msgid "an old score you could probably beat"
 msgstr "un puntaje viejo que probablemente podrías superar"
+
+#: src/routes/developers.tsx
+msgid "An osu! user id, or <0>@</0> and a username: <1>12345</1>, <2>@PlayerName</2>."
+msgstr "Un id de usuario de osu!, o <0>@</0> y un username: <1>12345</1>, <2>@PlayerName</2>."
 
 #: src/routes/discord.tsx
 msgid "An osu!mania bot for Discord."
@@ -4935,6 +4959,14 @@ msgstr "cualquier lugar"
 #: src/routes/companella.tsx
 msgid "API docs"
 msgstr "Docs de la API"
+
+#: src/routes/developers.tsx
+msgid "API keys"
+msgstr "API keys"
+
+#: src/routes/developers.tsx
+msgid "API keys and docs for reading osu!mania skill ratings from Mania Tracker."
+msgstr "API keys y documentación para leer ratings de skill de osu!mania desde Mania Tracker."
 
 #: src/components/settings/settings-tabs.ts
 msgid "appearance"
@@ -5199,6 +5231,10 @@ msgstr "Audiowide"
 #: src/lib/supporter-profile-themes.ts
 msgid "Aurora"
 msgstr "Aurora"
+
+#: src/routes/developers.tsx
+msgid "Authentication"
+msgstr "Autenticación"
 
 #: src/routes/companella_.authorize.tsx
 #~ msgid "Authorize {appName}"
@@ -6253,6 +6289,7 @@ msgstr "No se puede conectar con el bot ahora. Recarga en un momento."
 #: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/supporter/WorkshopFrames.tsx
+#: src/routes/developers.tsx
 #: src/routes/report.tsx
 #: src/routes/workshop.themes.gallery.tsx
 #: src/routes/workshop.themes.index.tsx
@@ -7892,6 +7929,7 @@ msgstr "Coordenadas"
 #: src/components/supporter/KofiNameSteps.tsx
 #: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/developers.tsx
 #: src/routes/workshop.themes.spec.tsx
 msgid "Copied"
 msgstr "Copiado"
@@ -7927,6 +7965,7 @@ msgstr "Copias de la imagen flotan sobre tu carta, detrás de todo lo impreso en
 #: src/components/supporter/KofiNameSteps.tsx
 #: src/components/supporter/SupportCheckout.tsx
 #: src/components/ui/MessageText.tsx
+#: src/routes/developers.tsx
 msgid "Copy"
 msgstr "Copiar"
 
@@ -8409,6 +8448,10 @@ msgstr "No se pudieron cargar las skills en este momento."
 msgid "Couldn't load that image."
 msgstr "No se pudo cargar esa imagen."
 
+#: src/routes/developers.tsx
+msgid "Couldn't load that key. Refresh and try again."
+msgstr "No se pudo cargar esa key. Recarga e intenta de nuevo."
+
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Couldn't load that me! page."
 msgstr "No se pudo cargar esa página me!."
@@ -8486,6 +8529,14 @@ msgstr "No se pudieron cargar los top plays en este momento."
 msgid "Couldn't load who has played this map."
 msgstr "No se pudo cargar quién ha jugado este mapa."
 
+#: src/routes/developers.tsx
+msgid "Couldn't load your keys. Refresh to try again."
+msgstr "No se pudieron cargar tus keys. Recarga para intentar de nuevo."
+
+#: src/routes/developers.tsx
+msgid "Couldn't make the key. Try again."
+msgstr "No se pudo crear la key. Intenta de nuevo."
+
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Couldn't play chart preview audio"
 msgstr "No se pudo reproducir el audio de la vista previa"
@@ -8521,6 +8572,10 @@ msgstr "No se pudo eliminar ese nominado."
 #: src/components/me/MyDataPanel.tsx
 msgid "Couldn't remove those plays right now. Try again in a moment."
 msgstr "No se pudieron eliminar esas jugadas en este momento. Inténtalo de nuevo en un momento."
+
+#: src/routes/developers.tsx
+msgid "Couldn't revoke the key. Try again."
+msgstr "No se pudo revocar la key. Intenta de nuevo."
 
 #: src/components/supporter/ThemeReadabilityPanel.tsx
 msgid "Couldn't save"
@@ -8726,6 +8781,10 @@ msgstr "Crear"
 msgid "Create a set to organize your cards."
 msgstr "Crea un conjunto para organizar tus cartas."
 
+#: src/routes/developers.tsx
+msgid "Create key"
+msgstr "Crear key"
+
 #: src/components/companella/TestClientPanel.tsx
 msgid "Create test connection"
 msgstr "Crear conexión de prueba"
@@ -8733,6 +8792,10 @@ msgstr "Crear conexión de prueba"
 #: src/components/companella/TestClientPanel.tsx
 #~ msgid "Create test installation"
 #~ msgstr ""
+
+#: src/routes/developers.tsx
+msgid "Created"
+msgstr "Creada"
 
 #. placeholder {0}: preset.name
 #: src/components/replay/ReplaySkinSettingsModal.tsx
@@ -9670,6 +9733,7 @@ msgstr "suficiente"
 #: src/components/settings/CompanellaGroup.tsx
 #: src/components/skins/SkinReportModal.tsx
 #: src/components/supporter/ThemeReadabilityPanel.tsx
+#: src/routes/developers.tsx
 #: src/routes/discord.tsx
 msgid "Done"
 msgstr "Listo"
@@ -10469,6 +10533,10 @@ msgstr "Cascada de errores"
 msgid "Error: {0}ms - {1}ms avg"
 msgstr "Error: {0}ms - {1}ms prom."
 
+#: src/routes/developers.tsx
+msgid "Errors"
+msgstr "Errores"
+
 #: src/components/discord/CommandShowcase.tsx
 #~ msgid "Estimate a chart's dan level, with its dan emblem."
 #~ msgstr "Estima el nivel de dan de un chart, con su emblema de dan."
@@ -11247,6 +11315,10 @@ msgstr "Menos plays"
 #: src/components/rankings/SkillLeaderboardBoard.tsx
 msgid "Fewer plays than the population baseline asks for, so this rating reads as an estimate"
 msgstr "Menos plays de los que pide la base de comparación, así que este rating es una estimación"
+
+#: src/routes/developers.tsx
+msgid "Fields may be added to this response. None will be renamed or removed."
+msgstr "Puede que se agreguen campos a esta respuesta. Ninguno se va a renombrar ni quitar."
 
 #: src/components/replay/ReplayCustomMediaControls.tsx
 #: src/components/skins/SkinUpdateModal.tsx
@@ -12183,6 +12255,10 @@ msgstr "Obtener mi enlace"
 msgid "Get the address"
 msgstr "Ver la dirección"
 
+#: src/routes/developers.tsx
+msgid "Getting started"
+msgstr "Primeros pasos"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "Getting the map out of osu!"
 msgstr "Sacando el mapa de osu!"
@@ -12884,6 +12960,10 @@ msgstr "Ocultarlo para todos los demás, en vez de mostrarlo sin forma de entrar
 msgid "Hide its countries"
 msgstr "Ocultar sus países"
 
+#: src/routes/developers.tsx
+msgid "Hide key"
+msgstr "Ocultar key"
+
 #: src/components/supporter/LoadoutSlots.tsx
 #: src/routes/workshop.themes.index.tsx
 msgid "Hide my osu! banner"
@@ -13464,6 +13544,10 @@ msgstr "Entiendo que soy responsable de lo que pongo en mis temas, y que uno que
 #: src/components/supporter/loadout.ts
 msgid "Ice fairy"
 msgstr "Hada de hielo"
+
+#: src/routes/developers.tsx
+msgid "Ids and <0>@usernames</0>, separated by commas."
+msgstr "Ids y <0>@usernames</0>, separados por comas."
 
 #: src/routes/news_.prism.tsx
 msgid "If a chart's rating looks wrong to you, send it through <0>Bugs and feedback</0>."
@@ -14421,6 +14505,7 @@ msgstr "Deja el marco anterior como está."
 
 #: src/components/companella/TestClientPanel.tsx
 #: src/components/replay/ReplaySkinSettingsModal.tsx
+#: src/routes/developers.tsx
 msgid "Key"
 msgstr "Tecla"
 
@@ -14431,6 +14516,10 @@ msgstr "Key Change"
 #: src/components/companella/SubmissionDetail.tsx
 #~ msgid "Key count"
 #~ msgstr ""
+
+#: src/routes/developers.tsx
+msgid "Key created"
+msgstr "Key creada"
 
 #: src/components/replay/ReplayControls.tsx
 msgid "Key history"
@@ -14730,6 +14819,10 @@ msgstr "Visto por última vez hace 1 d"
 #: src/components/legal/LegalDocument.tsx
 msgid "Last updated {updatedAt}"
 msgstr "Última actualización: {updatedAt}"
+
+#: src/routes/developers.tsx
+msgid "Last used"
+msgstr "Último uso"
 
 #: src/lib/changelog.ts
 msgid "last year"
@@ -16053,6 +16146,10 @@ msgstr "Rankings de equipos de mania"
 msgid "Mania Tracker"
 msgstr "Mania Tracker"
 
+#: src/routes/developers.tsx
+msgid "Mania Tracker API"
+msgstr "Mania Tracker API"
+
 #: src/routes/privacy.tsx
 msgid "Mania Tracker counts page views and feature usage with its own first-party analytics, stored on the site's own server. Events are sent through the site's own endpoint and can include the visited route, selected country, referrer, browser language, screen size, and route context such as a viewed player, score, beatmapset, or maps tab."
 msgstr "Mania Tracker cuenta las visitas a páginas y el uso de funciones con su propia analítica, guardada en el servidor del propio sitio. Los eventos se envían por un endpoint del propio sitio y pueden incluir la ruta visitada, el país seleccionado, el referrer, el idioma del navegador, el tamaño de pantalla y el contexto de la ruta, como un jugador, score, beatmapset o pestaña de mapas que estás viendo."
@@ -16570,6 +16667,10 @@ msgstr "MinaCalc es la calculadora de dificultad de Etterna"
 msgid "MinaCalc rated jumptrill charts much harder than they are to play."
 msgstr "MinaCalc calificaba los charts de jumptrill como mucho más difíciles de lo que son de jugar."
 
+#: src/routes/developers.tsx
+msgid "MinaCalc skillsets by Etterna name."
+msgstr "Skillsets de MinaCalc con su nombre de Etterna."
+
 #: src/routes/news_.prism.tsx
 msgid "MinaCalc was made for 4K. On 6K to 8K it rated charts with the same skillsets it uses on 4K, without Technical, and gave no chart an LN number."
 msgstr "MinaCalc se hizo para 4K. En 6K a 8K calificaba los charts con los mismos skillsets que usa en 4K, sin Technical, y no le daba número LN a ningún chart."
@@ -16815,6 +16916,10 @@ msgstr "¡Más estadísticas disponibles después de ver un replay!"
 #: src/routes/support.tsx
 msgid "More stats"
 msgstr "Más estadísticas"
+
+#: src/routes/developers.tsx
+msgid "More than {MAX_BATCH} players in one request."
+msgstr "Más de {MAX_BATCH} jugadores en un request."
 
 #: src/lib/streak-game.ts
 msgid "More watched"
@@ -17127,6 +17232,7 @@ msgstr "nombre"
 #: src/components/supporter/frames/FrameDialogs.tsx
 #: src/components/supporter/frames/FrameEditor.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
+#: src/routes/developers.tsx
 msgid "Name"
 msgstr "Nombre"
 
@@ -17238,9 +17344,9 @@ msgstr "Líneas de neón"
 msgid "Network"
 msgstr "Red"
 
-#: src/components/companella/InstallationList.tsx
-#~ msgid "Never"
-#~ msgstr ""
+#: src/routes/developers.tsx
+msgid "Never"
+msgstr "Nunca"
 
 #: src/components/packs/run/chain/ChainDetails.tsx
 msgid "Never leaves your hand. Its base doubles every time it plays, for the rest of the run."
@@ -17818,6 +17924,10 @@ msgstr "Sin datos de keymodes"
 #: src/components/companella/RatingPreviewPanel.tsx
 #~ msgid "No keymode has enough evidence yet."
 #~ msgstr ""
+
+#: src/routes/developers.tsx
+msgid "No keys yet."
+msgstr "Todavía no hay keys."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "No ladder recognises this number. Titles come from clearing a real course, and nothing here has a say in who gets one. It makes a poor ranking too, since two players a step apart on the dan leaderboard are not meaningfully apart and anyone who never farms accuracy reads lower than they play. It also drifts, because the rating engines and the chart analysis keep getting better, so a recompute that moves a chart by a step moves everyone whose evidence sat on that chart."
@@ -19227,6 +19337,10 @@ msgstr "Una copia para un amigo. Te quedas con {remaining}."
 #~ msgid "One dan level is wide, so each is split into five steps. A chart can be 7--, 7-, 7, 7+ or 7++, from the easiest end of 7th dan to the hardest. Those suffixes are ordering inside a level, nothing more."
 #~ msgstr "Un nivel de dan es amplio, así que cada uno se divide en cinco escalones. Un chart puede ser 7--, 7-, 7, 7+ o 7++, del extremo más fácil del 7º dan al más difícil. Esos sufijos ordenan dentro de un nivel, nada más."
 
+#: src/routes/developers.tsx
+msgid "One entry per player found, in the order asked, shaped like the single-player response."
+msgstr "Una entrada por jugador encontrado, en el orden pedido, con la misma forma que la respuesta de un solo jugador."
+
 #: src/lib/chain-run.ts
 msgid "One flag"
 msgstr "Una bandera"
@@ -20410,6 +20524,10 @@ msgstr "Pegado"
 msgid "Path"
 msgstr "Trazado"
 
+#: src/routes/developers.tsx
+msgid "Path parameters"
+msgstr "Parámetros de ruta"
+
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Patreon connected"
 msgstr "Patreon conectado"
@@ -20453,6 +20571,10 @@ msgstr "Perfil de patrones"
 #: src/components/maps/PatternRadar.tsx
 msgid "Pattern radar chart"
 msgstr "Gráfico radar de patrones"
+
+#: src/routes/developers.tsx
+msgid "Pattern ratings by id."
+msgstr "Ratings de patrones por id."
 
 #: src/components/maps/MapDetailModal.tsx
 #: src/components/maps/PatternPicker.tsx
@@ -21108,6 +21230,10 @@ msgstr "Jugador no encontrado."
 msgid "Player Peak"
 msgstr "Peak de jugador"
 
+#: src/routes/developers.tsx
+msgid "Player skills"
+msgstr "Skills del jugador"
+
 #: src/components/replay/ReplayControls.tsx
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Player's skin"
@@ -21245,6 +21371,10 @@ msgstr "Las plays en mapas unranked pueden publicarse tarde o no publicarse. Las
 #: src/components/companella/ProfileImportedPlays.tsx
 #~ msgid "Plays sent through Companella"
 #~ msgstr "Plays enviadas con Companella"
+
+#: src/routes/developers.tsx
+msgid "Plays the ratings are built from."
+msgstr "Plays con las que se calculan los ratings."
 
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "Plays the skill ratings leave out: vibro charts and charts that cannot be rated."
@@ -22046,6 +22176,10 @@ msgstr "Calificado hace {age}, da pp cuando lo rankeen. Los jugadores con tu pp 
 msgid "Quarter turn right"
 msgstr "Cuarto de vuelta a la derecha"
 
+#: src/routes/developers.tsx
+msgid "Query parameters"
+msgstr "Parámetros de consulta"
+
 #: src/components/player/AddScoreModal.tsx
 msgid "queued"
 msgstr "en cola"
@@ -22257,6 +22391,10 @@ msgstr "Velocidad"
 #~ msgid "Rate edits detected. Using this difficulty's audio to keep notes in sync."
 #~ msgstr "Se detectaron versiones con cambios de velocidad. Se usa el audio de esta dificultad para mantener las notas sincronizadas."
 
+#: src/routes/developers.tsx
+msgid "Rate limits"
+msgstr "Límites"
+
 #: src/routes/dan-estimates.tsx
 #~ msgid "Rate mods count, and they count for what the chart is worth at that speed. A pass at 1.0x, at <0/> or <1/> (1.5x) and at <2/> or <3/> (0.75x) are all credited against the chart's dan at that exact rate, which the site rates separately. Runengon [4K Hard] is a 4th dan chart at 1.0x and around 9th dan under <4/>, so a <5/> pass on it is credited as 9th, not as 4th. ANiMA [Starry's 4K Lv.15] moves from 3rd to about 7th the same way. Slowing a chart down works in reverse: a 0.75x pass is worth what the chart is at 0.75x, which is well under its normal level. Custom lazer rates like 1.15x do not count toward your dan. The site can rate a chart at any speed on demand, and the map page does exactly that when you open a play set at one, but only 0.75x, 1.0x and 1.5x are stored, and the dan only reads stored ones."
 #~ msgstr "Los mods de velocidad cuentan, y cuentan por lo que vale el chart a esa velocidad. Un pase a 1.0x, con <0/> o <1/> (1.5x) y con <2/> o <3/> (0.75x) se acreditan contra el dan del chart a esa velocidad exacta, que el sitio puntúa por separado. Runengon [4K Hard] es un chart de 4º dan a 1.0x y de alrededor de 9º con <4/>, así que un pase con <5/> ahí se acredita como 9º, no como 4º. ANiMA [Starry's 4K Lv.15] pasa de 3º a cerca de 7º de la misma forma. Ralentizar un chart funciona al revés: un pase a 0.75x vale lo que el chart vale a 0.75x, bastante por debajo de su nivel normal. Los rates personalizados de lazer como 1.15x no cuentan para tu dan. El sitio sí puede puntuar un chart a cualquier velocidad cuando se lo pides, y la página del mapa hace justo eso al abrir una play hecha con uno, pero solo guarda 0.75x, 1.0x y 1.5x, y el dan solo lee los guardados."
@@ -22419,6 +22557,10 @@ msgstr "No se pudieron calificar tus plays. Se reintenta automáticamente, vuelv
 #: src/routes/player/$username.tsx
 msgid "Ratings"
 msgstr "Ratings"
+
+#: src/routes/developers.tsx
+msgid "Ratings by key count (\"4\", \"7\", ...)."
+msgstr "Ratings por cantidad de teclas (\"4\", \"7\", ...)."
 
 #: src/components/player/RecentPlayRatingCells.tsx
 msgid "Ratings could not be loaded. Tap Retry to try again."
@@ -22839,6 +22981,10 @@ msgstr "Cambios"
 #: src/components/packs/SetsView.tsx
 msgid "Reduce this set to {BINDER_MAX_CARDS} cards to show it on Showcase."
 msgstr "Reduce este conjunto a {BINDER_MAX_CARDS} cartas para mostrarlo en Destacados."
+
+#: src/routes/developers.tsx
+msgid "Reference"
+msgstr "Referencia"
 
 #: src/components/layout/StaleBuildNotice.tsx
 #: src/components/player/SkillPlaysExplorer.tsx
@@ -23428,6 +23574,10 @@ msgstr "Reportado. Un admin lo revisará."
 #~ msgid "Representative intervals are shown for each detected pattern."
 #~ msgstr "Se muestran intervalos representativos de cada patrón detectado."
 
+#: src/routes/developers.tsx
+msgid "Requests that use this key stop working right away."
+msgstr "Los requests que usan esta key dejan de funcionar de una vez."
+
 #: src/components/packs/run/chain/ChainShop.tsx
 #: src/components/packs/run/RunShop.tsx
 #: src/routes/maps.tsx
@@ -23515,6 +23665,10 @@ msgstr "Redimensionar a"
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Resizing image..."
 msgstr "Redimensionando imagen..."
+
+#: src/routes/developers.tsx
+msgid "Response"
+msgstr "Respuesta"
 
 #. placeholder {0}: REPLY_AUTHOR.username
 #: src/routes/report.tsx
@@ -23615,8 +23769,14 @@ msgstr "Revivido: {0} filas más."
 
 #: src/components/companella/InstallationList.tsx
 #: src/components/settings/CompanellaGroup.tsx
+#: src/routes/developers.tsx
 msgid "Revoke"
 msgstr "Revocar"
+
+#. placeholder {0}: revoking.label || revoking.prefix
+#: src/routes/developers.tsx
+msgid "Revoke {0}?"
+msgstr "¿Revocar {0}?"
 
 #: src/components/companella/InstallationList.tsx
 msgid "Revoke all"
@@ -23629,6 +23789,10 @@ msgstr "¿Revocar todas las conexiones de esta cuenta?"
 #: src/routes/companella.tsx
 #~ msgid "Revoke every installation on this account?"
 #~ msgstr ""
+
+#: src/routes/developers.tsx
+msgid "Revoke key"
+msgstr "Revocar key"
 
 #: src/components/settings/CompanellaGroup.tsx
 msgid "Revoke this connection?"
@@ -23650,9 +23814,9 @@ msgstr "¿Revocar esta conexión? Deja de enviar de inmediato."
 #~ msgid "Revoke this installation? It stops submitting right away."
 #~ msgstr ""
 
-#: src/components/companella/InstallationList.tsx
+#: src/routes/developers.tsx
 #~ msgid "Revoked"
-#~ msgstr ""
+#~ msgstr "Revocada"
 
 #: src/components/companella/InstallationList.tsx
 #~ msgid "Revoking stops a connection from submitting straight away. Scores it already imported stay in your history until you delete them."
@@ -24537,6 +24701,10 @@ msgstr "Segunda en sacarse"
 #~ msgid "Section {songTime}"
 #~ msgstr ""
 
+#: src/routes/developers.tsx
+msgid "Sections"
+msgstr "Secciones"
+
 #: src/routes/workshop.index.tsx
 msgid "See all"
 msgstr "Ver todos"
@@ -24732,6 +24900,10 @@ msgstr "Enviar atrás"
 #: src/routes/report.tsx
 #~ msgid "Send update"
 #~ msgstr "Enviar actualización"
+
+#: src/routes/developers.tsx
+msgid "Send your key as a Bearer token. Call the API from a server: it sends no CORS headers, and a key in a web page can be read by anyone who opens it."
+msgstr "Manda tu key como token Bearer. Llama la API desde un servidor: no manda headers CORS, y cualquiera que abra una página web puede leer una key que esté en ella."
 
 #: src/components/player/AddScoreModal.tsx
 #: src/components/supporter/CustomThemeCredit.tsx
@@ -25013,6 +25185,10 @@ msgstr "Ajustes que difieren de ese archivo:"
 #: src/lib/pack-run.ts
 msgid "Seven Keys"
 msgstr "Siete teclas"
+
+#: src/routes/developers.tsx
+msgid "Several players"
+msgstr "Varios jugadores"
 
 #: src/components/prism/MashOdExplorer.tsx
 #~ msgid "Shaded: the 300 window around each press"
@@ -25339,6 +25515,10 @@ msgstr "Mostrar su banner detrás de mis filas en listas"
 msgid "Show its countries"
 msgstr "Mostrar sus países"
 
+#: src/routes/developers.tsx
+msgid "Show key"
+msgstr "Mostrar key"
+
 #: src/components/packs/collections/CommunitySets.tsx
 #~ msgid "Show less"
 #~ msgstr "Ver menos"
@@ -25625,6 +25805,10 @@ msgstr "Firmar para la siguiente ronda"
 msgid "Sign in"
 msgstr "Inicia sesión"
 
+#: src/routes/developers.tsx
+msgid "Sign in again to make a key."
+msgstr "Inicia sesión de nuevo para crear una key."
+
 #: src/components/packs/GiftSpareDialog.tsx
 msgid "Sign in again to send a gift."
 msgstr "Inicia sesión de nuevo para enviar un regalo."
@@ -25695,6 +25879,10 @@ msgstr "Inicia sesión para leer las respuestas"
 msgid "Sign in to save."
 msgstr "Inicia sesión para guardar."
 
+#: src/routes/developers.tsx
+msgid "Sign in to see and make your keys."
+msgstr "Inicia sesión para ver y crear tus keys."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 #: src/components/settings/SettingsPanel.tsx
 msgid "Sign in to set a replay skin for your plays."
@@ -25713,6 +25901,7 @@ msgid "Sign in with Discord so we can check the server is yours to post. Discord
 msgstr "Inicia sesión con Discord para comprobar que el servidor es tuyo y puedas publicarlo. Discord compartirá:"
 
 #: src/components/companella/AuthorizePage.tsx
+#: src/routes/developers.tsx
 #: src/routes/discord.tsx
 msgid "Sign in with osu!"
 msgstr "Iniciar sesión con osu!"
@@ -28303,6 +28492,10 @@ msgstr "Los dans de 4K LN están pensados para jugarse en ScoreV2. El problema e
 #~ msgid "The 4K LN courses are written for the ScoreV2 mod, and osu! only files a play under that formula if you are on lazer. Most people are on stable, so the site works ScoreV2 accuracy out from your judgements rather than asking for a ScoreV2 play at all. On an old archived pass with nothing left but its accuracy, a stable play has to reach 97.5% instead of 97%, because the same hands read about half a point higher on the stable formula."
 #~ msgstr "Los cursos de 4K LN están pensados para el mod ScoreV2, y osu! solo registra un play con esa fórmula si estás en lazer. La mayoría juega en stable, así que el sitio calcula la precisión de ScoreV2 a partir de tus judgements en vez de exigir un play con ScoreV2. En un pase viejo del archivo al que no le queda más que su precisión, un play de stable tiene que llegar a 97.5% en lugar de 97%, porque las mismas manos se leen medio punto más alto en la fórmula de stable."
 
+#: src/routes/developers.tsx
+msgid "The account is gone from osu!, restricted, or the player hides their ratings."
+msgstr "La cuenta ya no está en osu!, está restringida, o el jugador oculta sus ratings."
+
 #: src/components/player/SkillPlaysExplorer.tsx
 #~ msgid "The accuracy is too far under this ladder's pass bar to count."
 #~ msgstr "La precisión está demasiado por debajo de la línea de pase de esta escala para contar."
@@ -28781,6 +28974,10 @@ msgstr "El crédito en tabla"
 msgid "The customized settings are too large to store"
 msgstr "Los ajustes personalizados son demasiado grandes para guardarlos"
 
+#: src/routes/developers.tsx
+msgid "The dan as the site shows it (<0>label</0>), its position on the ladder (<1>value</1>), and whether the player is past the last level (<2>beyondTable</2>)."
+msgstr "El dan como lo muestra el sitio (<0>label</0>), su posición en la tabla (<1>value</1>) y si el jugador pasó el último nivel (<2>beyondTable</2>)."
+
 #: src/components/skins/SkinSettingsModal.tsx
 msgid "The delete failed. Try again."
 msgstr "No se pudo eliminar. Inténtalo de nuevo."
@@ -28809,6 +29006,10 @@ msgstr "Tu email nunca se guarda, solo un código hecho a partir de él para enc
 #: src/routes/dan-estimates.tsx
 #~ msgid "The engine gives back a continuous number, and the number is what everything else uses. The label you see is just that number printed in the ladder's own language. 4K regular runs 1st to 10th and then into the greek levels (alpha, beta, gamma and up). 4K LN runs 1 to 17, numbered up to 10 and named above it: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K runs 0 to 10th and then Gamma, Azimuth, Zenith, Stellium. Both 6K ladders run 0 to 9th and then Terra, Celestial, Mystery, Nihility and Finish."
 #~ msgstr "El algoritmo devuelve un número continuo, y ese número es lo que usa todo lo demás. La etiqueta que ves es solo ese número escrito en el idioma de cada escala. 4K regular va del 1º al 10º y luego entra en los niveles griegos (alpha, beta, gamma y arriba). 4K LN va de 1 a 17, numerado hasta 10 y con nombre por encima: Yoake, Yuugure, Yoru, Yami, Yume, Yokaze, Yeehee. 7K va de 0 a 10º y luego Gamma, Azimuth, Zenith, Stellium. Ambas escalas 6K van de 0 a 9º y luego Terra, Celestial, Mystery, Nihility y Finish."
+
+#: src/routes/developers.tsx
+msgid "The entries that matched no player the API serves, as you sent them."
+msgstr "Las entradas que no coincidieron con ningún jugador que sirva la API, tal como las mandaste."
 
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "The estimate appears once {quorum} clears at {minAccuracyPercent}%+ accuracy land on rated charts."
@@ -28945,6 +29146,10 @@ msgstr "La escarcha alcanzó todas las cartas"
 msgid "The goals page"
 msgstr "La página de metas"
 
+#: src/routes/developers.tsx
+msgid "The headline MSD the profile shows. Read this rather than picking one from <0>msd</0>."
+msgstr "El MSD principal que muestra el perfil. Lee este en vez de escoger uno de <0>msd</0>."
+
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "The highway plays the notes of your replay skin and takes their colour. Off, it keeps its own notes and blue."
 msgstr "El highway toca las notas de tu skin de replay y toma su color. Desactivado, mantiene sus propias notas y el azul."
@@ -28972,6 +29177,10 @@ msgstr "Los datos de judgement de esta jugada se perdieron, así que no hay prec
 #: src/components/companella/SubmissionDetail.tsx
 msgid "The judgements saved in this replay don't match its key presses, so it's held for review."
 msgstr "Los juicios guardados en este replay no coinciden con sus pulsaciones, así que queda en revisión."
+
+#: src/routes/developers.tsx
+msgid "The key is missing, wrong or revoked."
+msgstr "Falta la key, está mal o fue revocada."
 
 #: src/lib/chain-run.ts
 msgid "The last 3 cards always link."
@@ -29096,6 +29305,14 @@ msgstr "La página supera el límite de 60.000 caracteres de osu!."
 msgid "The pattern's notes and combo are halved."
 msgstr "Las notas y el combo del patrón se reducen a la mitad."
 
+#: src/routes/developers.tsx
+msgid "The player is tracked, so their loved and graveyard plays count too."
+msgstr "El jugador está trackeado, así que sus plays en loved y graveyard también cuentan."
+
+#: src/routes/developers.tsx
+msgid "The player isn't an id or <0>@username</0>."
+msgstr "El jugador no es un id ni un <0>@username</0>."
+
 #: src/routes/recommendations.tsx
 msgid "The player panel can stay here, but this view did not return fresh map data."
 msgstr "El panel del jugador puede quedarse aquí, pero esta vista no devolvió datos actualizados del mapa."
@@ -29111,6 +29328,10 @@ msgstr "del jugador"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "The player's avatar, name and country."
 msgstr "Avatar, nombre y país del jugador."
+
+#: src/routes/developers.tsx
+msgid "The player's osu! username as the site last saw it."
+msgstr "El username de osu! del jugador según lo vio el sitio por última vez."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The pool is your osu! top plays plus every play the site tracked for you, deduplicated down to your best play on each chart at each speed. That tracked half only exists if you are on your country's roster, which is its top 100 plus anyone who turned tracking on themselves, and it starts the day tracking does. Charts flagged as vibro are thrown out everywhere, because the rating engines read a mash wall as enormous density and rate it absurdly."
@@ -29249,6 +29470,10 @@ msgstr "Se acabaron las filas antes de llegar a la meta. Inténtalo otra vez: ju
 #: src/routes/dan-estimates.tsx
 #~ msgid "The same goes for any session where you never set a score on a ranked, qualified or loved chart: tracking never notices you are playing, so nothing from that session is recorded either. <0>Why that is</0>. If your estimate reads low, that is usually the reason, and the only fix is to play more."
 #~ msgstr "Lo mismo pasa con cualquier sesión en la que no hayas hecho ningún score en un chart ranked, qualified o loved: el tracking nunca se entera de que estás jugando, así que tampoco se trackea nada de esa sesión. <0>Por qué pasa esto</0>. Si tu estimación sale baja, normalmente es por eso, y lo único que lo arregla es jugar más."
+
+#: src/routes/developers.tsx
+msgid "The same ratings for up to {MAX_BATCH} players in one request."
+msgstr "Los mismos ratings para hasta {MAX_BATCH} jugadores en un request."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "The same shape rides every ladder's own bar, so on 4K LN the scale sits against 97% and stops crediting at 93%. A sub-bar credit is always at least a step under the chart's own level: a near miss never reads as the full clear."
@@ -29954,6 +30179,10 @@ msgstr "Es tu única copia, así que la carta sale de tu colección."
 msgid "This is your own gift code. Send the link to a friend."
 msgstr "Este es tu propio código. Mándale el link a un amigo."
 
+#: src/routes/developers.tsx
+msgid "This key can't be shown again. Revoke it and make a new one."
+msgstr "Esta key no se puede volver a mostrar. Revócala y crea una nueva."
+
 #: src/components/supporter/frames/FrameInspector.tsx
 msgid "This layer is locked. Unlock it in the layer list to paint or move it."
 msgstr "Esta capa está bloqueada. Desbloquéala en la lista de capas para pintarla o moverla."
@@ -30435,6 +30664,10 @@ msgstr "muy fácil"
 #: src/components/player/DanEvidenceModal.tsx
 #~ msgid "Too far under {0} to count its whole distance"
 #~ msgstr "Demasiado por debajo de {0} para contar toda su distancia"
+
+#: src/routes/developers.tsx
+msgid "Too few plays for a settled number."
+msgstr "Muy pocas plays para un número estable."
 
 #: src/routes/recommendations.tsx
 msgid "too hard"
@@ -31203,6 +31436,10 @@ msgstr "Activar sonido"
 #: src/components/maps/ChartPreviewPanel.tsx
 msgid "Unmute chart preview"
 msgstr "Activar audio de la vista previa del mapa"
+
+#: src/routes/developers.tsx
+msgid "Unnamed"
+msgstr "Sin nombre"
 
 #: src/routes/legal.tsx
 #: src/routes/terms.tsx
@@ -32005,6 +32242,10 @@ msgstr "Espera a que termine el cambio de tamaño de la imagen y copia de nuevo.
 msgid "Wait for the image resize to finish, then save again."
 msgstr "Espera a que termine de redimensionarse la imagen y vuelve a guardar."
 
+#: src/routes/developers.tsx
+msgid "Wait the number of seconds in the <0>Retry-After</0> header."
+msgstr "Espera los segundos que dice el header <0>Retry-After</0>."
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "waiting for a vibro check"
 msgstr "esperando una revisión de vibro"
@@ -32385,6 +32626,10 @@ msgstr "Con la sesión iniciada, puedes dejar de trackear o borrar tu perfil des
 #: src/routes/discord.tsx
 msgid "When someone pulls my card"
 msgstr "Cuando alguien saca mi carta"
+
+#: src/routes/developers.tsx
+msgid "When the ratings were last worked out. The API never asks for new ones, so this is how old they are."
+msgstr "Cuándo se calcularon los ratings por última vez. La API nunca pide nuevos, así que esto dice qué tan viejos son."
 
 #: src/components/me/MyDataPanel.tsx
 msgid "When you play"
@@ -32881,6 +33126,10 @@ msgstr "Ya tienes {BINDER_MAX_PER_COLLECTOR} sets."
 #: src/components/maps/UserCollectionEditor.tsx
 msgid "You already have the maximum number of collections."
 msgstr "Ya tienes el número máximo de colecciones."
+
+#: src/routes/developers.tsx
+msgid "You already have the most keys an account can have."
+msgstr "Ya tienes el máximo de keys por cuenta."
 
 #: src/components/packs/PackStage.tsx
 msgid "You are cutting through the cards"
