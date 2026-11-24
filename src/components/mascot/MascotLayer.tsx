@@ -102,9 +102,6 @@ export function MascotLayer() {
       query.set("vw", String(window.innerWidth));
       query.set("vh", String(window.innerHeight));
 
-      /* Deliberately bland on the wire: what a curious visitor sees in devtools
-         says "updates", giving away neither surveillance vibes nor that a
-         character overlay exists before it is actually shown. */
       source = new EventSource(`${base}/api/updates/stream?${query.toString()}`);
       source.addEventListener("hello", (event) => {
         retry = 0;
