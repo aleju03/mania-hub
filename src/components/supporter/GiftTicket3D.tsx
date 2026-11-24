@@ -220,6 +220,11 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
   const labels: Labels = { gift: t`Gift`, title: t`One week of supporter`, days: t`days` };
   const labelsRef = useRef(labels);
   labelsRef.current = labels;
+  // Both sides are painted into textures, so a language switch has to paint them again.
+  const repaintRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    repaintRef.current?.();
+  }, [labels.gift, labels.title, labels.days]);
   const glSlot = useWebGlSlot(hostRef);
 
   useEffect(() => {
@@ -334,6 +339,11 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
       const paintBack = () => {
         drawBack(backCtx, labelsRef.current, font, heart);
         backTexture.needsUpdate = true;
+      };
+      repaintRef.current = () => {
+        paint();
+        paintBack();
+        queue();
       };
       const image = new Image();
       image.onload = () => {
@@ -527,6 +537,7 @@ export function GiftTicket3D({ fallback }: { fallback: ReactNode }) {
       };
 
       cleanup = () => {
+        repaintRef.current = null;
         cancelAnimationFrame(frame);
         watcher.disconnect();
         resizer.disconnect();

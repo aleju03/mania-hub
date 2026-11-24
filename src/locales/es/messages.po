@@ -12480,8 +12480,8 @@ msgid "Golden hour"
 msgstr "Hora dorada"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi."
-msgstr "Google solo acepta unos montos fijos, y cuenta el que pagues ahí. Para cualquier otro monto, paga con Ko-fi."
+#~ msgid "Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi."
+#~ msgstr "Google solo acepta unos montos fijos, y cuenta el que pagues ahí. Para cualquier otro monto, paga con Ko-fi."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Google Pay"
@@ -13376,7 +13376,7 @@ msgstr "Cómo jugar"
 msgid "How to play {0} of {1}"
 msgstr "Cómo jugar {0} de {1}"
 
-#: src/components/supporter/SupportPlans.tsx
+#: src/components/supporter/SupportCheckout.tsx
 msgid "How to support"
 msgstr "Cómo apoyar"
 
@@ -14550,13 +14550,19 @@ msgstr "Tipo"
 msgid "Knob lasers"
 msgstr "Láseres de perilla"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/routes/__root.tsx
 #~ msgid "Ko-fi page"
 #~ msgstr "página de Ko-fi"
 
+#: src/components/supporter/KofiNameSteps.tsx
 #: src/routes/support.tsx
 #~ msgid "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
 #~ msgstr "Ko-fi acepta PayPal, lava.top acepta tarjetas y PayPal. El paso junto al pago asegura que el tiempo llegue a tu cuenta."
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Ko-fi's monthly payment renews by itself. You can cancel any time on Ko-fi."
+msgstr "El pago mensual de Ko-fi se renueva solo. Puedes cancelarlo cuando quieras en Ko-fi."
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
@@ -16742,6 +16748,7 @@ msgstr "Monocraft"
 msgid "Month {month}"
 msgstr "Mes {month}"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/SupportPlans.tsx
 msgid "Monthly"
 msgstr "Mensual"
@@ -18614,16 +18621,16 @@ msgid "Not in your collection"
 msgstr "No está en tu colección"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Not on lava.top"
-msgstr "No está en lava.top"
+#~ msgid "Not on lava.top"
+#~ msgstr "No está en lava.top"
 
 #: src/routes/player/$username.tsx
 msgid "Not on osu! anymore"
 msgstr "Ya no está en osu!"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Not on Patreon"
-msgstr "No está en Patreon"
+#~ msgid "Not on Patreon"
+#~ msgstr "No está en Patreon"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "not passed yet"
@@ -18690,8 +18697,8 @@ msgid "Not unlocked yet."
 msgstr "Aún no se desbloquea."
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Not with crypto"
-msgstr "No con cripto"
+#~ msgid "Not with crypto"
+#~ msgstr "No con cripto"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Note"
@@ -19160,8 +19167,8 @@ msgid "on stable"
 msgstr "en stable"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
-msgstr "En el panel de Ko-fi, marca \"Make this monthly\" antes de pagar. Puedes cancelar cuando quieras en Ko-fi."
+#~ msgid "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
+#~ msgstr "En el panel de Ko-fi, marca \"Make this monthly\" antes de pagar. Puedes cancelar cuando quieras en Ko-fi."
 
 #: src/components/supporter/frames/FrameInspector.tsx
 msgid "On the mask the brush hides the layer and the eraser brings it back. The gradient fades it out from where you start dragging."
@@ -19274,6 +19281,7 @@ msgstr "un solo skill, sin división"
 msgid "One week of supporter"
 msgstr "Una semana de supporter"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/SupportPlans.tsx
 msgid "One-time"
 msgstr "Pago único"
@@ -19554,6 +19562,11 @@ msgstr "Abrir en el cliente de osu!"
 #: src/routes/player/$username.tsx
 msgid "Open in the BBCode editor"
 msgstr "Abrir en el editor de BBCode"
+
+#: src/components/supporter/SupportCheckout.tsx
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Open Ko-fi in a new tab"
+msgstr "Abrir Ko-fi en otra pestaña"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open link"
@@ -20748,6 +20761,10 @@ msgstr "Elige un .osr y el .osu en el que se jugó."
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Pick it back up"
 msgstr "Recogerla"
+
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "Pick Monthly at the top of Ko-fi's panel. So the time reaches your account, do one of these there:"
+msgstr "Elige Monthly arriba en el panel de Ko-fi. Para que el tiempo llegue a tu cuenta, haz una de estas cosas ahí:"
 
 #: src/lib/pack-run.ts
 msgid "Pick one of two common charms."
@@ -27283,6 +27300,7 @@ msgstr "Super Rare"
 msgid "support"
 msgstr "supporter"
 
+#: src/components/layout/Nav.tsx
 #: src/components/supporter/frames/FrameDialogs.tsx
 #: src/routes/support.tsx
 msgid "Support"
@@ -27391,7 +27409,7 @@ msgstr "Los supporters envían marcos al selector de todos, con su nombre, y los
 
 #: src/routes/support.tsx
 msgid "Supporting keeps the servers running and new features coming. As thanks, supporters get everything on this page."
-msgstr "Apoyar mantiene los servidores en marcha y las novedades llegando. Como agradecimiento, los supporters tienen todo lo de esta página."
+msgstr "Apoyar ayuda a pagar los servidores y a seguir sacando cosas nuevas. Como agradecimiento, los supporters tienen todo lo de esta página."
 
 #: src/routes/support.tsx
 #~ msgid "Supporting pays for the servers. Supporters get profile themes, avatar frames, name styles, mascots, card foils, packs cosmetics, extra profile stats, video share links and DMs from the Discord bot."
@@ -33721,11 +33739,11 @@ msgstr "Tu suscripción guarda hasta 3 meses acumulados, y lo que pase de eso se
 
 #: src/components/supporter/SupporterWelcomeOverlay.tsx
 msgid "Your support keeps the servers running and new features coming."
-msgstr "Tu apoyo mantiene los servidores en marcha y las novedades llegando."
+msgstr "Tu apoyo ayuda a pagar los servidores y a seguir sacando cosas nuevas."
 
 #: src/routes/supporter.tsx
 msgid "Your support keeps the servers running and new features coming. These extras are the thank-you."
-msgstr "Tu apoyo mantiene los servidores en marcha y las novedades llegando. Estos extras son el agradecimiento."
+msgstr "Tu apoyo ayuda a pagar los servidores y a seguir sacando cosas nuevas. Estos extras son el agradecimiento."
 
 #: src/components/supporter/GiftCodeReminder.tsx
 msgid "Your supporter ends on {until}. You still have a week of supporter to give a friend."

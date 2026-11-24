@@ -29,6 +29,8 @@ import { msg, plural } from "@lingui/core/macro";
 import { useLocale } from "../../lib/locale-context";
 import { UsernameText } from "../ui/UsernameText";
 import { scaledPx } from "#/lib/ui-scale-values";
+import { track } from "../../lib/analytics";
+import { SupporterMark } from "../supporter/SupporterRankBadge";
 
 // The crest arrow shows the flag mirrored, except where that reads as another
 // country (IE/CI, ML/GN) or reverses writing on the flag.
@@ -276,6 +278,16 @@ export function Nav() {
   const replyAlert = useReplyAlert(Boolean(auth.viewer));
   // supporters manage their look there; for everyone else it is the way in, so it says what is inside
   const viewerIsSupporter = useViewerIsSupporter(auth.viewer?.id);
+  /* The way in to /support for everyone who is not a supporter yet, signed in
+     or not. Before this the footer pill and the account menu were the only
+     links, and the payment page got well under 1% of visitors. */
+  /* Supporters never see it. Their status is only known in the browser, so
+     for a signed-in viewer it waits for hydration instead of rendering on the
+     server and then vanishing. */
+  const hydrated = useHasHydrated();
+  const supporterStatusKnown = !auth.viewer || hydrated;
+  const showSupportLink = supporterStatusKnown && !viewerIsSupporter && !location.pathname.startsWith("/support");
+  const openSupportFromNav = () => track("support_page_open", { source: "nav" });
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
@@ -297,7 +309,6 @@ export function Nav() {
   const visibleLeaves = ALL_LEAVES.filter(isLeafVisible);
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const snipesFilters = useAppStore((state) => state.snipesFiltersByCountry[selectedCountry] ?? DEFAULT_SNIPES_FILTERS);
-  const hydrated = useHasHydrated();
   const topPlaysRangeForLink = hydrated && topPlaysRange !== "7d" ? topPlaysRange : "7d";
   const snipesFiltersForLink = hydrated ? snipesFilters : DEFAULT_SNIPES_FILTERS;
   const settingsActive = location.pathname.startsWith("/settings");
@@ -1150,9 +1161,20 @@ export function Nav() {
             <Settings className="h-5 w-5" strokeWidth={2.1} />
           </button>
           <ThemePicker />
+          {showSupportLink ? (
+            <Link
+              to="/support"
+              onClick={openSupportFromNav}
+              draggable={false}
+              title={t`Support`}
+              aria-label={t`Support`}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-osu-pink-light transition-colors hover:bg-osu-b3/50 hover:text-white"
+            >
+              <SupporterMark className="h-5 w-5" />
+            </Link>
+          ) : null}
         </div>
 
-        {/* Mobile hamburger button */}
         <button
           className="lg:hidden flex items-center justify-center w-9 h-9 rounded-lg hover:bg-osu-b3/50 transition-colors cursor-pointer"
           onClick={() => {
@@ -1441,6 +1463,20 @@ export function Nav() {
                   <Settings className="h-5 w-5" strokeWidth={2.1} />
                   {t`Settings`}
                 </button>
+                {/* on phones it lives here rather than in the bar, where it stood out on every page */}
+                {showSupportLink ? (
+                  <Link
+                    to="/support"
+                    onClick={() => {
+                      openSupportFromNav();
+                      setMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-3 rounded-lg bg-osu-b4/60 px-3 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-b4 hover:text-white"
+                  >
+                    <SupporterMark className="h-5 w-5" />
+                    {t`Support`}
+                  </Link>
+                ) : null}
                 <Link
                   to="/report"
                   search={{ from: location.pathname === "/report" ? undefined : location.pathname }}

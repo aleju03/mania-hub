@@ -6,70 +6,42 @@ import { FrameThumb } from "./LoadoutSlots";
 import { SupportDaysPreview } from "./SupportDaysPreview";
 import { RankGem, SupporterRankIcon } from "./SupporterRankBadge";
 import { useShowcaseViewer } from "./SupportShowcase";
-import type { SupportMethod } from "./SupportCheckout";
-
-type Plan = "monthly" | "once";
+import type { SupportMethod, SupportPlan } from "./SupportCheckout";
 
 /* How long the monthly card's gem stays on each rank as it climbs. */
 const CLIMB_MS = 2400;
 const GOLD = SUPPORTER_RANKS.find((rank) => rank.id === "gold") ?? SUPPORTER_RANKS[0];
 
-/* The two ways to support, side by side: a monthly subscription (the one
-   that gets the most, so it comes first and is picked by default) and a
-   one-time payment, with the days calculator. Monthly's gem burns and climbs
-   the twelve ranks, as a subscriber's does, and the ladder under it lifts the
-   rank it is on. Both are paid on the checkout beside this. Patreon and
-   lava.top only sell a membership, so One-time can't be picked while one of
-   them is the method, and crypto is paid once, so Monthly can't be with
-   it; Google takes a one-off but only in set amounts, which the plan says.
-   `amount` is the calculator's, which the crypto panel pays. */
-export function SupportPlans({ method, amount, onAmount }: { method: SupportMethod | null; amount: string; onAmount: (amount: string) => void }) {
+/* What the picked plan gets, beside the checkout: a subscription's rank
+   ladder and perks, or the one-time days calculator. `amount` is the
+   calculator's, which the crypto panel pays. */
+export function SupportPlanInfo({ plan, method, amount, onAmount }: { plan: SupportPlan; method: SupportMethod | null; amount: string; onAmount: (amount: string) => void }) {
   const { t } = useLingui();
-  const [picked, setPlan] = useState<Plan>("monthly");
   const index = useClimbingRank();
   const rank = SUPPORTER_RANKS[index];
-  const noOnce = method === "patreon" ? t`Not on Patreon` : method === "lava" ? t`Not on lava.top` : null;
-  const noMonthly = method === "crypto" ? t`Not with crypto` : null;
-  // The pick is kept, so it comes back with a method that takes it.
-  const plan: Plan = noOnce ? "monthly" : noMonthly ? "once" : picked;
+  if (plan === "monthly") {
+    return (
+      <>
+        <PlanHeading gem={<RankGem rank={rank} renewing className="h-9 w-9" />} title={t`Monthly`} price={t`$4 a month`} />
+        <MonthlyPerks index={index} method={method} />
+      </>
+    );
+  }
   return (
-    <div className="mt-7">
-      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t`How to support`}>
-        <PlanCard on={plan === "monthly"} off={noMonthly != null} onPick={() => setPlan("monthly")} gem={<RankGem rank={rank} renewing className="h-10 w-10" />} title={t`Monthly`} price={noMonthly ?? t`$4 a month`} />
-        <PlanCard on={plan === "once"} off={noOnce != null} onPick={() => setPlan("once")} gem={<SupporterRankIcon rank={rank} className="h-10 w-10" />} title={t`One-time`} price={noOnce ?? t`Any amount`} />
-      </div>
-      {plan === "monthly" ? <MonthlyPerks index={index} method={method} /> : (
-        <>
-          <SupportDaysPreview raw={amount} onRaw={onAmount} />
-          {method === "google" ? (
-            <p className="mt-2.5 rounded-xl bg-osu-b4 px-4 py-3 text-[12.5px] leading-relaxed text-osu-l2 ring-1 ring-inset ring-white/[0.06]">
-              {t`Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi.`}
-            </p>
-          ) : null}
-        </>
-      )}
-    </div>
+    <>
+      <PlanHeading gem={<SupporterRankIcon rank={rank} className="h-9 w-9" />} title={t`One-time`} price={t`Any amount`} />
+      <SupportDaysPreview raw={amount} onRaw={onAmount} />
+    </>
   );
 }
 
-/* A plan to pick, with the rank gem it gives: burning for monthly. The fire
-   rises past the card's top edge, in front of its ring. */
-function PlanCard({ on, off = false, onPick, gem, title, price }: { on: boolean; off?: boolean; onPick: () => void; gem: ReactNode; title: string; price: string }) {
+function PlanHeading({ gem, title, price }: { gem: ReactNode; title: string; price: string }) {
   return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={on}
-      disabled={off}
-      onClick={onPick}
-      className={`relative flex items-center gap-3 rounded-xl px-3.5 py-3 text-left ring-inset transition-colors ${off ? "cursor-not-allowed bg-osu-b4/50 ring-1 ring-white/[0.04]" : on ? "cursor-pointer bg-osu-pink/15 ring-2 ring-osu-pink" : "cursor-pointer bg-osu-b4 ring-1 ring-white/[0.06] hover:bg-osu-b3"}`}
-    >
-      <span className={`shrink-0 ${off ? "opacity-35 grayscale" : ""}`}>{gem}</span>
-      <span className="relative min-w-0">
-        <span className={`block text-[15px] font-bold ${off ? "text-white/40" : "text-white"}`}>{title}</span>
-        <span className={`block text-[12px] ${off ? "text-osu-f1" : "text-osu-l2"}`}>{price}</span>
-      </span>
-    </button>
+    <div className="flex items-center gap-3">
+      <span className="shrink-0">{gem}</span>
+      <span className="text-[17px] font-bold text-white">{title}</span>
+      <span className="text-[13px] text-osu-l2">{price}</span>
+    </div>
   );
 }
 
@@ -122,7 +94,7 @@ function MonthlyPerks({ index, method }: { index: number; method: SupportMethod 
             ? t`lava.top's Supporter membership renews by itself. You can cancel any time on lava.top.`
             : method === "patreon"
               ? t`Patreon's Supporter tier renews by itself. You can cancel any time on Patreon.`
-            : t`On the Ko-fi panel, tick "Make this monthly" before you pay. You can cancel any time on Ko-fi.`}
+            : t`Ko-fi's monthly payment renews by itself. You can cancel any time on Ko-fi.`}
       </p>
     </div>
   );

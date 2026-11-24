@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { plural } from "@lingui/core/macro";
 import { Plural, useLingui } from "@lingui/react/macro";
 import { createServerFn } from "@tanstack/react-start";
@@ -887,6 +887,15 @@ function PaymentMarks({ marks, label, className = "mt-1 h-3.5 gap-2" }: { marks:
    (cards or PayPal, in rubles, dollars or euros), which also works where
    Ko-fi does not. */
 export type SupportMethod = "kofi" | "google" | "lava" | "patreon" | "crypto";
+export type SupportPlan = "monthly" | "once";
+
+/* Which methods sell which plan: Patreon and lava.top only sell a
+   membership, crypto is paid once, Ko-fi and Google do both. */
+export function methodSellsPlan(method: SupportMethod, plan: SupportPlan): boolean {
+  if (method === "patreon" || method === "lava") return plan === "monthly";
+  if (method === "crypto") return plan === "once";
+  return true;
+}
 
 /* Google's checkout. It refuses every host but mania-tracker.com, so
    locally it only shows its button. A claim that fails on the spot falls
@@ -930,11 +939,11 @@ export function useSupportMethods() {
 }
 
 /* What to do so the payment reaches the account, beside the checkout. */
-export function SupportMethodSteps({ method }: { method: SupportMethod }) {
+export function SupportMethodSteps({ method, plan }: { method: SupportMethod; plan: SupportPlan }) {
   const { t } = useLingui();
   const auth = useAuth();
   const signedIn = !!auth.viewer;
-  if (method === "kofi") return <KofiNameSteps />;
+  if (method === "kofi") return <KofiNameSteps plan={plan} />;
   if (method === "patreon") {
     return (
       <p className="mt-2 text-[14px] leading-relaxed text-osu-l2">
@@ -971,7 +980,7 @@ export function SupportMethodSteps({ method }: { method: SupportMethod }) {
   );
 }
 
-export function SupportCheckout({ methods, method, onMethod, amount, onAmount }: { methods: SupportMethod[]; method: SupportMethod | null; onMethod: (method: SupportMethod) => void; amount: string; onAmount: (amount: string) => void }) {
+export function SupportCheckout({ plan, onPlan, methods, method, onMethod, amount, onAmount, steps }: { plan: SupportPlan; onPlan: (plan: SupportPlan) => void; methods: SupportMethod[]; method: SupportMethod | null; onMethod: (method: SupportMethod) => void; amount: string; onAmount: (amount: string) => void; /** What to do so the payment reaches the account, between the tabs and the panel */ steps?: ReactNode }) {
   const { t } = useLingui();
   const auth = useAuth();
   const viewerId = auth.viewer?.id;
@@ -994,8 +1003,33 @@ export function SupportCheckout({ methods, method, onMethod, amount, onAmount }:
     crypto: { name: t`Crypto`, detail: "USDT", marks: ["tether"] },
   };
 
+  const plans: { id: SupportPlan; label: string }[] = [
+    { id: "monthly", label: t`Monthly` },
+    { id: "once", label: t`One-time` },
+  ];
+
   return (
     <div className="overflow-hidden rounded-xl bg-osu-b4">
+      {/* The plan comes first: it decides which methods can sell it, and
+          Ko-fi's panel can't be opened on Monthly from here, so its steps
+          point at the panel's own Monthly switch. */}
+      <div role="radiogroup" aria-label={t`How to support`} className="grid grid-cols-2 gap-1 border-b border-white/[0.07] p-1.5">
+        {plans.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={plan === id}
+            onClick={() => {
+              onPlan(id);
+              track(`support_plan_${id}`);
+            }}
+            className={`cursor-pointer rounded-lg px-2 py-2 text-center text-[14px] font-bold transition-colors ${plan === id ? "bg-osu-pink text-white" : "text-osu-l2 hover:bg-white/[0.05] hover:text-white"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {/* a choice only when there is one to make */}
       {methods.length > 1 && <div role="radiogroup" aria-label={t`How to pay`} className={`grid gap-1 border-b border-white/[0.07] p-1.5 ${methods.length >= 6 ? "grid-cols-3 sm:grid-cols-6" : methods.length === 5 ? "grid-cols-3 sm:grid-cols-5" : methods.length === 4 ? "grid-cols-2 sm:grid-cols-4" : methods.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
         {methods.map((id) => {
@@ -1018,6 +1052,7 @@ export function SupportCheckout({ methods, method, onMethod, amount, onAmount }:
           );
         })}
       </div>}
+      {steps ? <div className="border-b border-white/[0.07] px-4 pb-3.5 pt-1.5">{steps}</div> : null}
       {method === "lava" && viewerId && (LAVA_API_CHECKOUT_FOR_EVERYONE || auth.isAdmin) ? (
         <div className="flex flex-col gap-5 px-5 pb-6 pt-5">
           <LavaApiPay viewerId={viewerId} />
@@ -1074,11 +1109,18 @@ export function SupportCheckout({ methods, method, onMethod, amount, onAmount }:
         ) : (
           <div className="h-[600px] bg-[#f9f9f9]/5" />
         )}
+        {/* Cloudflare sometimes checks a browser before Ko-fi loads, and that
+            check can't show inside a frame, so the panel comes up empty */}
+        <p className="border-t border-white/[0.07] px-4 pt-3 text-center text-[12px] text-osu-f1">
+          <a href={KOFI_PAGE_URL} target="_blank" rel="noopener noreferrer" onClick={() => track("support_kofi_tab_open")} className="font-semibold text-osu-pink-light hover:underline">
+            {t`Open Ko-fi in a new tab`}
+          </a>
+        </p>
         {viewerId && method !== null ? (
-          <div className="flex justify-center border-t border-white/[0.07] px-4 py-4">
+          <div className="flex justify-center px-4 pb-4 pt-3">
             <PaymentClaim provider="kofi" />
           </div>
-        ) : null}
+        ) : <div className="h-3" />}
       </div>
     </div>
   );

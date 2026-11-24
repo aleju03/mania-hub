@@ -6,9 +6,9 @@ import { AnimatePresence, motion, useInView, useReducedMotion, type Variants } f
 import type { MessageDescriptor } from "@lingui/core";
 
 import { PageHeader } from "../components/layout/PageHeader";
-import { SupportCheckout, SupportMethodSteps, useSupportMethods, type SupportMethod } from "../components/supporter/SupportCheckout";
+import { methodSellsPlan, SupportCheckout, SupportMethodSteps, useSupportMethods, type SupportMethod, type SupportPlan } from "../components/supporter/SupportCheckout";
 import { KofiNameSteps } from "../components/supporter/KofiNameSteps";
-import { SupportPlans } from "../components/supporter/SupportPlans";
+import { SupportPlanInfo } from "../components/supporter/SupportPlans";
 import {
   CardShowcase,
   ClipShowcase,
@@ -191,7 +191,17 @@ function SupportPage() {
   const [pickedMethod, setPickedMethod] = useState<SupportMethod | null>(null);
   // The one-time amount: the calculator's, and what the crypto panel pays.
   const [onceAmount, setOnceAmount] = useState("4");
-  const payMethod = pickedMethod && payMethods.includes(pickedMethod) ? pickedMethod : initialPayMethod;
+  const [plan, setPlan] = useState<SupportPlan>("monthly");
+  // back from a crypto invoice: that is a one-time payment
+  useEffect(() => {
+    if (initialPayMethod === "crypto") setPlan("once");
+  }, [initialPayMethod]);
+  // only the methods that sell the picked plan; the visitor's pick, then their country's, then the first
+  const planMethods = payMethods.filter((method) => methodSellsPlan(method, plan));
+  const payMethod = pickedMethod && planMethods.includes(pickedMethod)
+    ? pickedMethod
+    : initialPayMethod == null ? null
+    : planMethods.includes(initialPayMethod) ? initialPayMethod : (planMethods[0] ?? null);
   const reduced = useReducedMotion();
   const heroRef = useRef<HTMLDivElement>(null);
 
@@ -344,17 +354,30 @@ function SupportPage() {
             </section>
 
             <section id="checkout" className="scroll-mt-[76px] border-t border-white/[0.07] pt-8">
-              <Reveal className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-                <div>
-                  <h2 className="text-[22px] font-bold text-white">{t`Support`}</h2>
-                  {payMethod ? <SupportMethodSteps method={payMethod} /> : <KofiNameSteps />}
-                  <SupportPlans method={payMethod} amount={onceAmount} onAmount={setOnceAmount} />
-                  <p className="mt-4 text-[13px] leading-relaxed text-osu-l2">
-                    {t`Pick your look on the supporter page. It saves as you go.`}{" "}
-                    <Link to="/supporter" className="font-semibold text-osu-pink-light hover:underline">{t`Open the supporter page`}</Link>
-                  </p>
+              <Reveal>
+                <h2 className="text-[22px] font-bold text-white">{t`Support`}</h2>
+                {/* the panel comes first on phones, so paying is not below the perks */}
+                <div className="mt-4 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+                  <div className="order-2 lg:order-1">
+                    <SupportPlanInfo plan={plan} method={payMethod} amount={onceAmount} onAmount={setOnceAmount} />
+                    <p className="mt-4 text-[13px] leading-relaxed text-osu-l2">
+                      {t`Pick your look on the supporter page. It saves as you go.`}{" "}
+                      <Link to="/supporter" className="font-semibold text-osu-pink-light hover:underline">{t`Open the supporter page`}</Link>
+                    </p>
+                  </div>
+                  <div className="order-1 lg:order-2">
+                    <SupportCheckout
+                      plan={plan}
+                      onPlan={setPlan}
+                      methods={planMethods}
+                      method={payMethod}
+                      onMethod={setPickedMethod}
+                      amount={onceAmount}
+                      onAmount={setOnceAmount}
+                      steps={payMethod ? <SupportMethodSteps method={payMethod} plan={plan} /> : <KofiNameSteps plan={plan} />}
+                    />
+                  </div>
                 </div>
-                <SupportCheckout methods={payMethods} method={payMethod} onMethod={setPickedMethod} amount={onceAmount} onAmount={setOnceAmount} />
               </Reveal>
             </section>
           </div>

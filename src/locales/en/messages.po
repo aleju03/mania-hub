@@ -12518,8 +12518,8 @@ msgid "Golden hour"
 msgstr "Golden hour"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi."
-msgstr "Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi."
+#~ msgid "Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi."
+#~ msgstr "Google only takes a few set amounts, and the one you pay there is what counts. For any other amount, pay with Ko-fi."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Google Pay"
@@ -13418,7 +13418,7 @@ msgstr "How to play"
 msgid "How to play {0} of {1}"
 msgstr "How to play {0} of {1}"
 
-#: src/components/supporter/SupportPlans.tsx
+#: src/components/supporter/SupportCheckout.tsx
 msgid "How to support"
 msgstr "How to support"
 
@@ -14600,13 +14600,19 @@ msgstr "Kind"
 msgid "Knob lasers"
 msgstr "Knob lasers"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/routes/__root.tsx
 #~ msgid "Ko-fi page"
 #~ msgstr "Ko-fi page"
 
+#: src/components/supporter/KofiNameSteps.tsx
 #: src/routes/support.tsx
 #~ msgid "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
 #~ msgstr "Ko-fi takes PayPal, lava.top takes cards and PayPal. The step beside the checkout makes sure the time lands on your account."
+
+#: src/components/supporter/SupportPlans.tsx
+msgid "Ko-fi's monthly payment renews by itself. You can cancel any time on Ko-fi."
+msgstr "Ko-fi's monthly payment renews by itself. You can cancel any time on Ko-fi."
 
 #: src/lib/supporter-profile-themes.ts
 msgid "Koi pond"
@@ -16792,6 +16798,7 @@ msgstr "Monocraft"
 msgid "Month {month}"
 msgstr "Month {month}"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/SupportPlans.tsx
 msgid "Monthly"
 msgstr "Monthly"
@@ -18664,16 +18671,16 @@ msgid "Not in your collection"
 msgstr "Not in your collection"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Not on lava.top"
-msgstr "Not on lava.top"
+#~ msgid "Not on lava.top"
+#~ msgstr "Not on lava.top"
 
 #: src/routes/player/$username.tsx
 msgid "Not on osu! anymore"
 msgstr "Not on osu! anymore"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Not on Patreon"
-msgstr "Not on Patreon"
+#~ msgid "Not on Patreon"
+#~ msgstr "Not on Patreon"
 
 #: src/components/me/GoalsPanel.tsx
 msgid "not passed yet"
@@ -18740,8 +18747,8 @@ msgid "Not unlocked yet."
 msgstr "Not unlocked yet."
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "Not with crypto"
-msgstr "Not with crypto"
+#~ msgid "Not with crypto"
+#~ msgstr "Not with crypto"
 
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Note"
@@ -19210,8 +19217,8 @@ msgid "on stable"
 msgstr "on stable"
 
 #: src/components/supporter/SupportPlans.tsx
-msgid "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
-msgstr "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
+#~ msgid "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
+#~ msgstr "On the Ko-fi panel, tick \"Make this monthly\" before you pay. You can cancel any time on Ko-fi."
 
 #: src/components/supporter/frames/FrameInspector.tsx
 msgid "On the mask the brush hides the layer and the eraser brings it back. The gradient fades it out from where you start dragging."
@@ -19324,6 +19331,7 @@ msgstr "one skill, no split"
 msgid "One week of supporter"
 msgstr "One week of supporter"
 
+#: src/components/supporter/SupportCheckout.tsx
 #: src/components/supporter/SupportPlans.tsx
 msgid "One-time"
 msgstr "One-time"
@@ -19604,6 +19612,11 @@ msgstr "Open in osu! client"
 #: src/routes/player/$username.tsx
 msgid "Open in the BBCode editor"
 msgstr "Open in the BBCode editor"
+
+#: src/components/supporter/SupportCheckout.tsx
+#: src/components/supporter/SupportCheckout.tsx
+msgid "Open Ko-fi in a new tab"
+msgstr "Open Ko-fi in a new tab"
 
 #: src/components/player/bbcode/BBCodeEditor.tsx
 msgid "Open link"
@@ -20798,6 +20811,10 @@ msgstr "Pick both a .osr and the .osu it was played on."
 #: src/components/packs/collections/board/CardBoard.tsx
 msgid "Pick it back up"
 msgstr "Pick it back up"
+
+#: src/components/supporter/KofiNameSteps.tsx
+msgid "Pick Monthly at the top of Ko-fi's panel. So the time reaches your account, do one of these there:"
+msgstr "Pick Monthly at the top of Ko-fi's panel. So the time reaches your account, do one of these there:"
 
 #: src/lib/pack-run.ts
 msgid "Pick one of two common charms."
@@ -27341,6 +27358,7 @@ msgstr "Super Rare"
 msgid "support"
 msgstr "support"
 
+#: src/components/layout/Nav.tsx
 #: src/components/supporter/frames/FrameDialogs.tsx
 #: src/routes/support.tsx
 msgid "Support"
