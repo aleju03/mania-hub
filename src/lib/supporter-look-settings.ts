@@ -473,22 +473,41 @@ export interface SupporterWelcomeState {
   expiresAt: number | null;
   /** Who gave them their time, when it came from a gift code. */
   giftFrom: string | null;
+  /** Their unused gift code, when their time runs out soon and they have not been reminded for this run-out. */
+  giftReminder: { code: string; expiresAt: number } | null;
 }
 
 /** Whether the viewer is due the site's one-time supporter thank-you, and when their time runs out. */
 export const fetchSupporterWelcome = createServerFn({ method: "GET" }).handler(
   async (): Promise<SupporterWelcomeState> => {
     const viewer = await requireViewer();
-    if (!viewer) return { due: false, expiresAt: null, giftFrom: null };
+    if (!viewer) return { due: false, expiresAt: null, giftFrom: null, giftReminder: null };
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const response = await fetch(`${viewer.base}/api/supporters/self/welcome?userId=${viewer.userId}`, { headers: bridgeAuthHeaders() });
-    if (!response.ok) return { due: false, expiresAt: null, giftFrom: null };
-    const body = await response.json().catch(() => null) as { due?: unknown; expiresAt?: unknown; giftFrom?: unknown } | null;
+    if (!response.ok) return { due: false, expiresAt: null, giftFrom: null, giftReminder: null };
+    const body = await response.json().catch(() => null) as { due?: unknown; expiresAt?: unknown; giftFrom?: unknown; giftReminder?: { code?: unknown; expiresAt?: unknown } | null } | null;
     const expiresAt = typeof body?.expiresAt === "number" && Number.isFinite(body.expiresAt) ? body.expiresAt : null;
-    return { due: body?.due === true && expiresAt !== null, expiresAt, giftFrom: typeof body?.giftFrom === "string" ? body.giftFrom : null };
+    const reminder = body?.giftReminder;
+    const giftReminder = reminder && typeof reminder.code === "string" && typeof reminder.expiresAt === "number" && Number.isFinite(reminder.expiresAt)
+      ? { code: reminder.code, expiresAt: reminder.expiresAt }
+      : null;
+    return { due: body?.due === true && expiresAt !== null, expiresAt, giftFrom: typeof body?.giftFrom === "string" ? body.giftFrom : null, giftReminder };
   },
 );
+
+/** Records that the gift code reminder showed for the run-out ending at expiresAt. */
+export const markGiftCodeReminderShown = createServerFn({ method: "POST" })
+  .validator((data: { expiresAt?: unknown }) => ({ expiresAt: Math.floor(Number(data?.expiresAt) || 0) }))
+  .handler(async ({ data }): Promise<void> => {
+    const viewer = await requireViewer();
+    if (!viewer || data.expiresAt <= 0) return;
+    await fetch(`${viewer.base}/api/supporters/self/welcome`, {
+      method: "POST",
+      headers: bridgeAuthHeaders(true),
+      body: JSON.stringify({ userId: viewer.userId, giftReminderFor: data.expiresAt }),
+    });
+  });
 
 export const markSupporterWelcomeSeen = createServerFn({ method: "POST" }).handler(async (): Promise<void> => {
   const viewer = await requireViewer();

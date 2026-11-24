@@ -7321,6 +7321,7 @@ msgstr "Recortar a la capa de abajo"
 #: src/components/skins/SkinUpdateModal.tsx
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/supporter/frames/FrameDialogs.tsx
+#: src/components/supporter/GiftCodeReminder.tsx
 #: src/components/ui/ImageLightbox.tsx
 #: src/routes/discord.tsx
 #: src/routes/maps.tsx
@@ -7983,6 +7984,7 @@ msgstr "Copiar URL de la imagen"
 #: src/components/replay/ReplayControls.tsx
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/supporter/GiftCodePanel.tsx
+#: src/components/supporter/GiftCodeReminder.tsx
 msgid "Copy link"
 msgstr "Copiar enlace"
 
@@ -9148,6 +9150,7 @@ msgstr "Daycore"
 
 #: src/components/player/ProfileStatCards.tsx
 #: src/components/supporter/GiftCodePanel.tsx
+#: src/components/supporter/GiftCodeReminder.tsx
 #: src/components/supporter/GiftTicket3D.tsx
 #: src/components/supporter/SupportShowcase.tsx
 msgid "days"
@@ -15108,6 +15111,7 @@ msgstr "Enlaza una fila"
 #: src/components/packs/run/chain/ChainEnd.tsx
 #: src/components/skins/SkinUploadModal.tsx
 #: src/components/supporter/GiftCodePanel.tsx
+#: src/components/supporter/GiftCodeReminder.tsx
 msgid "Link copied"
 msgstr "Enlace copiado"
 
@@ -33722,6 +33726,10 @@ msgstr "Tu apoyo mantiene los servidores en marcha y las novedades llegando."
 #: src/routes/supporter.tsx
 msgid "Your support keeps the servers running and new features coming. These extras are the thank-you."
 msgstr "Tu apoyo mantiene los servidores en marcha y las novedades llegando. Estos extras son el agradecimiento."
+
+#: src/components/supporter/GiftCodeReminder.tsx
+msgid "Your supporter ends on {until}. You still have a week of supporter to give a friend."
+msgstr "Tu supporter se acaba el {until}. Todavía tienes una semana de supporter para regalarle a un amigo."
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/routes/supporter.tsx
