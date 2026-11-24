@@ -31,6 +31,8 @@ re-encoded as WebP at most 1024 px.
 | maneki-neko.glb | Rice & Soy Sauce | https://sketchfab.com/3d-models/50b5d360717c442c971b3db0576606c4 |
 | cat-maxwell.glb | Zhuier | https://sketchfab.com/3d-models/4175776146ba4550a8dd643363b7b0aa |
 
+cat-maxwell.glb also has its animation removed, so it stands still in its rest pose.
+
 plush-miku.glb is remodelled here from the Chubby Teto plush above: its texture recoloured to Miku's teal (dark charcoal on the boots), the drill twintails, hair curl and a stray tail piece removed, and long twintails and hair ties modelled in Blender (~/Projects/foundry/designs/miku-plush/build.py).
 
 blob-pink.glb is the site's own model, built by local-notes/companions/blob/make_blob.py.

@@ -105,7 +105,7 @@ export const BUILT_IN_COMPANIONS: readonly BuiltInCompanion[] = [
   { id: "taiko-ka", name: msg`Ka-chan`, kind: "model", url: "/models/companions/taiko-ka.glb?v=2", thumb: "/models/companions/thumbs/taiko-ka.webp?v=2", facing: -0.42 },
   licensed("plush-black-cat", msg`Black cat plush`, "dro", "0a81d050ac2c4f2c9adce8b640af1eeb", 0),
   licensed("maneki-neko", msg`Maneki-neko`, "Rice & Soy Sauce", "50b5d360717c442c971b3db0576606c4", 0, { matte: false }),
-  licensed("cat-maxwell", msg`Maxwell the cat`, "Zhuier", "4175776146ba4550a8dd643363b7b0aa", 0.75),
+  licensed("cat-maxwell", msg`Maxwell the cat`, "Zhuier", "4175776146ba4550a8dd643363b7b0aa", 0.75, { rev: 2 }),
   { id: "makiba", name: msg`Makiba`, kind: "model", url: "/models/companions/makiba.glb", thumb: "/models/companions/thumbs/makiba.webp", facing: -0.3 },
   { id: "makiba-chubby", name: msg`Chubby Makiba`, kind: "model", url: "/models/companions/makiba-chubby.glb", thumb: "/models/companions/thumbs/makiba-chubby.webp", facing: -0.3 },
   { id: "sahur-keycap", name: msg`Tung tung sahur keycap`, kind: "keycap" },
