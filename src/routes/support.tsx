@@ -192,7 +192,7 @@ function SupportPage() {
   // The one-time amount: the calculator's, and what the crypto panel pays.
   const [onceAmount, setOnceAmount] = useState("4");
   const [plan, setPlan] = useState<SupportPlan>("monthly");
-  // back from a crypto invoice: that is a one-time payment
+  // crypto first (back from an invoice, or the visitor's country): it is paid once
   useEffect(() => {
     if (initialPayMethod === "crypto") setPlan("once");
   }, [initialPayMethod]);

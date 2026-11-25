@@ -112,11 +112,21 @@ const getSupportUsesLava = createServerFn({ method: "GET" }).handler(() => {
 // stays out of the way. Admins see it everywhere.
 const CRYPTO_SUPPORT_COUNTRIES = new Set([...LAVA_SUPPORT_COUNTRIES, "CN", "PK", "BD", "AF", "IQ", "LB", "LY", "SD", "MM"]);
 
+// Countries where crypto is picked first: mainland China, where few players
+// have PayPal and USDT is the usual way to pay a site abroad.
+const CRYPTO_FIRST_COUNTRIES = new Set(["CN"]);
+
+type SupportRegion = { lavaFirst: boolean; crypto: boolean; cryptoFirst: boolean };
+
 /* The visitor's country, read after load like getSupportUsesLava: whether
-   lava.top comes first and whether crypto is offered. */
-const getSupportRegion = createServerFn({ method: "GET" }).handler((): { lavaFirst: boolean; crypto: boolean } => {
+   lava.top or crypto comes first and whether crypto is offered. */
+const getSupportRegion = createServerFn({ method: "GET" }).handler((): SupportRegion => {
   const country = readEdgeCountry(getRequest().headers);
-  return { lavaFirst: country != null && LAVA_SUPPORT_COUNTRIES.has(country), crypto: country != null && CRYPTO_SUPPORT_COUNTRIES.has(country) };
+  return {
+    lavaFirst: country != null && LAVA_SUPPORT_COUNTRIES.has(country),
+    crypto: country != null && CRYPTO_SUPPORT_COUNTRIES.has(country),
+    cryptoFirst: country != null && CRYPTO_FIRST_COUNTRIES.has(country),
+  };
 });
 
 /* Google's checkout: its own button and dialog. A signed-in payer's order is
@@ -905,16 +915,16 @@ export function methodSellsPlan(method: SupportMethod, plan: SupportPlan): boole
 const GOOGLE_OFFERED = false;
 
 /* The methods this visitor can pick, and the one picked first: lava.top
-   where Ko-fi cannot take a card, Ko-fi everywhere else. Null while the
-   visitor's country is being asked. */
+   where Ko-fi cannot take a card, crypto in CRYPTO_FIRST_COUNTRIES, Ko-fi
+   everywhere else. Null while the visitor's country is being asked. */
 export function useSupportMethods() {
   const auth = useAuth();
-  const [region, setRegion] = useState<{ lavaFirst: boolean; crypto: boolean } | null>(null);
+  const [region, setRegion] = useState<SupportRegion | null>(null);
   useEffect(() => {
     let cancelled = false;
     getSupportRegion()
       .then((value) => !cancelled && setRegion(value))
-      .catch(() => !cancelled && setRegion({ lavaFirst: false, crypto: false }));
+      .catch(() => !cancelled && setRegion({ lavaFirst: false, crypto: false, cryptoFirst: false }));
     return () => {
       cancelled = true;
     };
@@ -934,7 +944,9 @@ export function useSupportMethods() {
   // ?name=...): that method again.
   const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const backTo: SupportMethod | null = patreon && search?.has("patreon") ? "patreon" : crypto && search?.has("crypto") ? "crypto" : null;
-  const initial: SupportMethod | null = region == null ? null : backTo ?? (region.lavaFirst && lava ? "lava" : "kofi");
+  const initial: SupportMethod | null = region == null
+    ? null
+    : backTo ?? (region.lavaFirst && lava ? "lava" : region.cryptoFirst && crypto ? "crypto" : "kofi");
   return { methods, initial };
 }
 
