@@ -68,6 +68,29 @@ const RANKING_PAGE_SIZE = 50;
 const TOP_PLAYS_PATH = "/api/public/v1/top-plays";
 const SNIPES_PATH = "/api/public/v1/snipes";
 
+const SKILL_CHANGE_BODY = `{
+  "type": "skill_change",
+  "id": "skill_change:9876543",
+  "createdAt": "2026-11-24T18:02:40.511Z",
+  "country": "KR",
+  "data": {
+    "userId": 12345,
+    "username": "PlayerName",
+    "countryCode": "KR",
+    "keyCount": 4,
+    "overall": { "from": 24.18, "to": 24.41 },
+    "skillsets": {
+      "Stream": { "from": 23.6, "to": 24.02 },
+      "Technical": { "from": 22.91, "to": 23.1 }
+    },
+    "dan": {
+      "rc": { "from": "8", "to": "8+" },
+      "ln": null
+    },
+    "recordedAt": "2026-11-24T18:02:31.004Z"
+  }
+}`;
+
 const WEBHOOK_BODY = `{
   "type": "top_play",
   "id": "top_play:US:4567890123",
@@ -875,6 +898,7 @@ function WebhooksSection({ access }: { access: DeveloperAccessStatus | null }) {
     if (reason === "webhook_limit") return t`You already have the most webhooks an account can have.`;
     if (reason === "no_access") return t`You don't have API access.`;
     if (reason === "too_soon") return t`Wait a few seconds before sending another test.`;
+    if (reason === "invalid_players") return t`Up to 50 players, as ids or @usernames the site has seen.`;
     return t`Couldn't save that. Try again.`;
   }, [t]);
 
@@ -893,7 +917,12 @@ function WebhooksSection({ access }: { access: DeveloperAccessStatus | null }) {
         }
         return true;
       }
-      setNotice(result?.status === "refused" ? refusal(result.reason) : t`Sign in again to change webhooks.`);
+      if (result?.status === "refused" && result.unknownPlayers?.length) {
+        const names = result.unknownPlayers.join(", ");
+        setNotice(t`No player found for ${names}.`);
+      } else {
+        setNotice(result?.status === "refused" ? refusal(result.reason) : t`Sign in again to change webhooks.`);
+      }
     } catch {
       setNotice(t`Couldn't save that. Try again.`);
     }
@@ -911,8 +940,8 @@ function WebhooksSection({ access }: { access: DeveloperAccessStatus | null }) {
             <H2 id="webhooks"><Trans>Webhooks</Trans></H2>
             <p className="mt-3 max-w-2xl text-sm leading-6">
               <Trans>
-                New top plays and snipes sent to your URL as the site records them, so you don't have to poll. A Discord channel's
-                webhook URL gets them as messages.
+                New top plays, snipes and skill changes sent to your URL as the site records them, so you don't have to poll. A
+                Discord channel's webhook URL gets them as messages.
               </Trans>
             </p>
           </div>
@@ -951,13 +980,20 @@ function WebhooksSection({ access }: { access: DeveloperAccessStatus | null }) {
           <SubHeading><Trans>What gets sent</Trans></SubHeading>
           <FieldList
             rows={[
-              ["type", "string", <Trans key="type"><Code>top_play</Code> or <Code>snipe</Code>.</Trans>],
+              ["type", "string", <Trans key="type"><Code>top_play</Code>, <Code>snipe</Code> or <Code>skill_change</Code>.</Trans>],
               ["id", "string", t`The same for every retry of one event, so you can skip ones you've seen.`],
-              ["data", "object", <Trans key="data">Shaped like one entry of <Code>/top-plays</Code> or <Code>/snipes</Code>.</Trans>],
+              ["data", "object", <Trans key="data">Shaped like one entry of <Code>/top-plays</Code> or <Code>/snipes</Code>, or like the skill change example.</Trans>],
               ["X-Mania-Tracker-Timestamp", "header", t`Unix seconds when it was sent. Refuse old ones, so a copied request can't be sent to you again later.`],
               ["X-Mania-Tracker-Signature", "header", <Trans key="sig"><Code>sha256=</Code> and the HMAC-SHA256 of the timestamp header, a dot and the raw body, keyed with the webhook's secret.</Trans>],
             ]}
           />
+          <p className="mt-3 text-[13px] leading-6">
+            <Trans>
+              A skill change is sent when a player's new plays move their Overall or a skillset by 0.1 or more, or change their dan.
+              It lists every skillset that moved. Changes from the site recalculating everyone's ratings are not sent, and neither
+              are players who hide their ratings.
+            </Trans>
+          </p>
           <p className="mt-3 text-[13px] leading-6">
             <Trans>
               Answer with a 2xx within 8 seconds. A failed delivery is tried twice more. After 10 failures in a row, or once Discord
@@ -969,6 +1005,7 @@ function WebhooksSection({ access }: { access: DeveloperAccessStatus | null }) {
       </div>
       <div className="min-w-0 space-y-4 xl:sticky xl:top-20 xl:self-start">
         <CodeWindow response={WEBHOOK_BODY} title={t`Request body`} />
+        <CodeWindow response={SKILL_CHANGE_BODY} title={t`Skill change`} />
         <CodeWindow tabs={VERIFY_SAMPLES} />
       </div>
 
@@ -1014,7 +1051,9 @@ function WebhookRow({ hook, canEnable, onToggle, onTest, onDelete }: {
   const what = [
     hook.events.includes("top_play") ? t`Top plays` : null,
     hook.events.includes("snipe") ? t`Snipes` : null,
+    hook.events.includes("skill_change") ? t`Skill changes` : null,
   ].filter(Boolean).join(", ");
+  const playerCount = hook.players.length;
   const status = !hook.enabled
     ? hook.disabledReason === "gone"
       ? t`Off: Discord says this webhook was deleted.`
@@ -1034,6 +1073,9 @@ function WebhookRow({ hook, canEnable, onToggle, onTest, onDelete }: {
             <span>{what}</span>
             {hook.country ? <><span aria-hidden className="h-3 w-px bg-white/15" /><span>{hook.country}</span></> : null}
             {hook.keys ? <><span aria-hidden className="h-3 w-px bg-white/15" /><span>{hook.keys === "4" ? "4K" : t`Not 4K`}</span></> : null}
+            {playerCount > 0 ? (
+              <><span aria-hidden className="h-3 w-px bg-white/15" /><span>{playerCount === 1 ? t`1 player` : t`${playerCount} players`}</span></>
+            ) : null}
             <span aria-hidden className="h-3 w-px bg-white/15" />
             <span className={hook.enabled ? "" : "text-osu-yellow"}>{status}</span>
           </div>
@@ -1076,7 +1118,7 @@ function SmallButton({ children, onClick, disabled, danger }: { children: ReactN
 }
 
 function AddWebhookForm({ onSave, onClose }: {
-  onSave: (data: { action: "create"; url: string; events: DeveloperWebhookEvent[]; country: string; keys: string }) => Promise<boolean>;
+  onSave: (data: { action: "create"; url: string; events: DeveloperWebhookEvent[]; country: string; keys: string; players: string }) => Promise<boolean>;
   onClose: () => void;
 }) {
   const { t } = useLingui();
@@ -1084,6 +1126,7 @@ function AddWebhookForm({ onSave, onClose }: {
   const [events, setEvents] = useState<DeveloperWebhookEvent[]>(["top_play"]);
   const [country, setCountry] = useState("");
   const [keys, setKeys] = useState("");
+  const [players, setPlayers] = useState("");
   const [busy, setBusy] = useState(false);
   const toggle = (event: DeveloperWebhookEvent) =>
     setEvents((list) => (list.includes(event) ? list.filter((entry) => entry !== event) : [...list, event]));
@@ -1096,7 +1139,7 @@ function AddWebhookForm({ onSave, onClose }: {
         event.preventDefault();
         if (busy) return;
         setBusy(true);
-        void onSave({ action: "create", url, events, country, keys }).then((ok) => {
+        void onSave({ action: "create", url, events, country, keys, players }).then((ok) => {
           setBusy(false);
           if (ok) onClose();
         });
@@ -1112,7 +1155,7 @@ function AddWebhookForm({ onSave, onClose }: {
         className={`${inputClass} w-full font-mono text-[13px]`}
       />
       <div className="flex flex-wrap items-center gap-2">
-        {([["top_play", t`Top plays`], ["snipe", t`Snipes`]] as const).map(([value, label]) => (
+        {([["top_play", t`Top plays`], ["snipe", t`Snipes`], ["skill_change", t`Skill changes`]] as const).map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -1138,6 +1181,14 @@ function AddWebhookForm({ onSave, onClose }: {
           <option value="other">{t`Not 4K`}</option>
         </select>
       </div>
+      <input
+        value={players}
+        onChange={(event) => setPlayers(event.target.value)}
+        placeholder={t`Only these players (ids or @usernames), optional`}
+        aria-label={t`Players`}
+        maxLength={2_000}
+        className={`${inputClass} w-full`}
+      />
       <div className="flex justify-end gap-2">
         <button
           type="button"

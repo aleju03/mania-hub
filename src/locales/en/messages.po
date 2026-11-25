@@ -2082,6 +2082,10 @@ msgstr "{pendingPlays} plays still analyzing, so this estimate can still move."
 msgid "{picked} picked"
 msgstr "{picked} picked"
 
+#: src/routes/developers.tsx
+msgid "{playerCount} players"
+msgstr "{playerCount} players"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
 msgstr "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
@@ -2995,8 +2999,12 @@ msgid "<0>top {0}%</0> of {1} tracked {2}K mains"
 msgstr "<0>top {0}%</0> of {1} tracked {2}K mains"
 
 #: src/routes/developers.tsx
-msgid "<0>top_play</0> or <1>snipe</1>."
-msgstr "<0>top_play</0> or <1>snipe</1>."
+#~ msgid "<0>top_play</0> or <1>snipe</1>."
+#~ msgstr "<0>top_play</0> or <1>snipe</1>."
+
+#: src/routes/developers.tsx
+msgid "<0>top_play</0>, <1>snipe</1> or <2>skill_change</2>."
+msgstr "<0>top_play</0>, <1>snipe</1> or <2>skill_change</2>."
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "<0>Tracking is on.</0> Your recent plays are being pulled in and will be rated here in a few minutes."
@@ -3095,6 +3103,10 @@ msgstr "1 person has your card"
 #: src/components/player/ProfileStatCards.tsx
 msgid "1 play in one sitting"
 msgstr "1 play in one sitting"
+
+#: src/routes/developers.tsx
+msgid "1 player"
+msgstr "1 player"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "1 rate per chart"
@@ -3898,6 +3910,14 @@ msgstr "A set holds either players or teams."
 #: src/lib/pack-run.ts
 msgid "A sixth charm slot"
 msgstr "A sixth charm slot"
+
+#: src/routes/developers.tsx
+#~ msgid "A skill change is sent when a player's new plays move their Overall by 0.1 or more, or change their dan. Changes from the site recalculating everyone's ratings are not sent, and neither are players who hide their ratings."
+#~ msgstr "A skill change is sent when a player's new plays move their Overall by 0.1 or more, or change their dan. Changes from the site recalculating everyone's ratings are not sent, and neither are players who hide their ratings."
+
+#: src/routes/developers.tsx
+msgid "A skill change is sent when a player's new plays move their Overall or a skillset by 0.1 or more, or change their dan. It lists every skillset that moved. Changes from the site recalculating everyone's ratings are not sent, and neither are players who hide their ratings."
+msgstr "A skill change is sent when a player's new plays move their Overall or a skillset by 0.1 or more, or change their dan. It lists every skillset that moved. Changes from the site recalculating everyone's ratings are not sent, and neither are players who hide their ratings."
 
 #: src/routes/support.tsx
 msgid "A small figure that stands in the corner of your profile header. Drag a 3D one to turn it around."
@@ -17721,8 +17741,8 @@ msgid "New theme"
 msgstr "New theme"
 
 #: src/routes/developers.tsx
-msgid "New top plays and snipes sent to your URL as the site records them, so you don't have to poll. A Discord channel's webhook URL gets them as messages."
-msgstr "New top plays and snipes sent to your URL as the site records them, so you don't have to poll. A Discord channel's webhook URL gets them as messages."
+#~ msgid "New top plays and snipes sent to your URL as the site records them, so you don't have to poll. A Discord channel's webhook URL gets them as messages."
+#~ msgstr "New top plays and snipes sent to your URL as the site records them, so you don't have to poll. A Discord channel's webhook URL gets them as messages."
 
 #: src/routes/developers.tsx
 msgid "New top plays from the Top plays page, {RANKING_PAGE_SIZE} a page. It covers the players in each country's top 100, for the last 30 days."
@@ -17731,6 +17751,10 @@ msgstr "New top plays from the Top plays page, {RANKING_PAGE_SIZE} a page. It co
 #: src/components/LiveDataEmptyState.tsx
 msgid "New top plays will show up here as players set them."
 msgstr "New top plays will show up here as players set them."
+
+#: src/routes/developers.tsx
+msgid "New top plays, snipes and skill changes sent to your URL as the site records them, so you don't have to poll. A Discord channel's webhook URL gets them as messages."
+msgstr "New top plays, snipes and skill changes sent to your URL as the site records them, so you don't have to poll. A Discord channel's webhook URL gets them as messages."
 
 #: src/routes/__root.tsx
 msgid "new updates"
@@ -18308,6 +18332,10 @@ msgstr "No pattern signal for this keymode yet."
 #: src/routes/skins.tsx
 msgid "no Percy"
 msgstr "no Percy"
+
+#: src/routes/developers.tsx
+msgid "No player found for {names}."
+msgstr "No player found for {names}."
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "No players"
@@ -19762,6 +19790,10 @@ msgstr "Only the theme shows behind your profile header, without your osu! banne
 #: src/components/discord/FeedPlayersModal.tsx
 #~ msgid "Only these"
 #~ msgstr "Only these"
+
+#: src/routes/developers.tsx
+msgid "Only these players (ids or @usernames), optional"
+msgstr "Only these players (ids or @usernames), optional"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Only USDT, only on this network, and exactly this amount: the odd decimals tell your payment apart. Sending from an exchange like Binance? Its withdraw page shows a \"Receive amount\"; make that exactly this amount. Open for 24 hours."
@@ -21536,6 +21568,7 @@ msgstr "players"
 #: src/components/packs/SetsView.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
+#: src/routes/developers.tsx
 #: src/routes/discord.tsx
 #: src/routes/maps.tsx
 msgid "Players"
@@ -25531,8 +25564,16 @@ msgid "Shape round the avatar"
 msgstr "Shape round the avatar"
 
 #: src/routes/developers.tsx
-msgid "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>."
-msgstr "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>."
+msgid "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>, or like the skill change example."
+msgstr "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>, or like the skill change example."
+
+#: src/routes/developers.tsx
+#~ msgid "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>."
+#~ msgstr "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>."
+
+#: src/routes/developers.tsx
+#~ msgid "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>. For a skill change, the example on the right."
+#~ msgstr "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>. For a skill change, the example on the right."
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -26435,6 +26476,14 @@ msgstr "Skill breakdown"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Skill breakdown unavailable"
 msgstr "Skill breakdown unavailable"
+
+#: src/routes/developers.tsx
+msgid "Skill change"
+msgstr "Skill change"
+
+#: src/routes/developers.tsx
+msgid "Skill changes"
+msgstr "Skill changes"
 
 #: src/routes/recommendations.tsx
 msgid "Skill charts need rated plays in 4K or 7K."
@@ -32042,6 +32091,10 @@ msgstr "Up to 200 MB"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Up to 50 MB."
 msgstr "Up to 50 MB."
+
+#: src/routes/developers.tsx
+msgid "Up to 50 players, as ids or @usernames the site has seen."
+msgstr "Up to 50 players, as ids or @usernames the site has seen."
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Up to five, in the order you pick them."

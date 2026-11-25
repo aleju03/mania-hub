@@ -5,7 +5,7 @@ import { liveBridgeToken } from "./live-backend-tokens";
    the backend's bridge route like the keys (developer-keys.ts): the viewer
    comes from the osu! login cookie, never from client input. */
 
-export type DeveloperWebhookEvent = "top_play" | "snipe";
+export type DeveloperWebhookEvent = "top_play" | "snipe" | "skill_change";
 
 export interface DeveloperWebhook {
   id: number;
@@ -14,6 +14,7 @@ export interface DeveloperWebhook {
   events: DeveloperWebhookEvent[];
   country: string | null;
   keys: "4" | "other" | null;
+  players: number[];
   secret: string | null;
   enabled: boolean;
   disabledReason: string | null;
@@ -30,14 +31,14 @@ export interface DeveloperWebhooks {
 }
 
 export type DeveloperWebhookInput =
-  | { action: "create"; url: string; events: DeveloperWebhookEvent[]; country: string; keys: string }
+  | { action: "create"; url: string; events: DeveloperWebhookEvent[]; country: string; keys: string; players: string }
   | { action: "set-enabled"; id: number; enabled: boolean }
   | { action: "delete"; id: number }
   | { action: "test"; id: number };
 
 export type DeveloperWebhookResult =
   | { status: "ok"; state: DeveloperWebhooks; test?: { ok: boolean; status: number | null; error?: string } }
-  | { status: "refused"; reason: string };
+  | { status: "refused"; reason: string; unknownPlayers?: string[] };
 
 async function getTarget(): Promise<{ url: string; headers: HeadersInit } | null> {
   const { readCurrentAuth } = await import("./auth-server");
@@ -76,13 +77,15 @@ export const fetchOwnWebhooks = createServerFn({ method: "GET" }).handler(async 
 export const mutateOwnWebhooks = createServerFn({ method: "POST" })
   .validator((input: DeveloperWebhookInput): DeveloperWebhookInput => {
     if (input?.action === "create") {
-      const events = (Array.isArray(input.events) ? input.events : []).filter((entry) => entry === "top_play" || entry === "snipe");
+      const events = (Array.isArray(input.events) ? input.events : [])
+        .filter((entry) => entry === "top_play" || entry === "snipe" || entry === "skill_change");
       return {
         action: "create",
         url: String(input.url ?? "").slice(0, 500),
         events,
         country: String(input.country ?? "").slice(0, 2),
         keys: input.keys === "4" || input.keys === "other" ? input.keys : "",
+        players: String(input.players ?? "").slice(0, 2_000),
       };
     }
     const id = Math.floor(Number((input as { id?: unknown })?.id) || 0);
@@ -97,9 +100,16 @@ export const mutateOwnWebhooks = createServerFn({ method: "POST" })
     const target = await getTarget();
     if (!target) return null;
     const response = await fetch(target.url, { method: "POST", headers: target.headers, body: JSON.stringify(data) });
-    const body = (await response.json().catch(() => null)) as { error?: unknown; test?: { ok: boolean; status: number | null; error?: string } } | null;
+    const body = (await response.json().catch(() => null)) as {
+      error?: unknown;
+      detail?: { unknown?: unknown };
+      test?: { ok: boolean; status: number | null; error?: string };
+    } | null;
     if (!response.ok) {
-      if (typeof body?.error === "string" && response.status < 500) return { status: "refused", reason: body.error };
+      if (typeof body?.error === "string" && response.status < 500) {
+        const unknown = Array.isArray(body.detail?.unknown) ? body.detail.unknown.map(String) : undefined;
+        return { status: "refused", reason: body.error, ...(unknown ? { unknownPlayers: unknown } : {}) };
+      }
       throw new Error(`Webhook change failed (${response.status}).`);
     }
     return { status: "ok", state: parseState(body), ...(body?.test ? { test: body.test } : {}) };

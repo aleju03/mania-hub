@@ -2071,6 +2071,10 @@ msgstr "{pendingPlays} 个成绩仍在分析中，因此这个估计仍可能变
 msgid "{picked} picked"
 msgstr ""
 
+#: src/routes/developers.tsx
+msgid "{playerCount} players"
+msgstr "{playerCount} 位玩家"
+
 #: src/components/replay/ReplayBrowseView.tsx
 msgid "{playerName}'s replay loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded."
 msgstr "{playerName} 的回放已加载，但对应谱面不在 osu! 上(未提交或已删除)，因此无法下载谱面。"
@@ -2984,8 +2988,12 @@ msgid "<0>top {0}%</0> of {1} tracked {2}K mains"
 msgstr "在已追踪的 {1} 名 {2}K 主玩家中位列<0>前 {0}%</0>"
 
 #: src/routes/developers.tsx
-msgid "<0>top_play</0> or <1>snipe</1>."
-msgstr "<0>top_play</0> 或 <1>snipe</1>。"
+#~ msgid "<0>top_play</0> or <1>snipe</1>."
+#~ msgstr "<0>top_play</0> 或 <1>snipe</1>。"
+
+#: src/routes/developers.tsx
+msgid "<0>top_play</0>, <1>snipe</1> or <2>skill_change</2>."
+msgstr "<0>top_play</0>、<1>snipe</1> 或 <2>skill_change</2>。"
 
 #: src/components/player/SkillsUntrackedNotice.tsx
 msgid "<0>Tracking is on.</0> Your recent plays are being pulled in and will be rated here in a few minutes."
@@ -3084,6 +3092,10 @@ msgstr "有 1 人持有你的卡片"
 #: src/components/player/ProfileStatCards.tsx
 msgid "1 play in one sitting"
 msgstr "一次连续游玩 1 次"
+
+#: src/routes/developers.tsx
+msgid "1 player"
+msgstr "1 位玩家"
 
 #: src/components/player/SkillPlaysExplorer.tsx
 msgid "1 rate per chart"
@@ -3887,6 +3899,14 @@ msgstr "一个卡组只能放玩家或只能放战队。"
 #: src/lib/pack-run.ts
 msgid "A sixth charm slot"
 msgstr "第六个护符栏位"
+
+#: src/routes/developers.tsx
+#~ msgid "A skill change is sent when a player's new plays move their Overall by 0.1 or more, or change their dan. Changes from the site recalculating everyone's ratings are not sent, and neither are players who hide their ratings."
+#~ msgstr "当玩家的新成绩使其 Overall 变化 0.1 或以上，或段位发生变化时，会发送 skill change。网站为所有人重新计算评分引起的变化不会发送，隐藏评分的玩家也不会发送。"
+
+#: src/routes/developers.tsx
+msgid "A skill change is sent when a player's new plays move their Overall or a skillset by 0.1 or more, or change their dan. It lists every skillset that moved. Changes from the site recalculating everyone's ratings are not sent, and neither are players who hide their ratings."
+msgstr "当玩家的新成绩使其 Overall 或某个技能组变化 0.1 或以上，或段位发生变化时，会发送 skill change，并列出所有变化的技能组。网站为所有人重新计算评分引起的变化不会发送，隐藏评分的玩家也不会发送。"
 
 #: src/routes/support.tsx
 msgid "A small figure that stands in the corner of your profile header. Drag a 3D one to turn it around."
@@ -17683,8 +17703,8 @@ msgid "New theme"
 msgstr "新建主题"
 
 #: src/routes/developers.tsx
-msgid "New top plays and snipes sent to your URL as the site records them, so you don't have to poll. A Discord channel's webhook URL gets them as messages."
-msgstr "网站记录到新的最佳成绩和 snipe 时会发送到你的 URL，无需轮询。若是 Discord 频道的 webhook URL，则以消息形式发送。"
+#~ msgid "New top plays and snipes sent to your URL as the site records them, so you don't have to poll. A Discord channel's webhook URL gets them as messages."
+#~ msgstr "网站记录到新的最佳成绩和 snipe 时会发送到你的 URL，无需轮询。若是 Discord 频道的 webhook URL，则以消息形式发送。"
 
 #: src/routes/developers.tsx
 msgid "New top plays from the Top plays page, {RANKING_PAGE_SIZE} a page. It covers the players in each country's top 100, for the last 30 days."
@@ -17693,6 +17713,10 @@ msgstr "最佳成绩页面上的新最佳成绩，每页 {RANKING_PAGE_SIZE} 条
 #: src/components/LiveDataEmptyState.tsx
 msgid "New top plays will show up here as players set them."
 msgstr "玩家打出新的顶级成绩后会显示在这里。"
+
+#: src/routes/developers.tsx
+msgid "New top plays, snipes and skill changes sent to your URL as the site records them, so you don't have to poll. A Discord channel's webhook URL gets them as messages."
+msgstr "网站记录到新的最佳成绩、snipe 和 skill change 时会发送到你的 URL，无需轮询。若是 Discord 频道的 webhook URL，则以消息形式发送。"
 
 #: src/routes/__root.tsx
 msgid "new updates"
@@ -18270,6 +18294,10 @@ msgstr "这个键数还没有可用的键型数据。"
 #: src/routes/skins.tsx
 msgid "no Percy"
 msgstr "无 Percy"
+
+#: src/routes/developers.tsx
+msgid "No player found for {names}."
+msgstr "找不到玩家：{names}。"
 
 #: src/components/packs/CollectionPanel.tsx
 msgid "No players"
@@ -19724,6 +19752,10 @@ msgstr "个人资料头部背后只显示主题，不显示你的 osu! 横幅。
 #: src/components/discord/FeedPlayersModal.tsx
 #~ msgid "Only these"
 #~ msgstr "仅这些"
+
+#: src/routes/developers.tsx
+msgid "Only these players (ids or @usernames), optional"
+msgstr "仅限这些玩家（id 或 @用户名），可选"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Only USDT, only on this network, and exactly this amount: the odd decimals tell your payment apart. Sending from an exchange like Binance? Its withdraw page shows a \"Receive amount\"; make that exactly this amount. Open for 24 hours."
@@ -21498,6 +21530,7 @@ msgstr "玩家"
 #: src/components/packs/SetsView.tsx
 #: src/components/player/ActivityPanel.tsx
 #: src/components/replay/ReplaySideBySidePicker.tsx
+#: src/routes/developers.tsx
 #: src/routes/discord.tsx
 #: src/routes/maps.tsx
 msgid "Players"
@@ -25493,8 +25526,16 @@ msgid "Shape round the avatar"
 msgstr "围绕头像的形状"
 
 #: src/routes/developers.tsx
-msgid "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>."
-msgstr "格式与 <0>/top-plays</0> 或 <1>/snipes</1> 中的一条相同。"
+msgid "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>, or like the skill change example."
+msgstr "格式与 <0>/top-plays</0> 或 <1>/snipes</1> 中的一条相同，或与 skill change 示例相同。"
+
+#: src/routes/developers.tsx
+#~ msgid "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>."
+#~ msgstr "格式与 <0>/top-plays</0> 或 <1>/snipes</1> 中的一条相同。"
+
+#: src/routes/developers.tsx
+#~ msgid "Shaped like one entry of <0>/top-plays</0> or <1>/snipes</1>. For a skill change, the example on the right."
+#~ msgstr ""
 
 #: src/components/packs/CollectionPanel.tsx
 #: src/components/packs/PackSummary.tsx
@@ -26389,6 +26430,14 @@ msgstr "技能明细"
 #: src/components/maps/MapDetailModal.tsx
 msgid "Skill breakdown unavailable"
 msgstr "技能明细不可用"
+
+#: src/routes/developers.tsx
+msgid "Skill change"
+msgstr "Skill change"
+
+#: src/routes/developers.tsx
+msgid "Skill changes"
+msgstr "Skill change"
 
 #: src/routes/recommendations.tsx
 msgid "Skill charts need rated plays in 4K or 7K."
@@ -31988,6 +32037,10 @@ msgstr "最大 200 MB"
 #: src/components/skins/SkinUploadModal.tsx
 msgid "Up to 50 MB."
 msgstr "最大 50 MB。"
+
+#: src/routes/developers.tsx
+msgid "Up to 50 players, as ids or @usernames the site has seen."
+msgstr "最多 50 位玩家，使用网站已记录的 id 或 @用户名。"
 
 #: src/components/supporter/LoadoutSlots.tsx
 msgid "Up to five, in the order you pick them."
