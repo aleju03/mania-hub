@@ -965,6 +965,7 @@ export class ManiaReplayRenderer {
   private fullHeightLayout = false;
 
   private externalClock: (() => { time: number; stalled: boolean } | null) | null = null;
+  private leadInMs = 0;
   private receptorFlashTimestamps: number[];
   private judgmentEvents: ReplayJudgementEvent[];
   private missTimesCache: number[] | null = null;
@@ -1952,10 +1953,12 @@ export class ManiaReplayRenderer {
     this.hudCachedAccuracy = this.formatAccuracy(this.getAccuracy());
     this.hudCachedPp = `${Math.round(this.getPp())}pp`;
     this.hudCachedUr = String(Math.round(this.getUr()));
+    // A live lead-in runs before 0:00; it counts up to it as -0:02, -0:01.
     const wallTime = this.currentTime / this.modRate;
-    const mins = Math.floor(wallTime / 60000);
-    const secs = String(Math.floor((wallTime % 60000) / 1000)).padStart(2, "0");
-    this.hudCachedTime = `${mins}:${secs}`;
+    const wallSeconds = wallTime < 0 ? Math.ceil(-wallTime / 1000) : Math.floor(wallTime / 1000);
+    const mins = Math.floor(wallSeconds / 60);
+    const secs = String(wallSeconds % 60).padStart(2, "0");
+    this.hudCachedTime = `${wallTime < 0 && wallSeconds > 0 ? "-" : ""}${mins}:${secs}`;
     for (let i = 1; i < this.judgmentCounts.length; i++) {
       const v = String(this.judgmentCounts[i]);
       if (this.hudCachedJudgmentCounts[i] !== v) this.hudCachedJudgmentCounts[i] = v;
@@ -2448,9 +2451,85 @@ export class ManiaReplayRenderer {
     this.render(true);
   }
 
+  /**
+   * Live spectating: the play so far has grown. Judges it again from the
+   * frames received and carries on from where the stage is. Unlike
+   * setPreviewData it leaves the clock, the audio smoothing and the layout
+   * alone, so playback does not hitch. `lifeBarFrames` is the game's own
+   * health when the stream carries it; without it health is estimated from
+   * the judgements. `notes`, when given, replaces the chart's notes (the
+   * columns a Random shuffle put them in, once worked out from the presses).
+   */
+  setLiveFrames(frames: ReplayFrame[], lifeBarFrames: ReplayLifeBarFrame[] = [], notes?: ManiaNote[]) {
+    if (notes) this.notes = notes;
+    this.frames = frames;
+    this.keypressTimesByColumn = this.buildKeypressTimesByColumn();
+    this.keypressTimes = this.keypressTimesByColumn.flat().sort((a, b) => a - b);
+    this.peakKps = buildReplayPeakKps(this.keypressTimes, KEY_KPS_WINDOW_MS, this.modRate);
+    const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
+    this.totalDuration = Math.max(frameDuration, this.notesEndTime + this.hitWindows.miss * 1.5);
+    this.segments = buildReplaySegments(this.frames, this.keyCount, this.totalDuration);
+    const simulated = simulateManiaReplayJudgements(
+      this.notes,
+      this.segments,
+      this.keyCount,
+      this.hitWindows,
+      this.ruleset.accuracyMode,
+      {
+        lazerNoReleaseTails: this.modAcronyms.includes("NR"),
+        legacyReplayFrameRounding: this.ruleset.accuracyMode !== "lazer",
+        speedMultiplier: this.ruleset.speedMultiplier,
+      },
+    );
+    // The game counts a note nobody pressed only once a whole miss window
+    // (in real time) has gone by. A replay can show the miss early, but the
+    // live stage stops where the player paused, and there that note is still
+    // open in the game.
+    if (this.ruleset.accuracyMode === "stable") {
+      const openFor = this.hitWindows.miss * this.ruleset.speedMultiplier;
+      let moved = false;
+      for (const event of simulated.events) {
+        const note = this.notes[event.noteIndex];
+        if (event.part !== "note" || event.judgment !== 6 || event.offsetMs !== this.hitWindows.miss || !note) continue;
+        if (event.time < note.time + openFor) {
+          event.time = note.time + openFor;
+          moved = true;
+        }
+      }
+      if (moved) simulated.events.sort((a, b) => a.time - b.time);
+    }
+    this.judgmentEvents = simulated.events;
+    this.missTimesCache = null;
+    this.lifeBarFrames = lifeBarFrames.length > 0
+      ? lifeBarFrames.map((frame) => ({ time: Math.round(frame.time), health: Math.max(0, Math.min(1, frame.health)) }))
+      : this.buildFallbackLifeBarFrames(this.judgmentEvents);
+    this.noteStates = simulated.noteStates;
+    this.noteBlockEndTimes = buildReplayNoteBlockEndTimes(this.notes, this.noteStates);
+    this.comboEvents = this.ruleset.accuracyMode === "stable"
+      ? buildStableReplayComboEvents(this.notes, this.noteStates)
+      : this.judgmentEvents.map((event) => ({
+          kind: event.judgment == null || event.judgment === 6 ? "break" : "hit",
+          time: event.time,
+        }));
+    const lastJudgementTime = this.judgmentEvents.length > 0 ? this.judgmentEvents[this.judgmentEvents.length - 1].time : 0;
+    this.totalDuration = Math.max(this.totalDuration, lastJudgementTime);
+    this.buildScoreSimulator(null);
+    this.buildHitsoundTimeline();
+    this.recomputeStatsUpTo(this.currentTime);
+  }
+
+  /**
+   * Live spectating: how far before 0:00 the stage may run, so a map's
+   * lead-in plays as it does in the game instead of waiting at 0:00 with the
+   * first notes already on screen. 0 everywhere else.
+   */
+  setLeadIn(ms: number) {
+    this.leadInMs = Math.max(0, ms);
+  }
+
   seek(timeMs: number) {
     this.lazerLeaderboardFrameTime = null;
-    this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
+    this.currentTime = Math.max(-(this.leadInMs || 0), Math.min(timeMs, this.totalDuration));
     this.recomputeStatsUpTo(this.currentTime);
     this.resetHiddenCoverage();
     this.lastRenderTime = performance.now();
@@ -3875,7 +3954,7 @@ export class ManiaReplayRenderer {
 
     if (external) {
       if (!external.stalled) {
-        const audioTime = Math.max(0, Math.min(external.time, this.totalDuration));
+        const audioTime = Math.max(-(this.leadInMs || 0), Math.min(external.time, this.totalDuration));
         const newTime = this.getSmoothedExternalTime(audioTime, now);
         if (newTime >= this.currentTime || newTime > this.currentTime - 6) {
           this.currentTime = newTime;

@@ -134,6 +134,7 @@ import { Route as PlayerUsernameActivityRouteImport } from './routes/player/$use
 import { Route as PlayerUsernameManiacardRouteImport } from './routes/player/$username/maniacard'
 import { Route as PlayerUsernameRecentRouteImport } from './routes/player/$username/recent'
 import { Route as PlayerUsernameSkillsRouteImport } from './routes/player/$username/skills'
+import { Route as PlayerUsernameLiveRouteImport } from './routes/player/$username_.live'
 import { Route as PullOwnerIdCardIdRouteImport } from './routes/pull/$ownerId/$cardId'
 import { Route as RecommendationsMapBeatmapIdRouteImport } from './routes/recommendations/map/$beatmapId'
 import { Route as SupporterThemesSplatRouteImport } from './routes/supporter_.themes.$'
@@ -792,6 +793,11 @@ const PlayerUsernameSkillsRoute = PlayerUsernameSkillsRouteImport.update({
   path: '/skills',
   getParentRoute: () => PlayerUsernameRoute,
 } as any)
+const PlayerUsernameLiveRoute = PlayerUsernameLiveRouteImport.update({
+  id: '/player/$username_/live',
+  path: '/player/$username/live',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PullOwnerIdCardIdRoute = PullOwnerIdCardIdRouteImport.update({
   id: '/pull/$ownerId/$cardId',
   path: '/pull/$ownerId/$cardId',
@@ -1075,6 +1081,7 @@ export interface FileRoutesByFullPath {
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
+  '/player/$username/live': typeof PlayerUsernameLiveRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
   '/supporter/themes/$': typeof SupporterThemesSplatRoute
@@ -1230,6 +1237,7 @@ export interface FileRoutesByTo {
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
+  '/player/$username/live': typeof PlayerUsernameLiveRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
   '/supporter/themes/$': typeof SupporterThemesSplatRoute
@@ -1386,6 +1394,7 @@ export interface FileRoutesById {
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
+  '/player/$username_/live': typeof PlayerUsernameLiveRoute
   '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/recommendations/map/$beatmapId': typeof RecommendationsMapBeatmapIdRoute
   '/supporter_/themes/$': typeof SupporterThemesSplatRoute
@@ -1543,6 +1552,7 @@ export interface FileRouteTypes {
     | '/player/$username/maniacard'
     | '/player/$username/recent'
     | '/player/$username/skills'
+    | '/player/$username/live'
     | '/pull/$ownerId/$cardId'
     | '/recommendations/map/$beatmapId'
     | '/supporter/themes/$'
@@ -1698,6 +1708,7 @@ export interface FileRouteTypes {
     | '/player/$username/maniacard'
     | '/player/$username/recent'
     | '/player/$username/skills'
+    | '/player/$username/live'
     | '/pull/$ownerId/$cardId'
     | '/recommendations/map/$beatmapId'
     | '/supporter/themes/$'
@@ -1853,6 +1864,7 @@ export interface FileRouteTypes {
     | '/player/$username/maniacard'
     | '/player/$username/recent'
     | '/player/$username/skills'
+    | '/player/$username_/live'
     | '/pull/$ownerId/$cardId'
     | '/recommendations/map/$beatmapId'
     | '/supporter_/themes/$'
@@ -2003,6 +2015,7 @@ export interface RootRouteChildren {
   CompanellaDocsOpenapiDotyamlRoute: typeof CompanellaDocsOpenapiDotyamlRoute
   CompanellaDocsReferenceClientDotmjsRoute: typeof CompanellaDocsReferenceClientDotmjsRoute
   PacksOverjoyIdRoute: typeof PacksOverjoyIdRoute
+  PlayerUsernameLiveRoute: typeof PlayerUsernameLiveRoute
   PullOwnerIdCardIdRoute: typeof PullOwnerIdCardIdRoute
   SupporterThemesSplatRoute: typeof SupporterThemesSplatRoute
   VideosIdFilenameRoute: typeof VideosIdFilenameRoute
@@ -2900,6 +2913,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlayerUsernameSkillsRouteImport
       parentRoute: typeof PlayerUsernameRoute
     }
+    '/player/$username_/live': {
+      id: '/player/$username_/live'
+      path: '/player/$username/live'
+      fullPath: '/player/$username/live'
+      preLoaderRoute: typeof PlayerUsernameLiveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pull/$ownerId/$cardId': {
       id: '/pull/$ownerId/$cardId'
       path: '/pull/$ownerId/$cardId'
@@ -3366,6 +3386,7 @@ const rootRouteChildren: RootRouteChildren = {
   CompanellaDocsReferenceClientDotmjsRoute:
     CompanellaDocsReferenceClientDotmjsRoute,
   PacksOverjoyIdRoute: PacksOverjoyIdRoute,
+  PlayerUsernameLiveRoute: PlayerUsernameLiveRoute,
   PullOwnerIdCardIdRoute: PullOwnerIdCardIdRoute,
   SupporterThemesSplatRoute: SupporterThemesSplatRoute,
   VideosIdFilenameRoute: VideosIdFilenameRoute,

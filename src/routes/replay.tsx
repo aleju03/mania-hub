@@ -1,7 +1,7 @@
 import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
-import { Suspense, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Suspense, memo, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BringToFront, Check, ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Repeat2, RotateCcw, Send, SendToBack, X } from "lucide-react";
+import { BringToFront, Check, ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Repeat2, RotateCcw, Send, SendToBack, VolumeX, X } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { msg } from "@lingui/core/macro";
 import type { MessageDescriptor } from "@lingui/core";
@@ -184,13 +184,15 @@ import {
 } from "../lib/replay-recent";
 import { deleteUploadedReplay, fetchUploadedReplayPermissions } from "../lib/uploaded-replays";
 import { fetchRestrictedPpReplay, pickRestrictedPpReplayChart } from "../lib/restricted-pp-replay";
-import type { ManiaBeatmap } from "../lib/beatmap-parser";
+import type { ManiaBeatmap, ManiaNote } from "../lib/beatmap-parser";
 import { avatarImageSrc } from "../components/ui/Avatar";
 import type { ReplaySkinImageAsset, ReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplayOverlayId, ReplayOverlayPlacement, ReplayOverlaySettings } from "../lib/replay-overlays";
-import type { BeatmapScoreLookupStatus, LeanTrackerScore, OsuMod, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
+import type { BeatmapScoreLookupStatus, LeanTrackerScore, OsuMod, OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
 import { getScoreExpectedCounts } from "../lib/replay-types";
+import { LazerPauseOverlay, LazerResumeCountdown, SpectatorNotice } from "../components/replay/LivePauseOverlays";
+import { liveClockBarrier, liveClockPosition, type LiveClockSegment } from "../lib/live-spectate";
 import { LazerResultsScreen, lazerManiaRank, normalizeLazerRank, preloadLazerResultsSounds, type LazerResultsScore } from "../components/replay/LazerResultsScreen";
 import { STABLE_RESULTS_CONTENT_DELAY_MS, StableResultsScreen, preloadStableResultsArt, stableManiaAccuracy, stableManiaGrade, stableModElements, type StableResultsScore } from "../components/replay/StableResultsScreen";
 import type { OskRankingArt } from "../lib/replay-skin-import";
@@ -2247,7 +2249,56 @@ function ReplayPage() {
   );
 }
 
-function ReplayViewer({
+/**
+ * A play streamed live from Mania Bridge (/player/$username/live). The viewer
+ * runs as a spectator: the player's clock drives play, pause and seek, so the
+ * transport, speed and export controls are gone, and new frames are judged in
+ * as they arrive.
+ */
+/** The most extra delay the live stage takes on before it jumps to where the player is. */
+const LIVE_MAX_LAG_MS = 15_000;
+/** The longest lead-in a live stage runs through before 0:00. */
+const LIVE_MAX_LEAD_IN_MS = 10_000;
+
+export interface ReplayLiveFeed {
+  /**
+   * The latest map-time reading; `localAt` is when it arrived, in
+   * performance.now() time, and `resumingAt` when the game began counting
+   * down to carry on after a pause (lazer), null otherwise.
+   */
+  clockRef: { current: { paused: boolean; localAt: number; timeline: LiveClockSegment[]; resumingAt?: number | null } | null };
+  /** For the pause screen: restarts of this map in a row, and the game's own accuracy (0-100). */
+  pauseInfoRef: { current: { retries: number; accuracy: number | null } };
+  /** Every frame of the play so far, grown in place; `framesVersion` moves when it changes. */
+  framesRef: { current: ReplayFrame[] };
+  /** Moves when the frames change. A ref, so new frames do not re-render the viewer. */
+  framesVersionRef: { current: number };
+  /**
+   * The chart's notes in the columns the player actually saw, when the page
+   * had to work that out itself (a stable Random play); null to keep the
+   * renderer's own. `notesVersion` moves when they change.
+   */
+  notesRef?: { current: ManiaNote[] | null };
+  notesVersionRef?: { current: number };
+  /** The game's own health over the play (map time, 0 to 1), grown in place; empty when the stream has none. */
+  healthRef: { current: Array<{ time: number; health: number }> };
+  spectatorCount: number;
+  /** How far behind the player the stage runs, in real milliseconds. */
+  delayMs: number;
+  /** The play ended in a fail; the stage stops where it did. */
+  failed: boolean;
+  /** Map time of the fail, once known (it can be before the game says the play ended); the stage stops there. */
+  failTimeRef?: { current: number | null };
+}
+
+/**
+ * The viewer, re-rendered only when its props change. Live spectating hands
+ * it refs for everything that moves several times a second, so a stream
+ * event does not re-render the whole stage.
+ */
+export const MemoReplayViewer = memo(ReplayViewer);
+
+export function ReplayViewer({
   replay,
   beatmap,
   beatmapFileContent,
@@ -2265,6 +2316,7 @@ function ReplayViewer({
   ownerUserId,
   shareUrl,
   onClear,
+  live = null,
   children,
 }: {
   replay: ServerReplay;
@@ -2298,6 +2350,7 @@ function ReplayViewer({
   /** Canonical link to this replay for the controls' Share button. */
   shareUrl?: string | null;
   onClear: () => void;
+  live?: ReplayLiveFeed | null;
   // Mobile-only content (the score info card) slotted between the sticky
   // stage and the settings card so it scrolls under the pinned player.
   children?: ReactNode;
@@ -2309,6 +2362,9 @@ function ReplayViewer({
   }, [replay]);
   const { t, i18n } = useLingui();
   const auth = useAuth();
+  const isLive = live != null;
+  const liveRef = useRef(live);
+  liveRef.current = live;
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ReplayRendererLike | null>(null);
@@ -3038,6 +3094,11 @@ function ReplayViewer({
       setSpectatorNames([]);
     };
   }, [presenceKey, presenceObserveOnly, spectatorIdentity]);
+  // A live stream counts its own room's viewers instead of the replay's.
+  const liveSpectatorCount = live?.spectatorCount ?? null;
+  useEffect(() => {
+    if (liveSpectatorCount != null) setSpectatorCount(liveSpectatorCount);
+  }, [liveSpectatorCount]);
   const spectatorCountRef = useRef(0);
   const spectatorNamesRef = useRef<string[]>([]);
   useEffect(() => {
@@ -3193,7 +3254,7 @@ function ReplayViewer({
   }, [beatmap?.notes]);
   const [showSkipIntro, setShowSkipIntro] = useState(false);
   useEffect(() => {
-    if (firstNoteTimeMs == null || firstNoteTimeMs < 6000) {
+    if (isLive || firstNoteTimeMs == null || firstNoteTimeMs < 6000) {
       setShowSkipIntro(false);
       return;
     }
@@ -3204,7 +3265,7 @@ function ReplayViewer({
     update();
     const id = setInterval(update, 400);
     return () => clearInterval(id);
-  }, [firstNoteTimeMs]);
+  }, [firstNoteTimeMs, isLive]);
 
   // Space skips the lead-in like ingame. The action lives in a ref because
   // the seek helper is defined further down the component.
@@ -3332,7 +3393,7 @@ function ReplayViewer({
   // (typing fields, the settings modal, or pseudo-fullscreen's exit).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || isPseudoFullscreen || skinSettingsOpen) return;
+      if (event.key !== "Escape" || isPseudoFullscreen || skinSettingsOpen || isLive) return;
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
       if (rendererRef.current?.isPlaying) {
@@ -3345,13 +3406,14 @@ function ReplayViewer({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isPseudoFullscreen, skinSettingsOpen, pauseMenuVisible]);
+  }, [isPseudoFullscreen, skinSettingsOpen, pauseMenuVisible, isLive]);
   const handleCanvasTogglePointerUp = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
     const press = canvasPressRef.current;
     canvasPressRef.current = null;
     if (!press || event.pointerType !== "mouse" || event.button !== 0) return;
     if (Math.abs(event.clientX - press.x) > 4 || Math.abs(event.clientY - press.y) > 4) return;
     if (!rendererRef.current?.isPlayfieldClickPoint?.(event.clientX, event.clientY)) return;
+    if (liveRef.current) return;
     const wasPlaying = rendererRef.current?.isPlaying === true;
     togglePlayRef.current?.();
     if (wasPlaying) setPauseMenuVisible(true);
@@ -4130,10 +4192,17 @@ function ReplayViewer({
         // (i.e. audio is the master). When audio is seeking/buffering we
         // freeze the renderer so it can't drift ahead of the song. When audio
         // is disabled or fails we return null and the renderer uses its own clock.
-        renderer.setExternalClock(() => readReplayAudioClock(
-          audioRef.current,
-          audioEnabledRef.current && audioUrlActiveRef.current,
-        ));
+        // Live: before 0:00 there is no song to follow, so the stage runs on
+        // the player's clock through the lead-in, and takes the song from 0:00.
+        renderer.setExternalClock(() => {
+          const lead = liveLeadInClockRef.current?.();
+          if (lead != null) return { time: lead, stalled: false };
+          return readReplayAudioClock(
+            audioRef.current,
+            audioEnabledRef.current && audioUrlActiveRef.current,
+          );
+        });
+        if (liveRef.current) renderer.setLeadIn?.(LIVE_MAX_LEAD_IN_MS);
 
         const resume = resumeAfterRebuildRef.current;
         resumeAfterRebuildRef.current = null;
@@ -4538,7 +4607,7 @@ function ReplayViewer({
   const buildStableResultsScore = useCallback((): StableResultsScore | null => {
     const r = rendererRef.current;
     const live = r?.getLiveStats?.();
-    const official = !judgeAsLazer && !sourceIsLazer;
+    const official = !isLive && !judgeAsLazer && !sourceIsLazer;
     if (!official && !live) return null;
     const expected = official ? getScoreExpectedCounts(scoreInfo, replay) : null;
     const liveCounts = live?.counts ?? [];
@@ -4564,7 +4633,7 @@ function ReplayViewer({
       lifeBar: r?.getLifeBarFrames?.() ?? replay.lifeBarFrames,
       hitOffsets: (r?.getHitEvents?.() ?? []).map((event) => event.offsetMs),
     };
-  }, [scoreInfo, judgeAsLazer, sourceIsLazer, replay, rendererMods, replayInfo.player, leaderboardPlayerName]);
+  }, [scoreInfo, judgeAsLazer, sourceIsLazer, replay, rendererMods, replayInfo.player, leaderboardPlayerName, isLive]);
   // The ranking art of whichever skin the stage wears: the player's own skin
   // while applied, the viewer's community skin otherwise. A skin kept only as
   // local settings has no archive to read, so it gets the default screen.
@@ -4728,7 +4797,8 @@ function ReplayViewer({
 
   const togglePlay = () => {
     const r = rendererRef.current;
-    if (!r) return;
+    // A spectator follows the player's clock; there is nothing to pause.
+    if (!r || isLive) return;
     if (isPlaying) {
       cancelReplayEndAudioFade();
       r.pause();
@@ -4888,6 +4958,262 @@ function ReplayViewer({
     if (!rendererRef.current?.isPlaying) togglePlayRef.current?.();
   };
   skipIntroActionRef.current = skipIntro;
+
+  // Live spectating: the player's clock drives the stage. It runs `delayMs`
+  // behind the latest reading, catches up by seeking when it falls far
+  // behind (joining mid-play), runs on to the point the player paused at
+  // and holds there, and waits when the stream stalls.
+  const liveSeekRef = useRef(handleProgressSeek);
+  liveSeekRef.current = handleProgressSeek;
+  const liveStartRef = useRef(startPlayback);
+  liveStartRef.current = startPlayback;
+  const [livePaused, setLivePaused] = useState(false);
+  // Lazer counts 3, 2, 1 before it carries on. The stage shows that count the
+  // same delay behind the player as everything else, and lets it finish even
+  // though the reading that the game moved again lands partway through it.
+  const [liveCountdownAt, setLiveCountdownAt] = useState<number | null>(null);
+  const [liveFailed, setLiveFailed] = useState(false);
+  const liveFailFallbackRef = useRef<number | null>(null);
+  // While the stage is in a map's lead-in, the clock it runs on.
+  const liveLeadInClockRef = useRef<(() => number | null) | null>(null);
+  const liveInLeadInRef = useRef(false);
+  // Extra delay on top of the feed's own, in real ms, taken on when the
+  // stage could not keep up; and whether this play has started on the stage yet.
+  const liveLagRef = useRef(0);
+  const liveStartedRef = useRef(false);
+  const liveCountdownRef = useRef<{ origin: number; startAt: number } | null>(null);
+  // A page nobody has clicked on may not start sound, so a spectator starts
+  // muted (always allowed) and the stage runs anyway; one click turns it on.
+  const [liveMuted, setLiveMuted] = useState(false);
+  const muteLiveAudio = () => {
+    const audio = audioRef.current;
+    if (!audio || audio.muted) return;
+    audio.muted = true;
+    setLiveMuted(true);
+  };
+  const unmuteLiveAudio = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.muted = false;
+    setLiveMuted(false);
+    hitsoundPlayerRef.current?.resume();
+    if (audio.paused && rendererRef.current?.isPlaying) audio.play().catch(() => {});
+  };
+  const muteLiveAudioRef = useRef(muteLiveAudio);
+  muteLiveAudioRef.current = muteLiveAudio;
+  // Lazer's "Song progress": how far between the first and last note the play is.
+  const livePauseProgress = (): number | null => {
+    const r = rendererRef.current;
+    const end = r?.getNotesEndTime?.();
+    if (!r || firstNoteTimeMs == null || end == null || end <= firstNoteTimeMs) return null;
+    return Math.round(Math.max(0, Math.min(1, (r.time - firstNoteTimeMs) / (end - firstNoteTimeMs))) * 100);
+  };
+  const liveNudgeRef = useRef(1);
+  const liveRateRef = useRef(effectiveRate);
+  liveRateRef.current = effectiveRate;
+  // The song leads the stage, so the nudge goes to the song; without one, the stage's own speed.
+  const liveNudge = (factor: number) => {
+    if (liveNudgeRef.current === factor) return;
+    liveNudgeRef.current = factor;
+    const audio = audioRef.current;
+    if (audio && audioEnabledRef.current && audioUrlActiveRef.current && !audio.error) {
+      audio.playbackRate = liveRateRef.current * factor;
+    } else {
+      rendererRef.current?.setSpeed?.(factor);
+    }
+  };
+  useEffect(() => {
+    if (!isLive) return;
+    const id = window.setInterval(() => {
+      const feed = liveRef.current;
+      const r = rendererRef.current;
+      const clock = feed?.clockRef.current;
+      // Before the player's first reading the stage waits well before the
+      // map's start, empty, rather than showing its first notes standing still.
+      if (feed && r && !clock && !liveStartedRef.current && r.time > -LIVE_MAX_LEAD_IN_MS) r.seek(-LIVE_MAX_LEAD_IN_MS);
+      if (!feed || !r || !clock) return;
+      const now = performance.now();
+      const delay = () => feed.delayMs + liveLagRef.current;
+      // Where the stage belongs: the player's position, `delay` ago. When the
+      // map stopped (a pause), the stage still has that delay's worth of play
+      // to show before it reaches the same point, then holds there. No
+      // reading for a while means the stream stalled, so the target stops too.
+      // The stage replays the player's clock `delay` behind: through the
+      // same runs and the same stops.
+      const position = () => liveClockPosition(clock, now - delay(), modRate);
+      // A fail stops the player's clock for good at the fail point, which the
+      // stage reaches `delay` later and stops at too. Without a known point,
+      // where the player stood when the game said so.
+      let failAt = feed.failTimeRef?.current ?? null;
+      if (failAt != null || !feed.failed) liveFailFallbackRef.current = null;
+      else failAt = liveFailFallbackRef.current ??= liveClockPosition(clock, now, modRate)?.time ?? r.time;
+      const target = () => Math.min(position()?.time ?? 0, failAt ?? Infinity);
+      const here = position();
+      // A stop: the player's map stood still there, or the data so far ends there.
+      const stop = here && !here.segment.moving ? here.segment
+        : here?.held ? { at: now, time: here.time, moving: false, paused: false } : null;
+      // Late by a little (the chart or the song took a while to load, the tab
+      // stalled): keep that as extra delay rather than jumping the stage.
+      // Late by a lot (opened in the middle of a play): go to where it is now.
+      const settle = () => {
+        const behindMs = (target() - r.time) / modRate;
+        if (behindMs + liveLagRef.current <= LIVE_MAX_LAG_MS) {
+          liveLagRef.current += behindMs;
+        } else {
+          liveLagRef.current = 0;
+          liveSeekRef.current(Math.max(0, target()));
+        }
+      };
+      // The game can name a fail point a little past its last reading; with
+      // the play over, the stage holding at the end of the data is there.
+      const failed = failAt != null && (r.time >= failAt - 15 * modRate
+        || (feed.failed && here?.held === true && r.time >= here.time - 40 * modRate));
+      setLiveFailed(failed);
+      if (failed) {
+        if (r.isPlaying) {
+          r.pause();
+          audioRef.current?.pause();
+          setIsPlaying(false);
+        }
+        // A fail the game confirms only later (Easy waits to see the bar
+        // stay empty) finds the stage past it: back to where it happened.
+        if (failAt != null && r.time > failAt + 40 * modRate && r.time - failAt < 5_000 * modRate) liveSeekRef.current(failAt);
+        return;
+      }
+      // The lead-in: the map has started but its song has not. The stage runs
+      // on the player's clock until 0:00, where the song takes over.
+      // The first reading is past 0:00 (no lead-in, or joined mid-play): the
+      // stage leaves its wait before the start without counting it as lag.
+      if (!liveStartedRef.current && r.time < 0 && target() >= 0) r.seek(0);
+      // A stop in the lead-in holds the stage there, since it runs on that clock.
+      if (target() < 0) {
+        liveLeadInClockRef.current = () => {
+          const c = liveRef.current?.clockRef.current;
+          const at = c ? liveClockPosition(c, performance.now() - delay(), modRate)?.time ?? null : null;
+          return at != null && at < 0 ? at : null;
+        };
+        setLivePaused(stop != null && stop.paused && r.time >= stop.time - 15 * modRate);
+        if (stop == null && (!liveInLeadInRef.current || !r.isPlaying)) {
+          liveInLeadInRef.current = true;
+          liveStartedRef.current = true;
+          r.seek(Math.max(-LIVE_MAX_LEAD_IN_MS, target()));
+          r.play();
+        }
+        return;
+      }
+      liveLeadInClockRef.current = null;
+      if (liveInLeadInRef.current) {
+        // 0:00: hand the stage to the song.
+        liveInLeadInRef.current = false;
+        if (r.time < 0) r.seek(0);
+        if (typeof navigator !== "undefined" && navigator.userActivation && !navigator.userActivation.hasBeenActive) muteLiveAudioRef.current();
+        liveStartRef.current(false);
+        return;
+      }
+      // Stable says it paused late, so the stage can be past the pause point
+      // by the time it knows; it steps back to it, under the pause notice.
+      if (stop != null && r.time > stop.time + 40 * modRate && r.time - stop.time < 3_000 * modRate) {
+        if (r.isPlaying) {
+          r.pause();
+          audioRef.current?.pause();
+          setIsPlaying(false);
+          liveNudge(1);
+        }
+        liveSeekRef.current(stop.time);
+      }
+      const barrier = liveClockBarrier(clock, now - delay(), modRate);
+      const atPausePoint = (stop != null && r.time >= stop.time - 15 * modRate)
+        || (barrier != null && r.time >= barrier - 15 * modRate);
+      const countdown = liveCountdownRef.current;
+      if (clock.paused && clock.resumingAt != null) {
+        if (countdown?.origin !== clock.resumingAt) {
+          liveCountdownRef.current = { origin: clock.resumingAt, startAt: clock.resumingAt + delay() };
+        }
+      } else if (countdown && ((clock.paused && clock.localAt > countdown.origin) || now > countdown.startAt + 3000)) {
+        // Paused again before the count ran out, or the count is long over.
+        liveCountdownRef.current = null;
+      }
+      const counting = liveCountdownRef.current != null && now >= liveCountdownRef.current.startAt;
+      setLiveCountdownAt(counting ? liveCountdownRef.current!.startAt : null);
+      // The notice only for a pause the game reported, not a clock that stood still for a moment.
+      setLivePaused(stop != null && r.time >= stop.time - 15 * modRate && stop.paused && !counting);
+      if (r.isPlaying) {
+        // Sound refused after the start (no click yet): carry on muted.
+        const audio = audioRef.current;
+        if (audio && audio.paused && !audio.muted && audioEnabledRef.current && audioUrlActiveRef.current && !audio.error
+          && audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+          muteLiveAudioRef.current();
+          audio.play().catch(() => {});
+        }
+        if (atPausePoint) {
+          r.pause();
+          setIsPlaying(false);
+          liveNudge(1);
+          return;
+        }
+        const gap = target() - r.time;
+        if (gap < -400 * modRate) {
+          // Ahead of the player's data: wait for it.
+          r.pause();
+          setIsPlaying(false);
+          liveNudge(1);
+        } else if (gap > 600 * modRate) {
+          settle();
+          liveNudge(1);
+        } else {
+          // Readings are a few tens of ms off each; the stage keeps its own
+          // steady clock and only leans half a percent faster or slower when
+          // it has drifted well away from them, until it is close again. Any
+          // more and the song's pitch audibly wanders.
+          const leaning = liveNudgeRef.current;
+          liveNudge(gap > 120 * modRate ? 1.005
+            : gap < -120 * modRate ? 0.995
+              : Math.abs(gap) < 30 * modRate || (leaning > 1) !== (gap > 0) ? 1
+                : leaning);
+        }
+        return;
+      }
+      if (atPausePoint) {
+        // Held at the player's pause: extra delay from loading late goes
+        // here, where nothing plays, so the stage is back to its usual
+        // distance behind when the player carries on.
+        if (here && !here.segment.moving) liveLagRef.current = 0;
+        return;
+      }
+      // Not running: before the first note of the play, waiting for the
+      // player's data, or just let go of a pause.
+      const gap = target() - r.time;
+      if (gap < 20 * modRate || r.time >= r.duration - 1) {
+        if (liveStartedRef.current && gap < -1500 * modRate) liveSeekRef.current(Math.max(0, target()));
+        return;
+      }
+      // The first start of a play is from where the stage stands (its
+      // beginning), however late the stage got ready.
+      if (!liveStartedRef.current || gap > 1500 * modRate) settle();
+      liveStartedRef.current = true;
+      if (typeof navigator !== "undefined" && navigator.userActivation && !navigator.userActivation.hasBeenActive) muteLiveAudioRef.current();
+      liveStartRef.current(false);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [isLive, modRate]);
+
+  // New frames are judged in as they arrive, a few times a second, without
+  // touching the stage's clock.
+  useEffect(() => {
+    if (!isLive) return;
+    let built = "";
+    const id = window.setInterval(() => {
+      const feed = liveRef.current;
+      const r = rendererRef.current;
+      if (!feed || !r?.setLiveFrames) return;
+      const notes = feed.notesRef?.current ?? null;
+      const version = `${feed.framesVersionRef.current}:${feed.healthRef.current.length}:${notes ? feed.notesVersionRef?.current ?? 0 : 0}`;
+      if (version === built) return;
+      built = version;
+      r.setLiveFrames([...feed.framesRef.current], feed.healthRef.current, notes ?? undefined);
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [isLive]);
 
   const resumeFromPauseMenu = () => {
     setPauseMenuVisible(false);
@@ -5119,6 +5445,7 @@ function ReplayViewer({
   const renderReplayControls = (variant: "card" | "overlay") => (
     <ReplayControls
       variant={variant}
+      live={isLive}
       rendererRef={rendererRef}
       heatmap={keypressHeatmap}
       audioUrl={audioUrl}
@@ -5685,6 +6012,9 @@ function ReplayViewer({
             onBlurCapture={() => showFullscreenChromeTemporarily()}
           >
             <div className="flex items-center gap-2 px-2 pr-10 sm:gap-3">
+              {/* A spectator has no transport: the player's clock runs the stage. */}
+              {isLive ? <div className="min-w-0 flex-1" /> : (
+              <>
               <button
                 type="button"
                 onClick={togglePlay}
@@ -5712,6 +6042,8 @@ function ReplayViewer({
                   onContextMenu={() => {}}
                 />
               </div>
+              </>
+              )}
             </div>
           </div>
         )}
@@ -5794,6 +6126,38 @@ function ReplayViewer({
             </motion.button>
           )}
         </AnimatePresence>
+        {isLive && liveMuted && (
+          <button
+            type="button"
+            onClick={unmuteLiveAudio}
+            className="absolute left-1/2 top-3 z-30 flex -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-md bg-black/60 px-3 py-1.5 text-[13px] font-semibold text-white hover:brightness-110"
+          >
+            <VolumeX className="h-4 w-4" />
+            <Trans>Turn on sound</Trans>
+          </button>
+        )}
+        {/* The player paused: the stage holds where they stopped. A lazer
+            play shows lazer's pause screen and its count back in; a stable
+            one shows what stable's spectator mode does, a notice on a disc,
+            which is also how a fail reads on either client. */}
+        <AnimatePresence>
+          {isLive && liveFailed ? (
+            <SpectatorNotice key="live-failed" text={t`Host failed!`} avatarUrl={replayInfo.player?.avatarUrl} />
+          ) : isLive && livePaused && !judgeAsLazer ? (
+            <SpectatorNotice key="live-paused-stable" text={t`Host is paused.`} avatarUrl={replayInfo.player?.avatarUrl} />
+          ) : null}
+        </AnimatePresence>
+        <AnimatePresence>
+          {isLive && livePaused && judgeAsLazer && !liveFailed && (
+            <LazerPauseOverlay
+              key="live-paused-lazer"
+              retries={live?.pauseInfoRef.current.retries ?? 0}
+              progress={livePauseProgress()}
+              accuracy={live?.pauseInfoRef.current.accuracy ?? null}
+            />
+          )}
+        </AnimatePresence>
+        {isLive && judgeAsLazer && liveCountdownAt != null && <LazerResumeCountdown key={liveCountdownAt} startAt={liveCountdownAt} />}
         {/* osu!-style pause screen for playfield-click pauses: the dimmed
             backdrop stays click-through so clicking the lanes still resumes;
             only the three buttons capture the pointer. It sits above the
@@ -5921,6 +6285,9 @@ function ReplayViewer({
           never scroll away. Fullscreen mode has its own chrome overlay. */}
       {!isCanvasFullscreen && (
         <div className="flex items-center gap-2 border-b border-osu-b3/30 bg-osu-b4 px-2.5 py-1.5 sm:hidden">
+          {/* A spectator has no transport: the player's clock runs the stage. */}
+          {isLive ? <div className="min-w-0 flex-1" /> : (
+          <>
           <button
             type="button"
             onClick={togglePlay}
@@ -5948,6 +6315,8 @@ function ReplayViewer({
               onContextMenu={() => {}}
             />
           </div>
+          </>
+          )}
           <button
             type="button"
             onClick={toggleReplayFullscreen}
@@ -6000,3 +6369,4 @@ function ReplayViewer({
     </div>
   );
 }
+

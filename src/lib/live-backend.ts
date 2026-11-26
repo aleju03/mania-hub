@@ -295,6 +295,7 @@ export const LIVE_EVENT_NAMES = [
   "tracker_score",
   "companella_score",
   "companella_presence",
+  "companella_live",
   "score_gain",
   "top_play",
   "maps_farmed_update",
@@ -1990,11 +1991,13 @@ export interface CompanellaPresence {
 }
 
 /* Everyone with live presence right now. Empty when Companella is off. */
-export async function fetchCompanellaPresenceDirect(): Promise<CompanellaPresence[]> {
+/* Presence plus who is streaming their plays (`live`, missing from older backends). */
+export async function fetchCompanellaPresenceSnapshotDirect(): Promise<{ presence: CompanellaPresence[]; live: number[] }> {
   try {
-    return (await fetchLiveJson<{ presence: CompanellaPresence[] }>("/api/integrations/companella/public/presence")).presence;
+    const body = await fetchLiveJson<{ presence: CompanellaPresence[]; live?: number[] }>("/api/integrations/companella/public/presence");
+    return { presence: body.presence, live: body.live ?? [] };
   } catch (error) {
-    if (error instanceof LiveBackendRequestError && error.status === 404) return [];
+    if (error instanceof LiveBackendRequestError && error.status === 404) return { presence: [], live: [] };
     throw error;
   }
 }

@@ -55,8 +55,8 @@ import {
 } from "../../lib/format";
 import { useHasHydrated, useNoDans, useRecentPlayRatings } from "../../store";
 import { recentPlayRatingKey, useRecentPlayRatingLookup } from "../../components/player/recent-play-ratings";
-import { PresenceLine } from "../../components/player/LivePresence";
-import { usePlayerPresence } from "../../lib/companella-presence";
+import { PresenceLine, SpectateIcon } from "../../components/player/LivePresence";
+import { usePlayerPresence, usePlayerStreaming } from "../../lib/companella-presence";
 import {
   getBeatmapKeyCount,
   getDisplayedRank,
@@ -2160,6 +2160,7 @@ export function PlayerProfilePage({
     showRecentRatings,
   );
   const livePresence = usePlayerPresence(user?.id);
+  const isStreaming = usePlayerStreaming(user?.id);
 
   if (loadingUser && !user) {
     return <PlayerPageSkeleton tab={tab} onTabChange={handleTabChange} />;
@@ -2699,7 +2700,24 @@ export function PlayerProfilePage({
                   </span>
                 ))}
               </div>
-              {livePresence ? <PresenceLine presence={livePresence} /> : null}
+              {livePresence || isStreaming ? (
+                <div className="mt-2.5 flex min-w-0 items-center gap-x-2.5 text-[13px]">
+                  {isStreaming && user ? (
+                    <>
+                      <Link
+                        to="/player/$username/live"
+                        params={{ username: String(user.id) }}
+                        className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-osu-pink-light hover:brightness-110"
+                      >
+                        <SpectateIcon />
+                        <Trans>Spectate</Trans>
+                      </Link>
+                      {livePresence ? <span className="h-3 w-px shrink-0 bg-white/15" /> : null}
+                    </>
+                  ) : null}
+                  {livePresence ? <PresenceLine presence={livePresence} className="min-w-0 flex-1" /> : null}
+                </div>
+              ) : null}
               {canRename && renameOpen ? (
                 <DisplayNameForm
                   current={user.display_name ?? null}

@@ -5,6 +5,7 @@ import type { ReplaySkinSettings } from "./replay-skin";
 import type { ReplayLeaderboardEntry, ReplayLeaderboardOptions } from "./replay-leaderboard";
 import type { ReplayInfoData } from "./replay-info-overlay";
 import type { ReplayStoryboardData } from "./storyboard/types";
+import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame, ReplayLifeBarFrame, OsuScore } from "./types";
 
 export interface ServerReplay {
@@ -84,6 +85,10 @@ export interface ReplayViewportSnapshot {
 }
 
 export interface ReplayRendererLike {
+  /** Live spectating: judges the frames received so far again without disturbing playback. */
+  setLiveFrames?: (frames: ReplayFrame[], lifeBarFrames?: ReplayLifeBarFrame[], notes?: ManiaNote[]) => void;
+  /** Live spectating: lets the stage run this far before 0:00 for a map's lead-in. */
+  setLeadIn?: (ms: number) => void;
   readonly duration: number;
   readonly displayDuration: number;
   readonly time: number;

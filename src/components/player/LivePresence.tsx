@@ -46,12 +46,24 @@ function mapText(beatmap: NonNullable<CompanellaPresence["beatmap"]>): string {
   return beatmap.version ? `${name} [${beatmap.version}]` : name;
 }
 
+/** A screen with a play mark, for the profile's Spectate link. */
+export function SpectateIcon({ className = "h-[15px] w-[15px]" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 ${className}`} aria-hidden="true">
+      <rect x="1.5" y="2.5" width="13" height="9" rx="1.5" />
+      <path d="M6.5 5.2v3.6L9.6 7z" fill="currentColor" />
+      <path d="M5 14h6" />
+    </svg>
+  );
+}
+
 /** The profile line: state, the map (linked when osu! has it) and the mods. */
 export function PresenceLine({ presence, className = "mt-2.5", wrap = false }: { presence: CompanellaPresence; className?: string; wrap?: boolean }) {
   const label = useStateLabel(presence);
   const fit = wrap ? "break-words" : "truncate";
   const beatmap = presence.beatmap;
-  const mods = presence.mods;
+  // A client can send NM for a play without mods; it is not a mod.
+  const mods = presence.mods.filter((mod) => mod !== "NM");
   return (
     <div className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] ${className}`}>
       <span className="shrink-0 font-semibold text-osu-green-light">{label}</span>

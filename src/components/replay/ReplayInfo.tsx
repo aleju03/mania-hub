@@ -41,6 +41,8 @@ interface ReplayInfoProps {
   onDeleteUpload?: () => void;
   deletingUpload?: boolean;
   playerProfile?: ReplayPlayerProfile | null;
+  /** A play still being streamed: no score or combo to show yet. */
+  live?: boolean;
   /** Effective judging ruleset while the Client what-if toggle is in play. */
   judgeAsLazer?: boolean;
   /** Enables the Client stat's stable/lazer toggle. */
@@ -48,7 +50,7 @@ interface ReplayInfoProps {
   onClear: () => void;
 }
 
-export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, downloadUrl, onDeleteUpload, deletingUpload = false, playerProfile, judgeAsLazer, onSelectClient, onClear }: ReplayInfoProps) {
+export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, downloadUrl, onDeleteUpload, deletingUpload = false, playerProfile, judgeAsLazer, onSelectClient, onClear, live = false }: ReplayInfoProps) {
   const h = replay.header;
   const viewerTimeZone = useViewerTimeZone();
   // An upload has no API score, so the client comes from the .osr's own version
@@ -195,8 +197,8 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
         <div className="mt-3 grid grid-cols-4 gap-1.5">
           <MobileReplayStat label={t`Keys`} value={`${replay.keyCount}K`} valueClassName="text-osu-yellow" compact />
           <MobileReplayStat label={t`Acc`} value={`${shownAccuracy.toFixed(2)}%`} compact />
-          <MobileReplayStat label={t`Score`} value={h.totalScore.toLocaleString("en-US")} valueClassName={`text-white${realOnlyDim}`} compact />
-          <MobileReplayStat label={t`Combo`} value={`${h.maxCombo}x`} valueClassName={`text-white${realOnlyDim}`} compact />
+          {live ? null : <MobileReplayStat label={t`Score`} value={h.totalScore.toLocaleString("en-US")} valueClassName={`text-white${realOnlyDim}`} compact />}
+          {live ? null : <MobileReplayStat label={t`Combo`} value={`${h.maxCombo}x`} valueClassName={`text-white${realOnlyDim}`} compact />}
         </div>
         {(clientLabel || canToggleClient || playedDate || shownPp != null) && (
           <div className={`mt-1.5 grid gap-1.5 ${shownPp != null ? "grid-cols-3" : "grid-cols-2"}`}>
@@ -301,8 +303,8 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
               <StripStat label={t`Keys`} valueClassName="text-osu-yellow">{replay.keyCount}K</StripStat>
               <StripStat label={t`Accuracy`}>{shownAccuracy.toFixed(2)}%<DeltaChip delta={accDelta} suffix="%" decimals={2} /></StripStat>
               {shownPp != null && <StripStat label={t`PP`}>{Math.round(shownPp)}pp<DeltaChip delta={ppDelta} suffix="pp" /></StripStat>}
-              <StripStat label={t`Score`} valueClassName={`text-white${realOnlyDim}`} title={simActive ? t`From the real play (not simulated)` : undefined}>{h.totalScore.toLocaleString("en-US")}</StripStat>
-              <StripStat label={t`Combo`} valueClassName={`text-white${realOnlyDim}`} title={simActive ? t`From the real play (not simulated)` : undefined}>{h.maxCombo}x</StripStat>
+              {live ? null : <StripStat label={t`Score`} valueClassName={`text-white${realOnlyDim}`} title={simActive ? t`From the real play (not simulated)` : undefined}>{h.totalScore.toLocaleString("en-US")}</StripStat>}
+              {live ? null : <StripStat label={t`Combo`} valueClassName={`text-white${realOnlyDim}`} title={simActive ? t`From the real play (not simulated)` : undefined}>{h.maxCombo}x</StripStat>}
               {canToggleClient && onSelectClient ? (
                 <div>
                   <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">{t`Client`}</div>

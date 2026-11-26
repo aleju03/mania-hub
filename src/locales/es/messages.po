@@ -663,6 +663,11 @@ msgstr "{0} se elimina de este navegador y de tu cuenta."
 msgid "{0} is live"
 msgstr "{0} ya está publicada"
 
+#. placeholder {0}: live.username ?? user
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{0} is not streaming right now."
+#~ msgstr ""
+
 #. placeholder {0}: published.name
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{0} is yours"
@@ -1322,6 +1327,12 @@ msgstr "{0}pp de diferencia"
 #~ msgid "{0}pp to #{1} {2}"
 #~ msgstr "{0}pp para alcanzar al #{1} {2}"
 
+#. placeholder {0}: combo.combo
+#. placeholder {1}: combo.maxCombo
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{0}x combo, best {1}x"
+#~ msgstr ""
+
 #: src/lib/goal-format.ts
 msgid "{acc}% {speed} on {map}"
 msgstr "{acc}% {speed} en {map}"
@@ -1475,6 +1486,10 @@ msgstr "{count} repeticiones"
 #: src/components/maps/MapSearchSection.tsx
 msgid "{count} skillsets"
 msgstr "{count} skillsets"
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{count} spectators"
+#~ msgstr ""
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{count} still analyzing, so this estimate can still move."
@@ -1817,10 +1832,18 @@ msgstr "{mapCount, plural, one {# mejor jugada} other {# mejores jugadas}}"
 msgid "{mapCount, plural, one {across # map} other {across # maps}}"
 msgstr "{mapCount, plural, one {en # mapa} other {en # mapas}}"
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{mapName} played live"
+#~ msgstr ""
+
 #. placeholder {0}: collection.owner.username
 #: src/routes/collections_.$id.tsx
 msgid "{maps} osu!mania maps picked by {0}."
 msgstr "{maps} mapas de osu!mania elegidos por {0}."
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{maxCombo}x best combo"
+#~ msgstr ""
 
 #: src/routes/teams.tsx
 msgid "{members} members"
@@ -1921,6 +1944,14 @@ msgstr "{name} tiene {count} seguidores."
 #: src/lib/streak-game.ts
 msgid "{name} has {hours} hours of playtime."
 msgstr "{name} tiene {hours} horas de juego."
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "{name} is not playing right now."
+msgstr "{name} no está jugando ahora mismo."
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{name} is not streaming right now."
+#~ msgstr ""
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "{name} is ready"
@@ -2057,7 +2088,7 @@ msgstr "{pendingPlays} plays aún en análisis, así que esta estimación todav�
 
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "{picked} picked"
-msgstr ""
+msgstr "{picked} elegidos"
 
 #: src/routes/developers.tsx
 msgid "{playerCount} players"
@@ -3092,6 +3123,10 @@ msgstr "1 velocidad por mapa"
 #: src/routes/report.tsx
 #~ msgid "1 screenshot"
 #~ msgstr "1 captura"
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "1 spectator"
+#~ msgstr ""
 
 #: src/routes/workshop.index.tsx
 #: src/routes/workshop.themes.gallery.tsx
@@ -4581,7 +4616,7 @@ msgstr "Todos menos {0}"
 
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "All but {out}"
-msgstr ""
+msgstr "Todos menos {out}"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "All clears"
@@ -5521,6 +5556,10 @@ msgstr "Volver a supporter"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Back to the picker"
 msgstr "Volver al selector"
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "Back to the profile"
+msgstr "Volver al perfil"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "Back to the usual four"
@@ -10006,7 +10045,7 @@ msgstr "Descargar la plantilla"
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "Download the video instead"
-msgstr ""
+msgstr "Mejor descargar el video"
 
 #: src/routes/replay.tsx
 msgid "Downloading replay and beatmap{elapsedLabel}"
@@ -13516,6 +13555,22 @@ msgstr "Horizontal"
 msgid "Horror"
 msgstr "Terror"
 
+#: src/routes/replay.tsx
+msgid "Host failed!"
+msgstr "El host falló."
+
+#: src/routes/replay.tsx
+msgid "Host is paused."
+msgstr "El host está en pausa."
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "Host is playing a converted map, which can't be spectated."
+msgstr "El host está jugando un mapa convertido, y esos no se pueden espectar."
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "Host is selecting a song."
+msgstr "El host está eligiendo una canción."
+
 #: src/lib/pack-run.ts
 msgid "Hot Streak"
 msgstr "Racha"
@@ -15291,6 +15346,10 @@ msgstr "Menos score"
 msgid "Less watched"
 msgstr "Menos vistas"
 
+#: src/components/companella/AuthorizePage.tsx
+msgid "Let anyone spectate your plays live from your profile"
+msgstr "Que cualquiera pueda espectar tus plays en vivo desde tu perfil"
+
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Letting go of a hold on its own costs less"
 #~ msgstr "Soltar un hold por sí solo cuesta menos"
@@ -15779,6 +15838,7 @@ msgstr "Se cargó la skin integrada"
 #~ msgstr "cargando"
 
 #: src/components/discord/FeedPlayersModal.tsx
+#: src/components/live/LiveSpectatePage.tsx
 msgid "Loading"
 msgstr "Cargando"
 
@@ -16519,6 +16579,11 @@ msgstr "mapeado por"
 #: src/routes/maps.tsx
 msgid "mapped by {0}"
 msgstr "mapeado por {0}"
+
+#. placeholder {0}: play.beatmap.creator
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Mapped by {0}"
+#~ msgstr ""
 
 #. placeholder {0}: entry.creator
 #. placeholder {1}: formatNumber(entry.playCount)
@@ -20692,6 +20757,10 @@ msgstr "Clear"
 msgid "Pass stamp"
 msgstr "Sello de aprobado"
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Passed"
+#~ msgstr ""
+
 #: src/components/player/ActivityPanel.tsx
 #~ msgid "passes"
 #~ msgstr "passes"
@@ -20867,6 +20936,10 @@ msgstr "overlay de pausa, pantallas de fail y de sección, cuenta regresiva"
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Pause preview"
 msgstr "Pausar preview"
+
+#: src/routes/replay.tsx
+#~ msgid "Paused"
+#~ msgstr ""
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Paused: still frame"
@@ -22475,6 +22548,10 @@ msgstr "Ronda rápida"
 #: src/lib/pack-run.ts
 msgid "Quick Retry"
 msgstr "Quick Retry"
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Quit"
+#~ msgstr ""
 
 #: src/routes/bbcode.tsx
 msgid "Quote"
@@ -27083,13 +27160,39 @@ msgstr "Los duplicados se reciclan con +{bonus}%"
 msgid "Spec"
 msgstr "Especificación"
 
+#: src/routes/player/$username.tsx
+msgid "Spectate"
+msgstr "Espectar"
+
+#. placeholder {0}: params.username
+#: src/routes/player/$username_.live.tsx
+msgid "Spectate {0} playing osu!mania live."
+msgstr "Especta a {0} jugando osu!mania en vivo."
+
+#: src/routes/replay.tsx
+#~ msgid "Spectate with sound"
+#~ msgstr ""
+
 #: src/components/player/LivePresence.tsx
 msgid "Spectating"
 msgstr "Espectando"
 
+#. placeholder {0}: params.username
+#: src/routes/player/$username_.live.tsx
+msgid "Spectating {0}"
+msgstr "Espectando a {0}"
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Spectating {name}"
+#~ msgstr ""
+
 #: src/components/player/LivePresence.tsx
 msgid "Spectating {player}"
 msgstr "Espectando a {player}"
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "Spectating is not available here."
+msgstr "Espectar no está disponible aquí."
 
 #: src/lib/pack-run.ts
 msgid "Spectator"
@@ -29019,9 +29122,17 @@ msgstr "El mapa cambió después de esta jugada, por lo que no se puede verifica
 msgid "The chart changed on osu! and is waiting for a fresh check. The play is rated once that lands."
 msgstr "El chart cambió en osu! y espera una nueva revisión. El play se calcula cuando esa termine."
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "The chart could not be loaded."
+#~ msgstr ""
+
 #: src/routes/replay.tsx
 msgid "The chart file isn't available, so only the replay will load."
 msgstr "El archivo del mapa no está disponible, así que solo cargará el replay."
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "The chart for this play could not be loaded."
+msgstr "No se pudo cargar el chart de esta play."
 
 #: src/components/player/AddScoreModal.tsx
 msgid "The chart's file couldn't be fetched. Try again in a minute."
@@ -30658,6 +30769,10 @@ msgstr "Esta comparte skillset y dan con la anterior. Mientras más compartan do
 msgid "This page doesn't exist."
 msgstr "Esta página no existe."
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "This page picks the stream up as soon as they start."
+#~ msgstr ""
+
 #: src/components/CountryWarming.tsx
 msgid "This page will load automatically once {name} is ready."
 msgstr "Esta página se cargará sola cuando {name} esté listo."
@@ -31572,6 +31687,10 @@ msgstr "Encender"
 msgid "Turn on in every channel"
 msgstr "Activar en todos los canales"
 
+#: src/routes/replay.tsx
+msgid "Turn on sound"
+msgstr "Activar sonido"
+
 #: src/routes/discord.tsx
 #~ msgid "Turn on Top plays in a channel, then choose the players it posts."
 #~ msgstr "Activa Top plays en un canal y luego elige los jugadores que publica."
@@ -32461,7 +32580,7 @@ msgstr "Layout del video"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Video ready"
-msgstr ""
+msgstr "Video listo"
 
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
@@ -32655,6 +32774,10 @@ msgstr "Visualizador"
 msgid "Void"
 msgstr "Vacío"
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Volume"
+#~ msgstr ""
+
 #. placeholder {0}: nominee.username
 #: src/components/packs/GoatPoll.tsx
 msgid "Vote against {0}"
@@ -32706,6 +32829,10 @@ msgstr "Espera a que termine de redimensionarse la imagen y vuelve a guardar."
 msgid "Wait the number of seconds in the <0>Retry-After</0> header."
 msgstr "Espera los segundos que dice el header <0>Retry-After</0>."
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Waiting for {name} to start playing"
+#~ msgstr ""
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "waiting for a vibro check"
 msgstr "esperando una revisión de vibro"
@@ -32737,6 +32864,10 @@ msgstr "Esperando nuevos scores"
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Waiting for review"
 msgstr "Esperando revisión"
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "Waiting for the chart"
+msgstr "Esperando el chart"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "waiting for the next rating pass"

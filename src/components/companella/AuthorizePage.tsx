@@ -354,6 +354,14 @@ export function AuthorizePage({ search, path, onLeave }: {
             </div>
           </li>
         ) : null}
+        {detail.scopes.includes("companella:live:write") ? (
+          <li className="flex items-start gap-3 px-3 py-3">
+            <Check size={18} className="mt-0.5 shrink-0 text-emerald-300" />
+            <div className="text-sm text-white">
+              <Trans>Let anyone spectate your plays live from your profile</Trans>
+            </div>
+          </li>
+        ) : null}
       </ul>
 
       <label className="mt-5 block text-[11px] font-semibold uppercase tracking-wider text-osu-f1">

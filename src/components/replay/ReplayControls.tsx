@@ -90,6 +90,8 @@ interface ReplayControlsProps {
   onVideoExportDraftChange: Dispatch<SetStateAction<ReplayVideoExportDraft>>;
   /** Canonical link to this replay; the Share button hides without one. */
   shareUrl?: string | null;
+  /** Spectating a live play: no play button, scrubber, speed or export, since the player's clock runs the stage. */
+  live?: boolean;
   onTogglePlay: () => void;
   onToggleFullscreen?: () => void;
   onExportVideo?: (options: ReplayVideoExportOptions) => void;
@@ -220,6 +222,7 @@ export function ReplayControls({
   videoExportDraft,
   onVideoExportDraftChange,
   shareUrl: replayShareUrl = null,
+  live = false,
   onTogglePlay,
   onToggleFullscreen,
   onExportVideo,
@@ -561,7 +564,7 @@ export function ReplayControls({
   // Control clusters shared by both variants: the card keeps its compact
   // wrap-row look while the overlay spreads them through the tall osu!-style
   // Visual Settings panel, so each cluster branches its classes on isOverlay.
-  const playButton = (
+  const playButton = live ? null : (
     <button
       onClick={onTogglePlay}
       title={pendingPlay ? t`Waiting for audio to load...` : isPlaying && buffering ? t`Buffering...` : undefined}
@@ -584,7 +587,7 @@ export function ReplayControls({
     </button>
   );
 
-  const speedButtons = (
+  const speedButtons = live ? null : (
     <div className={isOverlay ? "flex items-center gap-1" : "order-1 sm:order-none flex items-center gap-0.5"}>
       {[0.25, 0.5, 1, 1.5, 2].map((nextSpeed) => (
         <button
@@ -784,7 +787,7 @@ export function ReplayControls({
     </div>
   ) : null;
 
-  const videoExportCluster = onExportVideo ? (
+  const videoExportCluster = onExportVideo && !live ? (
     <div ref={videoMenuRef} className={`${isOverlay ? "" : "order-9 sm:order-none "}relative inline-flex`}>
       <button
         type="button"
@@ -1167,6 +1170,9 @@ export function ReplayControls({
 
       {/* On phones the transport (play + scrubber) lives in the sticky strip
           under the canvas, so this card only shows it from sm up. */}
+      {/* A spectator has no seek bar. Left out rather than hidden: its miss
+          markers re-render on every live re-judge. */}
+      {live ? null : (
       <div className="hidden sm:block">
         <ReplayProgressBar
           rendererRef={rendererRef}
@@ -1200,6 +1206,7 @@ export function ReplayControls({
           />
         </ReplayProgressBar>
       </div>
+      )}
 
       {isOverlay ? (
         /* The tall stable-style Visual Settings panel: wordmark on the left,

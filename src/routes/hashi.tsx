@@ -46,7 +46,7 @@ export const Route = createFileRoute("/hashi")({
 // The app's own settings, named as their toggles read: they are not translated, so they are set apart from the sentence.
 const SETTING = "whitespace-nowrap rounded bg-osu-b4 px-1.5 py-0.5 text-[13px] font-semibold text-white";
 const sendSetting = "Send my plays";
-const shareSetting = "Share my live status";
+const shareSetting = "Rich presence";
 
 type Os = "windows" | "linux";
 

@@ -675,6 +675,11 @@ msgstr "{0} 会从这个浏览器和你的账号中删除。"
 msgid "{0} is live"
 msgstr "{0} 已上线"
 
+#. placeholder {0}: live.username ?? user
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{0} is not streaming right now."
+#~ msgstr ""
+
 #. placeholder {0}: published.name
 #: src/components/skins/SkinUploadModal.tsx
 msgid "{0} is yours"
@@ -1334,6 +1339,12 @@ msgstr "相差 {0}pp"
 #~ msgid "{0}pp to #{1} {2}"
 #~ msgstr "距离第 {1} 名 {2} 还差 {0}pp"
 
+#. placeholder {0}: combo.combo
+#. placeholder {1}: combo.maxCombo
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{0}x combo, best {1}x"
+#~ msgstr ""
+
 #: src/lib/goal-format.ts
 msgid "{acc}% {speed} on {map}"
 msgstr "在 {map} 上以 {speed} 打出 {acc}%"
@@ -1487,6 +1498,10 @@ msgstr "{count} 个回放"
 #: src/components/maps/MapSearchSection.tsx
 msgid "{count} skillsets"
 msgstr "{count} 个技能组"
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{count} spectators"
+#~ msgstr ""
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "{count} still analyzing, so this estimate can still move."
@@ -1829,10 +1844,18 @@ msgstr "{mapCount, plural, other {# 条最佳成绩}}"
 msgid "{mapCount, plural, one {across # map} other {across # maps}}"
 msgstr "{mapCount, plural, other {共 # 张谱面}}"
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{mapName} played live"
+#~ msgstr ""
+
 #. placeholder {0}: collection.owner.username
 #: src/routes/collections_.$id.tsx
 msgid "{maps} osu!mania maps picked by {0}."
 msgstr "{0} 挑选的 {maps} 张 osu!mania 谱面。"
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{maxCombo}x best combo"
+#~ msgstr ""
 
 #: src/routes/teams.tsx
 msgid "{members} members"
@@ -1933,6 +1956,14 @@ msgstr "{name} 有 {count} 名关注者。"
 #: src/lib/streak-game.ts
 msgid "{name} has {hours} hours of playtime."
 msgstr "{name} 有 {hours} 小时游戏时长。"
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "{name} is not playing right now."
+msgstr "{name} 现在没有在游玩。"
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "{name} is not streaming right now."
+#~ msgstr ""
 
 #: src/components/LiveDataEmptyState.tsx
 msgid "{name} is ready"
@@ -2069,7 +2100,7 @@ msgstr "{pendingPlays} 个成绩仍在分析中，因此这个估计仍可能变
 
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "{picked} picked"
-msgstr ""
+msgstr "已选 {picked} 人"
 
 #: src/routes/developers.tsx
 msgid "{playerCount} players"
@@ -3104,6 +3135,10 @@ msgstr "每张谱面 1 个倍速"
 #: src/routes/report.tsx
 #~ msgid "1 screenshot"
 #~ msgstr "1 张截图"
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "1 spectator"
+#~ msgstr ""
 
 #: src/routes/workshop.index.tsx
 #: src/routes/workshop.themes.gallery.tsx
@@ -4593,7 +4628,7 @@ msgstr "除 {0} 人外全部"
 
 #: src/components/discord/FeedPlayersModal.tsx
 msgid "All but {out}"
-msgstr ""
+msgstr "除 {out} 人外全部"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "All clears"
@@ -5533,6 +5568,10 @@ msgstr "返回支持者页面"
 #: src/components/replay/ReplaySideBySideView.tsx
 msgid "Back to the picker"
 msgstr "返回选择界面"
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "Back to the profile"
+msgstr "返回个人资料"
 
 #: src/components/player/ProfileStatCards.tsx
 msgid "Back to the usual four"
@@ -10018,7 +10057,7 @@ msgstr "下载模板"
 
 #: src/components/replay/ShareClipButton.tsx
 msgid "Download the video instead"
-msgstr ""
+msgstr "改为下载视频"
 
 #: src/routes/replay.tsx
 msgid "Downloading replay and beatmap{elapsedLabel}"
@@ -13528,6 +13567,22 @@ msgstr "横向"
 msgid "Horror"
 msgstr "恐怖"
 
+#: src/routes/replay.tsx
+msgid "Host failed!"
+msgstr "主机失败了。"
+
+#: src/routes/replay.tsx
+msgid "Host is paused."
+msgstr "主机已暂停。"
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "Host is playing a converted map, which can't be spectated."
+msgstr "主机正在玩转谱，转谱无法观战。"
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "Host is selecting a song."
+msgstr "主机正在选歌。"
+
 #: src/lib/pack-run.ts
 msgid "Hot Streak"
 msgstr "手感火热"
@@ -15303,6 +15358,10 @@ msgstr "更少分数"
 msgid "Less watched"
 msgstr "更少观看"
 
+#: src/components/companella/AuthorizePage.tsx
+msgid "Let anyone spectate your plays live from your profile"
+msgstr "允许任何人在你的个人资料实时观战你的游玩"
+
 #: src/components/prism/PrismUpdates.tsx
 #~ msgid "Letting go of a hold on its own costs less"
 #~ msgstr "单独放手的难度降低"
@@ -15791,6 +15850,7 @@ msgstr "已加载内置皮肤"
 #~ msgstr "加载中"
 
 #: src/components/discord/FeedPlayersModal.tsx
+#: src/components/live/LiveSpectatePage.tsx
 msgid "Loading"
 msgstr "加载中"
 
@@ -16531,6 +16591,11 @@ msgstr "谱师"
 #: src/routes/maps.tsx
 msgid "mapped by {0}"
 msgstr "谱师 {0}"
+
+#. placeholder {0}: play.beatmap.creator
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Mapped by {0}"
+#~ msgstr ""
 
 #. placeholder {0}: entry.creator
 #. placeholder {1}: formatNumber(entry.playCount)
@@ -20704,6 +20769,10 @@ msgstr "通过线"
 msgid "Pass stamp"
 msgstr "合格印章"
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Passed"
+#~ msgstr ""
+
 #: src/components/player/ActivityPanel.tsx
 #~ msgid "passes"
 #~ msgstr "次通过"
@@ -20879,6 +20948,10 @@ msgstr "暂停界面、失败与段落画面、倒计时"
 #: src/components/maps/MapPreviewAudio.tsx
 msgid "Pause preview"
 msgstr "暂停试听"
+
+#: src/routes/replay.tsx
+#~ msgid "Paused"
+#~ msgstr ""
 
 #: src/components/supporter/themes/ThemeEditor.tsx
 msgid "Paused: still frame"
@@ -22487,6 +22560,10 @@ msgstr "快速通关"
 #: src/lib/pack-run.ts
 msgid "Quick Retry"
 msgstr "快速重试"
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Quit"
+#~ msgstr ""
 
 #: src/routes/bbcode.tsx
 msgid "Quote"
@@ -27095,13 +27172,39 @@ msgstr "回收重复时多得 {bonus}%"
 msgid "Spec"
 msgstr "规范"
 
+#: src/routes/player/$username.tsx
+msgid "Spectate"
+msgstr "观战"
+
+#. placeholder {0}: params.username
+#: src/routes/player/$username_.live.tsx
+msgid "Spectate {0} playing osu!mania live."
+msgstr "实时观战 {0} 游玩 osu!mania。"
+
+#: src/routes/replay.tsx
+#~ msgid "Spectate with sound"
+#~ msgstr ""
+
 #: src/components/player/LivePresence.tsx
 msgid "Spectating"
 msgstr "观战中"
 
+#. placeholder {0}: params.username
+#: src/routes/player/$username_.live.tsx
+msgid "Spectating {0}"
+msgstr "正在观战 {0}"
+
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Spectating {name}"
+#~ msgstr ""
+
 #: src/components/player/LivePresence.tsx
 msgid "Spectating {player}"
 msgstr "正在观战 {player}"
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "Spectating is not available here."
+msgstr "此处无法观战。"
 
 #: src/lib/pack-run.ts
 msgid "Spectator"
@@ -29031,9 +29134,17 @@ msgstr "谱面在这次游玩后发生了变化，因此无法验证评级。"
 msgid "The chart changed on osu! and is waiting for a fresh check. The play is rated once that lands."
 msgstr "谱面在 osu! 上有改动，正在等待重新检查。检查完成后即会评分。"
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "The chart could not be loaded."
+#~ msgstr ""
+
 #: src/routes/replay.tsx
 msgid "The chart file isn't available, so only the replay will load."
 msgstr "谱面文件不可用，所以只会加载回放。"
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "The chart for this play could not be loaded."
+msgstr "无法加载这场游玩的谱面。"
 
 #: src/components/player/AddScoreModal.tsx
 msgid "The chart's file couldn't be fetched. Try again in a minute."
@@ -30670,6 +30781,10 @@ msgstr "这张和上一张的技能组、段位都相同。两张卡共享得越
 msgid "This page doesn't exist."
 msgstr "此页面不存在。"
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "This page picks the stream up as soon as they start."
+#~ msgstr ""
+
 #: src/components/CountryWarming.tsx
 msgid "This page will load automatically once {name} is ready."
 msgstr "{name} 就绪后，此页面会自动加载。"
@@ -31584,6 +31699,10 @@ msgstr "开启"
 msgid "Turn on in every channel"
 msgstr "在所有频道开启"
 
+#: src/routes/replay.tsx
+msgid "Turn on sound"
+msgstr "打开声音"
+
 #: src/routes/discord.tsx
 #~ msgid "Turn on Top plays in a channel, then choose the players it posts."
 #~ msgstr "在频道中开启 Top plays，然后选择要发布的玩家。"
@@ -32473,7 +32592,7 @@ msgstr "视频布局"
 
 #: src/components/replay/ReplayExportPanel.tsx
 msgid "Video ready"
-msgstr ""
+msgstr "视频已就绪"
 
 #: src/components/supporter/SupporterExtras.tsx
 #: src/routes/support.tsx
@@ -32667,6 +32786,10 @@ msgstr "可视化"
 msgid "Void"
 msgstr "虚空"
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Volume"
+#~ msgstr ""
+
 #. placeholder {0}: nominee.username
 #: src/components/packs/GoatPoll.tsx
 msgid "Vote against {0}"
@@ -32718,6 +32841,10 @@ msgstr "请等图片调整大小完成后再保存。"
 msgid "Wait the number of seconds in the <0>Retry-After</0> header."
 msgstr "等待 <0>Retry-After</0> 头中给出的秒数。"
 
+#: src/components/live/LiveSpectatePage.tsx
+#~ msgid "Waiting for {name} to start playing"
+#~ msgstr ""
+
 #: src/components/player/DanEvidenceModal.tsx
 msgid "waiting for a vibro check"
 msgstr "等待 vibro 检查"
@@ -32749,6 +32876,10 @@ msgstr "等待新成绩"
 #: src/components/supporter/SupporterExtras.tsx
 msgid "Waiting for review"
 msgstr "等待审核"
+
+#: src/components/live/LiveSpectatePage.tsx
+msgid "Waiting for the chart"
+msgstr "正在等待谱面"
 
 #: src/components/player/DanEvidenceModal.tsx
 msgid "waiting for the next rating pass"
