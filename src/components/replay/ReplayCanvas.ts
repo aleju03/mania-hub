@@ -8,6 +8,7 @@ import { createManiaScoreSimulator, formatLazerScore, formatStableScore, getScor
 import type { ManiaScoreSimulator } from "../../lib/mania-score-simulation";
 import { calculateManiaStarRatingTimeline } from "../../lib/mania-star-rating";
 import { buildReplayPeakKps, replayPeakKpsAt } from "../../lib/replay-kps";
+import { REPLAY_HOLD_TIME_BINS, REPLAY_HOLD_TIME_MAX_MS, ReplayHoldTimeHistogram, buildReplayHoldTimes } from "../../lib/replay-hold-times";
 import { buildReplayNoteBlockEndTimes, REPLAY_NOTE_BLOCK_SIZE } from "../../lib/replay-note-culling";
 import { ensureReplayFontStyle } from "../../lib/replay-fonts";
 import { withTimeout } from "../../lib/promise-timeout";
@@ -124,6 +125,18 @@ const COLUMN_COLORS: Record<number, string[]> = {
   9: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#88da20", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
   10: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#88da20", "#88da20", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
 };
+
+// Spread around the hue wheel short of wrapping back to the first column's.
+function holdTimeColumnColor(col: number, keyCount: number): string {
+  const hue = (keyCount <= 1 ? 0 : col / keyCount) * 300 + 200;
+  const h = (hue % 360) / 60;
+  const c = 0.78 * (1 - Math.abs(2 * 0.64 - 1));
+  const x = c * (1 - Math.abs((h % 2) - 1));
+  const m = 0.64 - c / 2;
+  const [r, g, b] = h < 1 ? [c, x, 0] : h < 2 ? [x, c, 0] : h < 3 ? [0, c, x] : h < 4 ? [0, x, c] : h < 5 ? [x, 0, c] : [c, 0, x];
+  const hex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
+}
 
 const JUDGMENT_COLORS: Record<number, string> = {
   1: "#b3f5ff",
@@ -811,6 +824,10 @@ export class ManiaReplayRenderer {
   private colors: string[];
   private totalDuration: number;
   private segments: ReturnType<typeof buildReplaySegments>;
+  // Built on first draw of the Hold times overlay, and again whenever the
+  // segments or rate it was built from change.
+  private holdTimeHistogram: { histogram: ReplayHoldTimeHistogram; segments: ReturnType<typeof buildReplaySegments>; rate: number } | null = null;
+  private holdTimeColumns: Float32Array[] = [];
   private maxHoldDuration: number;
   private noteBlockEndTimes: Float64Array;
   private scrollVelocities: ManiaScrollVelocity[];
@@ -5591,6 +5608,77 @@ export class ManiaReplayRenderer {
     });
   }
 
+  // One line per column: how many presses were held for each duration, up
+  // to the current time. Distinct hues rather than skin colours, since most
+  // skins repeat a colour across columns and the lines would merge.
+  private renderHoldTimesOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "holdTimes");
+    const width = Math.round(210 * scale);
+    const height = Math.round(104 * scale);
+    const frame = this.getOverlayFrame(layout, "holdTimes", width, height);
+    if (!frame) return;
+
+    let cached = this.holdTimeHistogram;
+    if (!cached || cached.segments !== this.segments || cached.rate !== this.modRate) {
+      cached = this.holdTimeHistogram = {
+        histogram: new ReplayHoldTimeHistogram(buildReplayHoldTimes(this.segments, this.modRate, this.totalDuration)),
+        segments: this.segments,
+        rate: this.modRate,
+      };
+    }
+    const { histogram } = cached;
+    histogram.advanceTo(this.currentTime);
+
+    const fontSize = 8.5 * scale;
+    const padX = 8 * scale;
+    const plotTop = frame.y + 20 * scale;
+    const plotBottom = frame.y + height - 16 * scale;
+    const plotLeft = frame.x + padX;
+    const plotWidth = width - padX * 2;
+    const plotHeight = plotBottom - plotTop;
+    this.roundRect(frame.x, frame.y, width, height, 6 * scale, "#0a0a12", 0.78);
+    this.addText("HOLD TIME", plotLeft, frame.y + 10 * scale, {
+      fontSize, fill: "#ffffff", alpha: 0.55, fontWeight: "700", anchorY: 0.5,
+    });
+
+    const columnWidth = this.measureTextWidth("10", fontSize, "700") + 3 * scale;
+    for (let col = 0; col < this.keyCount; col++) {
+      this.addText(String(col + 1), frame.x + width - padX - (this.keyCount - 1 - col) * columnWidth, frame.y + 10 * scale, {
+        fontSize, fill: holdTimeColumnColor(col, this.keyCount), alpha: 0.95, fontWeight: "700", anchorX: 1, anchorY: 0.5,
+      });
+    }
+
+    for (let ms = 0; ms <= REPLAY_HOLD_TIME_MAX_MS; ms += 50) {
+      const x = plotLeft + (ms / REPLAY_HOLD_TIME_MAX_MS) * plotWidth;
+      if (ms > 0 && ms < REPLAY_HOLD_TIME_MAX_MS) this.fillRect(x, plotTop, Math.max(1, scale * 0.75), plotHeight, "#ffffff", 0.07);
+      this.addText(ms === REPLAY_HOLD_TIME_MAX_MS ? `${ms}ms` : String(ms), x, plotBottom + 8 * scale, {
+        fontSize, fill: "#ffffff", alpha: 0.5, fontWeight: "700", tabularNums: true,
+        anchorX: ms === 0 ? 0 : ms === REPLAY_HOLD_TIME_MAX_MS ? 1 : 0.5, anchorY: 0.5,
+      });
+    }
+    this.fillRect(plotLeft, plotBottom, plotWidth, Math.max(1, scale * 0.75), "#ffffff", 0.18);
+
+    let peak = 0;
+    const columns: Float32Array[] = [];
+    for (let col = 0; col < this.keyCount; col++) {
+      const values = histogram.smoothedColumn(col, this.holdTimeColumns[col] ??= new Float32Array(REPLAY_HOLD_TIME_BINS));
+      for (const value of values) if (value > peak) peak = value;
+      columns.push(values);
+    }
+    if (peak <= 0) return;
+    const step = plotWidth / REPLAY_HOLD_TIME_BINS;
+    columns.forEach((values, col) => {
+      const g = this.graphics;
+      for (let bin = 0; bin < values.length; bin++) {
+        const x = plotLeft + (bin + 0.5) * step;
+        const y = plotBottom - (values[bin] / peak) * plotHeight;
+        if (bin === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.stroke({ color: hexToNumber(holdTimeColumnColor(col, this.keyCount)), alpha: 0.95, width: Math.max(1, 1.5 * scale), join: "round" });
+    });
+  }
+
   // Split by hand, "keypresses" holds the left hand's columns and
   // "keypressesRight" the right's, each placed on its own. The middle lane of
   // an odd keymode goes with the thumb the hand overlays use.
@@ -6392,6 +6480,7 @@ export class ManiaReplayRenderer {
       this.inOverlayLayer("accuracy", () => this.renderAccuracyOverlay(layout));
       this.inOverlayLayer("handAccuracy", () => this.renderHandAccuracyOverlay(layout));
       this.inOverlayLayer("columnStats", () => this.renderColumnStatsOverlay(layout));
+      this.inOverlayLayer("holdTimes", () => this.renderHoldTimesOverlay(layout));
       this.inOverlayLayer("pp", () => this.renderPpOverlay(layout));
       this.inOverlayLayer("judgements", () => this.renderJudgementOverlay(layout));
       this.inOverlayLayer("progress", () => this.renderProgressOverlay(layout));

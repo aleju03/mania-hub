@@ -13447,6 +13447,10 @@ msgstr "Hold Shift to move along one axis"
 msgid "Hold Shift to turn in 15° steps"
 msgstr "Hold Shift to turn in 15° steps"
 
+#: src/lib/replay-overlays.ts
+msgid "Hold times"
+msgstr "Hold times"
+
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "hold to delete"
 msgstr "hold to delete"
@@ -13599,6 +13603,10 @@ msgstr "How it will look"
 #: src/routes/support.tsx
 #~ msgid "How it works"
 #~ msgstr "How it works"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "How long each key is held, one line per column."
+msgstr "How long each key is held, one line per column."
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "How Mania Tracker gives every osu!mania chart a dan level, and how it reads a player's dan off the charts they have passed."

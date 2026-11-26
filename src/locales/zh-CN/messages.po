@@ -13421,6 +13421,10 @@ msgstr "按住 Shift 只沿一个方向移动"
 msgid "Hold Shift to turn in 15° steps"
 msgstr "按住 Shift 以 15° 为步长旋转"
 
+#: src/lib/replay-overlays.ts
+msgid "Hold times"
+msgstr "按键时长"
+
 #: src/components/maps/UserCollectionDetail.tsx
 msgid "hold to delete"
 msgstr "长按删除"
@@ -13573,6 +13577,10 @@ msgstr "实际效果"
 #: src/routes/support.tsx
 #~ msgid "How it works"
 #~ msgstr "运作方式"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "How long each key is held, one line per column."
+msgstr "每个按键按住的时长，每列一条线。"
 
 #: src/routes/dan-estimates.tsx
 #~ msgid "How Mania Tracker gives every osu!mania chart a dan level, and how it reads a player's dan off the charts they have passed."

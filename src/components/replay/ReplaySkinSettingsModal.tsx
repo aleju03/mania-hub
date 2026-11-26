@@ -4116,6 +4116,7 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayHudOverlayId, MessageDescriptor>
   accuracy: msg`Current accuracy percentage.`,
   handAccuracy: msg`Current accuracy percentage for each hand.`,
   columnStats: msg`Accuracy or unstable rate for every column, one cell per finger.`,
+  holdTimes: msg`How long each key is held, one line per column.`,
   pp: msg`Live performance points.`,
   judgements: msg`Hit counts and unstable rate.`,
   hitError: msg`Early/late meter with the real hit windows.`,
@@ -4307,6 +4308,37 @@ function ColumnStatsOverlayPreview({ style, metric }: { style: ReplayColumnStatS
   );
 }
 
+// The canvas chart's shape with made-up 4K counts: tap holds peaking
+// between 50 and 90ms, each column a little apart.
+function HoldTimesOverlayPreview() {
+  const colors = ["#5cbbeb", "#af5ceb", "#eb5c73", "#dfeb5c"];
+  const peaks = [62, 74, 70, 84];
+  const line = (peak: number) => Array.from({ length: 41 }, (_, i) => {
+    const ms = i * 5;
+    const y = Math.exp(-(((ms - peak) / 22) ** 2)) + 0.25 * Math.exp(-(((ms - peak - 45) / 40) ** 2));
+    return `${(ms / 200) * 180 + 10},${70 - y * 52}`;
+  }).join(" ");
+  return (
+    <div className="relative flex h-full w-full items-center justify-center" aria-hidden="true">
+      <svg viewBox="0 0 200 92" className="w-4/5">
+        <rect width="200" height="92" rx="6" fill="#0a0a12" fillOpacity="0.78" />
+        <text x="10" y="13" fontSize="8.5" fontWeight="700" fill="#fff" fillOpacity="0.55">HOLD TIME</text>
+        {colors.map((color, index) => (
+          <text key={color} x={160 + index * 9} y="13" fontSize="8.5" fontWeight="700" fill={color}>{index + 1}</text>
+        ))}
+        <line x1="10" y1="70.5" x2="190" y2="70.5" stroke="#fff" strokeOpacity="0.18" />
+        {peaks.map((peak, index) => (
+          <polyline key={peak} points={line(peak)} fill="none" stroke={colors[index]} strokeWidth="1.5" strokeLinejoin="round" />
+        ))}
+        {[0, 50, 100, 150, 200].map((ms) => (
+          <text key={ms} x={(ms / 200) * 180 + 10} y="84" fontSize="8.5" fontWeight="700" fill="#fff" fillOpacity="0.5"
+            textAnchor={ms === 0 ? "start" : ms === 200 ? "end" : "middle"}>{ms === 200 ? "200ms" : ms}</text>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 // Same bar the canvas draws: colored windows behind white ticks, or the
 // ticks alone carrying the window colour themselves.
 function HitErrorOverlayPreview({ style }: { style: ReplayHitErrorStyle }) {
@@ -4448,6 +4480,8 @@ function ReplayOverlaySettingsRow({
               style={normalizeReplayColumnStatStyle(placement.style)}
               metric={normalizeReplayColumnStatMetric(placement.metric)}
             />
+          ) : id === "holdTimes" ? (
+            <HoldTimesOverlayPreview />
           ) : id === "hitError" ? (
             <HitErrorOverlayPreview style={normalizeReplayHitErrorStyle(placement.style)} />
           ) : id === "judgements" ? (
