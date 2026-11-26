@@ -75,7 +75,7 @@ export function parseFrameDan(raw: unknown): FrameDan | null {
 const FRAME_GEOMETRY = {
   crown: { stillOnly: true, box: [-0.371, -0.6452, 1.6613, 1.0484], overhang: [0.3024, 0.5121, 0, 0] },
   sakura: { box: [-0.4355, -0.4194, 1.629, 1.6613], overhang: [0.3589, 0.3387, 0.1935, 0.2016] },
-  stardust: { box: [-0.8548, -0.3548, 2.1935, 2.129], overhang: [0.8427, 0, 0.2823, 0.7742] },
+  stardust: { roundStill: true, box: [-0.8548, -0.3548, 2.1935, 2.129], overhang: [0.8427, 0, 0.2823, 0.7742] },
   wisteria: { roundStill: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.2419, 0.2258, 0, 0.2419] },
   "aero-bubble": { squareWindow: true, box: [-0.371, -0.371, 1.7419, 1.7419], overhang: [0.3468, 0.1089, 0.121, 0.1331] },
   "aero-window": { squareWindow: true, box: [-0.2419, -0.2419, 1.4839, 1.4839], overhang: [0.1048, 0.2177, 0.1048, 0.121] },

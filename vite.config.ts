@@ -2,6 +2,7 @@ import { defineConfig, type Plugin, type ServerOptions } from 'vite'
 import { devtools } from '@tanstack/devtools-vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -12,6 +13,7 @@ import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { nitro } from 'nitro/vite'
 import { uiScalePostcss } from './scripts/ui-scale-postcss'
+import { buildSupporterNamesCss } from './scripts/supporter-names-css'
 
 function staticCacheHeaders(): Plugin {
   const middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
@@ -25,6 +27,9 @@ function staticCacheHeaders(): Plugin {
     ) {
       res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400')
     }
+    // the name fonts /supporter-names.css loads from other origins (Hashi);
+    // the nitro routeRules below do the same in production
+    if (url.startsWith('/fonts/name/')) res.setHeader('Access-Control-Allow-Origin', '*')
     next()
   }
   return {
@@ -34,6 +39,28 @@ function staticCacheHeaders(): Plugin {
     },
     configurePreviewServer(server) {
       server.middlewares.use(middleware)
+    },
+  }
+}
+
+/* virtual:supporter-names-css: the list-size name styles and fonts cut from
+   src/styles.css (scripts/supporter-names-css.ts), served by
+   src/routes/supporter-names[.]css.ts. */
+function supporterNamesCss(): Plugin {
+  const id = 'virtual:supporter-names-css'
+  const resolved = `\0${id}`
+  const stylesPath = fileURLToPath(new URL('./src/styles.css', import.meta.url))
+  return {
+    name: 'supporter-names-css',
+    resolveId(source) {
+      return source === id ? resolved : undefined
+    },
+    load(loaded) {
+      if (loaded !== resolved) return undefined
+      this.addWatchFile(stylesPath)
+      const css = buildSupporterNamesCss(readFileSync(stylesPath, 'utf8'))
+      const version = createHash('sha256').update(css).digest('hex').slice(0, 10)
+      return `export const css = ${JSON.stringify(css)};\nexport const version = ${JSON.stringify(version)};\n`
     },
   }
 }
@@ -120,6 +147,11 @@ const config = defineConfig({
     // Vercel fails looking for it. Vercel remains the rollback target for the
     // VPS migration, so it has to keep building.
     preset: process.env.VERCEL ? 'vercel' : 'node-server',
+    // the name fonts /supporter-names.css loads from other origins (Hashi's
+    // webview and its OBS source); the dev server sets it in staticCacheHeaders
+    routeRules: {
+      '/fonts/name/**': { headers: { 'access-control-allow-origin': '*' } },
+    },
     // The two native image packages are marked external up front and traced
     // into the server output here. Left to Nitro, resvg's CommonJS wrapper is
     // loaded by the commonjs pass before Nitro's externals get a say, which
@@ -147,6 +179,7 @@ const config = defineConfig({
   },
   plugins: [
     staticCacheHeaders(),
+    supporterNamesCss(),
     localReplayVideoExport(),
     devtools(),
     tsconfigPaths({ projects: ['./tsconfig.json'] }),

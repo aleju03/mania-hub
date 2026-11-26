@@ -40,6 +40,8 @@ import { Route as StableAccRouteImport } from './routes/stable-acc'
 import { Route as StreakRouteImport } from './routes/streak'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as SupporterRouteImport } from './routes/supporter'
+import { Route as SupporterFramesDotjsonRouteImport } from './routes/supporter-frames[.]json'
+import { Route as SupporterNamesDotcssRouteImport } from './routes/supporter-names[.]css'
 import { Route as TeamsRouteImport } from './routes/teams'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
@@ -314,6 +316,16 @@ const SupportRoute = SupportRouteImport.update({
 const SupporterRoute = SupporterRouteImport.update({
   id: '/supporter',
   path: '/supporter',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupporterFramesDotjsonRoute = SupporterFramesDotjsonRouteImport.update({
+  id: '/supporter-frames.json',
+  path: '/supporter-frames.json',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupporterNamesDotcssRoute = SupporterNamesDotcssRouteImport.update({
+  id: '/supporter-names.css',
+  path: '/supporter-names.css',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TeamsRoute = TeamsRouteImport.update({
@@ -969,6 +981,8 @@ export interface FileRoutesByFullPath {
   '/streak': typeof StreakRoute
   '/support': typeof SupportRoute
   '/supporter': typeof SupporterRoute
+  '/supporter-frames.json': typeof SupporterFramesDotjsonRoute
+  '/supporter-names.css': typeof SupporterNamesDotcssRoute
   '/teams': typeof TeamsRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
@@ -1122,6 +1136,8 @@ export interface FileRoutesByTo {
   '/streak': typeof StreakRoute
   '/support': typeof SupportRoute
   '/supporter': typeof SupporterRoute
+  '/supporter-frames.json': typeof SupporterFramesDotjsonRoute
+  '/supporter-names.css': typeof SupporterNamesDotcssRoute
   '/teams': typeof TeamsRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
@@ -1276,6 +1292,8 @@ export interface FileRoutesById {
   '/streak': typeof StreakRoute
   '/support': typeof SupportRoute
   '/supporter': typeof SupporterRoute
+  '/supporter-frames.json': typeof SupporterFramesDotjsonRoute
+  '/supporter-names.css': typeof SupporterNamesDotcssRoute
   '/teams': typeof TeamsRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
@@ -1431,6 +1449,8 @@ export interface FileRouteTypes {
     | '/streak'
     | '/support'
     | '/supporter'
+    | '/supporter-frames.json'
+    | '/supporter-names.css'
     | '/teams'
     | '/terms'
     | '/top-plays'
@@ -1584,6 +1604,8 @@ export interface FileRouteTypes {
     | '/streak'
     | '/support'
     | '/supporter'
+    | '/supporter-frames.json'
+    | '/supporter-names.css'
     | '/teams'
     | '/terms'
     | '/top-plays'
@@ -1737,6 +1759,8 @@ export interface FileRouteTypes {
     | '/streak'
     | '/support'
     | '/supporter'
+    | '/supporter-frames.json'
+    | '/supporter-names.css'
     | '/teams'
     | '/terms'
     | '/top-plays'
@@ -1891,6 +1915,8 @@ export interface RootRouteChildren {
   StreakRoute: typeof StreakRoute
   SupportRoute: typeof SupportRoute
   SupporterRoute: typeof SupporterRoute
+  SupporterFramesDotjsonRoute: typeof SupporterFramesDotjsonRoute
+  SupporterNamesDotcssRoute: typeof SupporterNamesDotcssRoute
   TeamsRoute: typeof TeamsRoute
   TermsRoute: typeof TermsRoute
   TopPlaysRoute: typeof TopPlaysRoute
@@ -2214,6 +2240,20 @@ declare module '@tanstack/react-router' {
       path: '/supporter'
       fullPath: '/supporter'
       preLoaderRoute: typeof SupporterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/supporter-frames.json': {
+      id: '/supporter-frames.json'
+      path: '/supporter-frames.json'
+      fullPath: '/supporter-frames.json'
+      preLoaderRoute: typeof SupporterFramesDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/supporter-names.css': {
+      id: '/supporter-names.css'
+      path: '/supporter-names.css'
+      fullPath: '/supporter-names.css'
+      preLoaderRoute: typeof SupporterNamesDotcssRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/teams': {
@@ -3237,6 +3277,8 @@ const rootRouteChildren: RootRouteChildren = {
   StreakRoute: StreakRoute,
   SupportRoute: SupportRoute,
   SupporterRoute: SupporterRoute,
+  SupporterFramesDotjsonRoute: SupporterFramesDotjsonRoute,
+  SupporterNamesDotcssRoute: SupporterNamesDotcssRoute,
   TeamsRoute: TeamsRoute,
   TermsRoute: TermsRoute,
   TopPlaysRoute: TopPlaysRoute,
