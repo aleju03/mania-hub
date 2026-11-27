@@ -225,10 +225,13 @@ export function rateVerdictPairFor(play: StoredPlaySsr): RateDanVerdictPair | nu
 
 export const DAN_MIN_OD_7K_LN = 5;
 
+const DAN_MIN_OD_6K_LN = 5;
+
 export const DAN_MIN_OD_4K_LN = 7;
 
 export function danMinOdFor(keyCount: number, side: "rc" | "ln" | null): number {
   if (side === "ln" && keyCount === 7) return DAN_MIN_OD_7K_LN;
+  if (side === "ln" && keyCount === 6) return DAN_MIN_OD_6K_LN;
   if (side === "ln" && keyCount === 4) return DAN_MIN_OD_4K_LN;
   return DAN_MIN_OD;
 }

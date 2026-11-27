@@ -250,7 +250,7 @@ export function scoreInvertsChart(mods: OsuMod[] | string[] | undefined): boolea
   return false;
 }
 
-const INVERSE_MOD_KEY_COUNTS = new Set([4, 7]);
+const INVERSE_MOD_KEY_COUNTS = new Set([4, 6, 7, 8]);
 
 export const INVERSE_MOD_PATTERNS = ["ln", "lninverse"];
 
