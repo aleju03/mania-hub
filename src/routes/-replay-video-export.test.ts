@@ -57,7 +57,7 @@ describe("job ownership", () => {
 
   it("starts the job through the app-level manager", () => {
     expect(routeSource).toContain("getReplayExportManager()");
-    expect(routeSource).toContain("manager.start({ spec, capture, target, title, replayPath })");
+    expect(routeSource).toContain("manager.start({ spec, capture, target, title, replayPath, share: options.share === true })");
   });
 
   it("opens the save dialog before anything awaited", () => {
