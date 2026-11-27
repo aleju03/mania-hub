@@ -188,7 +188,11 @@ export interface ChartLabelListQuery {
   /** A skillset some reporter asked for; "ln" matches any LN answer. */
   says?: string | null;
   withNote?: boolean;
+  /** Most reporters first by default; "newest" puts the latest report first. */
+  sort?: ChartLabelSort;
 }
+
+export type ChartLabelSort = "reporters" | "newest";
 
 async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const base = getServerLiveBackendUrl();
@@ -213,6 +217,7 @@ export const listChartLabelGroups = createServerFn({ method: "GET" })
     if (data.filed) query.set("filed", data.filed);
     if (data.says) query.set("says", data.says);
     if (data.withNote) query.set("withNote", "1");
+    if (data.sort && data.sort !== "reporters") query.set("sort", data.sort);
     const response = await adminFetch(`/api/admin/chart-label-reports?${query}`);
     if (!response.ok) throw new Error(`Chart label reports failed (${response.status}).`);
     return await response.json() as ChartLabelPage;

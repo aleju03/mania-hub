@@ -17,6 +17,7 @@ import {
   type ChartLabelGroupReport,
   type ChartLabelKind,
   type ChartLabelPage,
+  type ChartLabelSort,
   type ChartLabelStatus,
 } from "../../lib/chart-label-reports";
 
@@ -365,8 +366,9 @@ export function ChartLabelsBoard({ onShowReports }: { onShowReports: () => void 
   const [kind, setKind] = useState<ChartLabelKind | null>(null);
   const [filed, setFiled] = useState<ChartLabelFiled | null>(null);
   const [says, setSays] = useState<string | null>(null);
+  const [sort, setSort] = useState<ChartLabelSort>("reporters");
 
-  const query = useMemo(() => ({ status, keys, kind, filed, says, withNote: commentsOnly }), [status, keys, kind, filed, says, commentsOnly]);
+  const query = useMemo(() => ({ status, keys, kind, filed, says, withNote: commentsOnly, sort }), [status, keys, kind, filed, says, commentsOnly, sort]);
   // Any LN first, then the skillsets by how many charts ask for them; the picked one stays even at 0.
   const saysOptions = useMemo(() => {
     const list = [...(facets?.says ?? [])].sort((a, b) => Number(b.value === "ln") - Number(a.value === "ln"));
@@ -546,11 +548,21 @@ export function ChartLabelsBoard({ onShowReports }: { onShowReports: () => void 
               Clear
             </button>
           ) : null}
-          {groups !== null ? (
-            <span className="ml-auto text-[12px] text-osu-f1">
-              <span className="text-[14px] font-bold tabular-nums text-white">{total}</span> {total === 1 ? "chart" : "charts"}
-            </span>
-          ) : null}
+          <div className="ml-auto flex items-center gap-3">
+            <FilterMenu
+              label="Sort"
+              value={sort === "newest" ? "newest" : null}
+              valueLabel={sort === "newest" ? "Newest" : "Most players"}
+              all="Most players"
+              groups={[{ options: [{ value: "newest", label: "Newest" }] }]}
+              onChange={(value) => setSort(value === "newest" ? "newest" : "reporters")}
+            />
+            {groups !== null ? (
+              <span className="text-[12px] text-osu-f1">
+                <span className="text-[14px] font-bold tabular-nums text-white">{total}</span> {total === 1 ? "chart" : "charts"}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {error && <p className="mb-3 text-[12px] text-osu-red-light">{error}</p>}
