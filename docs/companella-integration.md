@@ -578,9 +578,12 @@ folded into the relationship: identical notes can judge completely differently.
 Scroll speed is compared as a whole timeline under the time transform (the
 parser's multipliers are already relative to each file's main BPM, so a rate
 copy keeps them and only moves their times); removing or flattening SVs does
-not survive that. A fresh match also returns the original's OD, which the rating
-judges the replay at, so a copy with easier windows keeps no more holds than the
-original would have. That OD is not stored.
+not survive that. A fresh match also returns the original's OD. The rating
+judges the replay at the higher of that and the file's own OD, so a copy with
+easier windows keeps no more holds than the original would have and a copy with
+harder windows is judged as it was played. That OD is not stored. A placed copy
+with a higher OD is also held to its own OD on the dan OD floor, and one with a
+lower OD credits no dan.
 
 The lookup first compares every chart with the upload's exact note sequence
 (`topology_key`); a strict match there settles it at once, since the upload is

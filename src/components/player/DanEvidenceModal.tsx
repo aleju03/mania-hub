@@ -779,6 +779,7 @@ export function DanEvidenceModal({ userId, username, keyCount, side, onClose, on
             source: detail.play.source,
             mods: detail.play.mods ?? null,
             daOd: detail.play.daOd ?? null,
+            playedOd: detail.play.playedOd ?? null,
             scoreId: detail.play.scoreId,
             sharePath: skillPlayShareLink(username, detail.play, `dan:${side}`),
             score: detail.play.score,

@@ -8,7 +8,7 @@ import { useLocale } from "../../lib/locale-context";
 import { OsuLogo } from "../ui/OsuLogo";
 import { PlayGlyph } from "../ui/PlayGlyph";
 import { Link } from "@tanstack/react-router";
-import { ModBadge } from "../ui/ModBadge";
+import { EDITED_OD_COLOR, ModBadge } from "../ui/ModBadge";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { invertManiaOsuText } from "#dan/invert-mod";
 import { MapScoresBoard, mapScoreEntryScore, pendingFriendsBoard } from "./MapScoresBoard";
@@ -159,6 +159,8 @@ export interface MapDetailPlayContext {
   mods?: string[] | null;
   /** The OD a Difficulty Adjust play set, for the DA badge's tail. */
   daOd?: number | null;
+  /** The OD of the edited file an app import was played on, for its own badge. */
+  playedOd?: number | null;
   // Historical identity; its namespace is ambiguous. Only score.scoreUrl
   // provides a verified external link.
   scoreId?: number | null;
@@ -177,9 +179,11 @@ export function PlayModRow({ play }: { play: MapDetailPlayContext }) {
     : play.rateMod
       ? [play.rateMod.acronym]
       : [];
-  if (mods.length === 0) return null;
+  const playedOd = typeof play.playedOd === "number" ? play.playedOd : null;
+  if (mods.length === 0 && playedOd == null) return null;
   return (
     <span className="flex flex-wrap items-center justify-end gap-1">
+      {playedOd != null && <ModBadge mod="OD" detail={formatDaOd(playedOd)} color={EDITED_OD_COLOR} size={0.75} />}
       {mods.map((mod) => (
         <ModBadge
           key={mod}

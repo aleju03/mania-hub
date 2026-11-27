@@ -79,6 +79,9 @@ export interface LivePlayerSkillPlay {
   rateMod?: string | null;
   // The OD a Difficulty Adjust play set. Absent on older backend payloads.
   daOd?: number | null;
+  // The OD of the file an app import was played on, when it is a copy of the
+  // chart with a different OD.
+  playedOd?: number | null;
   playedAt: string | null;
   source: "top" | "tracked";
   scoreId: number | null;

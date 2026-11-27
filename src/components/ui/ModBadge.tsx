@@ -55,6 +55,9 @@ export const MOD_BADGE_TYPE_COLORS: Record<string, string> = {
   TD: "#ffcc22", SV2: "#ffcc22",
 };
 
+/** The badge for a file edited to another OD takes Difficulty Adjust's color: it changes the same setting. */
+export const EDITED_OD_COLOR = MOD_BADGE_TYPE_COLORS.DA;
+
 const iconInset: Record<string, number> = {
   DT: 1,
   NC: 1,
@@ -120,7 +123,9 @@ export function ModBadge({ mod, size = 1, rate, color, detail, plain = false, ta
     // which matches osu-framework's .Darken(2.8f).
     // Unrounded: a rounded overlap at a fractional size slid the darker tail
     // over the pill's corner, and the pill is stacked above it besides.
-    const extenderWidth = height * 2.2;
+    // A one or two character tail ("8", "10") gets a shorter extender with the
+    // same room around the text as a three character one.
+    const extenderWidth = height * Math.min(2.2, 1.3 + 0.3 * tailText.length);
     const overlap = height * 0.5;
     // The tail is sized for a five-character rate; longer settings shrink to fit.
     const fontSize = Math.round(height * 0.5 * Math.min(1, 5 / tailText.length));
@@ -140,10 +145,12 @@ export function ModBadge({ mod, size = 1, rate, color, detail, plain = false, ta
             backgroundColor: darkerBg,
             maskImage: "url(/images/badges/mods/mod-icon-extender.svg)",
             WebkitMaskImage: "url(/images/badges/mods/mod-icon-extender.svg)",
-            maskSize: "contain",
-            WebkitMaskSize: "contain",
-            maskPosition: "center",
-            WebkitMaskPosition: "center",
+            // Anchored on its pointed end at full height: a shorter extender
+            // loses its left side, which sits under the pill anyway.
+            maskSize: "auto 100%",
+            WebkitMaskSize: "auto 100%",
+            maskPosition: "right center",
+            WebkitMaskPosition: "right center",
             maskRepeat: "no-repeat",
             WebkitMaskRepeat: "no-repeat",
           }}

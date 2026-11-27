@@ -894,6 +894,7 @@ export function SkillPlaysExplorer({ userId, username, modes, view, views, onVie
             source: detail.play.source,
             mods: playModAcronyms(detail.play),
             daOd: detail.play.daOd ?? null,
+            playedOd: detail.play.playedOd ?? null,
             scoreId: detail.play.scoreId,
             sharePath: skillPlayShareLink(username, detail.play, view === "unrated" ? "Overall" : detail.dan ? `dan:${detail.dan.family ?? side}` : axis),
             score: detail.play.score,

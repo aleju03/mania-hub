@@ -15,7 +15,7 @@ import {
 import { formatAccuracy, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { msdSkillsetMeta } from "../../lib/skill-axes";
 import { Skeleton } from "../ui/LoadingSkeleton";
-import { ModBadge } from "../ui/ModBadge";
+import { EDITED_OD_COLOR, ModBadge } from "../ui/ModBadge";
 import { MapDetailModal } from "../maps/MapDetailModal";
 import { ReplayChip } from "../ui/ReplayChip";
 import { useBodyScrollLock } from "../../lib/use-body-scroll-lock";
@@ -64,11 +64,14 @@ function formatDaOd(od: number): string {
 }
 
 export function PlayModBadges({ play, size = 0.8 }: { play: LivePlayerSkillPlay; size?: number }) {
-  const acronyms = playModAcronyms(play);
-  if (!acronyms || acronyms.length === 0) return null;
+  const acronyms = playModAcronyms(play) ?? [];
+  const playedOd = typeof play.playedOd === "number" ? play.playedOd : null;
+  if (acronyms.length === 0 && playedOd == null) return null;
   const rateMod = rateModFor(play.rate, play.rateMod);
   return (
     <span className="inline-flex flex-wrap items-center gap-0.5">
+      {/* A file edited to another OD: no mod did it, so it gets a badge of its own. */}
+      {playedOd != null && <ModBadge mod="OD" detail={formatDaOd(playedOd)} color={EDITED_OD_COLOR} size={size} />}
       {acronyms.map((mod) => (
         <ModBadge
           key={mod}
@@ -380,6 +383,7 @@ export function SkillPlaysModal({
             source: detail.play.source,
             mods: detail.play.mods ?? null,
             daOd: detail.play.daOd ?? null,
+            playedOd: detail.play.playedOd ?? null,
             scoreId: detail.play.scoreId,
             sharePath: skillPlayShareLink(username, detail.play, axis),
             score: detail.play.score,
