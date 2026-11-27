@@ -3649,8 +3649,8 @@ msgid "A figure that stands beside your profile's numbers. Pick one from the lis
 msgstr "Una figura que se queda junto a los números de tu perfil. Elige una de la lista o sube la tuya."
 
 #: src/routes/hashi.tsx
-msgid "A finished play's analysis in Hashi, turned into a practice map that opens in osu!"
-msgstr "El análisis de una play terminada en Hashi, convertido en un mapa de práctica que se abre en osu!"
+#~ msgid "A finished play's analysis in Hashi, turned into a practice map that opens in osu!"
+#~ msgstr "El análisis de una play terminada en Hashi, convertido en un mapa de práctica que se abre en osu!"
 
 #: src/lib/pack-run.ts
 msgid "A fourth charm slot"
@@ -3823,6 +3823,10 @@ msgstr "Una imagen pegada ya no está disponible. Pégala de nuevo antes de copi
 msgid "A picture you place, size and turn, that can sway or spin"
 msgstr "Una imagen que colocas, escalas y giras, y que puede mecerse o dar vueltas"
 
+#: src/routes/hashi.tsx
+msgid "A play being spectated on a profile"
+msgstr "Un play siendo espectado en un perfil"
+
 #: src/routes/dan-estimates.tsx
 msgid "A play under its ladder's minimum OD earns nothing: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. <0/> never counts."
 msgstr "Una play por debajo del OD mínimo de su escala no da nada: 5.5 en charts regulares, 7 en 4K LN y 5 en 7K LN. <0/> nunca cuenta."
@@ -3840,8 +3844,8 @@ msgid "A PNG or WebP with transparency. It's also what lists, Safari and reduced
 msgstr "Un PNG o WebP con transparencia. Es también lo que se ve en las listas, en Safari y con movimiento reducido."
 
 #: src/routes/hashi.tsx
-msgid "A practice map's analysis, with its repeats and earlier tries"
-msgstr "El análisis de un mapa de práctica, con sus repeticiones e intentos anteriores"
+#~ msgid "A practice map's analysis, with its repeats and earlier tries"
+#~ msgstr "El análisis de un mapa de práctica, con sus repeticiones e intentos anteriores"
 
 #: src/routes/hashi.tsx
 msgid "A profile showing the map its player is playing"
@@ -4013,7 +4017,6 @@ msgstr "A-Z"
 #: src/components/settings/CompanellaGroup.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
-#: src/routes/hashi.tsx
 #: src/routes/player/$username.tsx
 msgid "About"
 msgstr "Acerca de"
@@ -7346,6 +7349,10 @@ msgstr "clic"
 msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
 msgstr "Haz clic en una columna para seleccionarla. Arrastra un recuadro para selección múltiple. Mantén Shift para un rango y Ctrl/Cmd para alternar."
 
+#: src/routes/hashi.tsx
+msgid "Click a player on a leaderboard to see their score and its replay."
+msgstr "Haz clic en un jugador de un leaderboard para ver su score y su replay."
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
 msgstr "Haz clic en un sonido para previsualizarlo. Cada nota reproduce el sample que le asigna su mapa, así que todos se pueden escuchar en un replay."
@@ -7924,8 +7931,12 @@ msgid "Connect Discord to set up feeds in servers where you have Manage Server."
 msgstr "Conecta Discord para configurar los feeds en los servidores donde tienes Gestionar servidor."
 
 #: src/routes/hashi.tsx
-msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
-msgstr "Conéctala a tu cuenta desde la app. Puedes revocar la conexión en <0>Ajustes</0>, en Preferencias."
+msgid "Connect it to your account from inside the app, or pick Continue without connecting to only use the analysis and the skin editor. You can revoke the connection in <0>Settings</0>, under Preferences."
+msgstr "Conéctala a tu cuenta desde la app, o elige Continue without connecting para usar solo el análisis y el editor de skins. Puedes revocar la conexión en <0>Ajustes</0>, en Preferencias."
+
+#: src/routes/hashi.tsx
+#~ msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
+#~ msgstr "Conéctala a tu cuenta desde la app. Puedes revocar la conexión en <0>Ajustes</0>, en Preferencias."
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Connect Patreon"
@@ -9165,6 +9176,10 @@ msgstr "Cortar"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Cut LN tail"
 msgstr "Cortar cola del LN"
+
+#: src/routes/hashi.tsx
+msgid "Cutting a map down to one part in Hashi"
+msgstr "Recortando un mapa a una sola parte en Hashi"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "cyan"
@@ -10883,8 +10898,12 @@ msgstr "Todas las imágenes que ya pegaste dejarán de funcionar."
 #~ msgstr "Cada ladder pide además un OD mínimo: 5.5 en mapas regulares, 7 en 4K LN y 5 en 7K LN. Un pase con <0/> que baje el OD por debajo del mínimo de su ladder no recibe crédito de dan, y <1/> no lo recibe en ningún caso, porque ensancha todas las ventanas de hit."
 
 #: src/routes/hashi.tsx
-msgid "Every mania play you finish on stable or lazer goes to your profile with its replay. Turn on <0>{shareSetting}</0> and your profile and the rankings show what you're doing in osu!."
-msgstr "Cada play de mania que terminas en stable o lazer va a tu perfil con su replay. Activa <0>{shareSetting}</0> y tu perfil y los rankings muestran lo que estás haciendo en osu!."
+msgid "Every mania play you finish on stable or lazer goes to your profile with its replay."
+msgstr "Cada play de mania que terminas en stable o lazer va a tu perfil con su replay."
+
+#: src/routes/hashi.tsx
+#~ msgid "Every mania play you finish on stable or lazer goes to your profile with its replay. Turn on <0>{shareSetting}</0> and your profile and the rankings show what you're doing in osu!."
+#~ msgstr "Cada play de mania que terminas en stable o lazer va a tu perfil con su replay. Activa <0>{shareSetting}</0> y tu perfil y los rankings muestran lo que estás haciendo en osu!."
 
 #: src/routes/recommendations.tsx
 msgid "Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
@@ -12105,6 +12124,10 @@ msgstr "Por revisar"
 msgid "For screenshots that have nothing to do with the skin."
 msgstr "Para capturas que no tienen nada que ver con la skin."
 
+#: src/routes/hashi.tsx
+msgid "For streams, the same card goes into OBS as a Browser Source."
+msgstr "Para streams, la misma tarjeta va en OBS como Browser Source."
+
 #: src/routes/recommendations.tsx
 msgid "for you"
 msgstr "para ti"
@@ -12670,7 +12693,6 @@ msgstr "metas"
 #: src/lib/signature-shared.ts
 #: src/routes/discord.tsx
 #: src/routes/goals.tsx
-#: src/routes/hashi.tsx
 msgid "Goals"
 msgstr "Metas"
 
@@ -13000,8 +13022,8 @@ msgstr "Tiene su propio fondo"
 #~ msgstr "Hashi envía a tu cuenta cada play de mania que terminas en osu!stable o lazer, con su replay. Con Share what I'm playing activado, tu perfil y los rankings de pp también muestran lo que estás haciendo en osu!."
 
 #: src/routes/hashi.tsx
-msgid "Hashi showing a leaderboard for a graveyard map"
-msgstr "Hashi mostrando el leaderboard de un mapa del graveyard"
+#~ msgid "Hashi showing a leaderboard for a graveyard map"
+#~ msgstr "Hashi mostrando el leaderboard de un mapa del graveyard"
 
 #: src/routes/hashi.tsx
 msgid "Hashi showing a map's leaderboard for Double Time"
@@ -13016,8 +13038,24 @@ msgid "Hashi's main window with the last plays it sent"
 msgstr "La ventana principal de Hashi con las últimas jugadas que envió"
 
 #: src/routes/hashi.tsx
+msgid "Hashi's overlay card"
+msgstr "La tarjeta del overlay de Hashi"
+
+#: src/routes/hashi.tsx
+#~ msgid "Hashi's overlay card over the game"
+#~ msgstr "La tarjeta del overlay de Hashi sobre el juego"
+
+#: src/routes/hashi.tsx
 #~ msgid "Hashi's settings"
 #~ msgstr "Los ajustes de Hashi"
+
+#: src/routes/hashi.tsx
+msgid "Hashi's skin editor on the long notes tab"
+msgstr "El editor de skins de Hashi en la pestaña de long notes"
+
+#: src/routes/hashi.tsx
+msgid "Hashi's skin editor with the column and combo settings"
+msgstr "El editor de skins de Hashi con los ajustes de columnas y combo"
 
 #: src/lib/goal-format.ts
 msgid "Have {count, plural, one {# {pp}pp+ play} other {# {pp}pp+ plays}}"
@@ -14378,8 +14416,8 @@ msgstr "Puede que lo hayan retirado, o que todavía esté esperando aprobación.
 #~ msgstr "Solo puede subir el número. Si tus skills ya promedian más alto, se mantiene el promedio. Las filas de skills de abajo no se tocan en ningún caso, y por eso pueden leerse más bajo que el número que tienen encima."
 
 #: src/routes/hashi.tsx
-msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
-msgstr "Lee osu! a través de tosu, así que tosu tiene que estar abierto. Puedes descargarlo en <0>tosu.app</0>. En Linux, lazer necesita la versión de tosu para Linux."
+#~ msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
+#~ msgstr "Lee osu! a través de tosu, así que tosu tiene que estar abierto. Puedes descargarlo en <0>tosu.app</0>. En Linux, lazer necesita la versión de tosu para Linux."
 
 #: src/components/supporter/CustomThemeCredit.tsx
 msgid "It shows something that shouldn't be here"
@@ -20533,6 +20571,11 @@ msgstr "Paliza"
 msgid "Overlay"
 msgstr "Superponer"
 
+#: src/routes/hashi.tsx
+msgctxt "Hashi feature"
+msgid "Overlay"
+msgstr "Overlay"
+
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 msgid "Overlay scroll speed"
 msgstr "Velocidad de scroll"
@@ -24816,7 +24859,6 @@ msgstr "capturas"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 #: src/components/skins/SkinSettingsModal.tsx
-#: src/routes/hashi.tsx
 msgid "Screenshots"
 msgstr "Capturas"
 
@@ -27201,6 +27243,11 @@ msgstr "Especta a {0} jugando osu!mania en vivo."
 msgid "Spectating"
 msgstr "Espectando"
 
+#: src/routes/hashi.tsx
+msgctxt "Hashi feature"
+msgid "Spectating"
+msgstr "Espectar"
+
 #. placeholder {0}: params.username
 #: src/routes/player/$username_.live.tsx
 msgid "Spectating {0}"
@@ -28961,6 +29008,14 @@ msgstr "El chart {level} de esta escalera de skillset: una run a menos de un pun
 msgid "The {selectedKeymode}K block resolves no note images, so this preview uses flat colours."
 msgstr "El bloque {selectedKeymode}K no resuelve imágenes de notas, así que esta vista previa usa colores planos."
 
+#: src/routes/hashi.tsx
+#~ msgid "The <0>README</0> lists everything the app sends. It reads osu! on its own, so tosu isn't needed anymore."
+#~ msgstr "El <0>README</0> lista todo lo que manda la app. Lee osu! por su cuenta, así que ya no hace falta tosu."
+
+#: src/routes/hashi.tsx
+msgid "The <0>README</0> lists everything the app sends. It reads osu! on its own."
+msgstr "El <0>README</0> lista todo lo que manda la app. Lee osu! por su cuenta."
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "The <0>Visualizer</0> marks the sections Prism rates as mashed."
 msgstr "El <0>Visualizador</0> marca las secciones que Prism califica como mash."
@@ -29676,8 +29731,8 @@ msgid "The frost got to every card"
 msgstr "La escarcha alcanzó todas las cartas"
 
 #: src/routes/hashi.tsx
-msgid "The goals page"
-msgstr "La página de metas"
+#~ msgid "The goals page"
+#~ msgstr "La página de metas"
 
 #: src/routes/developers.tsx
 msgid "The headline MSD the profile shows. Read this rather than picking one from <0>msd</0>."
@@ -29828,6 +29883,10 @@ msgstr "La próxima vez que alguien saque esta carta, hay un 50% de probabilidad
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The only one ever pulled"
 msgstr "La única que se ha sacado"
+
+#: src/routes/hashi.tsx
+msgid "The overlay turns the window into a small card that stays above the game. It shows the rating and dan of the map you have selected, the play you just finished with its rank, or the map's leaderboard."
+msgstr "El overlay convierte la ventana en una tarjeta pequeña que se queda encima del juego. Muestra el rating y el dan del mapa que tienes seleccionado, el play que acabas de terminar con su puesto, o el leaderboard del mapa."
 
 #: src/components/packs/run/RunTable.tsx
 #: src/routes/packs.tsx
@@ -31707,6 +31766,14 @@ msgstr "¿Desactivar tus ratings de skill?"
 msgid "Turn on"
 msgstr "Encender"
 
+#: src/routes/hashi.tsx
+msgid "Turn on <0>{liveSetting}</0> and anyone can spectate your plays from your profile, without opening osu!."
+msgstr "Activa <0>{liveSetting}</0> y cualquiera puede espectar tus plays desde tu perfil, sin abrir osu!."
+
+#: src/routes/hashi.tsx
+msgid "Turn on <0>{shareSetting}</0> and your profile and the rankings show what you're doing in osu!."
+msgstr "Activa <0>{shareSetting}</0> y tu perfil y los rankings muestran lo que estás haciendo en osu!."
+
 #: src/routes/discord.tsx
 msgid "Turn on in every channel"
 msgstr "Activar en todos los canales"
@@ -33121,6 +33188,7 @@ msgstr "¿Qué estás creando? (opcional)"
 #~ msgstr ""
 
 #: src/routes/developers.tsx
+#: src/routes/hashi.tsx
 msgid "What gets sent"
 msgstr "Qué se manda"
 
@@ -33187,8 +33255,8 @@ msgid "What would you add or change?"
 msgstr "¿Qué agregarías o cambiarías?"
 
 #: src/routes/hashi.tsx
-msgid "What you need"
-msgstr "Qué necesitas"
+#~ msgid "What you need"
+#~ msgstr "Qué necesitas"
 
 #: src/components/me/MyStatsInsights.tsx
 msgid "What you play"
@@ -33798,6 +33866,10 @@ msgstr "Estás cortando las cartas"
 #: src/routes/developers.tsx
 #~ msgid "You asked for access. Once it's granted you can make keys here."
 #~ msgstr "Pediste acceso. Cuando te lo den vas a poder crear keys aquí."
+
+#: src/routes/hashi.tsx
+msgid "You can also cut a map down to the part you want to play, or change its rate on stable. The rate changer shows the MSD and dan at the rate you pick."
+msgstr "También puedes recortar un mapa a la parte que quieres jugar, o cambiarle el rate en stable. El cambiador de rate muestra el MSD y el dan al rate que elijas."
 
 #: src/routes/hashi.tsx
 msgid "You can also open it in a window the size of osu!'s and play the map there with its song, or watch autoplay."

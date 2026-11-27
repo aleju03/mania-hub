@@ -3661,8 +3661,8 @@ msgid "A figure that stands beside your profile's numbers. Pick one from the lis
 msgstr "站在你个人资料数据旁的小伙伴。从列表里挑一个，或者提交你自己的。"
 
 #: src/routes/hashi.tsx
-msgid "A finished play's analysis in Hashi, turned into a practice map that opens in osu!"
-msgstr "Hashi 中一局已完成游玩的分析，被做成在 osu! 中打开的练习谱面"
+#~ msgid "A finished play's analysis in Hashi, turned into a practice map that opens in osu!"
+#~ msgstr "Hashi 中一局已完成游玩的分析，被做成在 osu! 中打开的练习谱面"
 
 #: src/lib/pack-run.ts
 msgid "A fourth charm slot"
@@ -3835,6 +3835,10 @@ msgstr "有一张粘贴的图片已不可用。复制前请重新粘贴。"
 msgid "A picture you place, size and turn, that can sway or spin"
 msgstr "可自由摆放、缩放和旋转的图片，还能摇摆或转动"
 
+#: src/routes/hashi.tsx
+msgid "A play being spectated on a profile"
+msgstr "个人资料上正在被观战的一局"
+
 #: src/routes/dan-estimates.tsx
 msgid "A play under its ladder's minimum OD earns nothing: 5.5 on regular charts, 7 on 4K LN and 5 on 7K LN. <0/> never counts."
 msgstr "低于所属段位表最低 OD 的成绩不计分：常规谱面为 5.5，4K LN 为 7，7K LN 为 5。<0/> 永远不计入。"
@@ -3852,8 +3856,8 @@ msgid "A PNG or WebP with transparency. It's also what lists, Safari and reduced
 msgstr "带透明通道的 PNG 或 WebP。列表、Safari 和减少动态效果时也会显示它。"
 
 #: src/routes/hashi.tsx
-msgid "A practice map's analysis, with its repeats and earlier tries"
-msgstr "练习谱面的分析，包含各次重复和之前的尝试"
+#~ msgid "A practice map's analysis, with its repeats and earlier tries"
+#~ msgstr "练习谱面的分析，包含各次重复和之前的尝试"
 
 #: src/routes/hashi.tsx
 msgid "A profile showing the map its player is playing"
@@ -4025,7 +4029,6 @@ msgstr "A-Z"
 #: src/components/settings/CompanellaGroup.tsx
 #: src/components/supporter/themes/ThemeEditor.tsx
 #: src/components/team/TeamProfilePage.tsx
-#: src/routes/hashi.tsx
 #: src/routes/player/$username.tsx
 msgid "About"
 msgstr "关于"
@@ -7358,6 +7361,10 @@ msgstr "点击"
 msgid "Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle."
 msgstr "点击某一轨道即可选中。拖出框选区域可多选。按住 Shift 选择连续范围，Ctrl/Cmd 可切换选中。"
 
+#: src/routes/hashi.tsx
+msgid "Click a player on a leaderboard to see their score and its replay."
+msgstr "点击排行榜上的玩家，可以查看他们的成绩和回放。"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay."
 msgstr "点击音效即可试听。每个音符会播放谱面指定的采样，所以这些音效在回放里都能听到。"
@@ -7936,8 +7943,12 @@ msgid "Connect Discord to set up feeds in servers where you have Manage Server."
 msgstr "连接 Discord 后，可以为你拥有管理服务器权限的服务器设置推送。"
 
 #: src/routes/hashi.tsx
-msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
-msgstr "在应用内将它连接到你的账号。你可以在<0>设置</0>的“偏好”中撤销连接。"
+msgid "Connect it to your account from inside the app, or pick Continue without connecting to only use the analysis and the skin editor. You can revoke the connection in <0>Settings</0>, under Preferences."
+msgstr "在应用内将它连接到你的账号，或者选择 Continue without connecting，只使用分析和皮肤编辑器。你可以在<0>设置</0>的“偏好”中撤销连接。"
+
+#: src/routes/hashi.tsx
+#~ msgid "Connect it to your account from inside the app. You can revoke the connection in <0>Settings</0>, under Preferences."
+#~ msgstr "在应用内将它连接到你的账号。你可以在<0>设置</0>的“偏好”中撤销连接。"
 
 #: src/components/supporter/SupportCheckout.tsx
 msgid "Connect Patreon"
@@ -9177,6 +9188,10 @@ msgstr "截断"
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Cut LN tail"
 msgstr "截断长条尾"
+
+#: src/routes/hashi.tsx
+msgid "Cutting a map down to one part in Hashi"
+msgstr "在 Hashi 中把谱面裁剪成其中一段"
 
 #: src/components/layout/ThemePicker.tsx
 msgid "cyan"
@@ -10895,8 +10910,12 @@ msgstr "你已经贴出去的图片都会失效。"
 #~ msgstr "每个段位系统还有最低 OD 要求：常规谱面 5.5，4K LN 是 7，7K LN 是 5。用 <0/> 把 OD 降到该系统的最低值以下，这个成绩就得不到段位认定；<1/> 在任何地方都得不到，因为它会放宽所有判定窗。"
 
 #: src/routes/hashi.tsx
-msgid "Every mania play you finish on stable or lazer goes to your profile with its replay. Turn on <0>{shareSetting}</0> and your profile and the rankings show what you're doing in osu!."
-msgstr "你在 stable 或 lazer 上打完的每一局 mania 都会连同回放一起发到你的个人资料。打开 <0>{shareSetting}</0> 后，你的个人资料和排行榜会显示你在 osu! 里正在做什么。"
+msgid "Every mania play you finish on stable or lazer goes to your profile with its replay."
+msgstr "你在 stable 或 lazer 上打完的每一局 mania 都会连同回放一起发到你的个人资料。"
+
+#: src/routes/hashi.tsx
+#~ msgid "Every mania play you finish on stable or lazer goes to your profile with its replay. Turn on <0>{shareSetting}</0> and your profile and the rankings show what you're doing in osu!."
+#~ msgstr "你在 stable 或 lazer 上打完的每一局 mania 都会连同回放一起发到你的个人资料。打开 <0>{shareSetting}</0> 后，你的个人资料和排行榜会显示你在 osu! 里正在做什么。"
 
 #: src/routes/recommendations.tsx
 msgid "Every map here is a skillboost suggestion. They're hidden by default until you achieve one of their scores."
@@ -12117,6 +12136,10 @@ msgstr "待审核"
 msgid "For screenshots that have nothing to do with the skin."
 msgstr "用于与皮肤无关的截图。"
 
+#: src/routes/hashi.tsx
+msgid "For streams, the same card goes into OBS as a Browser Source."
+msgstr "直播时，同一张卡片可以作为浏览器源（Browser Source）加到 OBS 里。"
+
 #: src/routes/recommendations.tsx
 msgid "for you"
 msgstr "为你推荐"
@@ -12682,7 +12705,6 @@ msgstr "目标"
 #: src/lib/signature-shared.ts
 #: src/routes/discord.tsx
 #: src/routes/goals.tsx
-#: src/routes/hashi.tsx
 msgid "Goals"
 msgstr "目标"
 
@@ -13012,8 +13034,8 @@ msgstr "自带背景"
 #~ msgstr "Hashi 会把你在 osu!stable 或 lazer 上完成的每个 mania 成绩连同回放发送到你的账号。打开 Share what I'm playing 后，你的个人资料和 pp 排行榜也会显示你正在 osu! 里做什么。"
 
 #: src/routes/hashi.tsx
-msgid "Hashi showing a leaderboard for a graveyard map"
-msgstr "Hashi 显示一张坟场谱面的排行榜"
+#~ msgid "Hashi showing a leaderboard for a graveyard map"
+#~ msgstr "Hashi 显示一张坟场谱面的排行榜"
 
 #: src/routes/hashi.tsx
 msgid "Hashi showing a map's leaderboard for Double Time"
@@ -13028,8 +13050,24 @@ msgid "Hashi's main window with the last plays it sent"
 msgstr "Hashi 主窗口，显示最近发送的成绩"
 
 #: src/routes/hashi.tsx
+msgid "Hashi's overlay card"
+msgstr "Hashi 的悬浮窗卡片"
+
+#: src/routes/hashi.tsx
+#~ msgid "Hashi's overlay card over the game"
+#~ msgstr "游戏上方的 Hashi 悬浮窗卡片"
+
+#: src/routes/hashi.tsx
 #~ msgid "Hashi's settings"
 #~ msgstr "Hashi 的设置"
+
+#: src/routes/hashi.tsx
+msgid "Hashi's skin editor on the long notes tab"
+msgstr "Hashi 皮肤编辑器的长条标签页"
+
+#: src/routes/hashi.tsx
+msgid "Hashi's skin editor with the column and combo settings"
+msgstr "Hashi 皮肤编辑器的轨道和连击设置"
 
 #: src/lib/goal-format.ts
 msgid "Have {count, plural, one {# {pp}pp+ play} other {# {pp}pp+ plays}}"
@@ -14390,8 +14428,8 @@ msgstr "它可能已被下架，或者还在等待审核。"
 #~ msgstr "它只会把数字往上抬。如果你的技能平均值本来就更高，就还是用平均值。无论哪种情况，下面那几行技能都不动，这也是为什么它们会比上面的数字低。"
 
 #: src/routes/hashi.tsx
-msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
-msgstr "它通过 tosu 读取 osu!，所以 tosu 需要保持运行。你可以在 <0>tosu.app</0> 下载它。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
+#~ msgid "It reads osu! through tosu, so tosu has to be running. You can download it from <0>tosu.app</0>. On Linux, lazer needs tosu's Linux build."
+#~ msgstr "它通过 tosu 读取 osu!，所以 tosu 需要保持运行。你可以在 <0>tosu.app</0> 下载它。在 Linux 上，lazer 需要 tosu 的 Linux 版本。"
 
 #: src/components/supporter/CustomThemeCredit.tsx
 msgid "It shows something that shouldn't be here"
@@ -20545,6 +20583,11 @@ msgstr "碾压"
 msgid "Overlay"
 msgstr "叠加"
 
+#: src/routes/hashi.tsx
+msgctxt "Hashi feature"
+msgid "Overlay"
+msgstr "悬浮窗"
+
 #: src/components/replay/ReplayMasterOverlayControls.tsx
 msgid "Overlay scroll speed"
 msgstr "叠加层流速"
@@ -24828,7 +24871,6 @@ msgstr "截图"
 
 #: src/components/skins/SkinScreenshotFields.tsx
 #: src/components/skins/SkinSettingsModal.tsx
-#: src/routes/hashi.tsx
 msgid "Screenshots"
 msgstr "截图"
 
@@ -27213,6 +27255,11 @@ msgstr "实时观战 {0} 游玩 osu!mania。"
 msgid "Spectating"
 msgstr "观战中"
 
+#: src/routes/hashi.tsx
+msgctxt "Hashi feature"
+msgid "Spectating"
+msgstr "观战"
+
 #. placeholder {0}: params.username
 #: src/routes/player/$username_.live.tsx
 msgid "Spectating {0}"
@@ -28973,6 +29020,14 @@ msgstr "这条技能组段位表的 {level} 谱面：距离门槛不到一个百
 msgid "The {selectedKeymode}K block resolves no note images, so this preview uses flat colours."
 msgstr "{selectedKeymode}K 配置没有解析出任何音符图像，所以这个预览使用纯色。"
 
+#: src/routes/hashi.tsx
+#~ msgid "The <0>README</0> lists everything the app sends. It reads osu! on its own, so tosu isn't needed anymore."
+#~ msgstr "<0>README</0> 列出了应用发送的所有内容。它会自己读取 osu!，所以不再需要 tosu。"
+
+#: src/routes/hashi.tsx
+msgid "The <0>README</0> lists everything the app sends. It reads osu! on its own."
+msgstr "<0>README</0> 列出了应用发送的所有内容。它会自己读取 osu!。"
+
 #: src/components/prism/PrismUpdates.tsx
 msgid "The <0>Visualizer</0> marks the sections Prism rates as mashed."
 msgstr "<0>可视化</0>会标出 Prism 按乱拍评分的段落。"
@@ -29688,8 +29743,8 @@ msgid "The frost got to every card"
 msgstr "寒霜冻住了每一张卡"
 
 #: src/routes/hashi.tsx
-msgid "The goals page"
-msgstr "目标页面"
+#~ msgid "The goals page"
+#~ msgstr "目标页面"
 
 #: src/routes/developers.tsx
 msgid "The headline MSD the profile shows. Read this rather than picking one from <0>msd</0>."
@@ -29840,6 +29895,10 @@ msgstr "下次有人抽到这张卡片时，有 50% 的几率拿到这个编号�
 #: src/components/packs/collections/CardMarks.tsx
 msgid "The only one ever pulled"
 msgstr "唯一一张被抽到的"
+
+#: src/routes/hashi.tsx
+msgid "The overlay turns the window into a small card that stays above the game. It shows the rating and dan of the map you have selected, the play you just finished with its rank, or the map's leaderboard."
+msgstr "悬浮窗会把窗口变成一张停留在游戏上方的小卡片。它会显示你所选谱面的评分和段位、你刚打完的那一局及其排名，或者谱面的排行榜。"
 
 #: src/components/packs/run/RunTable.tsx
 #: src/routes/packs.tsx
@@ -31719,6 +31778,14 @@ msgstr "关闭你的技能评分？"
 msgid "Turn on"
 msgstr "开启"
 
+#: src/routes/hashi.tsx
+msgid "Turn on <0>{liveSetting}</0> and anyone can spectate your plays from your profile, without opening osu!."
+msgstr "打开 <0>{liveSetting}</0> 后，任何人都可以在你的个人资料上观战你的游玩，无需打开 osu!。"
+
+#: src/routes/hashi.tsx
+msgid "Turn on <0>{shareSetting}</0> and your profile and the rankings show what you're doing in osu!."
+msgstr "打开 <0>{shareSetting}</0> 后，你的个人资料和排行榜会显示你在 osu! 里正在做什么。"
+
 #: src/routes/discord.tsx
 msgid "Turn on in every channel"
 msgstr "在所有频道开启"
@@ -33133,6 +33200,7 @@ msgstr "你在做什么项目？（可选）"
 #~ msgstr ""
 
 #: src/routes/developers.tsx
+#: src/routes/hashi.tsx
 msgid "What gets sent"
 msgstr "发送内容"
 
@@ -33199,8 +33267,8 @@ msgid "What would you add or change?"
 msgstr "你想增加或修改什么？"
 
 #: src/routes/hashi.tsx
-msgid "What you need"
-msgstr "需要什么"
+#~ msgid "What you need"
+#~ msgstr "需要什么"
 
 #: src/components/me/MyStatsInsights.tsx
 msgid "What you play"
@@ -33810,6 +33878,10 @@ msgstr "你正在划开卡片"
 #: src/routes/developers.tsx
 #~ msgid "You asked for access. Once it's granted you can make keys here."
 #~ msgstr "你已申请访问权限。获批后即可在此创建密钥。"
+
+#: src/routes/hashi.tsx
+msgid "You can also cut a map down to the part you want to play, or change its rate on stable. The rate changer shows the MSD and dan at the rate you pick."
+msgstr "你也可以把谱面裁剪成你想打的那一段，或者在 stable 上更改它的倍速。倍速调节器会显示所选倍速下的 MSD 和段位。"
 
 #: src/routes/hashi.tsx
 msgid "You can also open it in a window the size of osu!'s and play the map there with its song, or watch autoplay."
