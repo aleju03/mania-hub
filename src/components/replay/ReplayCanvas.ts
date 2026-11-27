@@ -4220,21 +4220,14 @@ export class ManiaReplayRenderer {
     if (!this.barePlayfield) {
       this.fillRectInto(g, 0, 0, playfieldX, h, "#000000", 0.24);
       this.fillRectInto(g, playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h, "#000000", 0.24);
-      // Filled per run of touching columns, so a ColumnSpacing gap shows the
-      // background as in game.
+      // One fill across the whole stage, ColumnSpacing gaps included: in game
+      // a gap shows the map art, which makes the lanes hard to read unless
+      // the background is dimmed all the way.
       const playfieldAlpha = this.blackPlayfield ? 1 : hasImportedColumnArt ? 0 : 0.12;
-      for (let start = 0; playfieldAlpha > 0 && start < this.keyCount; ) {
-        const first = this.getColumnLayout(start, layout);
-        let last = first;
-        let end = start;
-        while (end + 1 < this.keyCount) {
-          const next = this.getColumnLayout(end + 1, layout);
-          if (next.x - (last.x + last.width) >= 0.01) break;
-          last = next;
-          end += 1;
-        }
+      if (playfieldAlpha > 0 && this.keyCount > 0) {
+        const first = this.getColumnLayout(0, layout);
+        const last = this.getColumnLayout(this.keyCount - 1, layout);
         this.fillRectInto(g, first.x, 0, last.x + last.width - first.x, h, "#000000", playfieldAlpha);
-        start = end + 1;
       }
 
       for (let col = 0; showColumnDividers && col < this.keyCount; col++) {
@@ -4247,14 +4240,16 @@ export class ManiaReplayRenderer {
     // how much of the map art shows through each lane, so it paints over the
     // default playfield fill rather than replacing the note palette. Preview
     // stages skip it: they sit on the page's own art with no stage behind
-    // them, and most skins declare an opaque black lane there.
+    // them, and most skins declare an opaque black lane there. Each lane
+    // also covers the ColumnSpacing gap to its right, like the fill above.
     if (this.skinSettings.style === "bars" && !this.barePlayfield) {
       for (let col = 0; col < this.keyCount; col++) {
         const declared = this.skinProfile.columnBackgrounds[col];
         if (!declared) continue;
         const { x, width } = this.getColumnLayout(col, layout);
+        const right = col + 1 < this.keyCount ? Math.max(x + width, this.getColumnLayout(col + 1, layout).x) : x + width;
         const alpha = declared.length === 9 ? parseInt(declared.slice(7, 9), 16) / 255 : 1;
-        this.fillRectInto(g, x, 0, width, h, declared.slice(0, 7), alpha);
+        this.fillRectInto(g, x, 0, right - x, h, declared.slice(0, 7), alpha);
       }
     }
 
