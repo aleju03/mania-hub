@@ -7,8 +7,8 @@ import { parseArgs, parseEnv } from "node:util";
 // Exports production chart label reports (players saying a chart is filed
 // wrong, backend features/chart-label-reports.ts) into local-notes/ for
 // classifier, vibro and eligibility tuning. Read-only: the backend's admin
-// export endpoint is called on the VPS over SSH, like bugs:pull. Reporters are
-// left out; each row keeps the reporter's rating and whether they played it.
+// export endpoint is called on the VPS over SSH, like bugs:pull. Each row names
+// its reporter with their rating and whether they played it.
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -57,7 +57,7 @@ function fetchRemote(remote, remoteDir) {
 const CSV_COLUMNS = [
   "beatmapId", "keyCount", "rate", "status", "filedLabel", "filedFamily", "filedRawDan", "filedTiles", "filedVibro",
   "analysisVersion", "currentLabel", "currentTiles", "suggestedTile", "suggestedFamily", "suggestedLevel", "suggestedTier", "suggestedRawDan",
-  "rateable", "rateableReasons", "played", "reporterOverall", "note", "title", "version", "createdAt",
+  "rateable", "rateableReasons", "username", "userId", "played", "reporterOverall", "note", "title", "version", "createdAt",
 ];
 
 function csvCell(value) {
@@ -87,6 +87,8 @@ function toCsv(reports) {
     suggestedRawDan: report.suggestedRawDan,
     rateable: report.rateable,
     rateableReasons: report.rateableReasons?.join(" "),
+    username: report.username,
+    userId: report.userId,
     played: report.played ? 1 : 0,
     reporterOverall: report.reporterOverall,
     note: report.note,
