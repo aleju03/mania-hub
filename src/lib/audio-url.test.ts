@@ -12,6 +12,20 @@ describe("beatmap playback audio URLs", () => {
     expect(getBeatmapAudioUrl(1, "song.mp3")).toBe("http://localhost:7227/api/audio?beatmapsetId=1&filename=song.mp3");
   });
 
+  it("asks for a plain MP3, or AAC where it is variable bitrate, when MP3 in MP4 cannot play", async () => {
+    vi.resetModules();
+    vi.stubGlobal("document", { createElement: () => ({ canPlayType: () => "" }) });
+    try {
+      const fresh = await import("./audio-url");
+      expect(fresh.getBeatmapAudioUrl(1, "song.mp3"))
+        .toBe("http://localhost:7227/api/audio?beatmapsetId=1&filename=song.mp3&format=mp3&vbr=aac");
+      expect(fresh.getBeatmapAudioUrl(1, "song.ogg")).toBe("http://localhost:7227/api/audio?beatmapsetId=1&filename=song.ogg&v=ogg-seek-v1");
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
+  });
+
   it("keeps the cache version when routing through the same-origin proxy", () => {
     backend.url = null;
     try {

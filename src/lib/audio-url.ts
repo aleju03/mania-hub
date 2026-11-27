@@ -11,7 +11,9 @@ let mp3InMp4Playable: boolean | null = null;
 
 // The backend serves MP3 songs inside MP4, which Safari cannot play. Firefox
 // answers "" for the mp4a codec ids but "probably" for codecs="mp3", so any of
-// the three counts. The server render keeps the MP4 URL.
+// the three counts. The server render keeps the MP4 URL. Safari asks for the
+// plain MP3 instead, and for AAC where that MP3 is variable bitrate, which
+// iOS seeks up to 1.6 s away from the time it reports.
 function canPlayMp3InMp4(): boolean {
   if (typeof document === "undefined") return true;
   if (mp3InMp4Playable == null) {
@@ -28,7 +30,7 @@ export function getBeatmapAudioUrl(beatmapsetId: number | string, filename: stri
   const lower = filename.toLowerCase();
   const variant = lower.endsWith(".ogg")
     ? "&v=ogg-seek-v1"
-    : lower.endsWith(".mp3") && !canPlayMp3InMp4() ? "&format=mp3" : "";
+    : lower.endsWith(".mp3") && !canPlayMp3InMp4() ? "&format=mp3&vbr=aac" : "";
   const path = `/api/audio?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}&filename=${encodeURIComponent(filename)}${variant}`;
   const assetsUrl = getAssetsBaseUrl();
   return assetsUrl ? `${assetsUrl}${path}` : path;

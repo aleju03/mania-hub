@@ -32,10 +32,12 @@ function getLiveAudioUrl(requestUrl: string): string | null {
   const filename = request.searchParams.get("filename");
   const version = request.searchParams.get("v");
   const format = request.searchParams.get("format");
+  const vbr = request.searchParams.get("vbr");
   if (beatmapsetId) target.searchParams.set("beatmapsetId", beatmapsetId);
   if (filename) target.searchParams.set("filename", filename);
   if (version) target.searchParams.set("v", version);
   if (format) target.searchParams.set("format", format);
+  if (vbr) target.searchParams.set("vbr", vbr);
   return target.toString();
 }
 
