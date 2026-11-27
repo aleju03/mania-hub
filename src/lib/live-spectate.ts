@@ -37,6 +37,8 @@ export interface LiveMap {
     time_scale: number;
     keep_pitch: boolean;
   } | null;
+  /** No song to fetch: the player's app sends its own copy, read at liveSpectateSongUrl(). */
+  song_stream?: boolean;
 }
 
 /** `resuming`: still paused, with the game counting down to carry on (lazer's 3, 2, 1). */
@@ -271,6 +273,11 @@ function fromSnapshot(snapshot: LiveSnapshot, previous: LiveSpectateState): Live
 export function liveSpectateChartUrl(userId: number, md5: string): string | null {
   const base = getLiveBackendUrl();
   return base ? `${base}/api/live/spectate/${userId}/chart/${md5}` : null;
+}
+
+export function liveSpectateSongUrl(userId: number, md5: string): string | null {
+  const base = getLiveBackendUrl();
+  return base ? `${base}/api/live/spectate/${userId}/song/${md5}` : null;
 }
 
 /** Follows one player's stream: the snapshot, then its events, re-reading the snapshot on any gap. */

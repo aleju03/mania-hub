@@ -8,7 +8,7 @@ import { avatarImageSrc } from "../ui/Avatar";
 import { MemoReplayViewer, type ReplayLiveFeed } from "../../routes/replay";
 import { parseManiaBeatmap, type ManiaBeatmap, type ManiaNote } from "../../lib/beatmap-parser";
 import { inferRandomColumnMap } from "../../lib/live-random-columns";
-import { liveSpectateChartUrl, useLiveSpectate, type LivePlay, type LiveMap, type LiveSpectateState } from "../../lib/live-spectate";
+import { liveSpectateChartUrl, liveSpectateSongUrl, useLiveSpectate, type LivePlay, type LiveMap, type LiveSpectateState } from "../../lib/live-spectate";
 import { fetchLivePlayerSummaryDirect } from "../../lib/live-backend";
 import { getBeatmapFile } from "../../lib/osu";
 import type { ServerReplay } from "../../lib/replay-types";
@@ -166,10 +166,13 @@ function scaleFrames(frames: ReplayFrame[], scale: number): ReplayFrame[] {
 function LivePlayStage({ live, play, user }: { live: LiveSpectateState; play: LivePlay; user: string }) {
   const { t } = useLingui();
   const navigate = useNavigate();
-  const [chart, setChart] = useState<LoadedChart | null>(null);
+  const [loadedChart, setChart] = useState<LoadedChart | null>(null);
   const [chartFailed, setChartFailed] = useState(false);
   const map = live.map;
   const userId = live.userId;
+  // Only the chart of the map being played: the one before stays loaded
+  // until the next arrives, and must not stand on the stage meanwhile.
+  const chart = loadedChart && map && loadedChart.md5 === map.md5 ? loadedChart : null;
 
   useEffect(() => {
     if (!map || userId == null || (map.chart === "none" && !(map.audio && map.audio.time_scale !== 1))) return;
@@ -194,6 +197,15 @@ function LivePlayStage({ live, play, user }: { live: LiveSpectateState; play: Li
   const notesRef = useRef<ManiaNote[] | null>(null);
   const [notesVersion, setNotesVersion] = useState(0);
   const columnMapRef = useRef<string>("");
+  // A new play has its own shuffle (and a new map its own notes): nothing
+  // worked out for the one before carries over.
+  const shuffleOfRef = useRef<string | null>(null);
+  const shuffleOf = `${live.playIds[0] ?? ""}:${chart?.md5 ?? ""}`;
+  if (shuffleOfRef.current !== shuffleOf) {
+    shuffleOfRef.current = shuffleOf;
+    notesRef.current = null;
+    columnMapRef.current = "";
+  }
   // The feed the viewer reads every tick, in the drawn chart's map time.
   const scale = chart?.timeScale ?? 1;
   const clockRef = useRef<ReplayLiveFeed["clockRef"]["current"]>(null);
@@ -229,6 +241,7 @@ function LivePlayStage({ live, play, user }: { live: LiveSpectateState; play: Li
   // No Fail or Easy, whose extra lives refill it; health that comes back was
   // an extra life, not a fail).
   const failTimeRef = useRef<number | null>(null);
+  const songUrl = map?.song_stream && userId != null && chart?.md5 === map.md5 ? liveSpectateSongUrl(userId, map.md5) : null;
   failTimeRef.current = failed && live.end?.time != null ? live.end.time * scale : healthFailTime(healthRef.current, play.mods);
   const feed = useMemo<ReplayLiveFeed>(
     () => ({
@@ -243,8 +256,9 @@ function LivePlayStage({ live, play, user }: { live: LiveSpectateState; play: Li
       delayMs: DELAY_MS,
       failed,
       failTimeRef,
+      songUrl,
     }),
-    [live.viewers, failed],
+    [live.viewers, failed, songUrl],
   );
 
   const mods = useMemo(() => (chart ? viewerMods(play, chart) : []), [play, chart]);

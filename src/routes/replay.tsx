@@ -2289,6 +2289,8 @@ export interface ReplayLiveFeed {
   failed: boolean;
   /** Map time of the fail, once known (it can be before the game says the play ended); the stage stops there. */
   failTimeRef?: { current: number | null };
+  /** The song the player's app is sending, for a chart with no song to fetch. */
+  songUrl?: string | null;
 }
 
 /**
@@ -3436,7 +3438,9 @@ export function ReplayViewer({
   const effectiveBeatmapsetId = scoreInfo?.beatmapset?.id ?? fallbackBeatmapsetId;
   // The remote URL is kept separate because server-side video export muxes
   // audio on the backend, which can't read a local blob: URL.
-  const remoteAudioUrl = localAssetsAreRemote && localAudioUrl
+  const remoteAudioUrl = live?.songUrl
+    ? live.songUrl
+    : localAssetsAreRemote && localAudioUrl
     ? localAudioUrl
     : effectiveBeatmapsetId && beatmap?.audioFilename
       ? getBeatmapAudioUrl(effectiveBeatmapsetId, beatmap.audioFilename)
@@ -4197,6 +4201,8 @@ export function ReplayViewer({
         renderer.setExternalClock(() => {
           const lead = liveLeadInClockRef.current?.();
           if (lead != null) return { time: lead, stalled: false };
+          // Live: a song still loading never holds the stage up; it joins once it can play.
+          if (liveSongHeldRef.current) return null;
           return readReplayAudioClock(
             audioRef.current,
             audioEnabledRef.current && audioUrlActiveRef.current,
@@ -4208,6 +4214,11 @@ export function ReplayViewer({
         resumeAfterRebuildRef.current = null;
         if (resume && resume.replay === replay && resume.time > 0) {
           renderer.seek(resume.time);
+        } else if (liveRef.current) {
+          // Live: the stage stays empty, well before the map's start, until
+          // the player's clock says where it belongs. Drawn at 0:00 it would
+          // show the chart's first notes standing still for a moment.
+          renderer.seek(-LIVE_MAX_LEAD_IN_MS);
         } else if (initialTime != null && initialTime > 0) {
           const gameTimeMs = initialTime * 1000 * modRate;
           renderer.seek(gameTimeMs);
@@ -5008,6 +5019,24 @@ export function ReplayViewer({
     if (!r || firstNoteTimeMs == null || end == null || end <= firstNoteTimeMs) return null;
     return Math.round(Math.max(0, Math.min(1, (r.time - firstNoteTimeMs) / (end - firstNoteTimeMs))) * 100);
   };
+  // Live: the song cannot play yet (still loading, or seeking to catch up),
+  // so the stage runs on its own clock instead of waiting for it. A song
+  // nobody has played before can take the backend several seconds to
+  // prepare, and waiting would leave the stage that far behind the player.
+  const liveSongHeldRef = useRef(false);
+  // How long the song took to be playable after the last seek, in real ms:
+  // the next seek aims that far ahead so the song lands where the stage is.
+  const liveSongSeekLeadRef = useRef(300);
+  const liveSongSeekAtRef = useRef<number | null>(null);
+  const liveSongLastSeekRef = useRef(0);
+  // How far the song has downloaded, in song ms, and when that last grew.
+  const liveSongBufferedRef = useRef({ end: 0, at: 0 });
+  useEffect(() => {
+    liveSongHeldRef.current = false;
+    liveSongSeekAtRef.current = null;
+    liveSongLastSeekRef.current = 0;
+    liveSongBufferedRef.current = { end: 0, at: performance.now() };
+  }, [audioUrl]);
   const liveNudgeRef = useRef(1);
   const liveRateRef = useRef(effectiveRate);
   liveRateRef.current = effectiveRate;
@@ -5018,9 +5047,64 @@ export function ReplayViewer({
     const audio = audioRef.current;
     if (audio && audioEnabledRef.current && audioUrlActiveRef.current && !audio.error) {
       audio.playbackRate = liveRateRef.current * factor;
-    } else {
+    }
+    if (!audio || !audioEnabledRef.current || !audioUrlActiveRef.current || audio.error || liveSongHeldRef.current) {
       rendererRef.current?.setSpeed?.(factor);
     }
+  };
+  // While the stage runs, a song that cannot play yet lets go of the stage's
+  // clock and stays quiet; once the part where the stage is has downloaded,
+  // the song moves there and takes the clock back. A song that downloads
+  // slower than it plays (the player's app sending it on a slow connection)
+  // stays quiet rather than putting the stage behind.
+  const liveHoldSong = (r: { time: number; isPlaying: boolean }, now: number) => {
+    const audio = audioRef.current;
+    if (!audio || !audioEnabledRef.current || !audioUrlActiveRef.current || audio.error) {
+      liveSongHeldRef.current = false;
+      return;
+    }
+    if (!r.isPlaying || liveLeadInClockRef.current != null) return;
+    const buffered = audio.buffered;
+    const bufferedEnd = buffered.length > 0 ? buffered.end(buffered.length - 1) * 1000 : 0;
+    if (bufferedEnd > liveSongBufferedRef.current.end) liveSongBufferedRef.current = { end: bufferedEnd, at: now };
+    if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA || audio.seeking) {
+      liveSongHeldRef.current = true;
+      return;
+    }
+    if (!liveSongHeldRef.current) return;
+    const seekAt = liveSongSeekAtRef.current;
+    if (seekAt != null) {
+      liveSongSeekAtRef.current = null;
+      liveSongSeekLeadRef.current = Math.min(2000, Math.max(150, (now - seekAt) * 1.2));
+    }
+    const behind = r.time - audio.currentTime * 1000;
+    if (behind > 60 * modRate) {
+      const to = r.time + liveSongSeekLeadRef.current * modRate;
+      let covered = false;
+      for (let i = 0; i < buffered.length; i++) {
+        if (buffered.start(i) * 1000 <= to && buffered.end(i) * 1000 >= to + 1000 * modRate) covered = true;
+      }
+      // Not there yet: wait while the download is still coming in, and
+      // otherwise ask for that part (a seek is a new request) every few seconds.
+      const growing = now - liveSongBufferedRef.current.at < 4000;
+      if (!covered && (growing || now - liveSongLastSeekRef.current < 5000)) {
+        if (!audio.paused) audio.pause();
+        return;
+      }
+      liveSongLastSeekRef.current = now;
+      liveSongSeekAtRef.current = now;
+      audio.currentTime = to / 1000;
+      if (audio.paused) audio.play().catch(() => {});
+      return;
+    }
+    if (audio.paused) {
+      if (typeof navigator !== "undefined" && navigator.userActivation && !navigator.userActivation.hasBeenActive) muteLiveAudioRef.current();
+      audio.play().catch(() => {});
+      return;
+    }
+    liveSongHeldRef.current = false;
+    rendererRef.current?.setSpeed?.(1);
+    audio.playbackRate = liveRateRef.current * liveNudgeRef.current;
   };
   useEffect(() => {
     if (!isLive) return;
@@ -5033,6 +5117,7 @@ export function ReplayViewer({
       if (feed && r && !clock && !liveStartedRef.current && r.time > -LIVE_MAX_LEAD_IN_MS) r.seek(-LIVE_MAX_LEAD_IN_MS);
       if (!feed || !r || !clock) return;
       const now = performance.now();
+      liveHoldSong(r, now);
       const delay = () => feed.delayMs + liveLagRef.current;
       // Where the stage belongs: the player's position, `delay` ago. When the
       // map stopped (a pause), the stage still has that delay's worth of play
@@ -5141,7 +5226,7 @@ export function ReplayViewer({
         // Sound refused after the start (no click yet): carry on muted.
         const audio = audioRef.current;
         if (audio && audio.paused && !audio.muted && audioEnabledRef.current && audioUrlActiveRef.current && !audio.error
-          && audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+          && audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA && !liveSongHeldRef.current) {
           muteLiveAudioRef.current();
           audio.play().catch(() => {});
         }
