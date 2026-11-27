@@ -4117,6 +4117,8 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayHudOverlayId, MessageDescriptor>
   handAccuracy: msg`Current accuracy percentage for each hand.`,
   columnStats: msg`Accuracy or unstable rate for every column, one cell per finger.`,
   holdTimes: msg`How long each key is held, one line per column.`,
+  hitOffsets: msg`How early or late each hit landed, as a histogram.`,
+  offsetTimeline: msg`Every hit's offset across the whole play, one dot per hit.`,
   pp: msg`Live performance points.`,
   judgements: msg`Hit counts and unstable rate.`,
   hitError: msg`Early/late meter with the real hit windows.`,
@@ -4339,6 +4341,70 @@ function HoldTimesOverlayPreview() {
   );
 }
 
+// The canvas histogram's shape with a made-up spread slightly late of
+// centre, in stable's window colours.
+function HitOffsetsOverlayPreview() {
+  const bins = 32;
+  const bars = Array.from({ length: bins }, (_, i) => {
+    const ms = ((i + 0.5) / bins * 2 - 1) * 120;
+    return { ms, value: Math.exp(-(((ms - 6) / 30) ** 2)) };
+  });
+  const color = (ms: number) => Math.abs(ms) <= 40 ? "#46b8e8" : Math.abs(ms) <= 80 ? "#85cc26" : "#e8a733";
+  const step = 180 / bins;
+  return (
+    <div className="relative flex h-full w-full items-center justify-center" aria-hidden="true">
+      <svg viewBox="0 0 200 92" className="w-4/5">
+        <rect width="200" height="92" rx="6" fill="#0a0a12" fillOpacity="0.78" />
+        <text x="10" y="13" fontSize="8.5" fontWeight="700" fill="#fff" fillOpacity="0.55">HIT OFFSET</text>
+        <text x="190" y="13" fontSize="8.5" fontWeight="700" fill="#fff" fillOpacity="0.85" textAnchor="end">avg +4.2ms</text>
+        {bars.map(({ ms, value }, i) => value > 0.01 && (
+          <rect key={i} x={10 + i * step} y={70 - value * 50} width={step - 1} height={value * 50} fill={color(ms)} fillOpacity="0.9" />
+        ))}
+        <line x1="10" y1="70.5" x2="190" y2="70.5" stroke="#fff" strokeOpacity="0.18" />
+        <line x1="100" y1="20" x2="100" y2="70" stroke="#fff" strokeOpacity="0.35" />
+        <text x="10" y="84" fontSize="8.5" fontWeight="700" fill="#fff" fillOpacity="0.5">-120</text>
+        <text x="100" y="84" fontSize="8.5" fontWeight="700" fill="#fff" fillOpacity="0.5" textAnchor="middle">0</text>
+        <text x="190" y="84" fontSize="8.5" fontWeight="700" fill="#fff" fillOpacity="0.5" textAnchor="end">+120ms</text>
+      </svg>
+    </div>
+  );
+}
+
+// The canvas scatter with made-up hits: a tight band that loosens in the
+// middle of the play, the playhead two thirds through.
+function OffsetTimelineOverlayPreview() {
+  let seed = 7;
+  const random = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  const dots = Array.from({ length: 220 }, (_, i) => {
+    const t = i / 220;
+    const spread = 14 + 26 * Math.exp(-(((t - 0.45) / 0.12) ** 2));
+    const ms = (random() + random() + random() - 1.5) * spread * 1.4 + 4;
+    return { t, ms };
+  }).filter(({ t }) => t <= 0.66);
+  const color = (ms: number) => Math.abs(ms) <= 40 ? "#46b8e8" : Math.abs(ms) <= 80 ? "#85cc26" : "#e8a733";
+  const y = (ms: number) => 52 - (Math.max(-120, Math.min(120, ms)) / 120) * 30;
+  return (
+    <div className="relative flex h-full w-full items-center justify-center" aria-hidden="true">
+      <svg viewBox="0 0 220 92" className="w-4/5">
+        <rect width="220" height="92" rx="6" fill="#0a0a12" fillOpacity="0.78" />
+        <text x="10" y="13" fontSize="8.5" fontWeight="700" fill="#fff" fillOpacity="0.55">OFFSET OVER TIME</text>
+        <text x="10" y="27" fontSize="8.5" fontWeight="700" fill="#fff" fillOpacity="0.5">late</text>
+        <text x="10" y="82" fontSize="8.5" fontWeight="700" fill="#fff" fillOpacity="0.5">early</text>
+        <line x1="36" y1={y(40)} x2="210" y2={y(40)} stroke="#fff" strokeOpacity="0.07" />
+        <line x1="36" y1={y(-40)} x2="210" y2={y(-40)} stroke="#fff" strokeOpacity="0.07" />
+        <line x1="36" y1="52" x2="210" y2="52" stroke="#fff" strokeOpacity="0.25" />
+        {dots.map(({ t, ms }, i) => (
+          <rect key={i} x={36 + t * 174 - 0.9} y={y(ms) - 0.9} width="1.8" height="1.8" fill={color(ms)} fillOpacity="0.85" />
+        ))}
+        <line x1={36 + 0.66 * 174} y1="22" x2={36 + 0.66 * 174} y2="82" stroke="#fff" strokeOpacity="0.45" />
+      </svg>
+    </div>
+  );
+}
+
 // Same bar the canvas draws: colored windows behind white ticks, or the
 // ticks alone carrying the window colour themselves.
 function HitErrorOverlayPreview({ style }: { style: ReplayHitErrorStyle }) {
@@ -4482,6 +4548,10 @@ function ReplayOverlaySettingsRow({
             />
           ) : id === "holdTimes" ? (
             <HoldTimesOverlayPreview />
+          ) : id === "hitOffsets" ? (
+            <HitOffsetsOverlayPreview />
+          ) : id === "offsetTimeline" ? (
+            <OffsetTimelineOverlayPreview />
           ) : id === "hitError" ? (
             <HitErrorOverlayPreview style={normalizeReplayHitErrorStyle(placement.style)} />
           ) : id === "judgements" ? (

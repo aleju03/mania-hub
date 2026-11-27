@@ -10870,6 +10870,10 @@ msgstr "Todos los mapas de farm que los jugadores cerca de tu pp realmente juega
 msgid "Every favourited map is equally likely. Players with bigger collections show up more often as a result."
 msgstr "Todos los mapas favoritos tienen la misma probabilidad. Por eso los jugadores con colecciones más grandes aparecen más seguido."
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Every hit's offset across the whole play, one dot per hit."
+msgstr "El offset de cada hit en toda la play, un punto por hit."
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Every image you have already pasted will stop working."
 msgstr "Todas las imágenes que ya pegaste dejarán de funcionar."
@@ -13350,6 +13354,10 @@ msgstr "Medidor de hit error"
 msgid "Hit light"
 msgstr "Luz de golpe"
 
+#: src/lib/replay-overlays.ts
+msgid "Hit offsets"
+msgstr "Offsets de hits"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit position"
 msgstr "Posición de hits"
@@ -13600,6 +13608,10 @@ msgstr "Cómo se estiman los niveles de dan"
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "How dans are estimated"
 msgstr "Cómo se estiman los dan"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "How early or late each hit landed, as a histogram."
+msgstr "Qué tan temprano o tarde cayó cada hit, como histograma."
 
 #: src/routes/dan-estimates.tsx
 msgid "How every osu!mania chart gets a dan level, and how a player's dan is read from the charts they have passed."
@@ -19467,6 +19479,10 @@ msgstr "Apagado: Discord dice que este webhook se borró."
 #: src/components/supporter/frames/FrameInspector.tsx
 msgid "Offset"
 msgstr "Desfase"
+
+#: src/lib/replay-overlays.ts
+msgid "Offsets over time"
+msgstr "Offsets en el tiempo"
 
 #: src/components/packs/GiftInbox.tsx
 #: src/components/packs/run/HandScore.tsx

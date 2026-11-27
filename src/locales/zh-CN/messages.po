@@ -10882,6 +10882,10 @@ msgstr "你 pp 附近的玩家实际在打的所有刷分谱面，按持有人�
 msgid "Every favourited map is equally likely. Players with bigger collections show up more often as a result."
 msgstr "每张被收藏的谱面等概率。因此收藏更多的玩家会更常出现。"
 
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "Every hit's offset across the whole play, one dot per hit."
+msgstr "整局中每次击打的偏移，每次击打一个点。"
+
 #: src/components/me/dynamic-renders/controls.tsx
 msgid "Every image you have already pasted will stop working."
 msgstr "你已经贴出去的图片都会失效。"
@@ -13362,6 +13366,10 @@ msgstr "打击误差条"
 msgid "Hit light"
 msgstr "击打光"
 
+#: src/lib/replay-overlays.ts
+msgid "Hit offsets"
+msgstr "击打偏移"
+
 #: src/components/replay/ReplaySkinSettingsModal.tsx
 msgid "Hit position"
 msgstr "判定线位置"
@@ -13612,6 +13620,10 @@ msgstr "段位等级是如何估算的"
 #: src/components/rankings/DanLeaderboardBoard.tsx
 msgid "How dans are estimated"
 msgstr "段位是如何估算的"
+
+#: src/components/replay/ReplaySkinSettingsModal.tsx
+msgid "How early or late each hit landed, as a histogram."
+msgstr "每次击打偏早或偏晚多少，以直方图显示。"
 
 #: src/routes/dan-estimates.tsx
 msgid "How every osu!mania chart gets a dan level, and how a player's dan is read from the charts they have passed."
@@ -19479,6 +19491,10 @@ msgstr "已关闭：Discord 表示此 webhook 已被删除。"
 #: src/components/supporter/frames/FrameInspector.tsx
 msgid "Offset"
 msgstr "偏移"
+
+#: src/lib/replay-overlays.ts
+msgid "Offsets over time"
+msgstr "偏移随时间变化"
 
 #: src/components/packs/GiftInbox.tsx
 #: src/components/packs/run/HandScore.tsx

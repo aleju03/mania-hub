@@ -9,6 +9,17 @@ import type { ManiaScoreSimulator } from "../../lib/mania-score-simulation";
 import { calculateManiaStarRatingTimeline } from "../../lib/mania-star-rating";
 import { buildReplayPeakKps, replayPeakKpsAt } from "../../lib/replay-kps";
 import { REPLAY_HOLD_TIME_BINS, REPLAY_HOLD_TIME_MAX_MS, ReplayHoldTimeHistogram, buildReplayHoldTimes } from "../../lib/replay-hold-times";
+import {
+  REPLAY_HIT_OFFSET_BINS,
+  REPLAY_HIT_OFFSET_TIMELINE_COLUMNS,
+  REPLAY_HIT_OFFSET_TIMELINE_ROWS,
+  ReplayHitOffsetHistogram,
+  buildReplayHitOffsetDots,
+  buildReplayHitOffsets,
+  countReplayHitOffsetDotsAt,
+  type ReplayHitOffsetDots,
+  type ReplayHitOffsets,
+} from "../../lib/replay-hit-offsets";
 import { buildReplayNoteBlockEndTimes, REPLAY_NOTE_BLOCK_SIZE } from "../../lib/replay-note-culling";
 import { ensureReplayFontStyle } from "../../lib/replay-fonts";
 import { withTimeout } from "../../lib/promise-timeout";
@@ -828,6 +839,16 @@ export class ManiaReplayRenderer {
   // segments or rate it was built from change.
   private holdTimeHistogram: { histogram: ReplayHoldTimeHistogram; segments: ReturnType<typeof buildReplaySegments>; rate: number } | null = null;
   private holdTimeColumns: Float32Array[] = [];
+  // The Hit offsets and Offsets over time overlays' data, rebuilt whenever
+  // the judgement events, hit windows or play length they came from change.
+  private hitOffsetData: {
+    events: ReplayJudgementEvent[];
+    range: number;
+    duration: number;
+    hits: ReplayHitOffsets;
+    histogram: ReplayHitOffsetHistogram;
+    dots: ReplayHitOffsetDots | null;
+  } | null = null;
   private maxHoldDuration: number;
   private noteBlockEndTimes: Float64Array;
   private scrollVelocities: ManiaScrollVelocity[];
@@ -5758,6 +5779,149 @@ export class ManiaReplayRenderer {
     });
   }
 
+  private getHitOffsetData(withDots: boolean) {
+    const range = this.hitWindows.meh;
+    let cached = this.hitOffsetData;
+    if (!cached || cached.events !== this.judgmentEvents || cached.range !== range || cached.duration !== this.totalDuration) {
+      const hits = buildReplayHitOffsets(this.judgmentEvents, range);
+      cached = this.hitOffsetData = {
+        events: this.judgmentEvents,
+        range,
+        duration: this.totalDuration,
+        hits,
+        histogram: new ReplayHitOffsetHistogram(hits),
+        dots: null,
+      };
+    }
+    if (withDots) cached.dots ??= buildReplayHitOffsetDots(cached.hits, cached.duration);
+    return cached;
+  }
+
+  // The panel and title row both offset overlays share with Hold times.
+  private renderOffsetOverlayPanel(frame: { x: number; y: number }, width: number, height: number, scale: number, title: string, right?: string) {
+    const fontSize = 8.5 * scale;
+    const padX = 8 * scale;
+    this.roundRect(frame.x, frame.y, width, height, 6 * scale, "#0a0a12", 0.78);
+    this.addText(title, frame.x + padX, frame.y + 10 * scale, {
+      fontSize, fill: "#ffffff", alpha: 0.55, fontWeight: "700", anchorY: 0.5,
+    });
+    if (right) {
+      this.addText(right, frame.x + width - padX, frame.y + 10 * scale, {
+        fontSize, fill: "#ffffff", alpha: 0.85, fontWeight: "700", tabularNums: true, anchorX: 1, anchorY: 0.5,
+      });
+    }
+  }
+
+  // How early or late every hit so far landed, as bars across the widest
+  // hit window, coloured by the window each bar falls in.
+  private renderHitOffsetsOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "hitOffsets");
+    const width = Math.round(210 * scale);
+    const height = Math.round(104 * scale);
+    const frame = this.getOverlayFrame(layout, "hitOffsets", width, height);
+    if (!frame) return;
+
+    const { histogram, range } = this.getHitOffsetData(false);
+    histogram.advanceTo(this.currentTime);
+    const mean = histogram.mean;
+    const meanLabel = histogram.total > 0 ? `avg ${mean > 0 ? "+" : mean < 0 ? "-" : ""}${Math.abs(mean).toFixed(1)}ms` : undefined;
+    this.renderOffsetOverlayPanel(frame, width, height, scale, "HIT OFFSET", meanLabel);
+
+    const fontSize = 8.5 * scale;
+    const padX = 8 * scale;
+    const plotTop = frame.y + 20 * scale;
+    const plotBottom = frame.y + height - 16 * scale;
+    const plotLeft = frame.x + padX;
+    const plotWidth = width - padX * 2;
+    const plotHeight = plotBottom - plotTop;
+    const hairline = Math.max(1, scale * 0.75);
+    const rangeLabel = String(Math.round(range));
+    ([[-1, `-${rangeLabel}`], [0, "0"], [1, `+${rangeLabel}ms`]] as const).forEach(([side, label]) => {
+      this.addText(label, plotLeft + ((side + 1) / 2) * plotWidth, plotBottom + 8 * scale, {
+        fontSize, fill: "#ffffff", alpha: 0.5, fontWeight: "700", tabularNums: true,
+        anchorX: (side + 1) / 2, anchorY: 0.5,
+      });
+    });
+    this.fillRect(plotLeft, plotBottom, plotWidth, hairline, "#ffffff", 0.18);
+
+    let peak = 0;
+    for (const count of histogram.counts) if (count > peak) peak = count;
+    if (peak > 0) {
+      const step = plotWidth / REPLAY_HIT_OFFSET_BINS;
+      const gap = step > 3 ? hairline : 0;
+      for (let bin = 0; bin < REPLAY_HIT_OFFSET_BINS; bin++) {
+        const count = histogram.counts[bin];
+        if (count === 0) continue;
+        const barHeight = Math.max(hairline, (count / peak) * plotHeight);
+        const center = ((bin + 0.5) / REPLAY_HIT_OFFSET_BINS * 2 - 1) * range;
+        this.fillRect(plotLeft + bin * step, plotBottom - barHeight, step - gap, barHeight, this.hitErrorColorFor(center), 0.9);
+      }
+    }
+    this.fillRect(plotLeft + plotWidth / 2 - hairline / 2, plotTop, hairline, plotHeight, "#ffffff", 0.35);
+  }
+
+  // Every hit across the whole play as a dot, late above the centre line and
+  // early below, filling in up to the playhead.
+  private renderOffsetTimelineOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "offsetTimeline");
+    const width = Math.round(280 * scale);
+    const height = Math.round(92 * scale);
+    const frame = this.getOverlayFrame(layout, "offsetTimeline", width, height);
+    if (!frame) return;
+
+    const { dots, range } = this.getHitOffsetData(true);
+    this.renderOffsetOverlayPanel(frame, width, height, scale, "OFFSET OVER TIME");
+
+    const fontSize = 8.5 * scale;
+    const padX = 8 * scale;
+    const gutter = Math.max(this.measureTextWidth("early", fontSize, "700"), this.measureTextWidth("late", fontSize, "700")) + 5 * scale;
+    const plotTop = frame.y + 20 * scale;
+    const plotBottom = frame.y + height - 8 * scale;
+    const plotLeft = frame.x + padX + gutter;
+    const plotWidth = width - padX * 2 - gutter;
+    const plotHeight = plotBottom - plotTop;
+    const hairline = Math.max(1, scale * 0.75);
+    this.addText("late", frame.x + padX, plotTop + 4 * scale, {
+      fontSize, fill: "#ffffff", alpha: 0.5, fontWeight: "700", anchorY: 0.5,
+    });
+    this.addText("early", frame.x + padX, plotBottom - 4 * scale, {
+      fontSize, fill: "#ffffff", alpha: 0.5, fontWeight: "700", anchorY: 0.5,
+    });
+    const yFor = (offset: number) => plotTop + plotHeight / 2 - (Math.max(-range, Math.min(range, offset)) / range) * (plotHeight / 2);
+    for (const offset of [-this.hitWindows.great, this.hitWindows.great]) {
+      if (this.hitWindows.great < range) this.fillRect(plotLeft, yFor(offset), plotWidth, hairline, "#ffffff", 0.07);
+    }
+    this.fillRect(plotLeft, yFor(0) - hairline / 2, plotWidth, hairline, "#ffffff", 0.25);
+
+    if (dots) {
+      const shown = countReplayHitOffsetDotsAt(dots, this.currentTime);
+      const cellWidth = plotWidth / REPLAY_HIT_OFFSET_TIMELINE_COLUMNS;
+      const cellHeight = plotHeight / REPLAY_HIT_OFFSET_TIMELINE_ROWS;
+      const size = Math.max(1.5 * scale, cellWidth, cellHeight);
+      const colors = this.hitErrorColors();
+      // One fill per window colour: a dense chart has thousands of dots.
+      const rowColors = Array.from({ length: REPLAY_HIT_OFFSET_TIMELINE_ROWS }, (_, row) => (
+        this.hitErrorColorFor(((row + 0.5) / REPLAY_HIT_OFFSET_TIMELINE_ROWS * 2 - 1) * range)
+      ));
+      const g = this.graphics;
+      for (const color of [colors.outer, colors.mid, colors.inner]) {
+        let any = false;
+        for (let i = 0; i < shown; i++) {
+          const row = dots.rows[i];
+          if (rowColors[row] !== color) continue;
+          const x = plotLeft + (dots.columns[i] + 0.5) * cellWidth;
+          const y = plotBottom - (row + 0.5) * cellHeight;
+          g.rect(x - size / 2, y - size / 2, size, size);
+          any = true;
+        }
+        if (any) g.fill({ color: hexToNumber(color), alpha: 0.85 });
+      }
+    }
+
+    const progress = this.totalDuration > 0 ? Math.max(0, Math.min(1, this.currentTime / this.totalDuration)) : 0;
+    this.fillRect(plotLeft + progress * plotWidth - hairline / 2, plotTop, hairline, plotHeight, "#ffffff", 0.45);
+  }
+
   // Split by hand, "keypresses" holds the left hand's columns and
   // "keypressesRight" the right's, each placed on its own. The middle lane of
   // an odd keymode goes with the thumb the hand overlays use.
@@ -6560,6 +6724,8 @@ export class ManiaReplayRenderer {
       this.inOverlayLayer("handAccuracy", () => this.renderHandAccuracyOverlay(layout));
       this.inOverlayLayer("columnStats", () => this.renderColumnStatsOverlay(layout));
       this.inOverlayLayer("holdTimes", () => this.renderHoldTimesOverlay(layout));
+      this.inOverlayLayer("hitOffsets", () => this.renderHitOffsetsOverlay(layout));
+      this.inOverlayLayer("offsetTimeline", () => this.renderOffsetTimelineOverlay(layout));
       this.inOverlayLayer("pp", () => this.renderPpOverlay(layout));
       this.inOverlayLayer("judgements", () => this.renderJudgementOverlay(layout));
       this.inOverlayLayer("progress", () => this.renderProgressOverlay(layout));
@@ -7280,6 +7446,21 @@ export class ManiaReplayRenderer {
     this.circle(cx, cy, Math.max(1.6, radius * 0.16), "#f0f0f0", 0.92);
   }
 
+  // The hit error bar's window colours, which the offset overlays share.
+  private hitErrorColors() {
+    return this.ruleset.accuracyMode === "lazer"
+      ? { inner: "#66ccff", mid: "#b3d944", outer: "#ffcc22" }
+      : { inner: "#46b8e8", mid: "#85cc26", outer: "#e8a733" };
+  }
+
+  private hitErrorColorFor(offset: number): string {
+    const colors = this.hitErrorColors();
+    const abs = Math.abs(offset);
+    if (abs <= this.hitWindows.great) return colors.inner;
+    if (abs <= this.hitWindows.ok) return colors.mid;
+    return colors.outer;
+  }
+
   // The hit error ("early/late") meter, styled after each client's bottom
   // bar: colored bands sized by the real hit windows (blue = 300, green =
   // 100, orange = 50 in stable's default palette), fading judgement ticks,
@@ -7316,17 +7497,10 @@ export class ManiaReplayRenderer {
     const pxPerMs = halfWidth / range;
     const isLazer = this.ruleset.accuracyMode === "lazer";
 
-    const colors = isLazer
-      ? { inner: "#66ccff", mid: "#b3d944", outer: "#ffcc22" }
-      : { inner: "#46b8e8", mid: "#85cc26", outer: "#e8a733" };
+    const colors = this.hitErrorColors();
     const bandHeight = (isLazer ? 6 : 5) * scale;
     const bandRadius = isLazer ? bandHeight / 2 : 0;
-    const tickColorFor = (offset: number) => {
-      const abs = Math.abs(offset);
-      if (abs <= this.hitWindows.great) return colors.inner;
-      if (abs <= this.hitWindows.ok) return colors.mid;
-      return colors.outer;
-    };
+    const tickColorFor = (offset: number) => this.hitErrorColorFor(offset);
     // "Hits only" drops the colored windows, which are the bar's backdrop
     // rather than its data. The box keeps its size either way, so switching
     // styles never moves a placed overlay.

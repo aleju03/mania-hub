@@ -23,7 +23,7 @@ export function normalizeReplayMasterScrollSpeed(value: unknown): number {
   return Math.max(REPLAY_MASTER_MIN_SCROLL_SPEED, Math.min(REPLAY_MASTER_MAX_SCROLL_SPEED, value));
 }
 
-export const REPLAY_OVERLAY_IDS = ["keypresses", "keypressesRight", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "holdTimes", "pp", "judgements", "hitError", "progress", "leaderboard", "replayMaster", "mapInfo", "playerInfo", "media", "stageLeft", "stageRight", "stageBottom", "healthBar"] as const;
+export const REPLAY_OVERLAY_IDS = ["keypresses", "keypressesRight", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "holdTimes", "hitOffsets", "offsetTimeline", "pp", "judgements", "hitError", "progress", "leaderboard", "replayMaster", "mapInfo", "playerInfo", "media", "stageLeft", "stageRight", "stageBottom", "healthBar"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
@@ -49,6 +49,8 @@ export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, MessageDescriptor> =
   handAccuracy: msg`Per-hand accuracy`,
   columnStats: msg`Per-finger stats`,
   holdTimes: msg`Hold times`,
+  hitOffsets: msg`Hit offsets`,
+  offsetTimeline: msg`Offsets over time`,
   pp: msg`PP counter`,
   judgements: msg`Judgements`,
   hitError: msg`Hit error bar`,
@@ -399,7 +401,7 @@ export function isReplayOverlayStackable(id: ReplayOverlayId): boolean {
 // the live element over the canvas first put it.
 export const REPLAY_OVERLAY_DEFAULT_STACK: readonly ReplayOverlayId[] = [
   "leaderboard", "replayMaster", "mapInfo", "playerInfo",
-  "keypresses", "keypressesRight", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "holdTimes", "pp", "judgements", "progress", "hitError",
+  "keypresses", "keypressesRight", "kps", "misses", "accuracy", "handAccuracy", "columnStats", "holdTimes", "hitOffsets", "offsetTimeline", "pp", "judgements", "progress", "hitError",
   "media", "stageLeft", "stageRight", "stageBottom", "healthBar",
 ];
 
@@ -438,6 +440,9 @@ export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   columnStats: { enabled: false, x: 0.035, y: 0.57, scale: 1, style: DEFAULT_REPLAY_COLUMN_STAT_STYLE, metric: DEFAULT_REPLAY_COLUMN_STAT_METRIC },
   // Right of the stage, between the judgement counts and the info cards.
   holdTimes: { enabled: false, x: 0.7, y: 0.4, scale: 1 },
+  hitOffsets: { enabled: false, x: 0.7, y: 0.56, scale: 1 },
+  // Wide, so it takes the open top right.
+  offsetTimeline: { enabled: false, x: 0.7, y: 0.05, scale: 1 },
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.92, y: 0.2, scale: 1.5, style: DEFAULT_REPLAY_JUDGEMENT_LAYOUT },
   // Anchored under the receptors until dragged, where it has always sat.
