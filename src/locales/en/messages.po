@@ -18540,6 +18540,10 @@ msgstr "No rating system changes yet."
 msgid "no ratings"
 msgstr "no ratings"
 
+#: src/routes/player/$username.tsx
+msgid "No recent plays"
+msgstr "No recent plays"
+
 #: src/routes/index.tsx
 msgid "No recent scores"
 msgstr "No recent scores"
@@ -18743,8 +18747,8 @@ msgid "No tracked players here."
 msgstr "No tracked players here."
 
 #: src/routes/player/$username.tsx
-msgid "No tracked plays found"
-msgstr "No tracked plays found"
+#~ msgid "No tracked plays found"
+#~ msgstr "No tracked plays found"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "No tracked plays from this team's members yet."

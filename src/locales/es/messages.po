@@ -18490,6 +18490,10 @@ msgstr "Aún no hay cambios en el sistema de valoración."
 msgid "no ratings"
 msgstr "sin ratings"
 
+#: src/routes/player/$username.tsx
+msgid "No recent plays"
+msgstr "No hay plays recientes"
+
 #: src/routes/index.tsx
 msgid "No recent scores"
 msgstr "Sin scores recientes"
@@ -18693,8 +18697,8 @@ msgid "No tracked players here."
 msgstr "No hay jugadores registrados aquí."
 
 #: src/routes/player/$username.tsx
-msgid "No tracked plays found"
-msgstr "No se encontraron plays trackeadas"
+#~ msgid "No tracked plays found"
+#~ msgstr "No se encontraron plays trackeadas"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "No tracked plays from this team's members yet."

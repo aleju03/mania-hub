@@ -18502,6 +18502,10 @@ msgstr "评分系统暂无更新。"
 msgid "no ratings"
 msgstr "没有评分"
 
+#: src/routes/player/$username.tsx
+msgid "No recent plays"
+msgstr "没有最近成绩"
+
 #: src/routes/index.tsx
 msgid "No recent scores"
 msgstr "暂无最近成绩"
@@ -18705,8 +18709,8 @@ msgid "No tracked players here."
 msgstr "这里没有已追踪的玩家。"
 
 #: src/routes/player/$username.tsx
-msgid "No tracked plays found"
-msgstr "没有追踪到的成绩"
+#~ msgid "No tracked plays found"
+#~ msgstr "没有追踪到的成绩"
 
 #: src/components/team/TeamProfilePage.tsx
 msgid "No tracked plays from this team's members yet."

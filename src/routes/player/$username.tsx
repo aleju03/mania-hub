@@ -3298,7 +3298,7 @@ export function PlayerProfilePage({
                   })
                 ) : (
                   <div className="text-center py-8 text-osu-f1 text-sm">
-                    {tab === "recent" ? t`No tracked plays found` : t`No scores found`}
+                    {tab === "recent" ? t`No recent plays` : t`No scores found`}
                   </div>
                 )}
               </motion.div>
