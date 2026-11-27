@@ -26541,8 +26541,12 @@ msgid "Skill changes"
 msgstr "Skill change"
 
 #: src/routes/recommendations.tsx
-msgid "Skill charts need rated plays in 4K or 7K."
-msgstr "技能谱面需要 4K 或 7K 的已评分成绩。"
+#~ msgid "Skill charts need rated plays in 4K or 7K."
+#~ msgstr "技能谱面需要 4K 或 7K 的已评分成绩。"
+
+#: src/routes/recommendations.tsx
+msgid "Skill charts need rated plays in 4K, 6K or 7K."
+msgstr "技能谱面需要 4K、6K 或 7K 的已评分成绩。"
 
 #: src/components/maps/MapSearchSection.tsx
 #~ msgid "Skill detection is less tuned outside 4K."

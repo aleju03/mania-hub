@@ -2788,7 +2788,8 @@ export async function fetchLiveTrackerSnapshot(
 // "practice" only ever appears on `practiceRecs` rows and "new" on `newMaps`
 // rows, never in `recs`.
 export type LiveFarmHelperReason = "missing" | "improve" | "stale" | "owned" | "push" | "practice" | "new";
-export type LiveFarmHelperKeyMode = "4k" | "7k" | "any";
+// "6k" is a skills-view keymode: the pp views have a 4K and a 7K cohort only.
+export type LiveFarmHelperKeyMode = "4k" | "6k" | "7k" | "any";
 export type LiveFarmHelperView = "gain" | "popular" | "skills";
 export type LiveFarmHelperSkillMods = "nm" | "dt";
 export type LiveFarmHelperSpeedBucket = "ht" | "normal" | "dt";

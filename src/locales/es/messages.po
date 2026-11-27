@@ -26529,8 +26529,12 @@ msgid "Skill changes"
 msgstr "Skill changes"
 
 #: src/routes/recommendations.tsx
-msgid "Skill charts need rated plays in 4K or 7K."
-msgstr "Los charts por skillset necesitan plays con rating en 4K o 7K."
+#~ msgid "Skill charts need rated plays in 4K or 7K."
+#~ msgstr "Los charts por skillset necesitan plays con rating en 4K o 7K."
+
+#: src/routes/recommendations.tsx
+msgid "Skill charts need rated plays in 4K, 6K or 7K."
+msgstr "Los charts por skillset necesitan plays con rating en 4K, 6K o 7K."
 
 #: src/components/maps/MapSearchSection.tsx
 #~ msgid "Skill detection is less tuned outside 4K."

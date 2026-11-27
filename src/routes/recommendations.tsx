@@ -91,7 +91,9 @@ const PAGE_SIZE = 20;
 // Ask for the server max so the reason filters ("missing", "old") see the full
 // ranked list instead of whatever cracked the overall top of a shorter slice.
 const SNAPSHOT_LIMIT = 200;
-const FARM_HELPER_KEY_MODES = ["any", "4k", "7k"] as const;
+const FARM_HELPER_KEY_MODES = ["any", "4k", "6k", "7k"] as const;
+// The pp views have no 6K cohort: osu! has no 6K pp variant.
+const FARM_HELPER_PP_KEY_MODES = ["any", "4k", "7k"] as const;
 const FARM_HELPER_VIEWS = ["gain", "popular", "skills"] as const;
 
 type ReasonFilter = "all" | "missing" | "improve" | "stale" | "push";
@@ -117,7 +119,7 @@ interface FarmHelperSearch {
 }
 
 function parseKeyMode(value: unknown): LiveFarmHelperKeyMode | undefined {
-  return value === "4k" || value === "7k" || value === "any" ? value : undefined;
+  return value === "4k" || value === "6k" || value === "7k" || value === "any" ? value : undefined;
 }
 
 function parseView(value: unknown): LiveFarmHelperView | undefined {
@@ -143,7 +145,7 @@ function inStarRange(stars: number, range: { min: number; max: number }): boolea
 }
 
 function parseSkill(value: unknown): string | undefined {
-  return typeof value === "string" && /^([47]k:)?(pattern:|dan:)?[A-Za-z]{2,24}$/.test(value) ? value : undefined;
+  return typeof value === "string" && /^([467]k:)?(pattern:|dan:)?[A-Za-z]{2,24}$/.test(value) ? value : undefined;
 }
 
 function defaultSortForView(view: LiveFarmHelperView): SortMode {
@@ -200,7 +202,7 @@ function buildFarmHelperSearch({
   const defaultSort = defaultSortForView(effectiveView);
   return {
     user: user ?? undefined,
-    key: key && key !== "any" ? key : undefined,
+    key: key && key !== "any" && !(key === "6k" && effectiveView !== "skills") ? key : undefined,
     view: effectiveView !== "gain" ? effectiveView : undefined,
     skill: effectiveView === "skills" ? skill : undefined,
     mods,
@@ -259,10 +261,10 @@ function isDanAxis(axis: string | null | undefined): boolean {
 
 // A `skill` search param ("4k:dan:stream" or "dan:stream") that picks a dan axis.
 function picksDanAxis(skill: string | undefined): boolean {
-  return isDanAxis(skill?.replace(/^[47]k:/, ""));
+  return isDanAxis(skill?.replace(/^[467]k:/, ""));
 }
 
-// The keymode decides the name: 7K's Prism files Chordstream, Bracket, Jack
+// The keymode decides the name: 6K and 7K's Prism files Chordstream, Bracket, Jack
 // and Delay under MinaCalc's Jumpstream, Handstream, Chordjack and Speed.
 function farmSkillAxisMeta(axis: string, keyCount: number | null | undefined): { labelMsg: MessageDescriptor; color: string } | null {
   return isDanAxis(axis) ? DAN_SKILLSET_META[axis.slice(DAN_AXIS_PREFIX.length)] ?? null : skillAxisMeta(axis, keyCount);
@@ -282,7 +284,7 @@ function DanLevelMark({ value, label: verdict, keyCount, className = "h-5 w-5" }
 
 function withPickedSkill(board: LiveFarmHelperSkillBoard, skill: string | undefined): LiveFarmHelperSkillBoard {
   if (!skill) return board;
-  const match = /^([47])k:(.+)$/.exec(skill);
+  const match = /^([467])k:(.+)$/.exec(skill);
   const keyCount = match ? Number(match[1]) : null;
   const axis = match ? match[2] : skill;
   const picked = board.axes.find((entry) => entry.axis === axis && (keyCount == null || entry.keyCount === keyCount));
@@ -1654,7 +1656,7 @@ function SubjectBar({
           <div className="flex items-center gap-2">
             <span className="text-[9px] font-bold uppercase tracking-wider text-osu-f1/70"><Trans>keys</Trans></span>
             <div className="flex overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label={t`Key mode`}>
-              {(["any", "4k", "7k"] as const).map((mode) => (
+              {(view === "skills" ? FARM_HELPER_KEY_MODES : FARM_HELPER_PP_KEY_MODES).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -2166,7 +2168,7 @@ function SkillBoardSection({
       <EmptyNotice
         eyebrow={t`no ratings`}
         title={t`No skill ratings in this key mode yet`}
-        body={t`Skill charts need rated plays in 4K or 7K.`}
+        body={t`Skill charts need rated plays in 4K, 6K or 7K.`}
       />
     );
   }
