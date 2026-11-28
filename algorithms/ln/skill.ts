@@ -6,7 +6,7 @@ import { buildLnWorkload, emptyLnFamilyVector, type LnFamilyVector, type LnWorkl
 import { LN_AXIS_KEY_COUNTS } from "./axis-keymodes";
 import { prismLnLeadValues, PRISM_KEY_COUNTS } from "../msd/prism";
 
-export const LN_SKILL_VERSION = 15;
+export const LN_SKILL_VERSION = 16;
 
 export const LN_SKILL_KEY_COUNTS: ReadonlySet<number> = LN_AXIS_KEY_COUNTS;
 export const LN_SKILL_SCORE_GOAL = 0.93;

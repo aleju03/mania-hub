@@ -1,8 +1,8 @@
 use dan_core::ManiaNote;
 use ln_skill::{analyze_ln_skill, LnMap, LnSkillOptions};
 
-pub const LN_LOW_END_RATING_AT_FIRST: f64 = 12.322;
-pub const LN_LOW_END_RATING_PER_LEVEL: f64 = 1.71;
+pub const LN_LOW_END_RATING_AT_FIRST: f64 = 14.35;
+pub const LN_LOW_END_RATING_PER_LEVEL: f64 = 1.486;
 pub const LN_LOW_END_TABLE_TAKEOVER: f64 = 5.6;
 pub const LN_LOW_END_BEND_FROM: f64 = 5.0;
 

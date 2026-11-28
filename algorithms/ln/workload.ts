@@ -18,8 +18,14 @@ const CROSS_HAND_RELEASE = 0.5;
 const JACK_UNITS = 8;
 const JACK_WINDOW_MS = 200;
 
+// An action under another held lane costs up to OVERLAP_UNITS, none once the hand's strain reaches OVERLAP_LOAD_CAP.
+const OVERLAP_UNITS = 2;
+const OVERLAP_LOAD_CAP = 16;
+
 const IDENTITY_RELEASE_WORK = 1 / 1.5;
 const TOLERANCE = LN_SAME_MOTION_TOLERANCE_MS;
+// A held body fades in over 10ms either side of the tolerance.
+const BODY_EDGE_MS = 10;
 const HANDS = [3, 12];
 
 export function combineLnDemand(leftFast: number, leftSustain: number, rightFast: number, rightSustain: number): number {
@@ -109,6 +115,9 @@ export function buildLnWorkload(
   const handPressTimes = HANDS.map(hand => rows.filter(row => (row.headMask | row.tapMask) & hand).map(row => row.timeMs));
   const handPressCursor = [0, 0];
   const held = [-1, -1, -1, -1], previous = [-1, -1, -1, -1];
+  const insideWeight = [0, 0, 0, 0];
+  const bodyWeight = (depth: number) => identityPricing ? (depth > TOLERANCE ? 1 : 0)
+    : clamp((depth - (TOLERANCE - BODY_EDGE_MS)) / (2 * BODY_EDGE_MS));
   const releaseAt = Array<number>(4).fill(-Infinity);
   const fast = [0, 0], sustain = [0, 0];
   const sections = new Map<number, LnWorkSection>();
@@ -136,13 +145,16 @@ export function buildLnWorkload(
     inside = 0;
     for (let l = 0; l < 4; l += 1) {
       const id = held[l];
-      if (id >= 0 && end[id] > time && time - start[id] > TOLERANCE && end[id] - time > TOLERANCE) inside |= 1 << l;
+      insideWeight[l] = id >= 0 ? bodyWeight(Math.min(time - start[id], end[id] - time)) : 0;
+      if (insideWeight[l] > 0) inside |= 1 << l;
     }
 
     work = 0;
     for (hand = 0; hand < 2; hand += 1) {
       fast[hand] *= decay; sustain[hand] *= slowDecay;
       handMask = HANDS[hand];
+      const overlapUnits = identityPricing ? 0 : OVERLAP_UNITS * Math.max(0, 1 - fast[hand] / OVERLAP_LOAD_CAP);
+      const otherHandInside = Math.max(insideWeight[(hand ^ 1) * 2], insideWeight[(hand ^ 1) * 2 + 1]);
       let presses = headMask & handMask;
       for (const id of row.taps) if (handMask & (1 << lane[id]) && relevant(lane[id], id)) presses |= 1 << lane[id];
       for (let l = hand * 2; l < hand * 2 + 2 && !identityPricing; l += 1) {
@@ -158,7 +170,8 @@ export function buildLnWorkload(
       for (let l = hand * 2; l < hand * 2 + 2; l += 1) {
         const bit = 1 << l;
         if (!(moves & bit)) continue;
-        if (held[l ^ 1] >= 0 && (inside & (1 << (l ^ 1)))) add(1);
+        add(overlapUnits * Math.max(insideWeight[l ^ 1], otherHandInside));
+        add(insideWeight[l ^ 1]);
         if (!(presses & bit)) continue;
         add(tailMask & bit ? 1 : clamp(1 - (time - releaseAt[l]) / tailWindow));
         if (previous[l] >= 0 && !isHold[previous[l]] && headMask & bit) add(clamp(1 - (time - start[previous[l]]) / (headWindow * 2)));
@@ -172,9 +185,15 @@ export function buildLnWorkload(
       const cursor = handPressCursor[hand];
       const gap = Math.min(time - (times[cursor - 1] ?? -Infinity), Math.abs((times[cursor] ?? Infinity) - time));
       add(timingConflict(gap, headWindow, tailWindow));
-      const split = row.tails.some(id => handMask & (1 << lane[id]) && held.some(other => other >= 0 && !(handMask & (1 << lane[other]))
-        && Math.abs(start[other] - start[id]) <= TOLERANCE && end[other] - time > TOLERANCE));
-      if (split) add(1 / 2);
+      let split = 0;
+      for (const id of row.tails) {
+        if (!(handMask & (1 << lane[id]))) continue;
+        for (const other of held) {
+          if (other < 0 || handMask & (1 << lane[other]) || Math.abs(start[other] - start[id]) > TOLERANCE) continue;
+          split = Math.max(split, bodyWeight(end[other] - time));
+        }
+      }
+      add(split / 2);
     }
     if (work > 0) {
       const slot = Math.floor((time - origin) / LN_SECTION_MS);

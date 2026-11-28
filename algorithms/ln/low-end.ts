@@ -1,8 +1,8 @@
 import type { ManiaBeatmap } from "../chart/beatmap";
 import { analyzeLnSkill } from "./skill";
 
-export const LN_LOW_END_RATING_AT_FIRST = 12.322;
-export const LN_LOW_END_RATING_PER_LEVEL = 1.71;
+export const LN_LOW_END_RATING_AT_FIRST = 14.35;
+export const LN_LOW_END_RATING_PER_LEVEL = 1.486;
 export const LN_LOW_END_TABLE_TAKEOVER = 5.6;
 export const LN_LOW_END_BEND_FROM = 5;
 
