@@ -31,6 +31,7 @@ const VERDICT_SOURCE_LABELS: Record<DanVerdictHalf["source"], string> = {
   "leoblack-mixed": "LeoBlack Mixed",
   "leoblack-companella": "Companella",
   "leoblack-sunny-table": "Sunny table",
+  "ln-skill-line": "LN rating line",
   "inhouse-ln-knn": "LN kNN",
 };
 
