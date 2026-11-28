@@ -74,7 +74,8 @@ These are explicit model conventions, not measured human difficulty units.
 | --- | --- |
 | Simultaneous or close same-direction finger commands | One command per finger |
 | Repeating the same finger | A new command, even inside chord-group tolerance |
-| Moving a finger while its same-hand neighbour stays held | One independence task |
+| Moving a finger while its same-hand neighbour stays held | One independence task, counted by how far inside the held body the move sits: none within 10 ms of its head or tail, all of it from 30 ms |
+| A press or release while any other lane is held, either hand | Up to 2 more units, falling in a straight line to none as the hand's strain reaches 16 |
 | Pressing one finger while releasing its partner | One opposing-direction control task |
 | Same-lane release/repress | Recovery demand from the unfilled part of the release window, including contact |
 | A tap immediately preceding/following a same-lane hold | Shield/reverse-shield motion and recovery, counted once |
@@ -163,6 +164,34 @@ players read on Overall. Over all pairs it orders 81.1% and 81.6% of the two
 halves against v14's 72.1% and 77.0%, and Dans 3 to 15 agree within 1.5, root
 mean square 0.77 (v14 1.32). The identity tiebreak (`dan/ln-identity.ts`)
 keeps v14's pricing, so the recalibration moves no chart between rice and LN.
+
+The overlap cost (2026-11-27) came from the low end. Under a rating of about
+20 the model's misses followed the share of heads and releases made while
+another lane was held, on the same hand or the other, and not rice tapped
+under holds: pricing the free-hand taps the workload skips changed nothing.
+Two sets of same-player pairs split by mapset were used, 205k rating plays
+(1.45M pairs) and 143k archived passes without rate mods on every stored 4K LN
+chart (657k pairs). Pairs of two charts rated under 20.2 went from 69.9% to
+72.6% ordered on the first and 70.1% to 73.2% on the second, pairs under 14
+from 68.5% to 77.3%, and all pairs with the blend from 81.9/81.1% to
+81.9/81.0% and 73.5/73.0% to 74.3/73.3%. A cost that does not fade with the
+hand's strain ordered the low charts as well and the charts above them worse,
+so it reaches zero at a strain of 16: ratings from about LN 9 up do not move
+through it, a chart near LN 1 gains about 2.5 and one near LN 6 about 0.5. The
+low-end dan line (`dan/ln-low-end.ts`) was refitted on it the same way.
+
+The same version fades the edge of a held body. A move within 20 ms of a
+neighbour's head or tail used to carry no independence task and one a
+millisecond further a whole one, so a rate that pushed a gap across the line
+dropped that work at once: a chart with releases written 30 ms before the next
+press read 46.5 at 1.45x and 41.4 at 1.5x. The task now grows in a straight
+line from 10 ms to 30 ms, as do the overlap cost and the split-chord task.
+Over 0.75x to 1.6x in steps of 0.05 on 12.3k charts, charts reading a point or
+more lower at the faster of two neighbouring rates went from 79 to none (half
+a point: 161 to 4), and pairs of one player's plays at different rates from
+78.7% to 79.4% ordered. At 1.0x 68 of 20.6k charts move a point or more and
+none under a rating of 20 moves half a point. The identity tiebreak has
+neither change.
 
 Since 2026-10-03 (effective v15) the tiebreak also needs held-through holds on
 a chart that only same-lane chains lift past the tap gate. In the hardest fifth
