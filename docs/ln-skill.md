@@ -165,7 +165,7 @@ halves against v14's 72.1% and 77.0%, and Dans 3 to 15 agree within 1.5, root
 mean square 0.77 (v14 1.32). The identity tiebreak (`dan/ln-identity.ts`)
 keeps v14's pricing, so the recalibration moves no chart between rice and LN.
 
-The overlap cost (2026-11-27) came from the low end. Under a rating of about
+The overlap cost (LN skill v16, 2026-11-27) came from the low end. Under a rating of about
 20 the model's misses followed the share of heads and releases made while
 another lane was held, on the same hand or the other, and not rice tapped
 under holds: pricing the free-hand taps the workload skips changed nothing.
