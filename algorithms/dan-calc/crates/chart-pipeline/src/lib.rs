@@ -6,6 +6,7 @@ pub mod hybrid;
 pub mod json;
 pub mod lean;
 pub mod leoblack;
+pub mod ln_low_end;
 pub mod msd;
 
 pub use analysis::{analyze_chart, rate_verdict, ChartAnalysisColumns, ChartInputs, PipelineError, RateVerdictColumns};

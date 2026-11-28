@@ -9,6 +9,7 @@ import { danVariantForOffset, getInputRate, parseDan } from "../dan-estimator/la
 import { LN_LADDER_TOP, estimateLnDan, parseLnDan } from "../dan-estimator/ln";
 import { LN_EFFECTIVE_KEY_COUNTS, chartIsLn } from "../dan-estimator/ln-effective";
 import { resolveChartLnIdentity } from "./ln-identity";
+import { lnLowEndDan, lnTableReadsLowEnd } from "../ln/low-end";
 import { parseLeoBlackLnHalf, parseLeoBlackRcHalf, resolvePlayedOd, runLeoBlackMixed, runLeoBlackSunny, type LeoBlackOdFlag, type ParsedDanPart } from "../leoblack/estimator";
 import { DAN_INDEX, type DanIntervalTable } from "leoblack/estimator/intervals/index";
 import { analyzePatternFromText, type LeoBlackPatternCluster, type LeoBlackPatternReport } from "leoblack/patterns/service";
@@ -20,7 +21,7 @@ import { inspectChartDanEligibility, type ChartDanEligibility } from "./dan-elig
 
 export { detectLnVibro, detectRiceVibro, detectRateVibro, detectRollVibro, detectSustainedChordVibro } from "../vibro/detection";
 
-export type DanVerdictSource = "leoblack-mixed" | "leoblack-companella" | "leoblack-sunny-table" | "inhouse-ln-knn";
+export type DanVerdictSource = "leoblack-mixed" | "leoblack-companella" | "leoblack-sunny-table" | "ln-skill-line" | "inhouse-ln-knn";
 
 export interface DanVerdictHalf {
   kind: "rc" | "ln";
@@ -530,8 +531,27 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     }
   }
 
-  let ln: DanVerdictHalf | null = lnFromTables && lnFromTables.boundary !== "below" ? lnFromTables : null;
-  if (!ln && map.keyCount === 4) {
+  const lnLowEnd = lnFromTables != null && map.keyCount === 4 && lnTableReadsLowEnd(lnFromTables);
+  let ln: DanVerdictHalf | null = lnFromTables && !lnLowEnd && lnFromTables.boundary !== "below" ? lnFromTables : null;
+  if (lnFromTables && lnLowEnd) {
+    const rawDan = lnLowEndDan(map, { rate, od: resolvePlayedOd(map.od, input.odFlag) });
+    if (rawDan != null) {
+      const parsed = parseLnDan(rawDan);
+      ln = {
+        kind: "ln",
+        source: "ln-skill-line",
+        label: parsed.label,
+        variant: parsed.variant,
+        displayName: `${parsed.label}${parsed.variant ?? ""}`,
+        rawDan,
+        estimatedSr: sunnySr ?? 0,
+        confidence: 0.6,
+        boundary: null,
+        raw: lnFromTables.raw,
+      };
+    }
+  }
+  if (!ln && map.keyCount === 4 && lnFromTables?.boundary !== null) {
     const baseStarRating = Number.isFinite(input.starRating) ? Math.max(0, input.starRating ?? 0) : 0;
     const starRating = baseStarRating > 0 ? baseStarRating * Math.pow(rate, 0.7) : 0;
     let lnEstimate = estimateLnDan(map, input, features.metrics, starRating, features.durationMs, rate);

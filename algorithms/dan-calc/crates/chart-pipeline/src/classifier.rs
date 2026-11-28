@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 use dan_core::dan_eligibility::{inspect_chart_dan_eligibility, ChartDanEligibility};
 use dan_core::features::extract_dan_features;
 use dan_core::labels::rate_or_one;
-use dan_core::ln::estimate_ln_dan;
+use dan_core::ln::{estimate_ln_dan, parse_ln_dan};
 use dan_core::ln_effective::chart_is_ln;
 use dan_core::patterns::analyze_mania_patterns;
 use dan_core::types::{DanEstimateInput, DanFeatureExtractionResult, ManiaPatternAnalysis};
@@ -18,6 +18,7 @@ use leoblack_parser::OsuFileParser;
 use leoblack_patterns::{analyze_pattern_from_text, detect_longjack_vibro_at_rate, PatternReport};
 use ln_skill::{resolve_chart_ln_identity, LnIdentityOptions, LnMap};
 
+use crate::ln_low_end::{ln_low_end_dan, ln_table_reads_low_end};
 use crate::leoblack::{
     debug_sunny_numeric, match_tier, parse_leoblack_ln_half, parse_leoblack_rc_half, resolve_played_od, run_leoblack_mixed,
     run_leoblack_sunny, JsThrow, LbOptions, ParsedDanPart, PlayedOd,
@@ -672,8 +673,27 @@ pub fn classify_chart(ctx: &ChartContext, input: &ClassifyInput) -> Result<Chart
         }
     }
 
-    let mut ln = ln_from_tables.clone().filter(|h| h.boundary != Some("below"));
-    if ln.is_none() && kc == 4 {
+    let ln_low_end = kc == 4 && ln_from_tables.as_ref().is_some_and(|h| ln_table_reads_low_end(h.raw_dan, h.boundary));
+    let mut ln = ln_from_tables.clone().filter(|h| !ln_low_end && h.boundary != Some("below"));
+    if let Some(table) = ln_from_tables.as_ref().filter(|_| ln_low_end) {
+        let od = resolve_played_od(map.od, input.od_flag);
+        if let Some(raw_dan) = ln_low_end_dan(&LnMap { notes: &map.notes, key_count: kc, od: map.od }, rate, od) {
+            let parsed = parse_ln_dan(raw_dan);
+            ln = Some(DanVerdictHalf {
+                kind: "ln",
+                source: "ln-skill-line",
+                display_name: format!("{}{}", parsed.label, parsed.variant.unwrap_or("")),
+                label: parsed.label,
+                variant: parsed.variant,
+                raw_dan,
+                estimated_sr: sunny_sr.unwrap_or(0.0),
+                confidence: 0.6,
+                boundary: None,
+                raw: table.raw.clone(),
+            });
+        }
+    }
+    if ln.is_none() && kc == 4 && !ln_from_tables.as_ref().is_some_and(|h| h.boundary.is_none()) {
         let base_star = match input.star_rating {
             Some(s) if s.is_finite() => jsmath::max(0.0, s),
             _ => 0.0,
