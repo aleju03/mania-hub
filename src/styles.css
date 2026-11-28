@@ -1097,15 +1097,6 @@ html[data-custom-cursor="true"] * {
   -webkit-text-fill-color: #fff2fb;
   text-shadow: 0 0 0.04em #fff, 0 0 0.12em #ff8fd0;
   filter: drop-shadow(0 0 0.12em rgba(255, 70, 175, 0.95)) drop-shadow(0 0 0.45em rgba(255, 40, 160, 0.65));
-  animation: name-tag-flicker 7s linear infinite;
-}
-
-/* A tube that stutters now and then, never off for long. */
-@keyframes name-tag-flicker {
-  0%, 70%, 71.5%, 73%, 74.6%, 100% { opacity: 1; }
-  70.6% { opacity: 0.45; }
-  72.2% { opacity: 0.7; }
-  73.8% { opacity: 0.35; }
 }
 
 .name-tag--glitch {
